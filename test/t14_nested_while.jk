@@ -1,0 +1,13 @@
+i main() {
+    i i = 0;
+    i total = 0;
+    while i < 3 {
+        i j = 0;
+        while j < 3 {
+            total++;
+            j++;
+        }
+        i++;
+    }
+    return total;
+}

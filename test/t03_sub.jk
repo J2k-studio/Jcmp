@@ -1,0 +1,6 @@
+i main() {
+    i x = 20;
+    i y = 8;
+    i z = x - y;
+    return z;
+}

@@ -1,0 +1,4 @@
+i main() {
+    i x = 7;
+    return x;
+}

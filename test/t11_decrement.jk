@@ -1,0 +1,7 @@
+i main() {
+    i x = 10;
+    while x > 3 {
+        x--;
+    }
+    return x;
+}

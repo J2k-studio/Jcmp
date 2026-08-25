@@ -1,0 +1,19 @@
+i main() {
+    i i = 0;
+    i evens = 0;
+    i odds = 0;
+    while i < 6 {
+        i r = i - 2;
+        if r == 0 {
+            evens += 1;
+        } else if r == 1 {
+            odds += 1;
+        } else if r == 2 {
+            evens += 1;
+        } else {
+            odds += 1;
+        }
+        i++;
+    }
+    return evens;
+}
