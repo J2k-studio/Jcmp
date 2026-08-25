@@ -1,0 +1,19 @@
+mov x1, 0
+mov x2, 0
+L0:
+cmp x1, 3
+b.ge L1
+mov x3, 0
+L2:
+cmp x3, 3
+b.ge L3
+add x2, x2, 1
+add x3, x3, 1
+b L2
+L3:
+add x1, x1, 1
+b L0
+L1:
+mov x0, x2
+mov x8, 93
+svc 0

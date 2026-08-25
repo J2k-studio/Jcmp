@@ -1,10 +1,10 @@
 #!/data/data/com.termux/files/usr/bin/bash
-# run_all_tests.sh — build Jcmp-v1 + j2k_asm_v0.3 once, then run the whole
+# run_all_tests.sh — build Jcmp-v1 + j2k_asm_v1 once, then run the whole
 # test suite (v0 arithmetic + v1.1 if/else + v1.2 while/break/continue/
 # compound-assign) and report PASS/FAIL against expected exit codes.
 #
-# วางไฟล์นี้ไว้โฟลเดอร์เดียวกับ Jcmp-v1.s และ j2k_asm_v0.3.s แล้วสร้างโฟลเดอร์
-# ย่อยชื่อ tests/ ที่มีไฟล์ .jk ทั้งหมดอยู่ข้างใน (ตามที่แนบมาให้)
+# วางไฟล์นี้ไว้โฟลเดอร์เดียวกับ Jcmp-v1.s และ j2k_asm_v1.s แล้วมีโฟลเดอร์ย่อย
+# ชื่อ tests/ หรือ test/ (สคริปต์เช็คให้อัตโนมัติว่ามีอันไหน) ที่เก็บไฟล์ .jk
 #
 # ใช้งาน:
 #   chmod +x run_all_tests.sh
@@ -15,15 +15,26 @@ PASS=0
 FAIL=0
 FAILED_NAMES=""
 
+# หาโฟลเดอร์ที่เก็บไฟล์ .jk อัตโนมัติ (tests/ หรือ test/)
+if [ -d "tests" ]; then
+    TESTDIR="tests"
+elif [ -d "test" ]; then
+    TESTDIR="test"
+else
+    echo "ไม่เจอโฟลเดอร์ tests/ หรือ test/ — ย้ายไฟล์ .jk ทั้งหมดไปไว้ในโฟลเดอร์ใดโฟลเดอร์หนึ่งก่อน"
+    exit 1
+fi
+echo "ใช้โฟลเดอร์เทส: $TESTDIR/"
+
 echo "== building Jcmp-v1 =="
 as -o Jcmp-v1.o Jcmp-v1.s || { echo "Jcmp-v1.s assemble FAILED"; exit 1; }
 ld -o Jcmp Jcmp-v1.o || { echo "Jcmp-v1.o link FAILED"; exit 1; }
 chmod +x Jcmp
 
-echo "== building j2k_asm_v0.3 =="
-as -o j2k_asm_v0.3.o j2k_asm_v0.3.s || { echo "j2k_asm_v0.3.s assemble FAILED"; exit 1; }
-ld -o j2k_asm_v0.3 j2k_asm_v0.3.o || { echo "j2k_asm_v0.3.o link FAILED"; exit 1; }
-chmod +x j2k_asm_v0.3
+echo "== building j2k_asm_v1 =="
+as -o j2k_asm_v1.o j2k_asm_v1.s || { echo "j2k_asm_v1.s assemble FAILED"; exit 1; }
+ld -o j2k_asm_v1 j2k_asm_v1.o || { echo "j2k_asm_v1.o link FAILED"; exit 1; }
+chmod +x j2k_asm_v1
 
 mkdir -p _test_out
 echo ""
@@ -32,7 +43,7 @@ echo "== running tests =="
 run_test () {
     name="$1"
     expected="$2"
-    jk="tests/${name}.jk"
+    jk="${TESTDIR}/${name}.jk"
     jasm="_test_out/${name}.jasm"
     elf="_test_out/${name}_bin"
 
@@ -49,7 +60,7 @@ run_test () {
         return
     fi
 
-    ./j2k_asm_v0.3 "$jasm" "$elf" 2> "_test_out/${name}.asm_err"
+    ./j2k_asm_v1 "$jasm" "$elf" 2> "_test_out/${name}.asm_err"
     if [ ! -f "$elf" ]; then
         echo "FAIL  $name  (j2k_asm error: $(cat _test_out/${name}.asm_err))"
         FAIL=$((FAIL+1))
@@ -94,3 +105,4 @@ if [ "$FAIL" -gt 0 ]; then
     echo "failed tests:$FAILED_NAMES"
     echo "(ดู _test_out/<name>.compile_err หรือ .asm_err และ .jasm ที่ generate ไว้ เพื่อ debug)"
 fi
+

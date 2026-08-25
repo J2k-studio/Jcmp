@@ -256,30 +256,42 @@ pb_loop:
 pb_i_dispatch:
     ldrb    w0, [x21, #1]
     cmp     w0, #'f'
-    b.ne    pb_decl
+    b.ne    pb_i_not_if
     ldrb    w0, [x21, #2]
     cmp     w0, #'a'
     b.lt    pb_bc2
     cmp     w0, #'z'
-    b.le    pb_decl                     // identifier starting "if..." — not the
-                                         // "if" keyword; let parse_decl_stmt
-                                         // handle it (will error naturally,
-                                         // since `i` type needs a space next)
+    b.le    pb_i_not_if                 // identifier starting "if..." (e.g.
+                                         // "iffy") — not the "if" keyword,
+                                         // fall through to the same check below
 pb_bc2:
     cmp     w0, #'A'
     b.lt    pb_bc3
     cmp     w0, #'Z'
-    b.le    pb_decl
+    b.le    pb_i_not_if
 pb_bc3:
     cmp     w0, #'0'
     b.lt    pb_bc4
     cmp     w0, #'9'
-    b.le    pb_decl
+    b.le    pb_i_not_if
 pb_bc4:
     cmp     w0, #'_'
-    b.eq    pb_decl
+    b.eq    pb_i_not_if
     bl      parse_if_chain
     b       pb_loop
+pb_i_not_if:
+    // Not "if". Could still be the `i` TYPE keyword starting a declaration
+    // ("i x = 5;") OR a plain identifier that happens to start with 'i' used
+    // in an assignment statement — most commonly a variable literally named
+    // "i" (extremely common loop counter, e.g. "i++;"), or "index", "item",
+    // etc. The type keyword `i` is always followed immediately by whitespace
+    // before the variable name; anything else means it's just an identifier.
+    ldrb    w0, [x21, #1]
+    cmp     w0, #' '
+    b.eq    pb_decl
+    cmp     w0, #9                      // tab
+    b.eq    pb_decl
+    b       pb_assign
 pb_decl:
     bl      parse_decl_stmt
     b       pb_loop

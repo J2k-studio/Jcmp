@@ -1,0 +1,7 @@
+mov x1, 5
+mov x2, 3
+mov x3, x1
+add x3, x3, x2
+mov x0, x3
+mov x8, 93
+svc 0

@@ -1,0 +1,7 @@
+mov x1, 20
+mov x2, 8
+mov x3, x1
+sub x3, x3, x2
+mov x0, x3
+mov x8, 93
+svc 0

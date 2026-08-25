@@ -1,0 +1,16 @@
+mov x1, 0
+L0:
+cmp x1, 100
+b.ge L1
+cmp x1, 5
+b.ne L3
+b L1
+b L2
+L3:
+L2:
+add x1, x1, 1
+b L0
+L1:
+mov x0, x1
+mov x8, 93
+svc 0

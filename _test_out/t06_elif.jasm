@@ -1,0 +1,19 @@
+mov x1, 3
+cmp x1, 1
+b.ne L1
+mov x0, 10
+mov x8, 93
+svc 0
+b L0
+L1:
+cmp x1, 3
+b.ne L2
+mov x0, 30
+mov x8, 93
+svc 0
+b L0
+L2:
+mov x0, 99
+mov x8, 93
+svc 0
+L0:
