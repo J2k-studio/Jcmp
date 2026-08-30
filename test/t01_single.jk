@@ -1,4 +1,4 @@
-i main() {
-    i x = 7;
+i64 main() {
+    i64 x = 7;
     return x;
 }

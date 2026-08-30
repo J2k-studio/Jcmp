@@ -4,17 +4,22 @@
 // Sub-step ที่รวมอยู่ในไฟล์นี้แล้ว:
 //   v1.1 (2026-08-21): if / else if / else
 //   v1.2 (2026-08-21): while, break/continue, compound assignment (++ -- += -=)
+//   v1.3 (2026-08-29): type keyword เปลี่ยนจาก `i` เดี่ยวๆ เป็น `i64` (กันชน
+//     กับตัวแปรชื่อ `i` ที่ dispatch level — Jao ยกขึ้นมาเองว่า "i i = 10;"
+//     สับสน), function (ประกาศ+เรียก, รองรับ recursion, สูงสุด 8 parameter,
+//     type เดียวคือ i64 ทั้ง return/parameter) — ใช้ stack-frame จริงผ่าน `sp`
 //
 // ต่อยอดจาก Jcmp v0 (ตัวแปร/arithmetic/return) — syntax ทั้งหมดเป็น subset ของ
 // syntax-design.md ที่ล็อคไว้แล้ว (ข้อ 7 if/else, ข้อ 18 while/for, ข้อ 19
-// compound assignment, ข้อ 20 break/continue) ไม่มีการคิด syntax ใหม่
+// compound assignment, ข้อ 20 break/continue, ข้อ 8.23/8.24 function decl +
+// i64 default) ไม่มีการคิด syntax ใหม่
 // เขียนด้วย ARM64 asm ล้วน, build ด้วย as/ld ตรงๆ (bootstrap เหมือน v0/j2k_asm)
 //
-// pipeline: Jcmp-v1 (.jk -> .jasm)  -->  j2k_asm_v0.3 (.jasm -> ELF)
-// (j2k_asm v0.3 รองรับ b.eq/b.ne/b.lt/b.ge/b.gt/b.le อยู่แล้ว — ไม่ต้องแก้
-// assembler เพิ่มเลยสำหรับ if/while)
+// pipeline: Jcmp-v1 (.jk -> .jasm)  -->  j2k_asm_v1 (.jasm -> ELF)
+// (v1.3 ใช้ sp ผ่าน handle_add/sub/ldr/str ที่ j2k_asm v1 เพิ่งขยายรองรับ —
+// ต้องใช้ j2k_asm_v1 ไม่ใช่ v0.3 อีกต่อไปตั้งแต่ v1.3)
 //
-// Syntax ใหม่ที่เพิ่ม (subset ของ syntax-design.md ข้อ 7/18/19/20 ที่ล็อคไว้แล้ว):
+// Syntax ใหม่ที่เพิ่ม (subset ของ syntax-design.md ข้อ 7/18/19/20/8.23 ที่ล็อคไว้แล้ว):
 //   if x > 5 {
 //       ...
 //   } else if x == 3 {
@@ -28,6 +33,10 @@
 //       x++;
 //       if x == 5 { break; }
 //       if x == 3 { continue; }
+//   }
+//
+//   i64 add(i64 a, i64 b) {
+//       return a + b;
 //   }
 //
 // ข้อจำกัดของ v1.1 (if/else, ตั้งใจ เพิ่มเติมจาก v0):
@@ -45,11 +54,22 @@
 // ข้อจำกัดของ v1.2 (while/break/continue/compound-assign, ตั้งใจ):
 //   - `while` ใช้เงื่อนไขกฎเดียวกับ `if` (LHS ต้องเป็นตัวแปร)
 //   - รองรับ compound assignment แค่ `++` `--` `+=` `-=` — **`*=` และ `/=` ยัง
-//     ไม่รองรับ** เพราะ j2k_asm v0.3 ยังไม่มี mnemonic `mul`/`udiv`/`sdiv` เลย
+//     ไม่รองรับ** เพราะ j2k_asm v1 ยังไม่มี mnemonic `mul`/`udiv`/`sdiv` เลย
 //     (ใช้ `*=`/`/=` ในโค้ด .jk จะได้ parse_error) — ต้องขยาย j2k_asm ก่อนถึง
 //     จะรองรับได้ เป็นงานแยกต่างหากที่ยังไม่ได้ทำ
 //   - `break`/`continue` นอก loop ใดๆ เลย -> parse_error
 //   - ยังไม่มี `for` (ทั้ง C-style และ range-style) — เก็บไว้ sub-step ถัดไป
+//
+// ข้อจำกัดของ v1.3 (function, ตั้งใจ):
+//   - type เดียวคือ `i64` ทั้ง return type และทุก parameter (ยังไม่มี `void`,
+//     ยังไม่มี type อื่น)
+//   - parameter สูงสุด 8 ตัวต่อฟังก์ชัน (x0-x7 เต็มตาม ARM64 calling
+//     convention จริง — เกิน 8 ตัวยังไม่รองรับ ต้องผ่าน stack เพิ่ม ค้างไว้)
+//   - รองรับ recursion เต็มรูปแบบ (เหตุผลหลักที่ต้องเปลี่ยนไปใช้ stack-frame
+//     จริงแทน flat-register x1-x7 เดิม)
+//   - ฟังก์ชันยังเป็น "flat" ระดับไฟล์ — ไม่มี nested function, ไม่มี closure
+//   - เรียกฟังก์ชันเป็น operand ได้ (เช่น `i64 x = add(1, 2);`) แต่ยังไม่รองรับ
+//     เรียกซ้อนเป็น argument (เช่น `add(add(1,2), 3)`) — ยังไม่ได้ออกแบบ
 //
 // Build:
 //   as -o Jcmp-v1.o Jcmp-v1.s
@@ -57,8 +77,8 @@
 //   chmod +x Jcmp
 //
 // ทดสอบตัวอย่าง (test_if.jk):
-//   i main() {
-//       i x = 10;
+//   i64 main() {
+//       i64 x = 10;
 //       if x > 5 {
 //           return 1;
 //       } else {
@@ -68,8 +88,8 @@
 // คาด: ./test_if_out ; echo $? --> 1
 //
 // ทดสอบ else-if (test_elif.jk):
-//   i main() {
-//       i x = 3;
+//   i64 main() {
+//       i64 x = 3;
 //       if x == 1 {
 //           return 10;
 //       } else if x == 3 {
@@ -81,9 +101,9 @@
 // คาด: ./test_elif_out ; echo $? --> 30
 //
 // ทดสอบ while (test_while.jk) — บวกเลขไปเรื่อยๆ จนถึง 5:
-//   i main() {
-//       i sum = 0;
-//       i i = 0;
+//   i64 main() {
+//       i64 sum = 0;
+//       i64 i = 0;
 //       while i < 5 {
 //           sum += i;
 //           i++;
@@ -93,9 +113,9 @@
 // คาด: ./test_while_out ; echo $? --> 10   (0+1+2+3+4)
 //
 // ทดสอบ break/continue (test_breakcontinue.jk):
-//   i main() {
-//       i i = 0;
-//       i sum = 0;
+//   i64 main() {
+//       i64 i = 0;
+//       i64 sum = 0;
 //       while i < 10 {
 //           i++;
 //           if i == 7 { break; }
@@ -106,6 +126,29 @@
 //   }
 // คาด: 1+2+4+5+6 = 18 (ข้าม 3 ด้วย continue, หยุดก่อนบวก 7 ด้วย break)
 // ./test_breakcontinue_out ; echo $? --> 18
+//
+// ทดสอบ function (test_func.jk):
+//   i64 add(i64 a, i64 b) {
+//       return a + b;
+//   }
+//   i64 main() {
+//       i64 result = add(3, 4);
+//       return result;
+//   }
+// คาด: ./test_func_out ; echo $? --> 7
+//
+// ทดสอบ recursion (test_recur.jk):
+//   i64 fact(i64 n) {
+//       if n <= 1 {
+//           return 1;
+//       }
+//       return n * fact(n - 1);
+//   }
+//   i64 main() {
+//       return fact(5);
+//   }
+// หมายเหตุ: ตัวอย่างนี้ใช้ `*` ซึ่ง Jcmp ยังไม่รองรับ (ดูข้อจำกัด v1.2) —
+// จะใช้ recursion ทดสอบจริงต้องเลี่ยง `*` เช่นใช้ fibonacci (บวก/ลบล้วน) แทน
 
     .global _start
     .text
@@ -159,12 +202,15 @@ _start:
     mov     x16, #0                     // x16 = global label counter (for if/else/while)
     mov     x15, #0                     // x15 = loop-context stack depth (0 = not in a loop)
 
-    // ---- parse header: "i" ws "main" ws "(" ws ")" ws "{" ----
+    // ---- parse header: "i64" ws "main" ws "(" ws ")" ws "{" ----
     bl      skip_ws
-    ldrb    w0, [x21]
-    cmp     w0, #'i'
+    adrp    x1, kw_i64
+    add     x1, x1, :lo12:kw_i64
+    mov     x2, #3
+    bl      match_word
+    cmp     x0, #1
     b.ne    parse_error
-    add     x21, x21, #1
+    add     x21, x21, #3
     bl      skip_ws
     adrp    x1, kw_main
     add     x1, x1, :lo12:kw_main
@@ -207,6 +253,13 @@ _start:
 //   "if"     -> if/else-if/else chain (checked as 'i' + 'f' + non-identifier
 //               boundary char, to distinguish from "i " variable declaration)
 //   'i' (else) -> variable declaration
+// v1.3 statement dispatch:
+//   '}'      -> end of this block
+//   "return" -> return statement
+//   "if"     -> if/else-if/else chain
+//   "i64"    -> variable declaration
+//   "while"/"break"/"continue" -> loop statements
+//   else     -> assignment statement (covers plain identifiers, incl. "i")
 parse_block:
     stp     x29, x30, [sp, #-16]!
 pb_loop:
@@ -214,15 +267,16 @@ pb_loop:
     ldrb    w0, [x21]
     cmp     w0, #'}'
     b.eq    pb_end
-    cmp     w0, #'i'
-    b.eq    pb_i_dispatch
 
     // try each keyword with word-boundary matching (non-destructive on
     // failure) BEFORE falling back to "it's an identifier -> assignment
     // statement". This matters now that variable names like "count" (starts
     // with 'c', same as "continue") or "result"/"row" (starts with 'r', same
     // as "return") are realistic — a bare first-letter peek would misroute
-    // them, so we do a real keyword comparison here instead.
+    // them, so we do a real keyword comparison here instead. Since v1.3, the
+    // type keyword is "i64" (3 chars, was bare "i") specifically so that a
+    // variable named plain "i" (extremely common loop counter) never
+    // collides with the type keyword at the dispatch level.
     adrp    x1, kw_return
     add     x1, x1, :lo12:kw_return
     mov     x2, #6
@@ -251,47 +305,27 @@ pb_loop:
     cmp     x0, #1
     b.eq    pb_continue
 
+    adrp    x1, kw_if
+    add     x1, x1, :lo12:kw_if
+    mov     x2, #2
+    bl      match_word
+    cmp     x0, #1
+    b.eq    pb_if
+
+    adrp    x1, kw_i64
+    add     x1, x1, :lo12:kw_i64
+    mov     x2, #3
+    bl      match_word
+    cmp     x0, #1
+    b.eq    pb_decl
+
     b       pb_assign
 
-pb_i_dispatch:
-    ldrb    w0, [x21, #1]
-    cmp     w0, #'f'
-    b.ne    pb_i_not_if
-    ldrb    w0, [x21, #2]
-    cmp     w0, #'a'
-    b.lt    pb_bc2
-    cmp     w0, #'z'
-    b.le    pb_i_not_if                 // identifier starting "if..." (e.g.
-                                         // "iffy") — not the "if" keyword,
-                                         // fall through to the same check below
-pb_bc2:
-    cmp     w0, #'A'
-    b.lt    pb_bc3
-    cmp     w0, #'Z'
-    b.le    pb_i_not_if
-pb_bc3:
-    cmp     w0, #'0'
-    b.lt    pb_bc4
-    cmp     w0, #'9'
-    b.le    pb_i_not_if
-pb_bc4:
-    cmp     w0, #'_'
-    b.eq    pb_i_not_if
+pb_if:
+    // keyword NOT consumed by match_word (non-destructive) -- parse_if_chain
+    // expects x21 still at 'i' of "if", matching its existing contract.
     bl      parse_if_chain
     b       pb_loop
-pb_i_not_if:
-    // Not "if". Could still be the `i` TYPE keyword starting a declaration
-    // ("i x = 5;") OR a plain identifier that happens to start with 'i' used
-    // in an assignment statement — most commonly a variable literally named
-    // "i" (extremely common loop counter, e.g. "i++;"), or "index", "item",
-    // etc. The type keyword `i` is always followed immediately by whitespace
-    // before the variable name; anything else means it's just an identifier.
-    ldrb    w0, [x21, #1]
-    cmp     w0, #' '
-    b.eq    pb_decl
-    cmp     w0, #9                      // tab
-    b.eq    pb_decl
-    b       pb_assign
 pb_decl:
     bl      parse_decl_stmt
     b       pb_loop
@@ -317,13 +351,13 @@ pb_end:
     ldp     x29, x30, [sp], #16
     ret
 
-// parse_decl_stmt: "i NAME = A [op B];" — same logic as v0's try_decl, just
+// parse_decl_stmt: "i64 NAME = A [op B];" — same logic as v0's try_decl, just
 // refactored into a callable subroutine that returns to its caller (parse_block)
 // instead of jumping back to a fixed loop label.
 // registers used across calls here: x12=kindA x13=valA x14=opchar x9=kindB x10=valB
 parse_decl_stmt:
     stp     x29, x30, [sp, #-16]!
-    add     x21, x21, #1                // consume 'i'
+    add     x21, x21, #3                // consume 'i64'
     bl      skip_ws
     bl      parse_ident                 // -> name_buf
     bl      save_lhs_name               // protect name from parse_operand's own
@@ -1353,6 +1387,10 @@ kw_break:
     .ascii "break"
 kw_continue:
     .ascii "continue"
+kw_if:
+    .ascii "if"
+kw_i64:
+    .ascii "i64"
 str_mov:
     .ascii "mov "
 str_add:
