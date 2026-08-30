@@ -1,0 +1,82 @@
+J2K / Jcmp Proprietary License
+Copyright (c) 2026 Jao (J2k-studio)
+All Rights Reserved.
+
+================================================================================
+SUMMARY (ภาษาไทย)
+================================================================================
+
+อนุญาต:
+  - อ่าน (view / study) ซอร์สโค้ดและเอกสารได้
+  - ใช้ (compile / run) บนเครื่องของตนเองเพื่อวัตถุประสงค์ส่วนตัวหรือการศึกษา
+
+ไม่อนุญาต:
+  - คัดลอก ดัดแปลง หรือนำโค้ด/เอกสารไปใช้เป็นของตนเอง (ห้ามลอก / ห้ามก็อปปี้)
+  - เผยแพร่ซ้ำ แจกจ่าย หรืออัพโหลดซอร์สโค้ดหรือไบนารีไปยังที่อื่น
+  - อ้างสิทธิ์ความเป็นเจ้าของ หรือใช้ชื่อ/แบรนด์ J2K, Jcmp, J2k-studio
+    ในลักษณะที่ทำให้เข้าใจผิดว่าเป็นผลงานของตนเอง
+  - ใช้ในเชิงพาณิชย์โดยไม่ได้รับอนุญาตเป็นลายลักษณ์อักษร
+
+================================================================================
+FULL TERMS (English)
+================================================================================
+
+1. Grant of Limited Permission
+
+   Subject to the terms below, you may:
+
+   (a) View and study the source code, documentation, and related materials
+       in this repository for personal learning and research purposes.
+
+   (b) Compile and run the software on machines under your own control for
+       personal, non-commercial, and non-redistributive use.
+
+2. Restrictions
+
+   You may NOT:
+
+   (a) Copy, reproduce, or substantially reproduce any portion of the source
+       code, documentation, or binaries for the purpose of creating a
+       derivative work, submitting as your own work, or claiming authorship.
+
+   (b) Redistribute, publish, upload, or otherwise make available the source
+       code, object code, binaries, or documentation (in whole or in part)
+       to any third party or public platform, including but not limited to
+       other GitHub repositories, mirrors, or package registries.
+
+   (c) Claim ownership of, or authorship of, this software, the J2K language,
+       the Jcmp compiler, or any substantial portion thereof.
+
+   (d) Use the names "J2K", "Jcmp", "J2k-studio", or any confusingly similar
+       name in a way that suggests endorsement or that the work is yours.
+
+   (e) Use the software or any part of it for commercial purposes without
+       prior written permission from the copyright holder.
+
+3. No Warranty
+
+   THIS SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+   OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+   FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. IN NO EVENT SHALL
+   THE COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY.
+
+4. Termination
+
+   Any violation of these terms automatically terminates the limited
+   permissions granted above. Upon termination you must cease all use and
+   destroy any copies in your possession.
+
+5. Reservation of Rights
+
+   All rights not expressly granted are reserved by the copyright holder.
+   This license does not grant any patent, trademark, or other intellectual
+   property rights beyond the limited permissions stated herein.
+
+6. Contact
+
+   For permission requests (commercial use, redistribution exceptions, etc.)
+   contact the copyright holder via the GitHub profile: J2k-studio
+
+================================================================================
+END OF LICENSE
+================================================================================
