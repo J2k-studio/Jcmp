@@ -1,6 +1,21 @@
 // j2k_asm_v1.s
-// J2K Assembler v1 — Phase 1 ขั้น 1 (ต่อจาก v0.2)
-// เพิ่มจาก v0.2: label definition (name:), branch (b, b.cond, bl), ldr/str
+// J2K Assembler v1 — Phase 1 ขั้น 1
+//
+// อัปเดตล่าสุด (2026-08-21): เพิ่มการรองรับ `sp` (stack pointer) เป็นชื่อ
+// register ได้ — จำเป็นสำหรับ Jcmp v1.3 (function/stack-frame) ที่กำลังจะทำ
+// รองรับเฉพาะจุดที่ ARM64 จริงอนุญาตให้ใช้ sp เท่านั้น (ไม่ใช่ทุกที่ที่มี
+// register operand) เพื่อเลี่ยงกับดัก encoding ผิดแบบเงียบๆ (register หมายเลข
+// 31 มีสองความหมายขึ้นกับบริบท: เป็น SP ในกลุ่มคำสั่ง immediate/load-store
+// base-register, แต่เป็น XZR ในกลุ่มคำสั่ง register-to-register):
+//   - `add`/`sub` เมื่อ operand ตัวที่ 3 เป็น "#imm" (ไม่ใช่ register): sp ใช้
+//     เป็น Rd และ/หรือ Rn ได้ เช่น `sub sp, sp, #32`
+//   - `add`/`sub` แบบ register-to-register (operand ตัวที่ 3 เป็น "xN"): sp
+//     ใช้ไม่ได้เลย (ตรงกับข้อจำกัดจริงของ ARM64) — ถ้าเผลอเขียนจะได้
+//     parse_error แทนที่จะ encode ผิดแบบเงียบๆ
+//   - `ldr`/`str` — sp ใช้เป็น base register (ตัวในวงเล็บ `[...]`) ได้ เช่น
+//     `str x0, [sp, #16]` — แต่ใช้เป็น Rt (ตัวนอกวงเล็บ) ไม่ได้
+//
+// เพิ่มจาก v0.2 (ของเดิม): label definition (name:), branch (b, b.cond, bl), ldr/str
 // (register + unsigned immediate offset, 64-bit only, offset ต้องหาร 8 ลงตัว)
 //
 // สถาปัตยกรรม: TWO-PASS
@@ -11,10 +26,11 @@
 //                    branch คำนวณ offset จากตาราง label ที่ pass 1 สร้างไว้แล้ว
 //                    (รองรับทั้ง forward และ backward reference)
 //
-// ข้อจำกัดที่ตั้งใจไว้ (เพื่อความง่ายของ v0.3 — ปรับได้ใน v0.4 ถ้าจำเป็น):
+// ข้อจำกัดที่ตั้งใจไว้ (เพื่อความง่าย — ปรับได้ถ้าจำเป็น):
 //   - Label ต้องขึ้นต้นด้วยตัวอักษรหรือ '_' (ไม่รองรับ label ตัวเลขล้วนแบบ "1:")
 //   - ldr/str รองรับเฉพาะ x-register (64-bit), unsigned offset, offset % 8 == 0
 //   - ยังไม่มี ldrb/strb, ยังไม่มี pre/post-index addressing
+//   - ยังไม่มี stp/ldp (คู่), ยังไม่มี mul/udiv/sdiv
 //
 // Mnemonic ที่รองรับตอนนี้ (เพิ่มจาก v0.2):
 //   label:                      (label definition)
@@ -216,9 +232,23 @@ try_str:
 try_branch:
     ldrb    w0, [x21, #0]
     cmp     w0, #'b'
-    b.ne    try_svc
+    b.ne    try_ret
     add     x21, x21, #1
     bl      handle_branch
+    b       skip_to_eol
+
+try_ret:
+    ldrb    w0, [x21, #0]
+    cmp     w0, #'r'
+    b.ne    try_svc
+    ldrb    w0, [x21, #1]
+    cmp     w0, #'e'
+    b.ne    try_svc
+    ldrb    w0, [x21, #2]
+    cmp     w0, #'t'
+    b.ne    try_svc
+    add     x21, x21, #3
+    bl      handle_ret
     b       skip_to_eol
 
 try_svc:
@@ -420,6 +450,49 @@ pr_err:
     ldp     x29, x30, [sp], #16
     b       parse_error
 
+// parse_register_or_sp: like parse_register, but also accepts the literal
+// "sp" (word-boundary checked) and returns register number 31 for it, plus a
+// flag in x1 (1 = was "sp", 0 = was a plain "xN"). Register 31 means SP in
+// the ADD/SUB-immediate and LDR/STR-base-register encodings (the only places
+// this helper is used), but means XZR in register-register forms — callers
+// MUST check the returned flag and reject it (parse_error) before using
+// register-register encodings, to avoid silently encoding "sp" as "xzr".
+parse_register_or_sp:
+    stp     x29, x30, [sp, #-16]!
+    ldrb    w0, [x21]
+    cmp     w0, #'s'
+    b.ne    prs_normal
+    ldrb    w1, [x21, #1]
+    cmp     w1, #'p'
+    b.ne    prs_normal
+    ldrb    w2, [x21, #2]
+    // accept "sp" only when directly followed by a delimiter this helper is
+    // actually ever called with: comma, space, ']', tab, or newline. Simpler
+    // and easier to verify than a "not identifier-continuation-char" range
+    // check, and covers every real call site ("sp,", "sp ", "sp]", "sp\n").
+    cmp     w2, #' '
+    b.eq    prs_is_sp
+    cmp     w2, #','
+    b.eq    prs_is_sp
+    cmp     w2, #']'
+    b.eq    prs_is_sp
+    cmp     w2, #9                      // tab
+    b.eq    prs_is_sp
+    cmp     w2, #10                     // newline
+    b.eq    prs_is_sp
+    b       prs_normal
+prs_is_sp:
+    add     x21, x21, #2
+    mov     x0, #31
+    mov     x1, #1
+    ldp     x29, x30, [sp], #16
+    ret
+prs_normal:
+    bl      parse_register
+    mov     x1, #0
+    ldp     x29, x30, [sp], #16
+    ret
+
 // add_label: reads label_name_buf + x16 (current position, = label's address),
 // appends a 32-byte entry (24-byte name + 8-byte address) at x27 + x28*32,
 // then increments x28. Pass-1-only caller (see label_done).
@@ -583,16 +656,18 @@ hm_err:
 handle_add:
     stp     x29, x30, [sp, #-16]!
     bl      skip_spaces
-    bl      parse_register              // Rd
+    bl      parse_register_or_sp        // Rd -- x0=reg, x1=is_sp
     mov     x24, x0
+    mov     x11, x1                     // is_sp_d
     bl      skip_spaces
     ldrb    w0, [x21]
     cmp     w0, #','
     b.ne    ha_err
     add     x21, x21, #1
     bl      skip_spaces
-    bl      parse_register              // Rn
+    bl      parse_register_or_sp        // Rn -- x0=reg, x1=is_sp
     mov     x9, x0
+    mov     x12, x1                     // is_sp_n
     bl      skip_spaces
     ldrb    w0, [x21]
     cmp     w0, #','
@@ -603,6 +678,8 @@ handle_add:
     cmp     w0, #'x'
     b.eq    ha_reg
 
+    // immediate form -- "sp" allowed for Rd/Rn here (matches real ARM64
+    // ADD-immediate, which is the only encoding that legitimately supports SP)
     bl      parse_number                // imm12
     mov     w2, #0x9100
     lsl     w2, w2, #16                 // 0x91000000  (ADD immediate base)
@@ -614,6 +691,12 @@ handle_add:
     bl      finish_instr
     b       ha_done
 ha_reg:
+    // register-register form -- "sp" is NOT valid here (register 31 means
+    // XZR in this encoding, not SP -- reject rather than silently mis-encode)
+    cmp     x11, #1
+    b.eq    ha_err
+    cmp     x12, #1
+    b.eq    ha_err
     bl      parse_register              // Rm
     mov     w2, #0x8B00
     lsl     w2, w2, #16                 // 0x8B000000  (ADD shifted-register base)
@@ -634,16 +717,18 @@ ha_err:
 handle_sub:
     stp     x29, x30, [sp, #-16]!
     bl      skip_spaces
-    bl      parse_register              // Rd
+    bl      parse_register_or_sp        // Rd
     mov     x24, x0
+    mov     x11, x1                     // is_sp_d
     bl      skip_spaces
     ldrb    w0, [x21]
     cmp     w0, #','
     b.ne    hs_err
     add     x21, x21, #1
     bl      skip_spaces
-    bl      parse_register              // Rn
+    bl      parse_register_or_sp        // Rn
     mov     x9, x0
+    mov     x12, x1                     // is_sp_n
     bl      skip_spaces
     ldrb    w0, [x21]
     cmp     w0, #','
@@ -654,7 +739,7 @@ handle_sub:
     cmp     w0, #'x'
     b.eq    hs_reg
 
-    bl      parse_number                // imm12
+    bl      parse_number                // imm12 -- sp allowed here
     mov     w2, #0xD100
     lsl     w2, w2, #16                 // 0xD1000000  (SUB immediate base)
     lsl     w3, w0, #10
@@ -665,6 +750,11 @@ handle_sub:
     bl      finish_instr
     b       hs_done
 hs_reg:
+    // register-register form -- sp NOT valid (see handle_add's ha_reg note)
+    cmp     x11, #1
+    b.eq    hs_err
+    cmp     x12, #1
+    b.eq    hs_err
     bl      parse_register              // Rm
     mov     w2, #0xCB00
     lsl     w2, w2, #16                 // 0xCB000000  (SUB shifted-register base)
@@ -743,7 +833,7 @@ handle_ldr:
     b.ne    hl_err
     add     x21, x21, #1
     bl      skip_spaces
-    bl      parse_register              // Rn
+    bl      parse_register_or_sp        // Rn (base register) -- sp allowed here
     mov     x9, x0
     bl      skip_spaces
     ldrb    w0, [x21]
@@ -758,16 +848,17 @@ handle_ldr:
     b.ne    hl_err
     add     x21, x21, #1
     bl      parse_number                // x0 = imm (bytes)
+    mov     x10, x0                     // save immediately -- skip_spaces/ldrb below clobber x0/w0
     bl      skip_spaces
     ldrb    w0, [x21]
     cmp     w0, #']'
     b.ne    hl_err
     add     x21, x21, #1
-    mov     x1, x0
+    mov     x1, x10
     and     x1, x1, #7
     cmp     x1, #0
     b.ne    hl_err                      // offset must be multiple of 8
-    lsr     x0, x0, #3                  // imm12 = imm/8
+    lsr     x0, x10, #3                 // imm12 = imm/8
     b       hl_encode
 hl_noimm:
     add     x21, x21, #1
@@ -804,7 +895,7 @@ handle_str:
     b.ne    hst_err
     add     x21, x21, #1
     bl      skip_spaces
-    bl      parse_register              // Rn
+    bl      parse_register_or_sp        // Rn (base register) -- sp allowed here
     mov     x9, x0
     bl      skip_spaces
     ldrb    w0, [x21]
@@ -819,16 +910,17 @@ handle_str:
     b.ne    hst_err
     add     x21, x21, #1
     bl      parse_number                // x0 = imm (bytes)
+    mov     x10, x0                     // save immediately -- skip_spaces/ldrb below clobber x0/w0
     bl      skip_spaces
     ldrb    w0, [x21]
     cmp     w0, #']'
     b.ne    hst_err
     add     x21, x21, #1
-    mov     x1, x0
+    mov     x1, x10
     and     x1, x1, #7
     cmp     x1, #0
     b.ne    hst_err                     // offset must be multiple of 8
-    lsr     x0, x0, #3
+    lsr     x0, x10, #3
     b       hst_encode
 hst_noimm:
     add     x21, x21, #1
@@ -918,6 +1010,17 @@ handle_svc:
     lsl     w3, w0, #5
     orr     w2, w2, w3
     orr     w2, w2, #1
+    bl      finish_instr
+    ldp     x29, x30, [sp], #16
+    ret
+
+// ---- handle_ret: "ret" (no operand, always returns via x30/LR) ----
+// Fixed encoding: 0xD65F03C0
+handle_ret:
+    stp     x29, x30, [sp, #-16]!
+    mov     w2, #0xD65F
+    lsl     w2, w2, #16                 // 0xD65F0000
+    orr     w2, w2, #0x03C0             // 0xD65F03C0
     bl      finish_instr
     ldp     x29, x30, [sp], #16
     ret
