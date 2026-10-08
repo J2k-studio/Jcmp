@@ -1158,7 +1158,9 @@ void own_add(int off, int kind, int aux) {
     frame_bytes += 32;
     char fn[128];
     int mode = 0;
-    if kind == 0 {
+    if kind == 5 {
+        mode = 2;                            // a deferred statement: aux is the label of its code, off is not used
+    } else if kind == 0 {
         str_copy(@fn, "Mem__free", 128);
     } else if kind == 3 {
         str_copy(@fn, "__Str__free_all", 128);
@@ -1169,14 +1171,21 @@ void own_add(int off, int kind, int aux) {
     } else {
         str_copy(@fn, "__Arr__free", 128);
     }
-    note_call(@fn);
+    if kind != 5 { note_call(@fn); }
     ins_n("add x1, x29, #", own_rec[own_count]);
     emit_line("ldr x2, [x27, #784]");
     emit_line("str x2, [x1, #0]");
-    ins_n("add x2, x29, #", off);
-    emit_line("str x2, [x1, #8]");
-    emit_str("adr x2, ");
-    emit_line(@fn);
+    if kind == 5 {
+        emit_line("str x29, [x1, #8]");      // the frame the code works on
+        emit_str("adr x2, ");
+        emit_lab(aux);
+        emit_nl();
+    } else {
+        ins_n("add x2, x29, #", off);
+        emit_line("str x2, [x1, #8]");
+        emit_str("adr x2, ");
+        emit_line(@fn);
+    }
     emit_line("str x2, [x1, #16]");
     ins_n("mov x2, ", mode);
     emit_line("str x2, [x1, #24]");
@@ -1191,6 +1200,12 @@ void own_unlink(int from) {
 }
 
 void emit_owner_free(int i) {
+    if own_kind[i] == 5 {
+        emit_str("bl ");                     // a deferred statement runs now
+        emit_lab(own_aux[i]);
+        emit_nl();
+        return;
+    }
     if own_kind[i] == 4 {
         // a struct variable with a free(self) method: the compiler calls it
         char sf[128];

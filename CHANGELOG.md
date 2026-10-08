@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9.9
+* **`defer`:** `defer statement;` / `defer { ... }` runs when the block is left (end, `return`, `break`, `continue`, or a `throw` passing through), last defer first, with the variables as they are then.
+
 ## 0.9.8
 * **`Option<T>` and `Result<T, E>`** (std) with the standard `Error` (`kind`, `message`) and **`expr?`**: an `Err` / `None` returns from the function at once, the content of an `Ok` / `Some` is the value. Methods `is_ok is_err is_some is_none unwrap or`.
 * **Values that free themselves are moved:** a struct with `free(self)` (and a data enum that holds a String, an array or such a struct) is moved by `=`, by a by-value parameter and by `return`; a fresh value from a call is taken over.

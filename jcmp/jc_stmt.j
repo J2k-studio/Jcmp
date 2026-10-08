@@ -1889,7 +1889,40 @@ void parse_statement() {
     str_flush(t0, 0);
 }
 
+int in_defer;                // > 0 while a deferred statement is compiled
+int defer_loop_base;         // loop_depth where it began
+
+// defer statement;   defer { ... }   : runs when the block is left (also by return, break, continue or a throw),
+// the last defer first; it sees the variables as they are then
+void parse_defer() {
+    if in_defer > 0 { die("a defer cannot contain a defer"); }
+    if cur_in_func == 0 || mt_active == 1 { die("defer is used inside a function (not in a #multithread loop)"); }
+    next();                              // "defer"
+    int lskip = new_label();
+    int ldef = new_label();
+    jump(lskip);
+    place_label(ldef);
+    emit_line("sub sp, sp, #16");
+    emit_line("str x30, [sp, #0]");
+    in_defer += 1;
+    defer_loop_base = loop_depth;
+    int sv_ok = own_ok;
+    own_ok = 0;
+    parse_statement();
+    own_ok = sv_ok;
+    in_defer -= 1;
+    emit_line("ldr x30, [sp, #0]");
+    emit_line("add sp, sp, #16");
+    emit_line("ret");
+    place_label(lskip);
+    own_add(0 - 1, 5, ldef);
+}
+
 void parse_statement_inner() {
+    if tok_is("defer") && in_func_stmt_ok() {
+        parse_defer();
+        return;
+    }
     if mt_pending == 1 {
         mt_pending = 0;
         if !tok_is("for") { die("#multithread must be followed by a for loop"); }
@@ -1932,6 +1965,7 @@ void parse_statement_inner() {
         next();
         expect(";");
         if loop_depth == 0 { die("break outside a loop"); }
+        if in_defer > 0 && loop_depth <= defer_loop_base { die("a deferred statement cannot break out of a loop around it"); }
         if mt_active == 1 && loop_depth - 1 == mt_base { die("break cannot be used in a #multithread loop (every iteration runs on its own)"); }
         leave_tries(try_depth - loop_try[loop_depth - 1]);
         own_free_from(loop_own[loop_depth - 1], 0);
@@ -1942,12 +1976,14 @@ void parse_statement_inner() {
         next();
         expect(";");
         if loop_depth == 0 { die("continue outside a loop"); }
+        if in_defer > 0 && loop_depth <= defer_loop_base { die("a deferred statement cannot continue a loop around it"); }
         leave_tries(try_depth - loop_try[loop_depth - 1]);
         own_free_from(loop_own[loop_depth - 1], 0);
         jump(cont_stack[loop_depth - 1]);
         return;
     }
     if tok_is("return") {
+        if in_defer > 0 { die("a deferred statement cannot return"); }
         if mt_active == 1 { die("return cannot be used inside a #multithread loop"); }
         next();
         int ret_mv = 0 - 1;
@@ -3037,6 +3073,10 @@ void emit_exc_helper() {
     emit_line("b.ne j2k_th2");
     emit_line("ldr x0, [x7, #0]");
     emit_line("j2k_th2:");
+    emit_line("cmp x10, 2");
+    emit_line("b.ne j2k_th4");
+    emit_line("mov x29, x7");               // a deferred statement works on the frame it was written in
+    emit_line("j2k_th4:");
     emit_line("blr x8");
     emit_line("b j2k_th1");
     emit_line("j2k_th3:");
@@ -3158,4 +3198,8 @@ void emit_copy_helper() {
     emit_line("b.ne j2k_cp1");
     emit_line("j2k_cp2:");
     emit_line("ret");
+}
+
+bool in_func_stmt_ok() {
+    return cur_in_func == 1;
 }

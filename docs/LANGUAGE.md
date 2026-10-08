@@ -416,6 +416,24 @@ switch add("20", "22") { ... }       // or  Result<int, Error> r = add(...);  sw
 * Methods: `is_ok()`, `is_err()`, `is_some()`, `is_none()`, `unwrap()` (throws if there is no value), `or(fallback)`.
 * `try`/`catch` stays for the cases where throwing is better; use a `Result` when the caller is expected to handle the failure.
 
+## defer
+
+`defer statement;` or `defer { ... }` runs when the block is left: at its end, by `return`, `break` or `continue`, or when a `throw` passes through. The last
+`defer` runs first, and it sees the variables as they are at that moment.
+
+```jk
+int work(int n) {
+    File f = open(path);
+    defer f.close();                  // whatever happens below, the file is closed
+    defer cout << "leaving, n = " << n << "\n";
+    n += 1;
+    if n > 5 { return n * 10; }
+    return n;
+}
+```
+
+A deferred statement cannot `return`, nor `break` or `continue` a loop around it.
+
 ## Values that free themselves
 
 A struct (or enum) with a method `free(self)` frees what it holds at the end of the block of a variable. Because of that it is **moved**, not copied:
