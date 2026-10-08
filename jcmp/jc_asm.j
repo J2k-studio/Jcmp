@@ -578,6 +578,34 @@ void as_h_blr() {
     as_put32(0xD63F0000 | (rn << 5));
 }
 
+// ldaxr / ldxr xT, [xN] : load and mark the address for an exclusive store
+void as_h_ldex(int base) {
+    as_skip_spaces();
+    int rt = as_parse_reg();
+    as_expect_comma();
+    if as_cur() != '[' { as_fail(); }
+    as_ci += 1;
+    int rn = as_parse_reg_or_sp();
+    if as_cur() != ']' { as_fail(); }
+    as_ci += 1;
+    as_put32(base | (rn << 5) | rt);
+}
+
+// stlxr / stxr wS, xT, [xN] : store if nothing else touched the address (wS = 0 on success)
+void as_h_stex(int base) {
+    as_skip_spaces();
+    int rs = as_parse_wreg();
+    as_expect_comma();
+    int rt = as_parse_reg();
+    as_expect_comma();
+    if as_cur() != '[' { as_fail(); }
+    as_ci += 1;
+    int rn = as_parse_reg_or_sp();
+    if as_cur() != ']' { as_fail(); }
+    as_ci += 1;
+    as_put32(base | (rs << 16) | (rn << 5) | rt);
+}
+
 void as_h_svc() {
     as_skip_spaces();
     int n = as_parse_number();
@@ -640,6 +668,12 @@ void as_instruction() {
     if as_mn_is("ldrsw") { as_h_mem(0xB980, 2); return; }
     if as_mn_is("strb") { as_h_mem(0x3900, 0); return; }
     if as_mn_is("strw") { as_h_mem(0xB900, 2); return; }
+    if as_mn_is("ldaxr") { as_h_ldex(0xC85FFC00); return; }
+    if as_mn_is("ldxr") { as_h_ldex(0xC85F7C00); return; }
+    if as_mn_is("stlxr") { as_h_stex(0xC800FC00); return; }
+    if as_mn_is("stxr") { as_h_stex(0xC8007C00); return; }
+    if as_mn_is("dmb") { as_put32(0xD5033BBF); return; }               // dmb ish
+    if as_mn_is("clrex") { as_put32(0xD5033F5F); return; }
     if as_mn_is("adr") { as_h_adr(); return; }
     if as_mn_is("blr") { as_h_blr(); return; }
     if as_mn_is("ldrw") { as_h_mem(0xB940, 2); return; }

@@ -367,6 +367,61 @@ void main() {
 }
 ```
 
+## Threads and locks
+
+```jk
+import cpu
+using cpu::thread
+using cpu::mutex
+
+int counter;
+Mutex mu;
+
+void work(void^ arg) {                  // a thread runs a function  void f(void^ arg)
+    for i in 0..1000 {
+        mu.lock();                      // only one thread at a time between lock and unlock
+        counter += 1;
+        mu.unlock();
+    }
+}
+
+void main() {
+    Thread t1 = create(work, null);     // start two threads
+    Thread t2 = create(work, null);
+    t1.join();                          // wait until a thread has ended
+    t2.join();
+    cout << counter << "\n";            // 2000
+}
+```
+
+`create(function, argument)` starts a thread; the argument is a `void^` (pass `@variable` or `(void^)number`;
+cast it back inside: `(char^)arg`, `(int)arg`). `t.join()` waits for the end, `t.detach()` lets it run alone (it cannot be joined
+afterwards), `t.is_running()` asks. `Thread::sleep(ms)`, `Thread::yield()` and `Thread::id()` are there too.
+A `Mutex` has `lock()`, `unlock()` and `try_lock()`; unlock it yourself on every way out of the section.
+Every thread has its own stack (1 MB), its own `try`/`catch` state, and shares globals and the heap (the heap is
+protected by a lock). An exception that no `catch` of the thread handles ends the whole program. The program also ends when
+`main` ends, even if other threads are still running.
+
+### `#multithread` loops
+
+```jk
+int squares[1000];
+
+void main() {
+    int offset = 5;
+    #multithread
+    for i in 0..1000 {                  // the iterations are shared among the machine's cores
+        squares[i] = i * i + offset;    // every iteration must be independent of the others
+    }
+    cout << squares[999] << "\n";       // 998006
+}
+```
+
+Put `#multithread` on the line before a `for i in a..b` loop. The range is worked out first, split into one part per core
+(at most 16), and each part runs on its own thread; the loop ends when all of them have finished. The body can read and write the
+variables of the function around it and globals (you must make sure no two iterations touch the same data, or use a `Mutex`).
+Not allowed inside the body: `break`, `return`, and another `#multithread`.
+
 ## Modules
 
 ```jk
@@ -412,7 +467,7 @@ Current warnings: `-Wswitch`, `-Wlarge-by-value` (a struct over 64 bytes passed 
 
 ## Planned, not built yet
 
-threads/`Mutex`.
+thread pools.
 
 ## Debug build
 

@@ -476,7 +476,8 @@ int find_func(char^ name) {
 
 
 // the variable last found by lookup_var
-int v_local;                 // 1 local, 0 global
+int v_local;                 // 1 local, 2 local of the enclosing function (inside a #multithread body: base x26), 0 global
+int mt_outer;                // while a #multithread body is compiled: how many locals belong to the enclosing function
 int v_kind;
 int v_elem;
 int v_off;
@@ -518,6 +519,7 @@ bool lookup_var(char^ name) {
     int li = find_local(name);
     if li >= 0 {
         v_local = 1;
+        if mt_outer > 0 && li < mt_outer { v_local = 2; }
         v_kind = lkind[li];
         v_elem = lelem[li];
         v_off = loff[li];
@@ -653,13 +655,23 @@ void pop_x1() {
     emit_line("add sp, sp, #16");
 }
 
+// the register that a variable's offset is relative to: 1 = x29 (this function), 2 = x26 (the function
+// around a #multithread loop), 0 = x28 (globals)
+char^ base_of(int local) {
+    if local == 1 { return "x29"; }
+    if local == 2 { return "x26"; }
+    return "x28";
+}
+
+char^ var_base() {
+    return base_of(v_local);
+}
+
 // the address of the variable (array start / scalar slot) into x0
 void addr_of_var() {
-    if v_local == 1 {
-        emit_str("add x0, x29, #");
-    } else {
-        emit_str("add x0, x28, #");
-    }
+    emit_str("add x0, ");
+    emit_str(var_base());
+    emit_str(", #");
     emit_int(v_off);
     emit_nl();
 }
@@ -673,11 +685,7 @@ void load_scalar() {
     if v_elem == 4 { str_copy(@lop, "ldrsw", 8); }
     if v_elem == 11 { str_copy(@lop, "ldrb", 8); }
     if v_elem == 12 { str_copy(@lop, "ldrw", 8); }
-    if v_local == 1 {
-        ins_mem(@lop, "x0", "x29", v_off);
-    } else {
-        ins_mem(@lop, "x0", "x28", v_off);
-    }
+    ins_mem(@lop, "x0", var_base(), v_off);
 }
 
 // bytes taken by one value of a width code: 1 i8, 2 char, 3 bool, 4 i32, 8 int
@@ -696,11 +704,7 @@ void store_scalar() {
     if v_elem == 4 { emit_line("sxtw x0, x0"); }
     if v_elem == 11 { emit_line("uxtb x0, x0"); }
     if v_elem == 12 { emit_line("uxtw x0, x0"); }
-    if v_local == 1 {
-        ins_mem("str", "x0", "x29", v_off);
-    } else {
-        ins_mem("str", "x0", "x28", v_off);
-    }
+    ins_mem("str", "x0", var_base(), v_off);
 }
 
 // x0 = the value of the given width code at the address held in x0
@@ -759,19 +763,13 @@ void element_address() {
     ins_n("mov x1, ", size_of(v_elem));
     emit_line("mul x0, x0, x1");
     if v_kind == 1 {
-        if v_local == 1 {
-            emit_str("add x1, x29, #");
-        } else {
-            emit_str("add x1, x28, #");
-        }
+        emit_str("add x1, ");
+        emit_str(var_base());
+        emit_str(", #");
         emit_int(v_off);
         emit_nl();
     } else {
-        if v_local == 1 {
-            ins_mem("ldr", "x1", "x29", v_off);
-        } else {
-            ins_mem("ldr", "x1", "x28", v_off);
-        }
+        ins_mem("ldr", "x1", var_base(), v_off);
     }
     emit_line("add x0, x0, x1");
 }
@@ -818,11 +816,7 @@ void emit_bounds(int size) {
 void check_index(int k, int nd, int cnt, int st1, int st2, int len_off, int len_local) {
     if opt_debug == 0 { return; }
     if len_off >= 0 {
-        if len_local == 1 {
-            ins_mem("ldr", "x2", "x29", len_off);
-        } else {
-            ins_mem("ldr", "x2", "x28", len_off);
-        }
+        ins_mem("ldr", "x2", base_of(len_local), len_off);
         emit_bounds(0 - 1);
         return;
     }
@@ -979,8 +973,9 @@ int parse_args() {
     return n;
 }
 
-// pops n pushed arguments into x0..x7; the 9th and later go to the overflow area
-// of the global block (x28 + 8 ...), where the callee's prologue copies them from
+// loads the pushed arguments into x0..x7. With 8 or fewer the stack slots are given back here;
+// with more, the slots stay (the callee reads arguments 9.. from them, on the stack of its own
+// thread) and the caller drops them after the call (see drop_args).
 void pop_args(int n) {
     int i = n - 1;
     int slot = 0;
@@ -991,18 +986,20 @@ void pop_args(int n) {
             emit_str(", [sp, #");
             emit_int(slot * 16);
             emit_str("]\n");
-        } else {
-            ins_mem("ldr", "x9", "sp", slot * 16);
-            ins_mem("str", "x9", "x28", 8 + (i - 8) * 8);
         }
         slot += 1;
         i -= 1;
     }
-    if n > 0 {
+    if n > 0 && n <= 8 {
         emit_str("add sp, sp, #");
         emit_int(n * 16);
         emit_nl();
     }
+}
+
+// after the call: give the argument slots back when there were more than 8
+void drop_args(int n) {
+    if n > 8 { ins_n("add sp, sp, #", n * 16); }
 }
 
 // a plain call name that is not a function of its own may be a static method of
@@ -1151,6 +1148,8 @@ void gen_call() {
     int tmp_off = 0;
     if fi >= 0 { res_ty = fret[fi]; }
     if str_eq(@callee, "__fsqrt") || str_eq(@callee, "__ffloor") || str_eq(@callee, "__fceil") || str_eq(@callee, "__ftrunc") { res_ty = 91; }
+    int is_atomic = 0;
+    if str_eq(@callee, "__cas") || str_eq(@callee, "__xchg") || str_eq(@callee, "__fetch_add") { is_atomic = 1; }
     if fi >= 0 && farr[fi] == 1 { arr_call_at = fnpar[fi] - 1 - is_method; }
     if res_ty >= 100 {
         // a struct result: a temporary in this frame, its address goes first
@@ -1196,6 +1195,36 @@ void gen_call() {
         if str_eq(@callee, "__fceil") { emit_line("frintp d0, d0"); }
         if str_eq(@callee, "__ftrunc") { emit_line("frintz d0, d0"); }
         emit_line("fmov x0, d0");
+    } else if is_atomic == 1 {
+        // atomic operations on an 8-byte word at the address in x0 (x1, x2 = the other arguments);
+        // the result is the value the word had before. Built from load-exclusive / store-exclusive.
+        int la = new_label();
+        int lb = new_label();
+        place_label(la);
+        emit_line("ldaxr x3, [x0]");
+        if str_eq(@callee, "__cas") {
+            if n != 3 { die("__cas(address, old, new) takes three arguments"); }
+            emit_line("cmp x3, x1");
+            jump_if("ne", lb);
+            emit_line("stlxr w4, x2, [x0]");
+        } else if str_eq(@callee, "__xchg") {
+            if n != 2 { die("__xchg(address, value) takes two arguments"); }
+            emit_line("stlxr w4, x1, [x0]");
+        } else {
+            if n != 2 { die("__fetch_add(address, value) takes two arguments"); }
+            emit_line("add x5, x3, x1");
+            emit_line("stlxr w4, x5, [x0]");
+        }
+        emit_line("cmp x4, 0");
+        jump_if("ne", la);
+        place_label(lb);
+        emit_line("dmb ish");
+        emit_line("mov x0, x3");
+    } else if str_eq(@callee, "__thread_start") {
+        // (function, argument, top of the new stack, address of the thread's id word, its thread block)
+        if n != 5 { die("__thread_start takes five arguments"); }
+        used_thread = 1;
+        emit_line("bl j2k_thread_start");
     } else if str_eq(@callee, "argc") {
         emit_line("ldr x9, [x28, #0]");
         emit_line("ldr x0, [x9, #0]");
@@ -1208,6 +1237,7 @@ void gen_call() {
     } else {
         emit_str("bl ");
         emit_line(@callee);
+        drop_args(n);
         if tmp_off != 0 { ins_n("add x0, x29, #", tmp_off); }
     }
     if free_owner >= 0 { emit_owner_null(free_owner); }       // Mem::free(p) on an owner: p is null afterwards
@@ -1606,9 +1636,15 @@ void gen_call_indirect(int tid) {
     if n != sig_n[sg] && pass_no >= 2 { die("wrong number of arguments for this function pointer"); }
     n += pre;
     pop_args(n);
-    emit_line("ldr x9, [sp, #0]");
-    emit_line("add sp, sp, #16");
-    emit_line("blr x9");
+    if n <= 8 {
+        emit_line("ldr x9, [sp, #0]");
+        emit_line("add sp, sp, #16");
+        emit_line("blr x9");
+    } else {
+        ins_mem("ldr", "x9", "sp", n * 16);       // the address is under the argument slots
+        emit_line("blr x9");
+        ins_n("add sp, sp, #", n * 16 + 16);
+    }
     if tmp_off != 0 { ins_n("add x0, x29, #", tmp_off); }
     ex_w = 8;
     ex_ty = r;

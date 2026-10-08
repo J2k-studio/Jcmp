@@ -2,7 +2,7 @@
 // Build:  bin/jcmp jcmp/jcmp.jk -o jcmp1        (see bootstrap.sh)
 // Use:    jcmp1 input.jk -o program
 // the version of the compiler (also in the file VERSION; release.sh checks that they agree)
-#define JCMP_VERSION "0.2.2"
+#define JCMP_VERSION "0.3.0"
 
 import "jc_base"
 import "jc_asm"
@@ -28,6 +28,7 @@ void reset_state(char^ in_path) {
     used_oob = 0;
     used_uprint = 0;
     used_try = 0;
+    used_thread = 0;
     lex_init(in_path);
     next();
 }
@@ -134,6 +135,7 @@ void main() {
     if used_oob == 1 { emit_oob_helper(); }
     if used_uprint == 1 { emit_uprint_helper(); }
     if used_try == 1 { emit_exc_helper(); }
+    if used_thread == 1 { emit_thread_helper(); }
     emit_start_stub();
     if out_asm != null {
         if write_file(out_asm, @out_buf, out_len) != 0 {

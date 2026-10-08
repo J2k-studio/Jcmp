@@ -28,6 +28,8 @@ int stk_ls[16];
 char lvl_name[2048];         // path of the file at each level (16 x 128)
 char inc_names[65536];        // paths already imported (64 x 128)
 int inc_count;
+int mt_pending;              // 1 after #multithread until the for loop it belongs to is parsed
+int cpu_loaded;              // 1 once `import cpu` has been read
 int std_loaded;              // 1 once `import std` has been read
 
 // ---------------------------------------------------------------- #define
@@ -263,6 +265,8 @@ void pop_file() {
 void lex_init(char^ path) {
     def_count = 0;
     std_loaded = 0;
+    mt_pending = 0;
+    cpu_loaded = 0;
     lx_depth = 0;
     cur_base = 0;
     str_copy(@lvl_name, path, 128);
@@ -315,6 +319,14 @@ bool file_exists(char^ p) {
 // the token is the word "import": switch to the named file (once)
 void lex_import() {
     next();
+    if tok_kind == T_IDENT && str_eq(@tok_text, "cpu") {
+        if cpu_loaded == 0 {
+            cpu_loaded = 1;
+            push_cpu();
+        }
+        next();
+        return;
+    }
     if tok_kind == T_IDENT && str_eq(@tok_text, "std") {
         if std_loaded == 0 {
             std_loaded = 1;
@@ -434,6 +446,11 @@ void next() {
             adv();
         }
         dw[dn] = 0;
+        if str_eq(@dw, "multithread") {
+            mt_pending = 1;              // the next statement must be a for loop: its iterations run on several threads
+            next();
+            return;
+        }
         if !str_eq(@dw, "define") { die("unknown directive after #"); }
         while lc(0) == 32 || lc(0) == 9 { adv(); }
         if !is_letter(lc(0)) { die("#define needs a name"); }

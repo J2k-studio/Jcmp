@@ -38,6 +38,9 @@ int gsi_n[4096];
 int gsi_count;
 int fn_self_struct = -1;     // set while a struct's method is parsed
 int cur_ret_off;             // frame slot holding the hidden result address (struct results)
+int xp_pos[8];               // places in the output where the offset of an argument 9.. is patched in
+int xp_reg[8];
+int xp_count;
 int cp_src[8];               // struct parameters to copy in the prologue
 int cp_dst[8];
 int cp_size[8];
@@ -508,6 +511,117 @@ void parse_for() {
     lcount = for_mark;
 }
 
+int mt_active;               // 1 while the body of a #multithread loop is compiled
+int mt_base;                 // loop_depth at its start
+
+// #multithread  for i in a..b { body }
+// The body becomes a separate routine inside this function's code ("worker"); __Mt::run starts
+// several threads that each run it for a part of a..b. Variables of the enclosing function are
+// reached through x26 (the enclosing frame); variables made inside the body live in the worker's frame.
+void parse_mt_for() {
+    if mt_active == 1 { die("#multithread loops cannot be nested"); }
+    int for_mark = lcount;
+    int lworker = new_label();
+    int lafter = new_label();
+    int lstart = new_label();
+    int lstep = new_label();
+    int lend = new_label();
+    next();                              // "for"
+    if tok_kind != T_IDENT || at_type() { die("#multithread needs a loop of the form  for i in a..b"); }
+    char m_name[256];
+    str_copy(@m_name, @tok_text, 256);
+    next();
+    if !tok_is("in") { die("#multithread needs a loop of the form  for i in a..b"); }
+    next();
+    // the range is worked out here, by the calling thread
+    parse_expr();
+    bin_type(0, ex_ty);
+    push_x0();
+    expect(".");
+    expect(".");
+    parse_expr();
+    bin_type(0, ex_ty);
+    emit_line("mov x3, x0");
+    emit_line("ldr x2, [sp, #0]");
+    emit_line("add sp, sp, #16");
+    emit_line("mov x1, x29");
+    emit_str("adr x0, ");
+    emit_lab(lworker);
+    emit_nl();
+    rt_call("__Mt__run");
+    jump(lafter);
+    // ---- the worker: x0 = [enclosing frame, from, to]
+    place_label(lworker);
+    int sv_frame = frame_bytes;
+    int sv_try = try_depth;
+    int sv_own = own_count;
+    int sv_outer = mt_outer;
+    int sv_base = mt_base;
+    int sv_ok = own_ok;
+    frame_bytes = 16;
+    try_depth = 0;
+    own_count = 0;
+    own_ok = 1;
+    mt_outer = lcount;                   // the locals so far belong to the enclosing function
+    mt_active = 1;
+    mt_base = loop_depth;
+    emit_str("sub sp, sp, #");
+    int pa = out_len;
+    emit_str("0000000");
+    emit_nl();
+    emit_line("str x29, [sp, #0]");
+    emit_line("str x30, [sp, #8]");
+    emit_line("add x29, sp, #0");
+    emit_line("ldr x26, [x0, #0]");
+    emit_line("ldr x1, [x0, #8]");
+    emit_line("ldr x2, [x0, #16]");
+    ty_tid = 0;
+    ty_dyn = 0;
+    add_local(@m_name, 0, 8, 8, 0);
+    int i_off = loff[lcount - 1];
+    add_local("..end", 0, 8, 8, 0);
+    int e_off = loff[lcount - 1];
+    ins_mem("str", "x1", "x29", i_off);
+    ins_mem("str", "x2", "x29", e_off);
+    place_label(lstart);
+    ins_mem("ldr", "x0", "x29", i_off);
+    ins_mem("ldr", "x1", "x29", e_off);
+    emit_line("cmp x0, x1");
+    jump_if("ge", lend);
+    brk_stack[loop_depth] = lend;
+    cont_stack[loop_depth] = lstep;
+    loop_try[loop_depth] = try_depth;
+    loop_own[loop_depth] = own_count;
+    loop_depth += 1;
+    parse_block();
+    loop_depth -= 1;
+    place_label(lstep);
+    ins_mem("ldr", "x0", "x29", i_off);
+    emit_line("add x0, x0, #1");
+    ins_mem("str", "x0", "x29", i_off);
+    jump(lstart);
+    place_label(lend);
+    emit_line("ldr x29, [sp, #0]");
+    emit_line("ldr x30, [sp, #8]");
+    emit_str("add sp, sp, #");
+    int pb = out_len;
+    emit_str("0000000");
+    emit_nl();
+    emit_line("ret");
+    int wframe = (frame_bytes + 15) / 16 * 16;
+    patch_number(pa, wframe);
+    patch_number(pb, wframe);
+    frame_bytes = sv_frame;
+    try_depth = sv_try;
+    own_count = sv_own;
+    own_ok = sv_ok;
+    mt_outer = sv_outer;
+    mt_base = sv_base;
+    mt_active = 0;
+    place_label(lafter);
+    lcount = for_mark;
+}
+
 // cout << a << b << ...;   (one number alone also ends the line)
 void parse_cout() {
     int c_count = 0;
@@ -744,7 +858,27 @@ void parse_using() {
     }
     // using std / using std::fs / using Struct
     int us_s = -1;
-    if tok_is("std") {
+    if tok_is("cpu") {
+        // using cpu::thread / cpu::mutex, or using cpu : both
+        next();
+        if tok_is("::") {
+            next();
+            if tok_is("thread") { us_s = find_struct("Thread"); }
+            else if tok_is("mutex") { us_s = find_struct("Mutex"); }
+            else { die_name("unknown cpu module", @tok_text); }
+            next();
+        } else {
+            int uc = find_struct("Thread");
+            int ud = find_struct("Mutex");
+            if cur_in_func == 1 {
+                if uc >= 0 { us_l[uc] = 1; }
+                if ud >= 0 { us_l[ud] = 1; }
+            } else {
+                if uc >= 0 { us_g[uc] = 1; }
+                if ud >= 0 { us_g[ud] = 1; }
+            }
+        }
+    } else if tok_is("std") {
         next();
         if tok_is("::") {
             // using std::fs / mem / str / sys / math : the struct of that module
@@ -1014,7 +1148,7 @@ void parse_try() {
     expect(")");
     ty_tid = 0;
     add_local(@c_name, 0, 8, 8, 2);
-    ins_mem("ldr", "x0", "x28", 72);
+    ins_mem("ldr", "x0", "x27", 0);
     ins_mem("str", "x0", "x29", loff[lcount - 1]);
     parse_block();
     lcount = catch_mark;
@@ -1177,6 +1311,12 @@ void parse_local_decl() {
 }
 
 void parse_statement() {
+    if mt_pending == 1 {
+        mt_pending = 0;
+        if !tok_is("for") { die("#multithread must be followed by a for loop"); }
+        parse_mt_for();
+        return;
+    }
     if tok_is("{") {
         parse_block();
         return;
@@ -1213,6 +1353,7 @@ void parse_statement() {
         next();
         expect(";");
         if loop_depth == 0 { die("break outside a loop"); }
+        if mt_active == 1 && loop_depth - 1 == mt_base { die("break cannot be used in a #multithread loop (every iteration runs on its own)"); }
         leave_tries(try_depth - loop_try[loop_depth - 1]);
         own_free_from(loop_own[loop_depth - 1], 0);
         jump(brk_stack[loop_depth - 1]);
@@ -1228,6 +1369,7 @@ void parse_statement() {
         return;
     }
     if tok_is("return") {
+        if mt_active == 1 { die("return cannot be used inside a #multithread loop"); }
         next();
         int ret_mv = 0 - 1;
         if tok_is(";") {
@@ -1305,7 +1447,14 @@ void emit_param_store(int reg, int off) {
         emit_int(off);
         emit_str("]\n");
     } else {
-        ins_mem("ldr", "x9", "x28", 8 + (reg - 8) * 8);
+        // arguments 9.. were left on the caller's stack; their distance from x29 is only known at the
+        // end of the function (frame size and number of arguments): patched in parse_function
+        emit_str("ldr x9, [x29, #");
+        if xp_count >= 8 { die("too many parameters"); }
+        xp_pos[xp_count] = out_len;
+        xp_reg[xp_count] = reg;
+        xp_count += 1;
+        emit_str("0000000]\n");
         ins_mem("str", "x9", "x29", off);
     }
 }
@@ -1340,11 +1489,13 @@ void parse_function() {
     int sv_oob = used_oob;
     int sv_try = used_try;
     int sv_up = used_uprint;
+    int sv_thr = used_thread;
     if pass_no == 3 && freach[f_idx] == 0 { f_skip = 1; }
     cur_fidx = f_idx;
     int f_self = fn_self_struct;
     fn_self_struct = 0 - 1;
     cp_count = 0;
+    xp_count = 0;
     cur_in_func = 1;
     int ue_i = 0;
     while ue_i < 64 {
@@ -1510,7 +1661,7 @@ void parse_function() {
             emit_line("ldr x0, [sp, #0]");
             emit_line("add sp, sp, #16");
         }
-        emit_line("mov x8, 93");
+        emit_line("mov x8, 94");
         emit_line("svc 0");
     } else {
         place_label(ret_label);
@@ -1525,6 +1676,12 @@ void parse_function() {
     int frame = (frame_bytes + 15) / 16 * 16;
     patch_number(patch_a, frame);
     if patch_b != 0 { patch_number(patch_b, frame); }
+    int xi = 0;
+    while xi < xp_count {
+        // argument k (counted from 0, n arguments in all) is at entry_sp + 16 * (n - 1 - k) = x29 + frame + ...
+        patch_number(xp_pos[xi], frame + 16 * (nparams - 1 - xp_reg[xi]));
+        xi += 1;
+    }
     cur_fidx = 0 - 1;
     if f_skip == 1 {
         out_len = sv_out;
@@ -1534,6 +1691,7 @@ void parse_function() {
         used_oob = sv_oob;
         used_try = sv_try;
         used_uprint = sv_up;
+        used_thread = sv_thr;
     }
     f_void = f_void + 0;
 }
@@ -1773,6 +1931,7 @@ void parse_program() {
 void emit_start_stub() {
     emit_line("j2k_start:");
     emit_line("mov x28, 268435456");
+    emit_line("add x27, x28, #72");            // x27: this thread's block (thrown text, try handlers)
     emit_line("add x9, sp, #0");
     emit_line("str x9, [x28, #0]");
     int i = 0;
@@ -2094,7 +2253,7 @@ void emit_oob_helper() {
     emit_line("mov x8, 64");
     emit_line("svc 0");
     emit_line("mov x0, 134");
-    emit_line("mov x8, 93");
+    emit_line("mov x8, 94");
     emit_line("svc 0");
 }
 
@@ -2108,44 +2267,44 @@ void emit_exc_helper() {
     str_copy(@exc_text, "uncaught exception: ", 64);
     exc_len = str_len(@exc_text);
     emit_line("j2k_try_enter:");
-    emit_line("ldr x1, [x28, #80]");
+    emit_line("ldr x1, [x27, #8]");
     emit_line("cmp x1, 32");
     emit_line("b.ge j2k_exc_full");
     emit_line("mov x2, 24");
     emit_line("mul x2, x1, x2");
-    emit_line("add x3, x28, #0");
+    emit_line("add x3, x27, #0");
     emit_line("add x3, x3, x2");
     emit_line("add x4, sp, #0");
-    emit_line("str x4, [x3, #88]");
-    emit_line("str x29, [x3, #96]");
-    emit_line("str x30, [x3, #104]");
+    emit_line("str x4, [x3, #16]");
+    emit_line("str x29, [x3, #24]");
+    emit_line("str x30, [x3, #32]");
     emit_line("add x1, x1, #1");
-    emit_line("str x1, [x28, #80]");
+    emit_line("str x1, [x27, #8]");
     emit_line("mov x0, 0");
     emit_line("ret");
     emit_line("j2k_exc_full:");
     emit_line("mov x0, 2");
-    emit_line("mov x8, 93");
+    emit_line("mov x8, 94");
     emit_line("svc 0");
     emit_line("j2k_try_leave:");
-    emit_line("ldr x1, [x28, #80]");
+    emit_line("ldr x1, [x27, #8]");
     emit_line("sub x1, x1, #1");
-    emit_line("str x1, [x28, #80]");
+    emit_line("str x1, [x27, #8]");
     emit_line("ret");
     emit_line("j2k_throw:");
-    emit_line("str x0, [x28, #72]");
-    emit_line("ldr x1, [x28, #80]");
+    emit_line("str x0, [x27, #0]");
+    emit_line("ldr x1, [x27, #8]");
     emit_line("cmp x1, 0");
     emit_line("b.eq j2k_uncaught");
     emit_line("sub x1, x1, #1");
-    emit_line("str x1, [x28, #80]");
+    emit_line("str x1, [x27, #8]");
     emit_line("mov x2, 24");
     emit_line("mul x2, x1, x2");
-    emit_line("add x3, x28, #0");
+    emit_line("add x3, x27, #0");
     emit_line("add x3, x3, x2");
-    emit_line("ldr x4, [x3, #88]");
-    emit_line("ldr x29, [x3, #96]");
-    emit_line("ldr x30, [x3, #104]");
+    emit_line("ldr x4, [x3, #16]");
+    emit_line("ldr x29, [x3, #24]");
+    emit_line("ldr x30, [x3, #32]");
     emit_line("add sp, x4, #0");
     emit_line("mov x0, 1");
     emit_line("ret");
@@ -2181,7 +2340,7 @@ void emit_exc_helper() {
     emit_line("mov x8, 64");
     emit_line("svc 0");
     emit_line("mov x0, 1");
-    emit_line("mov x8, 93");
+    emit_line("mov x8, 94");
     emit_line("svc 0");
 }
 
@@ -2211,6 +2370,36 @@ void emit_uprint_helper() {
     emit_line("mov x8, 64");
     emit_line("svc 0");
     emit_line("add sp, sp, #48");
+    emit_line("ret");
+}
+
+// start a thread: x0 = function, x1 = argument, x2 = top of its stack, x3 = address of its id word,
+// x4 = its thread block. clone(VM|FS|FILES|SIGHAND|SYSVSEM|THREAD|PARENT_SETTID|CHILD_CLEARTID);
+// the child runs function(argument) on the new stack, then ends only itself (exit, not exit_group)
+void emit_thread_helper() {
+    emit_line("j2k_thread_start:");
+    emit_line("sub x2, x2, #32");
+    emit_line("str x0, [x2, #0]");
+    emit_line("str x1, [x2, #8]");
+    emit_line("str x4, [x2, #16]");
+    emit_line("mov x6, x3");
+    emit_line("mov x0, 3477248");
+    emit_line("mov x1, x2");
+    emit_line("mov x2, x6");
+    emit_line("mov x3, 0");
+    emit_line("mov x4, x6");
+    emit_line("mov x8, 220");
+    emit_line("svc 0");
+    emit_line("cmp x0, 0");
+    emit_line("b.ne j2k_ts_parent");
+    emit_line("ldr x27, [sp, #16]");
+    emit_line("ldr x9, [sp, #0]");
+    emit_line("ldr x0, [sp, #8]");
+    emit_line("blr x9");
+    emit_line("mov x0, 0");
+    emit_line("mov x8, 93");
+    emit_line("svc 0");
+    emit_line("j2k_ts_parent:");
     emit_line("ret");
 }
 

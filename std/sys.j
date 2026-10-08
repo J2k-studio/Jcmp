@@ -1,7 +1,7 @@
 // Sys: the operating system calls, one function each (Linux ARM64)
 struct Sys {
     static void exit(int code) {
-        syscall(93, code);
+        syscall(94, code);                 // exit_group: the whole program, all threads
     }
     static int argc() {
         return argc();
