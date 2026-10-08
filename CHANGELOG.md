@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9.23
+* **Example `examples/solar.jk`:** an animated ASCII solar system (sun, five planets, orbits, shading, perspective, z-buffer) written with `vec3`, `mat3` and operators. Run: `jcmp examples/solar.jk -o solar && ./solar` (needs a terminal of 100 x 37).
+
 ## 0.9.22
 * **`vec`:** `vec pos = {1.0, 2.0, 3.0};` is a `vec3` (the number of values says which: 2, 3 or 4). Elsewhere (parameters, fields, results) write `vec2`, `vec3`, `vec4`.
 * **Swizzle:** `v.xy`, `v.zyx`, `v.xxyy`, `c.rgb` make a new vector from some components of a `vec2/3/4` (letters of `xyzw` or of `rgba`, not mixed); a single letter (`v.r`, `v.y`) is the component itself and can be assigned. A swizzle with several letters is read only.
