@@ -1779,6 +1779,7 @@ void lvalue_loop() {
                 s_code = 8;
                 s_tid = 0;
             }
+            lv_done = 0;                     // an index like  arr.len - 1  set lv_done on its own
             lv_fresh = 0;
             lv_code = s_code;
             lv_ptr = s_ptr;
@@ -2099,6 +2100,7 @@ void gen_identifier() {
             gen_function_value(fv, @id_name);
             return;
         }
+        if str_eq(@id_name, "self") { die("self can only be used in a method that has it as its first parameter: write  int name(self) { ... }"); }
         if pass_no < 2 {
             emit_line("mov x0, 0");
             ex_ty = 97;
@@ -2816,9 +2818,12 @@ void dyn_index() {
     load_through(8);                     // x0 = the header
     dyn_null_check();
     push_x0();
+    int sv_self = lv_self;
     next();                              // "["
     parse_expr();
     expect("]");
+    lv_done = 0;                         // the index may have been  a.len  : that set lv_done and lv_self of its own
+    lv_self = sv_self;
     pop_x1();                            // x1 = the header, x0 = the index
     if opt_debug == 1 {
         int lok = new_label();

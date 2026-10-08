@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.46
+* **Fixed (an old fault):** an index that contains `.len`, like `a[a.len - 1]`, gave the address of the element instead of the element (for a String, a `T[]`, and a fixed array): the `len` inside the index left the "finished" mark of the outer lvalue on. `v[v.len - 1]`, `s[s.len - 1]` and `m[m.len - 1][2]` work now (test `t252`).
+* **Standard library:** `Path` (`join name parent ext stem`), `Hex` (`encode`, `decode` as a `Result`) and `Base64` (`encode`, `decode` as a `Result`), checked against `base64` and `xxd`.
+* A clearer message when `self` is used in a method that does not have it as its first parameter (`int name(self) { ... }`).
+
 ## 0.9.45
 * **Faster code, second step:** a **peephole pass** (`jcmp/jc_peep.j`, `-nopeep` switches it off) shortens the assembler text of the whole program: a store followed by a load of the same place, a push that is popped at once, `mov x1, N` + `add/sub/cmp`, a comparison used as a condition (`cmp` + one conditional branch instead of making 0 or 1 and testing it), a jump to the next line, a store with its address worked out first, and the left operand that waited in a register. **Loops** have a better shape: the condition at the bottom (`for i in a..b` and the C form), one jump a turn instead of three. **Array elements**: the index is worked out first and the base address is added after (no push), a power-of-two element size is a shift; the **address of the target of an assignment** waits in a register when the right side has no call. A division by a literal does not load the divisor any more.
 * Measured (ms, best of 3; `clang -O2` in brackets): `fib(35)` 211 -> 93 (71), 300 million `s = s + i % 7` 1554 -> 1030 (232), a sieve of 5 million 276 -> 144 (72), a 200 x 200 matrix product 130 -> 80 (28).
