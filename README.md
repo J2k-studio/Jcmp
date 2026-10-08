@@ -72,7 +72,7 @@ wget -qO- https://raw.githubusercontent.com/J2k-studio/Jcmp/main/install.sh | sh
 | Option | Meaning |
 |--------|---------|
 | `--dir DIR`        | install into `DIR` (created if needed) |
-| `--version 0.9.19`  | a specific release instead of the latest |
+| `--version 0.9.20`  | a specific release instead of the latest |
 | `--with-assembler` | also install `j2k_asm`, the stand-alone assembler |
 
 Run it again to update. To uninstall, delete the file.
@@ -107,7 +107,7 @@ sha256sum -c --ignore-missing SHA256SUMS      # must print:  jcmp: OK
 chmod +x jcmp && rm SHA256SUMS
 ```
 
-A specific version: replace `latest/download` with `download/v0.9.19` (also a good idea right after a new release, when the `latest` links can lag behind for a minute). The bundle
+A specific version: replace `latest/download` with `download/v0.9.20` (also a good idea right after a new release, when the `latest` links can lag behind for a minute). The bundle
 `jcmp-<version>-linux-arm64.tar.gz` of the same release holds the compiler, the assembler, the examples and the docs.
 
 ### Use it
@@ -116,7 +116,7 @@ Put the folder on your `PATH` (once per shell, or add the line to `~/.bashrc`), 
 
 ```bash
 export PATH="$PWD:$PATH"            # inside the folder; or the full path of your folder
-jcmp -version                      # jcmp 0.9.19 (J2K compiler, Linux ARM64)
+jcmp -version                      # jcmp 0.9.20 (J2K compiler, Linux ARM64)
 
 printf '#import <stdlib>\nusing stdlib\nvoid main() { cout << "hi\\n"; }\n' > hi.jk
 jcmp hi.jk -o hi && ./hi            # hi

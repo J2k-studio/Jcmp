@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.20
+* **Operator methods:** a struct method declared with the word `operator` can be used with an operator: `+` calls `add`, `-` calls `sub`, `*` calls `mul`, `/` calls `div`, `==` / `!=` call `eq`; `a += b` (also `-= *= /=`) is `a = a.add(b)`. Example: `operator vec3 add(self, vec3 o) { ... }`, then `p = a + b * 2.0;`. A struct on the left only (`v * 2.0`); `2.0 * v` is an error that says so. A method without `operator` is never called by an operator.
+* **Renamed:** the math types are `vec2 vec3 vec4 mat3 mat4` (lower case), and their `add sub mul div eq` are operators.
+
 ## 0.9.19
 * **One import for the math library:** `#import <math>` once, then `using math::vector;`, `using math::matrix;` or `using math;` choose the parts (only those are compiled in). This replaces `#import <vector>` / `#import <matrix>` of 0.9.18.
 

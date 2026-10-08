@@ -335,8 +335,17 @@ void parse_assign_core(char^ target) {
     }
     if a_code >= 16 && a_ptr == 0 {
         // a whole struct: copy from another struct or fill from { ... }
-        if op[0] != 0 { die("a struct can only be assigned with ="); }
-        if tok_is("{") {
+        if op[0] != 0 && (op[1] != 0 || !(op[0] == '+' || op[0] == '-' || op[0] == '*' || op[0] == '/')) { die("a struct can only be assigned with = or + - * / (an operator method)"); }
+        if op[0] != 0 {
+            // a += b  is  a = a.add(b)
+            emit_line("ldr x0, [sp, #0]");
+            push_x0();                   // self
+            parse_expr();
+            emit_operator_call(@op, a_tid);
+            emit_line("ldr x3, [sp, #0]");
+            ins_n("mov x2, ", ssize[a_code - 16]);
+            emit_line("bl j2k_copy");
+        } else if tok_is("{") {
             parse_brace(a_code - 16, 0);
         } else {
             parse_expr();
@@ -2124,8 +2133,11 @@ void parse_function() {
     if ty_ptr != 0 { f_rettid = 0; }
     cur_ret_tid = f_rettid;
     int f_idx = find_func(@d_fname);
+    int f_oper = op_pending;
+    op_pending = 0;
     if f_idx < 0 {
         if fcount >= 16384 { die("too many functions"); }
+        fop[fcount] = 0;
         str_copy(@fname + fcount * 64, @d_fname, 64);
         farr[fcount] = 0;
         fvoid[fcount] = 0;
@@ -2156,6 +2168,7 @@ void parse_function() {
     int sv_up = used_uprint;
     int sv_thr = used_thread;
     if pass_no == 3 && freach[f_idx] == 0 { f_skip = 1; }
+    if f_oper == 1 { fop[f_idx] = 1; }
     cur_fidx = f_idx;
     int f_self = fn_self_struct;
     fn_self_struct = 0 - 1;
@@ -2524,6 +2537,11 @@ void parse_struct() {
     while !tok_is("}") {
         if tok_kind == T_EOF { die("} expected"); }
         int is_static = 0;
+        op_pending = 0;
+        if tok_is("operator") {
+            op_pending = 1;              // operator vec3 add(self, vec3 o) { ... }: usable as a + b
+            next();
+        }
         if tok_is("static") {
             is_static = 1;
             next();

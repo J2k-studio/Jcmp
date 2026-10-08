@@ -501,6 +501,8 @@ int fowned[16384];           // 1 if the function returns memory it owned (retur
 int fcharret[16384];            // 1 if the function returns a char: cout prints the result as a character
 int fret[16384];              // type of the result
 int fptid[131072];            // type of each parameter (8 per function)
+int fop[16384];               // 1 if the method was declared with the word `operator` (a + b calls a.add(b))
+int op_pending;              // the word `operator` was read in front of the method being declared
 int fself[16384];             // 1 if the function is a method with self (not static)
 int farr[16384];              // 1 if the last parameter is an array (T name[])
 int fcount;
@@ -1339,7 +1341,15 @@ void gen_call() {
         tmp_off = loff[lcount - 1];
         ins_n("add x0, x29, #", tmp_off);
         push_x0();
-        if pre > 0 {
+        if pre == 2 {
+            // an operator: the callee wants (result address, self, other): rotate the three stack slots
+            emit_line("ldr x1, [sp, #0]");
+            emit_line("ldr x2, [sp, #16]");
+            emit_line("ldr x3, [sp, #32]");
+            emit_line("str x2, [sp, #0]");
+            emit_line("str x3, [sp, #16]");
+            emit_line("str x1, [sp, #32]");
+        } else if pre > 0 {
             // a method: the callee wants (result address, self): swap the two stack slots
             emit_line("ldr x1, [sp, #16]");
             emit_line("ldr x2, [sp, #0]");
@@ -3142,6 +3152,58 @@ void arith(char^ op) {
     die_name("unknown operator", op);
 }
 
+// the name of the method that an operator calls
+void operator_method(char^ op, char^ out) {
+    if str_eq(op, "+") { str_copy(out, "add", 16); }
+    else if str_eq(op, "-") { str_copy(out, "sub", 16); }
+    else if str_eq(op, "*") { str_copy(out, "mul", 16); }
+    else if str_eq(op, "/") { str_copy(out, "div", 16); }
+    else if str_eq(op, "==") || str_eq(op, "!=") { str_copy(out, "eq", 16); }
+    else { die("this operator does not work on a struct"); }
+}
+
+// `left op right` where the left value is a struct: [sp] = the left value (its address), x0 = the right operand.
+// The call is  left.method(right)  of a method declared with the word `operator`; the result is left in x0.
+void emit_operator_call(char^ op, int lt) {
+    char mname[16];
+    operator_method(op, @mname);
+    char fn[256];
+    str_copy(@fn, @sname + (lt - 100) * 64, 64);
+    append_text(@fn, "__");
+    append_text(@fn, @mname);
+    int fi = find_func(@fn);
+    if fi < 0 || fop[fi] == 0 {
+        if pass_no >= 2 {
+            char m[300];
+            str_copy(@m, "'", 300);
+            append_text(@m, @sname + (lt - 100) * 64);
+            append_text(@m, "' has no operator ");
+            append_text(@m, @mname);
+            append_text(@m, " (declare:  operator ");
+            append_text(@m, @sname + (lt - 100) * 64);
+            append_text(@m, " ");
+            append_text(@m, @mname);
+            append_text(@m, "(self, ...) { ... })");
+            die(@m);
+        }
+        emit_line("add sp, sp, #16");           // pass 1: the method may be written further down
+        ex_ty = lt;
+        return;
+    }
+    if fnpar[fi] != 2 { die("an operator method takes self and one more value"); }
+    check_assign(fptid[fi * 8 + 1]);
+    push_x0();
+    str_copy(@id_name, @fn, 256);
+    call_pre = 2;
+    call_method = 1;
+    call_bare = 1;
+    gen_call();
+    if str_eq(op, "!=") {
+        emit_line("mov x1, 1");
+        emit_line("eor x0, x0, x1");
+    }
+}
+
 void parse_mul() {
     parse_unary();
     int mlw = ex_w;
@@ -3154,7 +3216,13 @@ void parse_mul() {
         int rhs_lit = 0;
         if tok_kind == T_NUM && tok_float == 0 && tok_num != 0 { rhs_lit = 1; }
         parse_unary();
-        if is_float(mlt) || is_float(ex_ty) {
+        if mlt >= 100 && mlt < 1000 {
+            emit_operator_call(@op, mlt);
+            mlt = ex_ty;
+            mlw = 8;
+        } else if ex_ty >= 100 && ex_ty < 1000 && pass_no >= 2 {
+            die("a number on the left of * or / and a struct on the right: write the struct first (v * 2.0)");
+        } else if is_float(mlt) || is_float(ex_ty) {
             if str_eq(@op, "%") { die("% does not work on floats"); }
             int mrt = ex_ty;
             take_operands();
@@ -3188,7 +3256,13 @@ void parse_add() {
         next();
         push_x0();
         parse_mul();
-        if alt == 80 || ex_ty == 80 {
+        if alt >= 100 && alt < 1000 {
+            emit_operator_call(@aop, alt);
+            alt = ex_ty;
+            alw = 8;
+        } else if ex_ty >= 100 && ex_ty < 1000 && pass_no >= 2 {
+            die("a number on the left of + or - and a struct on the right: write the struct first");
+        } else if alt == 80 || ex_ty == 80 {
             // String + String / text / char
             if !str_eq(@aop, "+") { die("a String can only be joined with +"); }
             int kb = str_kind();
@@ -3377,7 +3451,12 @@ void parse_equality() {
         push_x0();
         parse_relational();
         int eq_right = ex_ty;
-        if eq_left == 80 || eq_right == 80 {
+        if eq_left >= 100 && eq_left < 1000 {
+            emit_operator_call(@eqop, eq_left);
+            ex_w = 8;
+            ex_ty = 1;
+            rv_valid = 0;
+        } else if eq_left == 80 || eq_right == 80 {
             // String == String / text
             int kb = str_kind();
             int ka = 0;
