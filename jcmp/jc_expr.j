@@ -35,6 +35,7 @@ int own_ok = 1;              // 0 where a declaration may not run (a case body w
 int ex_dyn;                  // the packed element type of the dynamic array the last expression was (0 = none)
 int ex_arr_cnt = -1;         // set when the last expression was a whole fixed array: its element count ...
 int ex_arr_code;             // ... and its element width code
+int lalias[8192];            // 1: a variable that is a pointer to a struct but is used like the struct itself (a name in a case)
 int lused[8192];             // 1 once the name was looked up after its declaration
 int lwarn[8192];             // 1: warn if it is never used (a scalar or array made by a declaration statement)
 int lw_line[8192];           // where it was declared
@@ -48,6 +49,8 @@ int decl_base;
 int decl_ls;
 int rv_valid;                // the last operand read was exactly a plain local variable ...
 int rv_off;                  // ... at this frame offset
+int last_call_struct;        // the last call made a struct value (a fresh temporary)
+int own_src_off;             // struct_source: the frame offset of the local variable a value moves out of
 int last_call_owning;        // the last call made returns memory its receiver owns
 int ty_tid;                  // type of values: 0 number, 1 bool, 3+n enum number n
 int ex_ty;                   // type of the last operand/result: 0 number, 1 bool, 2 the literal 0 or 1, 3+n enum n
@@ -598,6 +601,7 @@ void add_local(char^ name, int kind, int elem, int bytes, int ptr) {
     lblk[lcount] = cur_blk;
     luninit[lcount] = 0;
     lused[lcount] = 0;
+    lalias[lcount] = 0;
     lwarn[lcount] = 0;
     if track_unused == 1 && (kind == 0 || kind == 1) && elem < 16 && name[0] != '.' {
         lwarn[lcount] = 1;
@@ -1002,6 +1006,25 @@ int parse_args() {
             }
             if pfi >= 0 && argno + pskip < fnpar[pfi] && argno + pskip < 8 { check_assign(fptid[pfi * 8 + argno + pskip]); }
             if psig >= 0 && argno < sig_n[psig] { check_assign(sig_p[psig * 16 + argno]); }
+            if pfi >= 0 && argno + pskip < 8 && fptid[pfi * 8 + argno + pskip] >= 100 && ex_ty >= 100 && struct_has_free(ex_ty - 100) {
+                // a value that frees itself is moved into the call: a fresh value goes as it is, a local variable is
+                // copied to a temporary and emptied now (so that a throw in the call cannot free it twice)
+                int how = struct_source(ex_ty - 100);
+                if how == 2 {
+                    int src_off = own_src_off;
+                    int ssz = ssize[ex_ty - 100];
+                    ty_tid = 0;
+                    add_local("..moved", 0, 16 + ex_ty - 100, ssz, 0);
+                    int tmp_at = loff[lcount - 1];
+                    ins_n("add x3, x29, #", tmp_at);
+                    ins_n("mov x2, ", ssz);
+                    emit_line("bl j2k_copy");
+                    emit_zero_local(src_off, ssz);
+                    int oi2 = own_find(src_off);
+                    if oi2 >= 0 && own_blk[oi2] == cur_blk { own_moved[oi2] = 1; }
+                    ins_n("add x0, x29, #", tmp_at);
+                }
+            }
             push_x0();
             n += 1;
         }
@@ -1277,6 +1300,7 @@ void gen_call() {
     int is_atomic = 0;
     if str_eq(@callee, "__cas") || str_eq(@callee, "__xchg") || str_eq(@callee, "__fetch_add") { is_atomic = 1; }
     if fi >= 0 && farr[fi] == 1 { arr_call_at = fnpar[fi] - 1 - is_method; }
+    last_call_struct = 0;
     if res_ty >= 100 {
         // a struct result: a temporary in this frame, its address goes first
         ty_tid = 0;
@@ -1381,6 +1405,7 @@ void gen_call() {
     if fi >= 0 && fowned[fi] == 1 { last_call_owning = 1; }
     rv_valid = 0;
     if fi >= 0 && fretdyn[fi] != 0 { ex_dyn = fretdyn[fi]; }
+    if res_ty >= 100 { last_call_struct = 1; }
     if fi >= 0 && fretstr[fi] == 1 {
         last_call_owning = 0;            // a String that is returned is a temporary that the compiler frees
         str_temp();
@@ -1436,6 +1461,8 @@ void parse_lvalue() {
     lv_serial += 1;
     str_copy(@lv_base, @id_name, 256);
     if str_eq(@id_name, "self") { lv_self = 1; }
+    int ali = find_local(@id_name);
+    if ali >= 0 && lalias[ali] == 1 { lv_self = 1; }
     addr_of_var();
     lv_code = v_elem;
     lv_kind = v_kind;
@@ -1830,6 +1857,32 @@ int dyn_ptr(int info) {
 
 int dyn_tid(int info) {
     return info / 131072 - 1024;
+}
+
+// A value of a struct that frees itself (it has a method free(self)) cannot be copied. It moves: a fresh value (the result of
+// a call, a constructor) is taken over, a plain local variable is emptied (zeroed) after its bytes were copied, anything
+// else is an error. Returns 1 for a fresh value, 2 for a local variable (its frame offset in own_src_off), else dies.
+int struct_source(int sidx) {
+    if last_call_struct == 1 { return 1; }
+    if rv_valid == 1 {
+        int oi = own_find(rv_off);
+        if oi >= 0 && own_kind[oi] == 4 {
+            own_src_off = rv_off;
+            return 2;
+        }
+    }
+    if pass_no >= 2 { die_name("a value that frees itself can only be taken from a call or from a local variable (it moves); use a pointer for the rest", @sname + sidx * 64); }
+    return 1;
+}
+
+// the local variable at frame offset off (a struct of size bytes) becomes empty: zeros
+void emit_zero_local(int off, int size) {
+    int zk = 0;
+    emit_line("mov x1, 0");
+    while zk < size {
+        ins_mem("str", "x1", "x29", off + zk);
+        zk += 8;
+    }
 }
 
 // ---------------------------------------------------------------- String
@@ -2687,9 +2740,18 @@ void gen_sizeof() {
     ex_ty = 96;
 }
 
+// a value followed by ? : see gen_try_op
 void parse_unary() {
+    parse_unary_core();
+    while tok_is("?") {
+        gen_try_op();
+    }
+}
+
+void parse_unary_core() {
     rv_valid = 0;
     last_call_owning = 0;
+    last_call_struct = 0;
     if tok_kind == T_NUM && tok_float == 1 {
         gen_float_literal();
         return;

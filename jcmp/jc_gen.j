@@ -36,6 +36,7 @@ char dvp_field[262144];      // 4096 x 64: the field of the struct that holds ea
 char dvp_pname[262144];      // 4096 x 64: the name the parameter was given
 int dvv_count;
 int dvp_count;
+int dvp_owns[4096];          // 1: that member holds something that frees itself
 char de_buf[262144];
 int de_len;
 
@@ -1502,6 +1503,7 @@ int gen_data_enum(char^ b, int s, int n, int line) {
     str_copy(@dv_name + d * 64, @en_name, 64);
     dv_first[d] = dvv_count;
     dv_nvar[d] = m_n;
+    int dvp_first_of_enum = dvp_count;
     // the struct
     de_len = 0;
     de_str("struct ");
@@ -1548,6 +1550,7 @@ int gen_data_enum(char^ b, int s, int n, int line) {
                 de_range(b, ps, nb);
                 de_str(@dvp_field + px * 64);
                 de_str(";\n");
+                dvp_owns[px] = de_type_owns(b, ps, nb);
                 k += 1;
             }
         }
@@ -1580,6 +1583,34 @@ int gen_data_enum(char^ b, int s, int n, int line) {
         }
         de_str(" return s; }\n");
         v += 1;
+    }
+    // a member that holds something that frees itself (a String, an array, a struct with free(self)): the enum frees it
+    int owns_any = 0;
+    int pxx = dvp_first_of_enum;
+    while pxx < dvp_count {
+        if dvp_owns[pxx] == 1 { owns_any = 1; }
+        pxx += 1;
+    }
+    if owns_any == 1 && !de_has_free(b, methods, close) {
+        de_str("    void free(self) {\n");
+        v = 0;
+        while v < m_n {
+            int gv3 = dv_first[d] + v;
+            int pk3 = 0;
+            while pk3 < dvv_nparam[gv3] {
+                int px3 = dvv_pfirst[gv3] + pk3;
+                if dvp_owns[px3] == 1 {
+                    de_str("        if self.__tag == ");
+                    append_int_to_de(v);
+                    de_str(" { self.");
+                    de_str(@dvp_field + px3 * 64);
+                    de_str(".free(); }\n");
+                }
+                pk3 += 1;
+            }
+            v += 1;
+        }
+        de_str("    }\n");
     }
     // the methods (written after a ;)
     if methods < close { de_range(b, methods, close); }
@@ -1638,4 +1669,146 @@ bool dv_label_ok(int d, char^ text) {
     int i = 0;
     while text[i] != 0 && nm[i] == text[i] { i += 1; }
     return text[i] == 0 && nm[i] == '_' && nm[i + 1] == '_';
+}
+
+// does the type written in b[s..e) own memory (String, an array, a struct that has free(self))?
+int de_type_owns(char^ b, int s, int e) {
+    s = gen_blanks(b, s, e);
+    while e > s && is_space(b[e - 1]) { e -= 1; }
+    if e - s >= 2 && b[e - 1] == ']' && b[e - 2] == '[' { return 1; }
+    char word[64];
+    int w = gen_word(b, s, e, @word);
+    if w != e { return 0; }                 // a pointer, a generic type, ...
+    if str_eq(@word, "String") { return 1; }
+    int sd = find_struct(@word);
+    if sd >= 0 && struct_has_free(sd) { return 1; }
+    return 0;
+}
+
+// does the text b[s..e) (the methods of an enum) define a method free?
+bool de_has_free(char^ b, int s, int e) {
+    int i = s;
+    char word[64];
+    while i < e {
+        int j = gen_skip_lit(b, i, e);
+        if j != i {
+            i = j;
+        } else if is_letter(b[i]) {
+            int k = gen_word(b, i, e, @word);
+            int nx = gen_blanks(b, k, e);
+            if str_eq(@word, "free") && nx < e && b[nx] == '(' { return true; }
+            i = k;
+        } else {
+            i += 1;
+        }
+    }
+    return false;
+}
+
+// ------------------------------------------------------------- expr?
+// The value is a Result<T,E> or an Option<T> (a data enum made from the generic enum of that name, see
+// std/result.j) that comes from a call: if it is the Ok / Some member the value of the expression is its content;
+// else the function returns at once with the Err / None (the error moves into the result of this function, which
+// must return a Result with the same E / an Option). Everything the function owns is freed on the way.
+void gen_try_op() {
+    if ex_ty < 100 { die("? needs a Result or an Option in front of it"); }
+    int ssrc = ex_ty - 100;
+    int dsrc = dv_find(@sname + ssrc * 64);
+    int family = 0;
+    if dsrc >= 0 {
+        if str_eq_n(@dv_name + dsrc * 64, "Result__", 8) { family = 1; }
+        if str_eq_n(@dv_name + dsrc * 64, "Option__", 8) { family = 2; }
+    }
+    if family == 0 { die("? needs a Result or an Option in front of it"); }
+    if last_call_struct == 0 { die("? is used on the result of a call (a variable that holds a Result is looked at with switch)"); }
+    if cur_ret_tid < 100 { die("? can only be used in a function that returns a Result or an Option"); }
+    int sdst = cur_ret_tid - 100;
+    int ddst = dv_find(@sname + sdst * 64);
+    bool same = false;
+    if ddst >= 0 {
+        if family == 1 && str_eq_n(@dv_name + ddst * 64, "Result__", 8) { same = true; }
+        if family == 2 && str_eq_n(@dv_name + ddst * 64, "Option__", 8) { same = true; }
+    }
+    if !same { die("? can only be used in a function that returns the same kind (a Result with ?, an Option with ?)"); }
+    fn_returns = 1;
+    int gok = dv_first[dsrc];             // member 0: Ok / Some
+    int gbad = dv_first[dsrc] + 1;        // member 1: Err / None
+    // the value is in a temporary; keep its address
+    ty_tid = 0;
+    add_local("..try", 0, 8, 8, 0);
+    int slot = loff[lcount - 1];
+    ins_mem("str", "x0", "x29", slot);
+    int lok = new_label();
+    emit_line("ldr x1, [x0, #0]");
+    emit_line("cmp x1, 0");
+    jump_if("eq", lok);
+    // the error: it becomes the result of this function
+    emit_line("add sp, x29, #0");
+    ins_mem("ldr", "x3", "x29", cur_ret_off);
+    emit_line("mov x1, 1");
+    emit_line("str x1, [x3, #0]");
+    if family == 1 {
+        int fsrc = dv_find_field(ssrc, dv_pfield(gbad, 0));
+        int fdst = dv_find_field(sdst, dv_pfield(dv_first[ddst] + 1, 0));
+        if fsrc < 0 || fdst < 0 { die("internal: the error of a Result has no field"); }
+        int fsize = size_of(fldcode[fsrc]);
+        if fldcode[fsrc] >= 16 && fldptr[fsrc] == 0 { fsize = ssize[fldcode[fsrc] - 16]; }
+        if fldkind[fsrc] == 3 || fldptr[fsrc] != 0 { fsize = 8; }
+        int fsize2 = size_of(fldcode[fdst]);
+        if fldcode[fdst] >= 16 && fldptr[fdst] == 0 { fsize2 = ssize[fldcode[fdst] - 16]; }
+        if fldkind[fdst] == 3 || fldptr[fdst] != 0 { fsize2 = 8; }
+        if (fsize != fsize2 || fldcode[fsrc] != fldcode[fdst]) && pass_no >= 2 {
+            die("the error types of the Result in front of ? and of this function differ");
+        }
+        ins_mem("ldr", "x0", "x29", slot);
+        if fldoff[fsrc] != 0 { ins_n("add x0, x0, #", fldoff[fsrc]); }
+        if fldoff[fdst] != 0 { ins_n("add x3, x3, #", fldoff[fdst]); }
+        ins_n("mov x2, ", (fsize + 7) / 8 * 8);
+        emit_line("bl j2k_copy");
+    }
+    leave_tries(try_depth);
+    own_free_from(0, 0);
+    jump(ret_label);
+    place_label(lok);
+    // the content
+    int fok = dv_find_field(ssrc, dv_pfield(gok, 0));
+    if fok < 0 { die("internal: the content of a Result has no field"); }
+    ins_mem("ldr", "x0", "x29", slot);
+    if fldoff[fok] != 0 { ins_n("add x0, x0, #", fldoff[fok]); }
+    rv_valid = 0;
+    last_call_struct = 0;
+    last_call_owning = 0;
+    if flddyn[fok] != 0 {
+        emit_line("ldr x0, [x0, #0]");
+        ex_w = 8;
+        if is_str_dyn(flddyn[fok]) {
+            ex_ty = 80;
+            str_temp();                       // a String that moves out of the Result
+        } else {
+            ex_ty = 99;
+            ex_dyn = flddyn[fok];
+            last_call_owning = 1;
+        }
+    } else if fldcode[fok] >= 16 && fldptr[fok] == 0 {
+        ex_w = 8;
+        ex_ty = 100 + fldcode[fok] - 16;
+        last_call_struct = 1;
+    } else {
+        load_through(fldcode[fok]);
+        ex_w = fldcode[fok];
+        ex_ty = fldtid[fok];
+        if fldptr[fok] != 0 { ex_ty = 0; ex_w = 8; }
+        if fldptr[fok] == 2 { ex_w = 9; }
+    }
+    next();                                   // the ?
+}
+
+// the field of struct s with this name, or -1
+int dv_find_field(int s, char^ name) {
+    int fk = sfirst[s];
+    while fk < sfirst[s] + snf[s] {
+        if str_eq(@fldname + fk * 64, name) { return fk; }
+        fk += 1;
+    }
+    return 0 - 1;
 }

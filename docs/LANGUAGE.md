@@ -391,6 +391,39 @@ switch s {
 * It can be generic: `enum class Maybe<T> { Some(T value), Nothing; ... }` and `Maybe<int>::Some(5)`.
 * A member of a data enum cannot be given a number (`= 5`); a plain `enum class` is as before.
 
+## Option, Result and ?
+
+A value that may be missing is an `Option<T>` (`Some(value)` or `None`). An operation that may fail is a `Result<T, E>` (`Ok(value)` or
+`Err(error)`); `Error` is the usual error: a `kind` (`ErrorKind::NotFound`, `Parse`, `Invalid`, ...) and a `message`.
+
+```jk
+Result<int, Error> parse(String s) {
+    if s.len == 0 { return Result<int, Error>::Err(Error::make(ErrorKind::Invalid, "empty text")); }
+    return Result<int, Error>::Ok(s.to_int());
+}
+
+Result<int, Error> add(String a, String b) {
+    int x = parse(a)?;               // an Err goes straight back to the caller, the Ok content is the value
+    int y = parse(b)?;
+    return Result<int, Error>::Ok(x + y);
+}
+
+switch add("20", "22") { ... }       // or  Result<int, Error> r = add(...);  switch r { Result::Ok(v): ...  Result::Err(e): ... }
+```
+
+* `expr?` works on the result of a call, in a function that returns the same kind (a `Result` with the same error type, or an `Option`).
+  Everything the function owns is freed on the way out. A Result in a variable is taken apart with `switch`.
+* Methods: `is_ok()`, `is_err()`, `is_some()`, `is_none()`, `unwrap()` (throws if there is no value), `or(fallback)`.
+* `try`/`catch` stays for the cases where throwing is better; use a `Result` when the caller is expected to handle the failure.
+
+## Values that free themselves
+
+A struct (or enum) with a method `free(self)` frees what it holds at the end of the block of a variable. Because of that it is **moved**, not copied:
+`Box b = a;` empties `a` and `b` holds the value; passing it to a function by value moves it into the function; `return b;` moves it to the caller;
+a call that returns one gives a fresh value. A value can only come from a call or from a local variable (use a pointer for the rest), and its
+`free` must work on an emptied (all zero) value. A data enum whose members hold a String, an array or such a struct gets its `free` by itself.
+In a `switch`, the name of a member that frees itself is a pointer to it (used like the struct: `e.message`).
+
 ## Lambdas
 
 A lambda is a function without a name, written where you use it. It looks like a function declaration without the name (the result type first, then the parameters):

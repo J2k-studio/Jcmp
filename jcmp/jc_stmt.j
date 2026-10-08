@@ -44,6 +44,7 @@ int xp_count;
 int cp_src[8];               // struct parameters to copy in the prologue
 int cp_dst[8];
 int cp_size[8];
+int cp_sidx[8];
 int cp_count;
 int fn_returns;              // 1 once the function has a return with a value or a throw
 int fn_line;
@@ -338,12 +339,31 @@ void parse_assign_core(char^ target) {
         if tok_is("{") {
             parse_brace(a_code - 16, 0);
         } else {
-            if struct_has_free(a_code - 16) { die_name("a struct with a free method cannot be copied; use a pointer", @sname + (a_code - 16) * 64); }
             parse_expr();
             check_assign(a_tid);
+            int how = 0;
+            int src_off = 0;
+            if struct_has_free(a_code - 16) {
+                // the old content of the target is freed, then the new one is moved in
+                how = struct_source(a_code - 16);
+                src_off = own_src_off;
+                push_x0();
+                emit_line("ldr x0, [sp, #16]");
+                char sfree[128];
+                str_copy(@sfree, @sname + (a_code - 16) * 64, 64);
+                append_text(@sfree, "__free");
+                rt_call(@sfree);
+                emit_line("ldr x0, [sp, #0]");
+                emit_line("add sp, sp, #16");
+            }
             emit_line("ldr x3, [sp, #0]");
             ins_n("mov x2, ", ssize[a_code - 16]);
             emit_line("bl j2k_copy");
+            if how == 2 {
+                emit_zero_local(src_off, ssize[a_code - 16]);
+                int oi = own_find(src_off);
+                if oi >= 0 && own_blk[oi] == cur_blk { own_moved[oi] = 1; }
+            }
         }
         emit_line("add sp, sp, #16");
         if for_step == 0 { expect(";"); }
@@ -1343,12 +1363,19 @@ void parse_switch_data(int sw_off, int sd, int sv_line, int sv_col, int sv_base,
                                 add_local(@bind_name + k * 64, 3, 8, 8, 0);
                                 ins_mem("str", "x0", "x29", loff[lcount - 1]);
                             } else if fldcode[fi] >= 16 && fldptr[fi] == 0 {
-                                if struct_has_free(fldcode[fi] - 16) { die("a value that frees itself cannot be named in a case (use a pointer)"); }
-                                ty_tid = fldtid[fi];
-                                add_local(@bind_name + k * 64, 0, fldcode[fi], ssize[fldcode[fi] - 16], 0);
-                                ins_n("add x3, x29, #", loff[lcount - 1]);
-                                ins_n("mov x2, ", ssize[fldcode[fi] - 16]);
-                                emit_line("bl j2k_copy");
+                                if struct_has_free(fldcode[fi] - 16) {
+                                    // a value that frees itself is only looked at: the name is a pointer to it (used like the struct)
+                                    ty_tid = 0;
+                                    add_local(@bind_name + k * 64, 0, 8, 8, fldcode[fi]);
+                                    lalias[lcount - 1] = 1;
+                                    ins_mem("str", "x0", "x29", loff[lcount - 1]);
+                                } else {
+                                    ty_tid = fldtid[fi];
+                                    add_local(@bind_name + k * 64, 0, fldcode[fi], ssize[fldcode[fi] - 16], 0);
+                                    ins_n("add x3, x29, #", loff[lcount - 1]);
+                                    ins_n("mov x2, ", ssize[fldcode[fi] - 16]);
+                                    emit_line("bl j2k_copy");
+                                }
                             } else {
                                 load_through(fldcode[fi]);
                                 ty_tid = fldtid[fi];
@@ -1510,6 +1537,11 @@ bool struct_has_free(int s) {
     str_copy(@nm, @sname + s * 64, 64);
     append_text(@nm, "__free");
     return find_func(@nm) >= 0;
+}
+
+// the struct at frame offset off (a parameter copy) is an owner of kind 4 if it frees itself
+void struct_owner_at(int off, int s) {
+    if own_ok == 1 && struct_has_free(s) { own_add(off, 4, s); }
 }
 
 // the struct variable just declared (the last local) is an owner of kind 4
@@ -1781,14 +1813,25 @@ void parse_local_decl_core() {
                 emit_line("add sp, sp, #16");
                 struct_owner(d_sidx);
             } else {
-                if struct_has_free(d_sidx) { die_name("this struct frees itself (it has a free method) and cannot be copied; use a pointer", @sname + d_sidx * 64); }
                 parse_expr();
                 check_assign(d_tid);
+                int how = 0;
+                int src_off = 0;
+                if struct_has_free(d_sidx) {
+                    how = struct_source(d_sidx);
+                    src_off = own_src_off;
+                }
                 ty_tid = d_tid;
                 add_local(@d_name, 0, d_width, ssize[d_sidx], 0);
                 ins_n("add x3, x29, #", loff[lcount - 1]);
                 ins_n("mov x2, ", ssize[d_sidx]);
                 emit_line("bl j2k_copy");
+                if how == 2 {
+                    emit_zero_local(src_off, ssize[d_sidx]);       // the value moved: the old variable is empty
+                    int oi = own_find(src_off);
+                    if oi >= 0 && own_blk[oi] == cur_blk { own_moved[oi] = 1; }
+                }
+                struct_owner(d_sidx);
             }
             expect(";");
             return;
@@ -1930,11 +1973,18 @@ void parse_statement_inner() {
             }
             check_assign(cur_ret_tid);
             if rv_valid == 1 && cur_ret_isptr == 1 { ret_mv = own_find(rv_off); }
+            int rhow = 0;
+            int rsrc = 0;
+            if cur_ret_tid >= 100 && struct_has_free(cur_ret_tid - 100) {
+                rhow = struct_source(cur_ret_tid - 100);       // a value that frees itself moves out
+                rsrc = own_src_off;
+            }
             if cur_ret_tid >= 100 {
                 ins_mem("ldr", "x3", "x29", cur_ret_off);
                 ins_n("mov x2, ", ssize[cur_ret_tid - 100]);
                 emit_line("bl j2k_copy");
             }
+            if rhow == 2 { emit_zero_local(rsrc, ssize[cur_ret_tid - 100]); }
             expect(";");
         }
         leave_tries(try_depth);
@@ -2160,7 +2210,6 @@ void parse_function() {
             ty_tid = p_tid;
             if p_tid >= 100 && ty_ptr == 0 {
                 // a struct by value: the caller passes its address, we copy it
-                if struct_has_free(p_tid - 100) { die_name("a struct with a free method cannot be passed by value; use a pointer", @sname + (p_tid - 100) * 64); }
                 ty_tid = 0;
                 add_local("..src", 0, 8, 8, 0);
                 int p_srcoff = loff[lcount - 1];
@@ -2180,6 +2229,7 @@ void parse_function() {
                 cp_src[cp_count] = p_srcoff;
                 cp_dst[cp_count] = loff[lcount - 1];
                 cp_size[cp_count] = ssize[p_tid - 100];
+                cp_sidx[cp_count] = p_tid - 100;
                 cp_count += 1;
                 nparams += 1;
                 f_declared += 1;
@@ -2210,6 +2260,7 @@ void parse_function() {
         ins_n("add x3, x29, #", cp_dst[cp_i]);
         ins_n("mov x2, ", cp_size[cp_i]);
         emit_line("bl j2k_copy");
+        struct_owner_at(cp_dst[cp_i], cp_sidx[cp_i]);        // a value that frees itself is the callee's now
         cp_i += 1;
     }
     in_lambda = 0;
@@ -2220,6 +2271,7 @@ void parse_function() {
     fn_base = err_base;
     fn_ls = err_ls;
     parse_block();
+    own_free_from(0, 1);                 // what the parameters own (the body's own variables were given back at its end)
     if fvoid[f_idx] == 0 && cur_is_main == 0 && fn_returns == 0 {
         err_line = fn_line;
         err_col = fn_col;

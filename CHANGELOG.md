@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.8
+* **`Option<T>` and `Result<T, E>`** (std) with the standard `Error` (`kind`, `message`) and **`expr?`**: an `Err` / `None` returns from the function at once, the content of an `Ok` / `Some` is the value. Methods `is_ok is_err is_some is_none unwrap or`.
+* **Values that free themselves are moved:** a struct with `free(self)` (and a data enum that holds a String, an array or such a struct) is moved by `=`, by a by-value parameter and by `return`; a fresh value from a call is taken over.
+* In a `switch` a member that frees itself is named by a pointer. The cleanup of a `throw` and the end of a function also free the parameters of that kind.
+
 ## 0.9.7
 * **Enums that carry values:** `enum class Shape { Circle(double r), Rect(double w, double h), Empty; ...methods };`, built with `Shape::Rect(2.0, 3.0)`, taken apart with `switch s { Shape::Rect(w, h): ... }`. They can be generic (`enum class Maybe<T> { Some(T value), Nothing }`). The first step of the error model (`Option`, `Result`, `?` follow).
 
