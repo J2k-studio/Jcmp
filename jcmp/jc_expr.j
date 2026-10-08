@@ -24,6 +24,8 @@ int arr_esize;               // element size for the arr(n) being parsed (0 = no
 int own_off[256];            // frame offset of each owner (innermost last)
 int own_kind[256];           // 0 = Mem::alloc block, 1 = dynamic array / String, 2 = temporary String, 4 = a struct with a free(self) method
 int own_aux[256];            // kind 4: the struct
+int own_rec[256];            // the frame offset of its cleanup record (see own_add)
+int stmt_t0;                 // own_count where the statement being parsed began
 int own_blk[256];            // the block it belongs to
 int own_moved[256];          // 1 after the ownership went elsewhere (for the "used after move" warning)
 int own_count;
@@ -1112,14 +1114,53 @@ int own_find(int off) {
     return -1;
 }
 
-void own_add(int off, int kind) {
+// An owner is also entered in the cleanup chain of the thread (the head is at [x27 + 784]): a record of
+// 4 words in the frame [next, address of the slot, routine, mode]. When a throw leaves the function the
+// chain is walked and everything that was not freed yet is freed (mode 0: the routine gets the value in the
+// slot, mode 1: it gets the address of the slot, a struct with free(self)). Leaving a block takes the
+// records out again (own_unlink).
+void own_add(int off, int kind, int aux) {
     if own_count >= 256 { die("too many owning variables in one function"); }
+    if kind != 2 { str_flush(stmt_t0, 1); }       // Strings made by this statement go first: the records must be in order
     own_off[own_count] = off;
     own_kind[own_count] = kind;
-    own_aux[own_count] = 0;
+    own_aux[own_count] = aux;
     own_blk[own_count] = cur_blk;
     own_moved[own_count] = 0;
+    own_rec[own_count] = frame_bytes;
+    frame_bytes += 32;
+    char fn[128];
+    int mode = 0;
+    if kind == 0 {
+        str_copy(@fn, "Mem__free", 128);
+    } else if kind == 3 {
+        str_copy(@fn, "__Str__free_all", 128);
+    } else if kind == 4 {
+        str_copy(@fn, @sname + aux * 64, 64);
+        append_text(@fn, "__free");
+        mode = 1;
+    } else {
+        str_copy(@fn, "__Arr__free", 128);
+    }
+    note_call(@fn);
+    ins_n("add x1, x29, #", own_rec[own_count]);
+    emit_line("ldr x2, [x27, #784]");
+    emit_line("str x2, [x1, #0]");
+    ins_n("add x2, x29, #", off);
+    emit_line("str x2, [x1, #8]");
+    emit_str("adr x2, ");
+    emit_line(@fn);
+    emit_line("str x2, [x1, #16]");
+    ins_n("mov x2, ", mode);
+    emit_line("str x2, [x1, #24]");
+    emit_line("str x1, [x27, #784]");
     own_count += 1;
+}
+
+// the cleanup chain goes back to what it was before owner `from` (and the ones after it) were entered
+void own_unlink(int from) {
+    ins_mem("ldr", "x1", "x29", own_rec[from]);
+    emit_line("str x1, [x27, #784]");
 }
 
 void emit_owner_free(int i) {
@@ -1151,9 +1192,12 @@ void emit_owner_null(int i) {
 // free the owners with index >= from (innermost first); with pop the list shrinks
 void own_free_from(int from, int pop) {
     int i = own_count - 1;
-    while i >= from {
-        emit_owner_free(i);
-        i -= 1;
+    if from < own_count {
+        while i >= from {
+            emit_owner_free(i);
+            i -= 1;
+        }
+        own_unlink(from);
     }
     if pop == 1 { own_count = from; }
 }
@@ -1790,7 +1834,7 @@ void str_temp() {
     add_local(".t", 0, 8, 8, 0);
     int off = loff[lcount - 1];
     ins_mem("str", "x0", "x29", off);
-    own_add(off, 2);
+    own_add(off, 2, 0);
     rv_valid = 1;
     rv_off = off;
     ex_ty = 80;
@@ -1834,8 +1878,10 @@ void str_adopt() {
 void str_flush(int t0, int keep) {
     int i = t0;
     int any = 0;
+    int first_tmp = 0 - 1;
     while i < own_count {
         if own_kind[i] == 2 && own_moved[i] == 0 { any = 1; }
+        if own_kind[i] == 2 && first_tmp < 0 { first_tmp = i; }
         i += 1;
     }
     if any == 1 {
@@ -1850,6 +1896,7 @@ void str_flush(int t0, int keep) {
             emit_line("add sp, sp, #16");
         }
     }
+    if first_tmp >= 0 { own_unlink(first_tmp); }
     int w = t0;
     i = t0;
     while i < own_count {
@@ -1857,6 +1904,7 @@ void str_flush(int t0, int keep) {
             own_off[w] = own_off[i];
             own_kind[w] = own_kind[i];
             own_aux[w] = own_aux[i];
+            own_rec[w] = own_rec[i];
             own_blk[w] = own_blk[i];
             own_moved[w] = own_moved[i];
             w += 1;

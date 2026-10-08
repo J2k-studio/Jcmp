@@ -591,14 +591,16 @@ void parse_for_each(char^ f_name, int lstart, int lbody, int lstep, int lend, in
     if is_strarr_dyn(info) { elem_str = 1; }
     int seq_new = 0;
     if is_dyn == 1 && last_call_owning == 1 { seq_new = 1; }     // a list made by a call: freed after the loop
+    str_flush(stmt_t0, 1);               // Strings of the list expression are not needed any more
     int own_before = own_count;
     ty_tid = 0;
     add_local("..seq", 0, 8, 8, 0);
     int seq_off = loff[lcount - 1];
     ins_mem("str", "x0", "x29", seq_off);
     if seq_new == 1 {
-        own_add(seq_off, 1);
-        if elem_str == 1 { own_kind[own_count - 1] = 3; }
+        int sk = 1;
+        if elem_str == 1 { sk = 3; }
+        own_add(seq_off, sk, 0);
     }
     add_local("..idx", 0, 8, 8, 0);
     int idx_off = loff[lcount - 1];
@@ -1337,8 +1339,7 @@ bool struct_has_free(int s) {
 // the struct variable just declared (the last local) is an owner of kind 4
 void struct_owner(int s) {
     if own_ok == 1 && struct_has_free(s) {
-        own_add(loff[lcount - 1], 4);
-        own_aux[own_count - 1] = s;
+        own_add(loff[lcount - 1], 4, s);
     }
 }
 
@@ -1561,7 +1562,7 @@ void parse_local_decl_core() {
         ty_dyn = d_dyn;
         add_local(@d_name, 3, 8, 8, 0);
         ins_mem("str", "x0", "x29", loff[lcount - 1]);
-        if own_ok == 1 { own_add(loff[lcount - 1], 1); }
+        if own_ok == 1 { own_add(loff[lcount - 1], 1, 0); }
         return;
     }
     if d_dyn != 0 {
@@ -1583,8 +1584,9 @@ void parse_local_decl_core() {
         add_local(@d_name, 3, 8, 8, 0);
         ins_mem("str", "x0", "x29", loff[lcount - 1]);
         if dd_start == 1 {
-            own_add(loff[lcount - 1], 1);
-            if is_strarr_dyn(d_dyn) { own_kind[own_count - 1] = 3; }
+            int dk = 1;
+            if is_strarr_dyn(d_dyn) { dk = 3; }
+            own_add(loff[lcount - 1], dk, 0);
         }
         return;
     }
@@ -1646,7 +1648,7 @@ void parse_local_decl_core() {
         lookup_var(@d_name);
         lused[lcount - 1] = 0;           // the declaration itself is not a use
         store_scalar();
-        if d_own == 1 { own_add(v_off, 0); }
+        if d_own == 1 { own_add(v_off, 0, 0); }
         return;
     }
     expect(";");
@@ -1661,7 +1663,10 @@ void parse_local_decl_core() {
 // a statement; the Strings that its expressions made are freed at its end
 void parse_statement() {
     int t0 = own_count;
+    int saved_t0 = stmt_t0;
+    stmt_t0 = t0;
     parse_statement_inner();
+    stmt_t0 = saved_t0;
     str_flush(t0, 0);
 }
 
@@ -2741,9 +2746,9 @@ void emit_exc_helper() {
     exc_len = str_len(@exc_text);
     emit_line("j2k_try_enter:");
     emit_line("ldr x1, [x27, #8]");
-    emit_line("cmp x1, 32");
+    emit_line("cmp x1, 24");
     emit_line("b.ge j2k_exc_full");
-    emit_line("mov x2, 24");
+    emit_line("mov x2, 32");
     emit_line("mul x2, x1, x2");
     emit_line("add x3, x27, #0");
     emit_line("add x3, x3, x2");
@@ -2751,6 +2756,8 @@ void emit_exc_helper() {
     emit_line("str x4, [x3, #16]");
     emit_line("str x29, [x3, #24]");
     emit_line("str x30, [x3, #32]");
+    emit_line("ldr x4, [x27, #784]");
+    emit_line("str x4, [x3, #40]");
     emit_line("add x1, x1, #1");
     emit_line("str x1, [x27, #8]");
     emit_line("mov x0, 0");
@@ -2771,10 +2778,37 @@ void emit_exc_helper() {
     emit_line("b.eq j2k_uncaught");
     emit_line("sub x1, x1, #1");
     emit_line("str x1, [x27, #8]");
-    emit_line("mov x2, 24");
+    emit_line("mov x2, 32");
     emit_line("mul x2, x1, x2");
     emit_line("add x3, x27, #0");
     emit_line("add x3, x3, x2");
+    // free what the frames that are left owned (the cleanup chain down to the head saved by the try)
+    emit_line("sub sp, sp, #16");
+    emit_line("str x3, [sp, #0]");
+    emit_line("ldr x9, [x3, #40]");
+    emit_line("str x9, [sp, #8]");
+    emit_line("j2k_th1:");
+    emit_line("ldr x5, [x27, #784]");
+    emit_line("ldr x9, [sp, #8]");
+    emit_line("cmp x5, x9");
+    emit_line("b.eq j2k_th3");
+    emit_line("cmp x5, 0");
+    emit_line("b.eq j2k_th3");
+    emit_line("ldr x6, [x5, #0]");
+    emit_line("str x6, [x27, #784]");
+    emit_line("ldr x7, [x5, #8]");
+    emit_line("ldr x8, [x5, #16]");
+    emit_line("ldr x10, [x5, #24]");
+    emit_line("mov x0, x7");
+    emit_line("cmp x10, 0");
+    emit_line("b.ne j2k_th2");
+    emit_line("ldr x0, [x7, #0]");
+    emit_line("j2k_th2:");
+    emit_line("blr x8");
+    emit_line("b j2k_th1");
+    emit_line("j2k_th3:");
+    emit_line("ldr x3, [sp, #0]");
+    emit_line("add sp, sp, #16");
     emit_line("ldr x4, [x3, #16]");
     emit_line("ldr x29, [x3, #24]");
     emit_line("ldr x30, [x3, #32]");

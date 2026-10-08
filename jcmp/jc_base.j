@@ -168,7 +168,7 @@ void color_reset() {
 
 // the colour of the word `error` (red) or `warning` (yellow, the terminal's own bold yellow)
 void kind_color() {
-    if msg_kind == 1 { set_color("[1;31m"); } else { set_color("[1;33m"); }
+    if msg_kind == 1 { set_color("[1;31m"); } else { set_color("[1;38;5;226m"); }
 }
 
 void write_err_int(int v) {

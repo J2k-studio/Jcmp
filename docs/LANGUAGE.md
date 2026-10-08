@@ -411,7 +411,10 @@ void main() {
 
 Only text can be thrown (version 0.1 of the design). A `throw` that no `try` catches prints
 `uncaught exception: <text>` to stderr and the program exits with code 1. `return`, `break`
-and `continue` may leave a `try` block. Up to 32 `try` blocks can be open at once.
+and `continue` may leave a `try` block. Up to 24 `try` blocks can be open at once.
+
+When a `throw` leaves functions, what they owned is freed on the way (arrays, Strings, `alloc` blocks, Strings made inside a statement, and structs
+with `free(self)`), innermost first. Nothing leaks.
 
 ## sizeof
 

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.8.1
+* **A `throw` frees what the left functions owned:** arrays, Strings, `alloc` blocks, Strings made inside a statement and structs with `free(self)` are freed on the way to the `catch` (innermost first). Before, they leaked. Cost: about ten instructions when an owner is made.
+* Warnings are bright yellow now (a fixed colour that does not depend on the terminal theme).
+
 ## 0.8.0
 * **`#import`** (with the `#`, like `#define`): `#import <stdlib>`, `#import "file"`. A plain `import` still works with a warning `[-Wimport]`; a later version makes the `#` required.
 * **`cout` and `cin` handle every type**, decimals included. `coutf` and `cinf` still work with a warning `[-Wdeprecated]`.
