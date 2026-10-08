@@ -2564,6 +2564,10 @@ void parse_unary() {
         return;
     }
     if tok_kind == T_IDENT {
+        if lambda_fn_ahead() {
+            gen_lambda_fn();
+            return;
+        }
         if tok_is("sizeof") {
             gen_sizeof();
             return;

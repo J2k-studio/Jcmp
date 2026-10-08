@@ -23,6 +23,7 @@ char lam_file[65536];        // 512 x 128
 int lam_count;
 int lam_done;
 int lam_seq;
+int lam_warned;
 char tpl_text[1048576];      // the texts of the generic declarations
 int tpl_used;
 char tpl_name[4096];         // 64 x 64
@@ -61,6 +62,7 @@ void gen_reset() {
     lam_count = 0;
     lam_done = 0;
     lam_seq = 0;
+    lam_warned = 0;
     tpl_used = 0;
     tpl_count = 0;
     ins_count = 0;
@@ -678,47 +680,12 @@ bool lambda_ahead() {
     return i < n && is_letter(b[i]);
 }
 
-void gen_lambda() {
-    if err_base != cur_base { die("a lambda cannot be written inside a #define"); }
-    if lam_count >= 500 { die("too many lambdas in one program"); }
+int lam_ptmp[16];
+
+// the common end of a lambda: the raw text of the return type [r_start, r_end), of the parameters [p_start, p_end)
+// and of the body [b_start, b_end) become a function; the expression is its address
+void lam_finish(int r_tid, int pn, int r_start, int r_end, int p_start, int p_end, int b_start, int b_end, int line) {
     char^ b = @src_bufs + cur_base;
-    int p_start = cur_pos;               // just after the "("
-    int line = err_line;
-    next();
-    int pn = 0;
-    int ptmp[16];
-    if !tok_is(")") {
-        while true {
-            parse_type();
-            int pt = ty_tid;
-            if ty_ptr != 0 { pt = 0; }
-            if ty_void == 1 && ty_ptr == 0 { die("a parameter type cannot be void"); }
-            if tok_kind != T_IDENT { die("a parameter name was expected"); }
-            if pn >= 8 { die("a lambda has at most 8 parameters"); }
-            ptmp[pn] = pt;
-            pn += 1;
-            next();
-            if tok_is(",") {
-                next();
-            } else {
-                break;
-            }
-        }
-    }
-    if !tok_is(")") { die(") expected"); }
-    int p_end = err_ls + err_col - 1;
-    next();
-    if !tok_is("->") { die("-> expected: (parameters) -> type { body }"); }
-    int r_start = cur_pos;
-    next();
-    parse_type();
-    int r_tid = ty_tid;
-    if ty_ptr != 0 { r_tid = 0; }
-    if ty_void == 1 && ty_ptr == 0 { r_tid = 98; }
-    if !tok_is("{") { die("{ expected: the body of the lambda"); }
-    int r_end = err_ls + err_col - 1;
-    int b_end = gen_item_end(b, r_end, cur_len);
-    // the text of the function:  RET __lambda_N(PARAMS) BODY
     char name[64];
     str_copy(@name, "__lambda_", 64);
     append_int(@name, lam_seq);
@@ -749,7 +716,7 @@ void gen_lambda() {
     lam_buf[o] = ')';
     lam_buf[o + 1] = ' ';
     o += 2;
-    x = r_end;
+    x = b_start;
     while x < b_end {
         lam_buf[o] = b[x];
         o += 1;
@@ -769,7 +736,7 @@ void gen_lambda() {
     next();
     int k = 0;
     while k < pn {
-        sg_tmp[k] = ptmp[k];
+        sg_tmp[k] = lam_ptmp[k];
         k += 1;
     }
     int sg = sig_intern(r_tid, pn);
@@ -780,6 +747,96 @@ void gen_lambda() {
     ex_ty = 0 - sg - 1;
     rv_valid = 0;
     last_call_owning = 0;
+}
+
+// the parameters of a lambda: the token after "(" is current; leaves ")" as the current token
+int lam_params() {
+    int pn = 0;
+    if !tok_is(")") {
+        while true {
+            parse_type();
+            int pt = ty_tid;
+            if ty_ptr != 0 { pt = 0; }
+            if ty_void == 1 && ty_ptr == 0 { die("a parameter type cannot be void"); }
+            if tok_kind != T_IDENT { die("a parameter name was expected"); }
+            if pn >= 8 { die("a lambda has at most 8 parameters"); }
+            lam_ptmp[pn] = pt;
+            pn += 1;
+            next();
+            if tok_is(",") {
+                next();
+            } else {
+                break;
+            }
+        }
+    }
+    if !tok_is(")") { die(") expected"); }
+    return pn;
+}
+
+// the older form  (int a) -> int { ... }  : still accepted, with a warning
+void gen_lambda() {
+    if err_base != cur_base { die("a lambda cannot be written inside a #define"); }
+    if lam_count >= 500 { die("too many lambdas in one program"); }
+    if lam_warned == 0 {
+        lam_warned = 1;
+        warn("write a lambda like a function: int(int a, int b) { return a + b; } (the form with -> will be removed)", "deprecated");
+    }
+    char^ b = @src_bufs + cur_base;
+    int p_start = cur_pos;               // just after the "("
+    int line = err_line;
+    next();
+    int pn = lam_params();
+    int p_end = err_ls + err_col - 1;
+    next();
+    if !tok_is("->") { die("-> expected: (parameters) -> type { body }"); }
+    int r_start = cur_pos;
+    next();
+    parse_type();
+    int r_tid = ty_tid;
+    if ty_ptr != 0 { r_tid = 0; }
+    if ty_void == 1 && ty_ptr == 0 { r_tid = 98; }
+    if !tok_is("{") { die("{ expected: the body of the lambda"); }
+    int r_end = err_ls + err_col - 1;
+    int b_end = gen_item_end(b, r_end, cur_len);
+    lam_finish(r_tid, pn, r_start, r_end, p_start, p_end, r_end, b_end, line);
+}
+
+// is the current token a type that is followed by "(" : the start of  int(int a, int b) { ... } ?
+bool lambda_fn_ahead() {
+    if !at_type() { return false; }
+    char^ b = @src_bufs + cur_base;
+    int n = cur_len;
+    int i = gen_blanks(b, cur_pos, n);
+    while i < n && b[i] == '^' { i = gen_blanks(b, i + 1, n); }
+    return i < n && b[i] == '(';
+}
+
+// a lambda written like a function without a name:  int(int a, int b) { return a + b; }
+void gen_lambda_fn() {
+    if err_base != cur_base { die("a lambda cannot be written inside a #define"); }
+    if lam_count >= 500 { die("too many lambdas in one program"); }
+    char^ b = @src_bufs + cur_base;
+    int r_start = err_ls + err_col - 1;
+    int line = err_line;
+    int sv_fn = parse_fn_type_ok;
+    parse_fn_type_ok = 0;                // the "(" after the type starts the parameters, not a function pointer type
+    parse_type();
+    parse_fn_type_ok = sv_fn;
+    int r_tid = ty_tid;
+    if ty_ptr != 0 { r_tid = 0; }
+    if ty_void == 1 && ty_ptr == 0 { r_tid = 98; }
+    int r_end = err_ls + err_col - 1;
+    if !tok_is("(") { die("( expected: the parameters of the lambda"); }
+    int p_start = cur_pos;
+    next();
+    int pn = lam_params();
+    int p_end = err_ls + err_col - 1;
+    next();
+    if !tok_is("{") { die("{ expected: the body of the lambda"); }
+    int b_start = err_ls + err_col - 1;
+    int b_end = gen_item_end(b, b_start, cur_len);
+    lam_finish(r_tid, pn, r_start, r_end, p_start, p_end, b_start, b_end, line);
 }
 
 // compile the lambdas that were written since the last call

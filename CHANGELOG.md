@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9.1
+* **A lambda is written like a function without a name** (the way functions are declared: result type first, no `->`): `int(int a, int b) { return a + b; }`, `void() { ... }`. The form of 0.9.0, `(int a, int b) -> int { ... }`, still works with a warning.
+
 ## 0.9.0
 * **Lambdas:** a function without a name where you use it: `(int a, int b) -> int { return a + b; }`, `() -> void { ... }`. It gives a function pointer, so it can be passed to a function or kept in `int(int, int)^ f = ...;`. It cannot use the variables around it (a clear message says so).
 * `->` is a token now.

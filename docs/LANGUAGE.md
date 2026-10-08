@@ -354,14 +354,14 @@ Methods (with `self`) and functions with array parameters cannot be used as valu
 
 ## Lambdas
 
-A lambda is a function without a name, written where you use it. The parameters have types and the result type follows `->`:
+A lambda is a function without a name, written where you use it. It looks like a function declaration without the name (the result type first, then the parameters):
 
 ```jk
 int apply(int(int, int)^ f, int x, int y) { return f(x, y); }
 
-cout << apply((int a, int b) -> int { return a + b; }, 3, 4) << "\n";      // 7
-int(int)^ twice = (int x) -> int { return x * 2; };                         // keep it in a function pointer
-void()^ hello = () -> void { cout << "hi\n"; };
+cout << apply(int(int a, int b) { return a + b; }, 3, 4) << "\n";      // 7
+int(int)^ twice = int(int x) { return x * 2; };                         // keep it in a function pointer
+void()^ hello = void() { cout << "hi\n"; };
 ```
 
 A lambda is an ordinary function in disguise (the compiler names it `__lambda_N`), so it **cannot use the variables around it**; it can use

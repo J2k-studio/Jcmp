@@ -27,11 +27,12 @@ For the complete list of features see [LANGUAGE.md](LANGUAGE.md); for the comman
 12. Strings
 13. Generics
 14. Lists, maps and sets
-15. Errors with try and catch
-16. Decimals and the Math library
-17. Files
-18. A program in several files
-19. A small project: counting words
+15. Lambdas
+16. Errors with try and catch
+17. Decimals and the Math library
+18. Files
+19. A program in several files
+20. A small project: counting words
 
 ## Lesson 1. Hello, world
 
@@ -539,7 +540,36 @@ bob is 25
 
 `ages.get("zed")` would throw `key not found`; ask with `ages.has("zed")` first. `keys_list()` makes a new list that the `for` loop frees for you.
 
-## Lesson 15. Errors with try and catch
+## Lesson 15. Lambdas
+
+A lambda is a small function written right where you need it: `int(int a, int b) { return a + b; }`. It can be passed to a function that takes a function
+pointer, or kept in a variable of type `int(int, int)^`. It cannot use the variables around it.
+
+```jk
+#import <stdlib>
+using stdlib
+
+int apply(int(int, int)^ f, int x, int y) {
+    return f(x, y);
+}
+
+void main() {
+    cout << apply(int(int a, int b) { return a + b; }, 3, 4) << "\n";
+    int(int)^ triple = int(int x) { return x * 3; };
+    cout << triple(5) << "\n";
+}
+```
+
+Output:
+
+```
+7
+15
+```
+
+The types are written out, so a lambda reads like a function. If the body needs a value from outside, pass it as a parameter.
+
+## Lesson 16. Errors with try and catch
 
 `throw "text"` stops what you are doing and jumps to the nearest `catch`. Without a `catch` the program stops and prints `uncaught exception: text`.
 
@@ -569,7 +599,7 @@ Output:
 error: cannot divide by zero
 ```
 
-## Lesson 16. Decimals and the Math library
+## Lesson 17. Decimals and the Math library
 
 `#import <stdlib>` brings the standard library and `using stdlib` lets you write `sqrt(x)` instead of `Math::sqrt(x)` (every program that prints needs both lines; the tutorial adds them at the top). If two modules have the same function name (`write` is in `Sys` and `File`), write the module: `File::write(...)`. Casts are explicit: `(int)x`, `(double)n`.
 
@@ -600,7 +630,7 @@ hypotenuse = 5.000000
 
 The library has `Sys` (system calls), `Mem` (memory), `Str` (text), `Math` and `File`.
 
-## Lesson 17. Files
+## Lesson 18. Files
 
 `File::open(path, mode)` gives a number (negative if it failed). `read`, `write`, `read_line` and `close` use it.
 
@@ -628,7 +658,7 @@ Output:
 J2K can write files
 ```
 
-## Lesson 18. A program in several files
+## Lesson 19. A program in several files
 
 A file that ends in `.jk` is a program (it has `main`). A file that ends in `.j` is a component that other files `import`; it must not have `main`.
 `#import "mathx"` finds `mathx.j` next to the file; `#import "tools.mathx"` finds `tools/mathx.j`.
@@ -663,7 +693,7 @@ Output:
 
 Compile only the main file: `jcmp multi.jk -o multi`; the imported file is read automatically (once).
 
-## Lesson 19. A small project: counting words
+## Lesson 20. A small project: counting words
 
 Putting it together: read words until the input ends (reading past the end throws `end of input`) and report how many there were and the longest.
 
