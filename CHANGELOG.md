@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.22
+* **`vec`:** `vec pos = {1.0, 2.0, 3.0};` is a `vec3` (the number of values says which: 2, 3 or 4). Elsewhere (parameters, fields, results) write `vec2`, `vec3`, `vec4`.
+* **Swizzle:** `v.xy`, `v.zyx`, `v.xxyy`, `c.rgb` make a new vector from some components of a `vec2/3/4` (letters of `xyzw` or of `rgba`, not mixed); a single letter (`v.r`, `v.y`) is the component itself and can be assigned. A swizzle with several letters is read only.
+
 ## 0.9.21
 * **JSON (stdlib):** `Json::parse(text)` gives a `Result<JsonDoc, Error>` (an error says what and at which byte); a `JsonDoc` is a table of nodes (a node is a number, -1 = none): `root get at len has name_of text number integer boolean is_null kind_of dump`. `Json::quote(s)` and `Json::num_text(x)` make JSON text. Strings are decoded (`\n`, `\u00e9`, surrogate pairs to UTF-8).
 * **Fixed:** a data enum member with a parameter named `s` (`Name(String s)`) clashed with a name made by the compiler.

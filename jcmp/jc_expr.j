@@ -1494,6 +1494,7 @@ int lv_dyn;
 int lv_base_off;             // frame offset / local-ness of the variable the chain began with
 int lv_base_local;
 int lv_self;                 // the variable is `self`
+int lv_swz;                  // 1: the value is a temporary made by a swizzle with several components (read only)
 char lv_base[256];           // the variable the chain started from
 int lv_fresh;                // 1 while no [ ] ^ . has been followed yet
 int lv_serial;               // counts the l-value chains parsed (sizeof uses it)
@@ -1508,10 +1509,64 @@ bool lv_len_next() {
     return lv_fresh == 1 && lv_kind == 0 && lv_ptr != 0 && lv_ptr < 16 && lv_code < 16;
 }
 
+// the struct named base + n  (vec2, vec3, vec4), or -1
+int find_struct_n(char^ base, int n) {
+    char nm[16];
+    str_copy(@nm, base, 12);
+    nm[str_len(@nm) + 1] = 0;
+    nm[str_len(@nm)] = '0' + n;
+    return find_struct(@nm);
+}
+
+// is `name` a swizzle of the vector struct st: 1 to 4 letters of xyzw, or of rgba (not mixed), each one a component st has?
+bool swizzle_ok(int st, char^ name) {
+    if str_len(@sname + st * 64) != 4 || sname[st * 64] != 'v' || sname[st * 64 + 1] != 'e' || sname[st * 64 + 2] != 'c' { return false; }
+    int comps = sname[st * 64 + 3] - '0';
+    int n = str_len(name);
+    if n < 1 || n > 4 { return false; }
+    int set = 0;
+    int i = 0;
+    while i < n {
+        int c = name[i];
+        int idx = 0 - 1;
+        int cs = 0;
+        if c == 'x' { idx = 0; cs = 1; }
+        else if c == 'y' { idx = 1; cs = 1; }
+        else if c == 'z' { idx = 2; cs = 1; }
+        else if c == 'w' { idx = 3; cs = 1; }
+        else if c == 'r' { idx = 0; cs = 2; }
+        else if c == 'g' { idx = 1; cs = 2; }
+        else if c == 'b' { idx = 2; cs = 2; }
+        else if c == 'a' { idx = 3; cs = 2; }
+        if idx < 0 { return false; }
+        if set != 0 && set != cs { return false; }
+        set = cs;
+        if idx >= comps {
+            if pass_no >= 2 { die_name("this vector has no such component", name); }
+            return false;
+        }
+        i += 1;
+    }
+    return true;
+}
+
+// the letters rgba become xyzw (in place)
+void swizzle_letter(char^ name) {
+    int i = 0;
+    while name[i] != 0 {
+        if name[i] == 'r' { name[i] = 'x'; }
+        else if name[i] == 'g' { name[i] = 'y'; }
+        else if name[i] == 'b' { name[i] = 'z'; }
+        else if name[i] == 'a' { name[i] = 'w'; }
+        i += 1;
+    }
+}
+
 // the variable id_name was found (v_*): x0 = its address, then follow
 // [index], ^, .field and .method(...)
 void parse_lvalue() {
     lv_done = 0;
+    lv_swz = 0;
     lv_self = 0;
     lv_fresh = 1;
     lv_serial += 1;
@@ -1676,6 +1731,41 @@ void lvalue_loop() {
                 return;
             }
             int fi = find_field(st, @m_name);
+            if fi < 0 && swizzle_ok(st, @m_name) {
+                int sl = str_len(@m_name);
+                if sl == 1 {
+                    swizzle_letter(@m_name);             // v.r is v.x, and so on
+                    fi = find_field(st, @m_name);
+                } else {
+                    // v.xy, c.rgb, v.zyx : a new vector with those components (the source stays as it is)
+                    int ns = find_struct_n("vec", sl);
+                    if ns < 0 { die("a swizzle makes a vec2, vec3 or vec4: it must be loaded (using math::vector)"); }
+                    ty_tid = 0;
+                    add_local("..swizzle", 0, 16 + ns, ssize[ns], 0);
+                    int sw_off = loff[lcount - 1];
+                    emit_line("mov x1, x0");
+                    int sj = 0;
+                    while sj < sl {
+                        char one[2];
+                        one[0] = m_name[sj];
+                        one[1] = 0;
+                        swizzle_letter(@one);
+                        int sf = find_field(st, @one);
+                        ins_mem("ldr", "x2", "x1", fldoff[sf]);
+                        ins_mem("str", "x2", "x29", sw_off + sj * 8);
+                        sj += 1;
+                    }
+                    ins_n("add x0, x29, #", sw_off);
+                    lv_code = 16 + ns;
+                    lv_kind = 0;
+                    lv_ptr = 0;
+                    lv_tid = 100 + ns;
+                    lv_self = 0;
+                    lv_fresh = 0;
+                    lv_swz = 1;
+                    continue;
+                }
+            }
             if fi < 0 { die_name("the struct has no such field", @m_name); }
             if fldoff[fi] != 0 { ins_n("add x0, x0, #", fldoff[fi]); }
             lv_code = fldcode[fi];

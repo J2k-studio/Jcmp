@@ -71,8 +71,56 @@ int loop_depth;
 
 int parse_fn_type_ok = 1;      // parse_type may read RET(PARAMS)^
 
+// `vec NAME = { a, b, c };` : the number of values in the braces (the current token is `vec`, nothing after it is read yet).
+// -1 if the text is not of that shape
+int vec_count_ahead() {
+    int o = 0;
+    while is_space(lc(o)) { o += 1; }
+    if !is_letter(lc(o)) { return -1; }
+    while is_letter(lc(o)) || is_digit(lc(o)) || lc(o) == '_' { o += 1; }
+    while is_space(lc(o)) { o += 1; }
+    if lc(o) != '=' { return -1; }
+    o += 1;
+    while is_space(lc(o)) { o += 1; }
+    if lc(o) != '{' { return -1; }
+    o += 1;
+    int depth = 0;
+    int n = 0;
+    int any = 0;
+    while lc(o) != 0 {
+        int c = lc(o);
+        if c == '"' || c == 39 {
+            int q = c;
+            o += 1;
+            while lc(o) != 0 && lc(o) != q {
+                if lc(o) == 92 { o += 1; }
+                o += 1;
+            }
+            any = 1;
+        } else if c == '(' || c == '[' || c == '{' {
+            depth += 1;
+            any = 1;
+        } else if c == ')' || c == ']' {
+            depth -= 1;
+        } else if c == '}' {
+            if depth == 0 {
+                if any == 1 { return n + 1; }
+                return 0;
+            }
+            depth -= 1;
+        } else if c == ',' && depth == 0 {
+            n += 1;
+        } else if !is_space(c) {
+            any = 1;
+        }
+        o += 1;
+    }
+    return -1;
+}
+
 // is the current token a type word?
 bool at_type() {
+    if tok_kind == T_IDENT && tok_is("vec") && find_struct("vec") < 0 && find_struct("vec3") >= 0 { return true; }
     if tok_kind == T_IDENT && find_enum(@tok_text) >= 0 { return true; }
     if tok_kind == T_IDENT && find_struct(@tok_text) >= 0 { return true; }
     if tok_kind == T_IDENT && tok_is("String") { return true; }
@@ -111,6 +159,13 @@ void parse_type() {
     ty_ptr = 0;
     ty_tid = 0;
     ty_dyn = 0;
+    if tok_kind == T_IDENT && tok_is("vec") && find_struct("vec") < 0 && find_struct("vec3") >= 0 {
+        // vec pos = { 1.0, 2.0, 3.0 };  the number of values says which one: vec2, vec3 or vec4
+        int vn = vec_count_ahead();
+        if vn < 2 || vn > 4 { die("vec needs its values in { } (2 to 4 of them): vec pos = {1.0, 2.0, 3.0};  elsewhere write vec2, vec3 or vec4"); }
+        tok_text[3] = '0' + vn;
+        tok_text[4] = 0;
+    }
     if tok_kind == T_IDENT && tok_is("String") && find_struct(@tok_text) < 0 {
         // String: a dynamic array of char marked with the type id 70 (see is_str_dyn)
         next();
@@ -307,6 +362,7 @@ void parse_assign_core(char^ target) {
         if for_step == 0 { expect(";"); }
         return;
     }
+    if lv_swz == 1 { die("a swizzle with several components can only be read (assign the parts one by one: v.x = ...)"); }
     int a_code = lv_code;
     int a_kind = lv_kind;
     int lv_dyn_saved = lv_dyn;
