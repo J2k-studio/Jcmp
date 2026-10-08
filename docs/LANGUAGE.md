@@ -352,6 +352,21 @@ parameter types), which the compiler checks. Pointers may live in variables, arr
 (`table[i](x)`, `object.callback(x)`) and may be returned (`pick(1)(5, 5)`).
 Methods (with `self`) and functions with array parameters cannot be used as values; at most 8 parameters.
 
+## Lambdas
+
+A lambda is a function without a name, written where you use it. The parameters have types and the result type follows `->`:
+
+```jk
+int apply(int(int, int)^ f, int x, int y) { return f(x, y); }
+
+cout << apply((int a, int b) -> int { return a + b; }, 3, 4) << "\n";      // 7
+int(int)^ twice = (int x) -> int { return x * 2; };                         // keep it in a function pointer
+void()^ hello = () -> void { cout << "hi\n"; };
+```
+
+A lambda is an ordinary function in disguise (the compiler names it `__lambda_N`), so it **cannot use the variables around it**; it can use
+globals and its parameters. A lambda inside a lambda is fine.
+
 ## Structs and methods
 
 ```jk

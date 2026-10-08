@@ -14,6 +14,15 @@
 //   3. the lexer (next) turns `Name<args>` into the single identifier of the instance.
 // A generic must be written before its first use. The tables are rebuilt in every pass.
 
+char lam_buf[262144];
+int lam_used;
+int lam_off[512];
+int lam_len[512];
+int lam_line[512];
+char lam_file[65536];        // 512 x 128
+int lam_count;
+int lam_done;
+int lam_seq;
 char tpl_text[1048576];      // the texts of the generic declarations
 int tpl_used;
 char tpl_name[4096];         // 64 x 64
@@ -48,6 +57,10 @@ char gs_text[4096];          // 16 x 256
 char gs_str[16384];          // 16 x 1024
 
 void gen_reset() {
+    lam_used = 0;
+    lam_count = 0;
+    lam_done = 0;
+    lam_seq = 0;
     tpl_used = 0;
     tpl_count = 0;
     ins_count = 0;
@@ -632,4 +645,154 @@ void gen_use() {
     if f < 0 { return; }
     while cur_pos < ae { adv(); }
     str_copy(@tok_text, @ins_name + f * 64, 256);
+}
+
+// ---------------------------------------------------------------- lambdas
+//   (int a, int b) -> int { return a + b; }       a function without a name, written where it is used
+// It cannot use the variables around it (it is an ordinary function that gets the name __lambda_N).
+// The text of the function is kept and compiled as soon as the item that contains it is done; the
+// expression itself is the address of the function (a function pointer).
+
+
+// is the "(" (the current token) the start of a lambda? Looks at the text after it: a type and then a name,
+// or ")" and "->"
+bool lambda_ahead() {
+    char^ b = @src_bufs + cur_base;
+    int n = cur_len;
+    int i = gen_blanks(b, cur_pos, n);
+    if i < n && b[i] == ')' {
+        i = gen_blanks(b, i + 1, n);
+        return i + 1 < n && b[i] == '-' && b[i + 1] == '>';
+    }
+    char word[64];
+    int e = gen_word(b, i, n, @word);
+    if e == i { return false; }
+    bool is_ty = str_eq(@word, "int") || str_eq(@word, "char") || str_eq(@word, "bool") || str_eq(@word, "i8") || str_eq(@word, "i32");
+    if str_eq(@word, "u8") || str_eq(@word, "u32") || str_eq(@word, "u64") || str_eq(@word, "float") || str_eq(@word, "double") { is_ty = true; }
+    if str_eq(@word, "f32") || str_eq(@word, "f64") || str_eq(@word, "String") { is_ty = true; }
+    if find_struct(@word) >= 0 || find_enum(@word) >= 0 { is_ty = true; }
+    if !is_ty { return false; }
+    i = gen_blanks(b, e, n);
+    while i < n && b[i] == '^' { i = gen_blanks(b, i + 1, n); }
+    if i + 1 < n && b[i] == '[' && b[i + 1] == ']' { i = gen_blanks(b, i + 2, n); }
+    return i < n && is_letter(b[i]);
+}
+
+void gen_lambda() {
+    if err_base != cur_base { die("a lambda cannot be written inside a #define"); }
+    if lam_count >= 500 { die("too many lambdas in one program"); }
+    char^ b = @src_bufs + cur_base;
+    int p_start = cur_pos;               // just after the "("
+    int line = err_line;
+    next();
+    int pn = 0;
+    int ptmp[16];
+    if !tok_is(")") {
+        while true {
+            parse_type();
+            int pt = ty_tid;
+            if ty_ptr != 0 { pt = 0; }
+            if ty_void == 1 && ty_ptr == 0 { die("a parameter type cannot be void"); }
+            if tok_kind != T_IDENT { die("a parameter name was expected"); }
+            if pn >= 8 { die("a lambda has at most 8 parameters"); }
+            ptmp[pn] = pt;
+            pn += 1;
+            next();
+            if tok_is(",") {
+                next();
+            } else {
+                break;
+            }
+        }
+    }
+    if !tok_is(")") { die(") expected"); }
+    int p_end = err_ls + err_col - 1;
+    next();
+    if !tok_is("->") { die("-> expected: (parameters) -> type { body }"); }
+    int r_start = cur_pos;
+    next();
+    parse_type();
+    int r_tid = ty_tid;
+    if ty_ptr != 0 { r_tid = 0; }
+    if ty_void == 1 && ty_ptr == 0 { r_tid = 98; }
+    if !tok_is("{") { die("{ expected: the body of the lambda"); }
+    int r_end = err_ls + err_col - 1;
+    int b_end = gen_item_end(b, r_end, cur_len);
+    // the text of the function:  RET __lambda_N(PARAMS) BODY
+    char name[64];
+    str_copy(@name, "__lambda_", 64);
+    append_int(@name, lam_seq);
+    lam_seq += 1;
+    int o = lam_used;
+    int x = r_start;
+    while x < r_end {
+        lam_buf[o] = b[x];
+        o += 1;
+        x += 1;
+    }
+    lam_buf[o] = ' ';
+    o += 1;
+    x = 0;
+    while name[x] != 0 {
+        lam_buf[o] = name[x];
+        o += 1;
+        x += 1;
+    }
+    lam_buf[o] = '(';
+    o += 1;
+    x = p_start;
+    while x < p_end {
+        lam_buf[o] = b[x];
+        o += 1;
+        x += 1;
+    }
+    lam_buf[o] = ')';
+    lam_buf[o + 1] = ' ';
+    o += 2;
+    x = r_end;
+    while x < b_end {
+        lam_buf[o] = b[x];
+        o += 1;
+        x += 1;
+        if o >= 262000 { die("the lambdas are too large"); }
+    }
+    lam_buf[o] = 10;
+    o += 1;
+    lam_off[lam_count] = lam_used;
+    lam_len[lam_count] = o - lam_used;
+    lam_line[lam_count] = line;
+    str_copy(@lam_file + lam_count * 128, @err_file, 128);
+    lam_used = o;
+    lam_count += 1;
+    // the lexer goes on after the body
+    while cur_pos < b_end && cur_pos < cur_len { adv(); }
+    next();
+    int k = 0;
+    while k < pn {
+        sg_tmp[k] = ptmp[k];
+        k += 1;
+    }
+    int sg = sig_intern(r_tid, pn);
+    note_call(@name);
+    emit_str("adr x0, ");
+    emit_line(@name);
+    ex_w = 8;
+    ex_ty = 0 - sg - 1;
+    rv_valid = 0;
+    last_call_owning = 0;
+}
+
+// compile the lambdas that were written since the last call
+void gen_lambdas() {
+    while lam_done < lam_count {
+        int i = lam_done;
+        lam_done += 1;
+        int d = lx_depth;
+        gen_save(d);
+        push_text(@lam_buf + lam_off[i], lam_len[i], @lam_file + i * 128, lam_line[i]);
+        next();
+        while tok_kind != T_EOF { parse_one_item(); }
+        pop_file();
+        gen_restore(d);
+    }
 }

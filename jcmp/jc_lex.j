@@ -156,9 +156,11 @@ void die(char^ msg) {
 }
 
 // die with a name in the message:  error: msg 'name'
+int in_lambda;               // 1 while the function being compiled is a lambda
 void die_name(char^ msg, char^ name) {
     begin_msg("error");
     write_err(msg);
+    if in_lambda == 1 && str_eq(msg, "unknown name") { write_err(" (a lambda cannot use the variables around it)"); }
     write_err(" '");
     write_err(name);
     write_err("'");
@@ -871,6 +873,8 @@ void next() {
         len = 2;
     } else if (c == '|' && c1 == '=') || (c == '+' && c1 == '+') || (c == '-' && c1 == '-') {
         len = 2;
+    } else if c == '-' && c1 == '>' {
+        len = 2;                         // ->  (a lambda)
     }
     int k = 0;
     while k < len {

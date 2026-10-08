@@ -2036,6 +2036,8 @@ void parse_function() {
         emit_line("bl j2k_copy");
         cp_i += 1;
     }
+    in_lambda = 0;
+    if d_fname[0] == '_' && d_fname[1] == '_' && d_fname[2] == 'l' && d_fname[3] == 'a' && d_fname[4] == 'm' { in_lambda = 1; }
     fn_returns = 0;
     fn_line = err_line;
     fn_col = err_col;
@@ -2053,6 +2055,7 @@ void parse_function() {
         append_text(@rm, "' must return a value but has no return statement (make it void, or return something)");
         if pass_no >= 2 { die(@rm); }
     }
+    in_lambda = 0;
     patch_b = 0;
     cur_in_func = 0;
     if cur_is_main == 1 {
@@ -2335,6 +2338,7 @@ void parse_one_item() {
     } else {
         parse_top_item();
     }
+    gen_lambdas();                       // the lambdas written in this item become functions now
 }
 
 void parse_program() {

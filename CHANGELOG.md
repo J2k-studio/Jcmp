@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.0
+* **Lambdas:** a function without a name where you use it: `(int a, int b) -> int { return a + b; }`, `() -> void { ... }`. It gives a function pointer, so it can be passed to a function or kept in `int(int, int)^ f = ...;`. It cannot use the variables around it (a clear message says so).
+* `->` is a token now.
+
 ## 0.8.1
 * **A `throw` frees what the left functions owned:** arrays, Strings, `alloc` blocks, Strings made inside a statement and structs with `free(self)` are freed on the way to the `catch` (innermost first). Before, they leaked. Cost: about ten instructions when an owner is made.
 * Warnings are bright yellow now (a fixed colour that does not depend on the terminal theme).

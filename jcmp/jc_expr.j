@@ -2592,6 +2592,10 @@ void parse_unary() {
         gen_identifier();
         return;
     }
+    if tok_is("(") && lambda_ahead() {
+        gen_lambda();
+        return;
+    }
     if tok_is("(") {
         next();
         if at_type() {
