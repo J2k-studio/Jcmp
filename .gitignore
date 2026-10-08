@@ -4,3 +4,10 @@
 *.o
 /dist/
 token.local
+# private files that sometimes sit in the project folder (never commit them)
+xiaorin-ai.md
+*.jpg
+*.jpeg
+*.png
+/bh
+/solar
