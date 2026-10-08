@@ -1,3 +1,6 @@
+import std
+using std
+
 // hello.jk -- the smallest program
 void main() {
     cout << "Hello from J2K!\n";

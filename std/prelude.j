@@ -393,7 +393,7 @@ struct __In {
         return v;
     }
     // a decimal number: 12  -3.5  .5  2e-3
-    static f64 fnum() {
+    static double fnum() {
         int c = __In::start();
         if c < 0 { throw "end of input"; }
         int neg = 0;
@@ -444,7 +444,7 @@ struct __In {
             if eneg == 1 { exp -= ev; } else { exp += ev; }
         }
         if c >= 0 && !__In::space(c) { throw "invalid input"; }
-        f64 v = (f64)mant;
+        double v = (double)mant;
         while exp > 0 {
             v = v * 10.0;
             exp -= 1;

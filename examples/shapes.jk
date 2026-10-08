@@ -1,11 +1,14 @@
+import std
+using std
+
 // shapes.jk -- structs, methods, enums, switch, floats
 enum class Kind { Circle, Square, Triangle };
 
 struct Shape {
     Kind kind;
-    f64 size;
+    double size;
 
-    f64 area(self) {
+    double area(self) {
         switch self.kind {
             Kind::Circle: return 3.14159265 * self.size * self.size;
             Kind::Square: return self.size * self.size;
@@ -20,7 +23,7 @@ void main() {
     shapes[0] = {Kind::Circle, 2.0};
     shapes[1] = {Kind::Square, 3.0};
     shapes[2] = {Kind::Triangle, 4.0};
-    f64 total = 0.0;
+    double total = 0.0;
     for i in 0..3 {
         coutf << "area " << shapes[i].area() << "\n";
         total += shapes[i].area();

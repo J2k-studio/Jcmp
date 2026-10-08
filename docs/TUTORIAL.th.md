@@ -37,6 +37,9 @@ jcmp hello.jk -o hello      # คอมไพล์
 โปรแกรมเริ่มทำงานที่ `main` คำสั่ง `cout <<` ใช้พิมพ์ และ `\n` คือขึ้นบรรทัดใหม่ บันทึกเป็นไฟล์ `hello.jk`
 
 ```jk
+import std
+using std
+
 void main() {
     cout << "Hello, J2K!\n";
 }
@@ -53,17 +56,20 @@ Hello, J2K!
 
 ## บทที่ 2. ตัวเลขและตัวแปร
 
-ตัวแปรมีชนิด: `int` (จำนวนเต็ม 64 บิต), `f64` (ทศนิยม), `char` (ตัวอักษรหนึ่งตัว), `bool` (จริงหรือเท็จ)
+ตัวแปรมีชนิด: `int` (จำนวนเต็ม 64 บิต), `double` (ทศนิยม), `char` (ตัวอักษรหนึ่งตัว), `bool` (จริงหรือเท็จ)
 พิมพ์ทศนิยมด้วย `coutf` ทุกบรรทัดจบด้วย `;`
 
 ```jk
+import std
+using std
+
 void main() {
     int apples = 5;
     int pears = 3;
     int total = apples + pears;
     cout << "total = " << total << "\n";
 
-    f64 price = 2.5;
+    double price = 2.5;
     coutf << "cost = " << price * 4.0 << "\n";
 
     char letter = 'J';
@@ -83,13 +89,16 @@ J
 enough fruit
 ```
 
-`bool` ไม่ใช่ตัวเลข: `if total` ผิด ต้องเขียน `if total != 0` และ `int` กับ `f64` ผสมกันตรงๆ ไม่ได้ ต้อง cast เช่น `(f64)total`
+`bool` ไม่ใช่ตัวเลข: `if total` ผิด ต้องเขียน `if total != 0` และ `int` กับ `double` ผสมกันตรงๆ ไม่ได้ ต้อง cast เช่น `(double)total`
 
 ## บทที่ 3. การตัดสินใจ
 
 `if`, `else if`, `else` เลือกว่าจะทำอะไร เงื่อนไขใช้ `== != < > <= >=` และ `&&` (และ) `||` (หรือ) `!` (ไม่) ต้องมี `{ }` เสมอ
 
 ```jk
+import std
+using std
+
 void main() {
     int score = 72;
     if score >= 90 {
@@ -119,6 +128,9 @@ passed
 `break` ออกจากลูป `continue` ข้ามไปรอบถัดไป
 
 ```jk
+import std
+using std
+
 void main() {
     int i = 1;
     while i <= 3 {
@@ -150,6 +162,9 @@ void main() {
 ฟังก์ชันมีชนิดผลลัพธ์ ชื่อ และพารามิเตอร์ `void` คือไม่คืนค่า เขียนฟังก์ชันไว้ใต้จุดที่เรียกใช้ก็ได้
 
 ```jk
+import std
+using std
+
 void main() {
     cout << square(7) << "\n";
     cout << sum_to(10) << "\n";
@@ -187,6 +202,9 @@ Hello, Ann!
 `char word[] = "banana"` คำนวณขนาดให้เอง อาร์เรย์มีได้ถึงสามมิติ เช่น `int grid[2][3]`
 
 ```jk
+import std
+using std
+
 void main() {
     int scores[5];
     for i in 0..5 { scores[i] = (i + 1) * 10; }
@@ -225,6 +243,9 @@ banana has 3 letter a
 `cinf` อ่านทศนิยม คำคั่นด้วยช่องว่างหรือขึ้นบรรทัดใหม่
 
 ```jk
+import std
+using std
+
 void main() {
     char name[20];
     int age;
@@ -248,6 +269,9 @@ Ann will be 31 next year
 `struct` รวมค่าหลายตัวเข้าด้วยกัน ฟังก์ชันที่อยู่ข้างในคือ method รับตัวมันเองเป็น `self` `Rect r = {3, 4};` ใส่ค่าให้ field ตามลำดับ
 
 ```jk
+import std
+using std
+
 struct Rect {
     int w;
     int h;
@@ -285,6 +309,9 @@ method ชื่อ `init(self)` จะทำงานเองเมื่อ�
 enum ไม่ใช่ตัวเลข จึงไม่สับสนโดยไม่ตั้งใจ
 
 ```jk
+import std
+using std
+
 enum class Light { Red, Yellow, Green };
 
 void say(Light l) {
@@ -324,6 +351,9 @@ three
 `p[i]` เข้าถึงสมาชิกตัวที่ i (ไม่มี `p + 1`)
 
 ```jk
+import std
+using std
+
 void bump(int^ p) {
     p^ = p^ + 1;
 }
@@ -355,8 +385,8 @@ void main() {
 
 ```jk
 import std
-using std::mem
 
+using std
 int total(int[] list) {
     int s = 0;
     for i in 0..list.len { s += list[i]; }
@@ -392,6 +422,9 @@ void main() {
 `String` ถูกปล่อยเองตอนจบบล็อก และ `String b = a;` ทำสำเนาแยกอิสระ
 
 ```jk
+import std
+using std
+
 String shout(String s) {
     String r = s + "!";
     return r;
@@ -425,9 +458,12 @@ same
 ## บทที่ 13. Generics (ชนิดแบบพารามิเตอร์)
 
 ฟังก์ชันหรือ struct รับชนิดเป็นพารามิเตอร์ได้ เขียนใน `<>` ต่อท้ายชื่อ คอมไพเลอร์สร้างสำเนาให้ทุกชนิดที่ใช้
-ตอนใช้ต้องเขียนชนิดทุกครั้ง: `largest<int>(...)`, `Box<f64>`
+ตอนใช้ต้องเขียนชนิดทุกครั้ง: `largest<int>(...)`, `Box<double>`
 
 ```jk
+import std
+using std
+
 T largest<T>(T a, T b) {
     if a > b { return a; }
     return b;
@@ -440,7 +476,7 @@ struct Box<T> {
 
 void main() {
     cout << largest<int>(3, 9) << "\n";
-    coutf << largest<f64>(2.5, 1.5) << "\n";
+    coutf << largest<double>(2.5, 1.5) << "\n";
     Box<int> b = {7};
     cout << b.get() << "\n";
 }
@@ -461,6 +497,9 @@ generic ต้องเขียนไว้ก่อนจุดแรกที
 `throw "ข้อความ"` หยุดงานที่ทำอยู่และกระโดดไปที่ `catch` ที่ใกล้ที่สุด ถ้าไม่มี `catch` โปรแกรมจะหยุดและพิมพ์ `uncaught exception: ข้อความ`
 
 ```jk
+import std
+using std
+
 int divide(int a, int b) {
     if b == 0 { throw "cannot divide by zero"; }
     return a / b;
@@ -485,21 +524,21 @@ error: cannot divide by zero
 
 ## บทที่ 15. ทศนิยมและไลบรารี Math
 
-`import std` นำไลบรารีมาตรฐานเข้ามา `using std::math` ทำให้เขียน `sqrt(x)` แทน `Math::sqrt(x)` ได้ การแปลงชนิดต้องเขียนเอง: `(int)x`, `(f64)n`
+`import std` นำไลบรารีมาตรฐานเข้ามา และ `using std` ทำให้เขียน `sqrt(x)` แทน `Math::sqrt(x)` ได้ (ทุกโปรแกรมที่พิมพ์ข้อความต้องมีสองบรรทัดนี้ บทเรียนเติมให้ที่บนสุด) ถ้าสองโมดูลมีฟังก์ชันชื่อเดียวกัน (`write` อยู่ทั้งใน `Sys` และ `File`) ให้เขียนชื่อโมดูล: `File::write(...)` การแปลงชนิดต้องเขียนเอง: `(int)x`, `(double)n`
 
 ```jk
 import std
-using std::math
 
+using std
 void main() {
-    f64 a = 3.0;
-    f64 b = 4.0;
+    double a = 3.0;
+    double b = 4.0;
     coutf << "hypotenuse = " << sqrt(a * a + b * b) << "\n";
 
     int whole = (int)floor(7.9);
     cout << whole << "\n";
 
-    f64 half = (f64)whole / 2.0;
+    double half = (double)whole / 2.0;
     coutf << half << "\n";
 }
 ```
@@ -520,18 +559,18 @@ hypotenuse = 5.000000
 
 ```jk
 import std
-using std::fs
 
+using std
 void main() {
     i32 f = File::open("note.txt", FileMode::Write);
     if f < 0 { throw "cannot create note.txt"; }
-    write(f, "J2K can write files\n");
-    close(f);
+    File::write(f, "J2K can write files\n");
+    File::close(f);
 
     char line[64];
     i32 g = File::open("note.txt", FileMode::Read);
-    read_line(g, line);
-    close(g);
+    File::read_line(g, line);
+    File::close(g);
     cout << line << "\n";
 }
 ```
@@ -559,6 +598,9 @@ int cube(int x) {
 `multi.jk`:
 
 ```jk
+import std
+using std
+
 import "mathx"
 
 void main() {
@@ -579,6 +621,9 @@ void main() {
 รวมทุกอย่างเข้าด้วยกัน: อ่านคำไปเรื่อยๆ จนข้อมูลหมด (อ่านเกินจะ throw `end of input`) แล้วรายงานจำนวนคำและคำที่ยาวที่สุด
 
 ```jk
+import std
+using std
+
 int length(char^ s) {
     int n = 0;
     while s[n] != 0 { n++; }

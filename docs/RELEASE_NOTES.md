@@ -1,6 +1,8 @@
-# J2K / Jcmp 0.4.0
+# J2K / Jcmp 0.5.0
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
+
+**0.5.0 changes how programs begin:** `float`/`double` replace `f32`/`f64`, and `cout`/`cin` need `import std` and `using std` at the top (a warning now, an error later).
 
 **New in 0.4.0:** `String` (text that grows: `+`, `==`, `s.len`, `s[i]`, `slice`, `find`, `cin >> s`, freed automatically) and generics (`T max<T>(T a, T b)`, `struct Box<T>`).
 
@@ -20,11 +22,11 @@ end of the block, `cin` / `cinf`, function pointers, unsigned types, `sizeof`, `
 (unused library functions are left out). Full list: CHANGELOG.md.
 
 **Install:** `curl -fsSL https://raw.githubusercontent.com/J2k-studio/Jcmp/main/install.sh | sh`
-(options: `--dir ../bin`, `--version 0.4.0`, `--with-assembler`), or download `jcmp` below, check it
+(options: `--dir ../bin`, `--version 0.5.0`, `--with-assembler`), or download `jcmp` below, check it
 against `SHA256SUMS` and `chmod +x` it. See the README.
 
 **Use:** `jcmp hello.jk -o hello && ./hello`
 
 Files: `jcmp` (the compiler), `j2k_asm` (stand-alone assembler),
-`jcmp-0.4.0-linux-arm64.tar.gz` (both + README + LICENSE + examples + docs), `SHA256SUMS`.
+`jcmp-0.5.0-linux-arm64.tar.gz` (both + README + LICENSE + examples + docs), `SHA256SUMS`.
 Linux ARM64 only. See LICENSE for the terms of use.

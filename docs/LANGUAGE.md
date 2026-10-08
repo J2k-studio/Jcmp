@@ -10,10 +10,19 @@ Files: `.jk` is a program (it has `main`); `.j` is a component that other files 
 ## Program shape
 
 ```jk
+import std
+using std
+
 void main() {
     cout << "hi\n";
 }
 ```
+
+`cout`, `coutf`, `cin` and `cinf` come with the standard library: a program that uses them starts with `import std` and `using std`
+(the snippets below leave these two lines out). Without them the compiler warns `[-Wstd]` for now; a later version makes it an error.
+`using std` makes the names of all the std modules usable without the prefix; if two modules have the same name (`write` is in `Sys` and
+`File`) the compiler reports it and you write `File::write(...)`. `float` is the 32-bit and `double` the 64-bit decimal type (they were
+called `f32` and `f64`; the old names still work with a warning).
 
 `main` may be `void main()` or `int main()` (the returned number is the exit code).
 Statements end with `;`. Blocks use `{ }` and are always required. `//` and `/* */` are comments.
@@ -27,13 +36,13 @@ Statements end with `;`. Blocks use `{ }` and are always required. `//` and `/* 
 | `char`  | 8-bit **unsigned** (a byte / character)  |
 | `bool`  | `true` / `false` (1 byte)                |
 | `u8`, `u32`, `u64` | unsigned integers (8 / 32 / 64 bit) |
-| `f64`, `f32` | floating point                      |
+| `double`, `float` | floating point                      |
 | `T^`    | pointer to `T`  (`void^` = pointer to anything) |
 
 Rules that catch bugs early:
 
 * `bool` is not a number: `if x` with an `int` is an error — write `if x != 0`.
-* Enums are not numbers; floats and integers do not mix: `(f64)n`, `(int)x`.
+* Enums are not numbers; floats and integers do not mix: `(double)n`, `(int)x`.
 * Arithmetic is done at full register width (`i8 + i8` is an `int`); the value is cut to size
   when it is **stored** or **cast**.
 
@@ -220,7 +229,7 @@ T largest<T>(T a, T b) { if a > b { return a; } return b; }
 struct Pair<A, B> { A first; B second; }
 
 cout << largest<int>(3, 9) << "\n";
-Pair<int, f64> p = {1, 2.5};
+Pair<int, double> p = {1, 2.5};
 ```
 
 * The type is written at every use (`largest<int>(...)`); it is not worked out from the arguments.
@@ -231,7 +240,7 @@ Pair<int, f64> p = {1, 2.5};
 
 ```jk
 import std
-using std::mem
+using std
 
 struct Node { int value; Node^ next; }
 
@@ -332,15 +341,15 @@ instance methods as `object.name(...)`; mixing them up is an error.
 
 ```jk
 void main() {
-    f64 r = 2.5;
-    f32 half = 0.5;
-    f64 area = 3.14159 * r * r;
+    double r = 2.5;
+    float half = 0.5;
+    double area = 3.14159 * r * r;
     int whole = (int)area;               // casts are explicit
     coutf << area << " " << whole << " " << half << "\n";
 }
 ```
 
-`coutf` prints floats with 6 decimals. Literals such as `3.14`, `1e-3` adapt to `f32`/`f64`.
+`coutf` prints floats with 6 decimals. Literals such as `3.14`, `1e-3` adapt to `float`/`double`.
 Comparisons treat NaN correctly. `%` does not work on floats.
 
 ## Errors: try / catch / throw
@@ -385,7 +394,7 @@ void main() {
 void main() {
     int age;
     char name[16];
-    f64 height;
+    double height;
     cin >> name >> age;               // words are separated by spaces or new lines
     cinf >> height;
     cout << name << " " << age << "\n";
@@ -395,7 +404,7 @@ void main() {
 
 What is read follows the type of the variable: a whole number for `int`, `i8`, `i32`, `u8`, `u32`, `u64` (checked
 against the range of the type), one character for `char`, a word for a `char` array (a longer word is cut and a
-warning goes to stderr), a decimal number for `f32`/`f64` with `cinf`. Anything else is a compile error.
+warning goes to stderr), a decimal number for `float`/`double` with `cinf`. Anything else is a compile error.
 Bad input throws text you can catch: `invalid input`, `number out of range`, `end of input`.
 
 ```jk
@@ -465,7 +474,7 @@ Not allowed inside the body: `break`, `return`, and another `#multithread`.
 ```jk
 import "mylib"            // mylib.j (or mylib.jk) next to this file; "dir.mylib" = dir/mylib.j
 import std                // the standard library
-using std::str            // call Str functions without the prefix  (or: using std)
+using std::str            // call only the Str functions without the prefix (using std: all modules)
 ```
 
 Standard library (`std/`): 

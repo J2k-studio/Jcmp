@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.0
+* **Names of the decimal types:** `float` (32 bit) and `double` (64 bit), as in C. `f32` and `f64` still work, with a warning `[-Wdeprecated]`.
+* **`cout`, `coutf`, `cin`, `cinf` need `import std` and `using std`.** A program without them gets the warning `[-Wstd]` (a later version makes it an error). Update your programs: put `import std` and `using std` at the top.
+* `using std` makes `Sys`, `Mem`, `Str`, `Math` and `File` usable without the prefix; a name that is in two of them (`write`) is an error that tells you to write `File::write`.
+
 ## 0.4.0
 * **`String`**: text that grows. `String s = "hi";`, `a + b`, `a == b`, `s += x`, `s.len`, `s[i]`, `push pop append clear find slice c`, `cin >> s`. `String b = a;` makes a copy; Strings are freed at the end of their block, and a String made by an expression is freed at the end of the statement.
 * **Generics** (since 0.3.1) are described in the tour (`docs/LANGUAGE.md`) and the tutorial (lessons 12 and 13).

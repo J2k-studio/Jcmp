@@ -70,10 +70,27 @@ bool at_type() {
     if tok_kind == T_IDENT && find_enum(@tok_text) >= 0 { return true; }
     if tok_kind == T_IDENT && find_struct(@tok_text) >= 0 { return true; }
     if tok_kind == T_IDENT && tok_is("String") { return true; }
-    return tok_is("int") || tok_is("char") || tok_is("bool") || tok_is("void") || tok_is("i8") || tok_is("i32") || tok_is("f32") || tok_is("f64") || tok_is("u8") || tok_is("u32") || tok_is("u64");
+    return tok_is("int") || tok_is("char") || tok_is("bool") || tok_is("void") || tok_is("i8") || tok_is("i32") || tok_is("float") || tok_is("double") || tok_is("f32") || tok_is("f64") || tok_is("u8") || tok_is("u32") || tok_is("u64");
 }
 
 // TYPE [^] ; sets the ty_* variables and leaves the token after the type
+// f32 / f64 were the first names of float / double: still accepted, with one warning per program
+int old_float_warned;
+int using_std_seen;          // 1 after `using std` (the whole module) at the top level
+int io_warned;
+void old_float_name() {
+    if old_float_warned == 1 { return; }
+    old_float_warned = 1;
+    warn("'f32' and 'f64' are now called 'float' and 'double'", "deprecated");
+}
+
+// cout, coutf, cin and cinf need `import std` and `using std`: for now a warning, later an error
+void check_io_std() {
+    if io_warned == 1 || (std_loaded == 1 && using_std_seen == 1) { return; }
+    io_warned = 1;
+    warn("cout, coutf, cin and cinf need 'import std' and 'using std' at the top of the file (this will become an error)", "std");
+}
+
 void parse_type() {
     ty_void = 0;
     ty_ptr = 0;
@@ -109,11 +126,13 @@ void parse_type() {
         ty_elem = 13;
         ty_width = 13;
         ty_tid = 95;
-    } else if tok_is("f32") {
+    } else if tok_is("float") || tok_is("f32") {
+        if tok_is("f32") { old_float_name(); }
         ty_elem = 6;
         ty_width = 6;
         ty_tid = 90;
-    } else if tok_is("f64") {
+    } else if tok_is("double") || tok_is("f64") {
+        if tok_is("f64") { old_float_name(); }
         ty_elem = 7;
         ty_width = 7;
         ty_tid = 91;
@@ -698,6 +717,7 @@ void parse_mt_for() {
 
 // cout << a << b << ...;   (one number alone also ends the line)
 void parse_cout() {
+    check_io_std();
     int c_count = 0;
     int c_last = 0;
     int c_float = 0;
@@ -771,7 +791,7 @@ void read_into_object(int is_f) {
     int code = lv_code;
     bool is_float_code = code == 6 || code == 7;
     if is_float_code && is_f == 0 { die("use cinf to read a float"); }
-    if !is_float_code && is_f == 1 { die("cinf reads floats (f32, f64) only"); }
+    if !is_float_code && is_f == 1 { die("cinf reads floats (float, double) only"); }
     push_x0();                           // the object's address
     if is_float_code {
         rt_call("__In__fnum");
@@ -799,6 +819,7 @@ void read_into_object(int is_f) {
 }
 
 void parse_cin() {
+    check_io_std();
     int is_f = 0;
     if tok_is("cinf") { is_f = 1; }
     next();                              // "cin" or "cinf"
@@ -979,12 +1000,16 @@ void parse_using() {
             next();
         } else {
             // using std : every module
+            if cur_in_func == 0 { using_std_seen = 1; }
             int um = 0;
             while um < scount {
-                if cur_in_func == 1 {
-                    us_l[um] = 1;
-                } else {
-                    us_g[um] = 1;
+                char^ mn = @sname + um * 64;
+                if str_eq(mn, "Sys") || str_eq(mn, "Mem") || str_eq(mn, "Str") || str_eq(mn, "Math") || str_eq(mn, "File") {
+                    if cur_in_func == 1 {
+                        us_l[um] = 1;
+                    } else {
+                        us_g[um] = 1;
+                    }
                 }
                 um += 1;
             }
@@ -1914,7 +1939,7 @@ void parse_global(char^ name) {
         next();
         int value = parse_const();
         if cf_flag == 1 {
-            if g_tid != 90 && g_tid != 91 { die("a float constant needs a f32 or f64 variable"); }
+            if g_tid != 90 && g_tid != 91 { die("a float constant needs a float or double variable"); }
             if gfi_count >= 4096 { die("too many global float initializers"); }
             if pass_no >= 2 {
                 gfi_off[gfi_count] = goff[gcount - 1];

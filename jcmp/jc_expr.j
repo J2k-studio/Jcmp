@@ -182,9 +182,9 @@ void type_name_err(int t) {
     } else if t == 96 {
         write_err("a number");
     } else if t == 90 {
-        write_err("f32");
+        write_err("float");
     } else if t == 91 {
-        write_err("f64");
+        write_err("double");
     } else if t == 92 {
         write_err("a decimal number");
     } else if t >= 100 {
@@ -245,8 +245,8 @@ void f32_to_f64(int r) {
 // x0 = left, x1 = right, types lt / rt: both must be floats (a literal adapts);
 // returns 90 when the operation is done in f32, else 91; the operands are ready
 int fp_prepare(int lt, int rt) {
-    if !is_float(lt) || !is_float(rt) { die("cannot mix a float and a non-float (use a cast, e.g. (f64)n)"); }
-    if (lt == 90 && rt == 91) || (lt == 91 && rt == 90) { die("cannot mix f32 and f64 (use a cast)"); }
+    if !is_float(lt) || !is_float(rt) { die("cannot mix a float and a non-float (use a cast, e.g. (double)n)"); }
+    if (lt == 90 && rt == 91) || (lt == 91 && rt == 90) { die("cannot mix float and double (use a cast)"); }
     if lt == 90 || rt == 90 {
         if lt == 92 { lit_to_f32(0); }
         if rt == 92 { lit_to_f32(1); }
@@ -1024,6 +1024,7 @@ void resolve_callee() {
     if find_func(@id_name) >= 0 { return; }
     if str_eq(@id_name, "syscall") || str_eq(@id_name, "argc") || str_eq(@id_name, "arg") { return; }
     int k = 0;
+    int found = 0 - 1;
     while k < scount {
         if us_g[k] == 1 || us_l[k] == 1 {
             char rc_full[256];
@@ -1031,11 +1032,26 @@ void resolve_callee() {
             str_copy(@rc_full + str_len(@rc_full), "__", 4);
             str_copy(@rc_full + str_len(@rc_full), @id_name, 100);
             if find_func(@rc_full) >= 0 {
-                str_copy(@id_name, @rc_full, 256);
-                return;
+                if found >= 0 && pass_no >= 2 {
+                    char amb[200];
+                    str_copy(@amb, "the name is in several modules that are in use (", 200);
+                    append_text(@amb, @sname + found * 64);
+                    append_text(@amb, " and ");
+                    append_text(@amb, @sname + k * 64);
+                    append_text(@amb, "): write Module::name");
+                    die_name(@amb, @id_name);
+                }
+                if found < 0 { found = k; }
             }
         }
         k += 1;
+    }
+    if found >= 0 {
+        char rc_one[256];
+        str_copy(@rc_one, @sname + found * 64, 64);
+        str_copy(@rc_one + str_len(@rc_one), "__", 4);
+        str_copy(@rc_one + str_len(@rc_one), @id_name, 100);
+        str_copy(@id_name, @rc_one, 256);
     }
 }
 

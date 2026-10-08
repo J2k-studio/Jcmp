@@ -1,5 +1,6 @@
 // wc: count lines, words and bytes of the file named by the first argument.
 import std
+using std
 using std::fs
 
 char data[65536];

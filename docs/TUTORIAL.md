@@ -37,6 +37,9 @@ For the complete list of features see [LANGUAGE.md](LANGUAGE.md); for the comman
 Every program starts at `main`. `cout <<` prints; `\n` is a new line. Save this as `hello.jk`.
 
 ```jk
+import std
+using std
+
 void main() {
     cout << "Hello, J2K!\n";
 }
@@ -54,17 +57,20 @@ and shows the line with a `^` under the problem.
 
 ## Lesson 2. Numbers and variables
 
-A variable has a type: `int` (whole number, 64 bit), `f64` (decimal), `char` (one character), `bool` (true or false).
+A variable has a type: `int` (whole number, 64 bit), `double` (decimal), `char` (one character), `bool` (true or false).
 Use `coutf` to print decimals. Lines end with `;`.
 
 ```jk
+import std
+using std
+
 void main() {
     int apples = 5;
     int pears = 3;
     int total = apples + pears;
     cout << "total = " << total << "\n";
 
-    f64 price = 2.5;
+    double price = 2.5;
     coutf << "cost = " << price * 4.0 << "\n";
 
     char letter = 'J';
@@ -84,14 +90,17 @@ J
 enough fruit
 ```
 
-A `bool` is not a number: `if total` is an error, write `if total != 0`. Likewise `int` and `f64` do not mix without a cast:
-`(f64)total`.
+A `bool` is not a number: `if total` is an error, write `if total != 0`. Likewise `int` and `double` do not mix without a cast:
+`(double)total`.
 
 ## Lesson 3. Making decisions
 
 `if`, `else if`, `else` choose what to run. Conditions use `== != < > <= >=` and `&&` (and), `||` (or), `!` (not). Braces are always needed.
 
 ```jk
+import std
+using std
+
 void main() {
     int score = 72;
     if score >= 90 {
@@ -121,6 +130,9 @@ passed
 `break` leaves a loop, `continue` skips to the next round.
 
 ```jk
+import std
+using std
+
 void main() {
     int i = 1;
     while i <= 3 {
@@ -152,6 +164,9 @@ Output:
 A function has a result type, a name and parameters. `void` means no result. A function can be written below the place that uses it.
 
 ```jk
+import std
+using std
+
 void main() {
     cout << square(7) << "\n";
     cout << sum_to(10) << "\n";
@@ -189,6 +204,9 @@ Hello, Ann!
 `char word[] = "banana"` sizes it for you. Arrays can have up to three dimensions: `int grid[2][3]`.
 
 ```jk
+import std
+using std
+
 void main() {
     int scores[5];
     for i in 0..5 { scores[i] = (i + 1) * 10; }
@@ -227,6 +245,9 @@ Build with `jcmp prog.jk -d -o prog` to stop with a message when an index is out
 a word for a `char` array. `cinf` reads decimals. Words are separated by spaces or new lines.
 
 ```jk
+import std
+using std
+
 void main() {
     char name[20];
     int age;
@@ -250,6 +271,9 @@ Run it and type `Ann 30` (or pipe it in: `echo "Ann 30" | ./input`). Bad input t
 A `struct` groups values. Functions inside it are methods; they receive the object as `self`. `Rect r = {3, 4};` fills the fields in order.
 
 ```jk
+import std
+using std
+
 struct Rect {
     int w;
     int h;
@@ -288,6 +312,9 @@ An `enum class` is a list of named values. `switch` picks the case that matches,
 An enum is not a number, so you cannot mix them up by accident.
 
 ```jk
+import std
+using std
+
 enum class Light { Red, Yellow, Green };
 
 void say(Light l) {
@@ -327,6 +354,9 @@ If a `switch` on an enum forgets a member, the compiler warns you (use `-st` to 
 `p[i]` reaches the i-th element (there is no `p + 1`).
 
 ```jk
+import std
+using std
+
 void bump(int^ p) {
     p^ = p^ + 1;
 }
@@ -358,8 +388,8 @@ local variable made with `arr` or `alloc` at the end of the block, so you rarely
 
 ```jk
 import std
-using std::mem
 
+using std
 int total(int[] list) {
     int s = 0;
     for i in 0..list.len { s += list[i]; }
@@ -395,6 +425,9 @@ Methods: `push`, `append`, `pop`, `clear`, `find`, `slice(from, to)`, `c()` (the
 A `String` is freed at the end of its block, and `String b = a;` makes a separate copy.
 
 ```jk
+import std
+using std
+
 String shout(String s) {
     String r = s + "!";
     return r;
@@ -428,9 +461,12 @@ A String parameter only borrows the caller's String, so inside the function you 
 ## Lesson 13. Generics
 
 A function or struct can take a type as a parameter: write it in `<>` after the name. The compiler makes one copy for every type you use.
-You write the type at every use: `largest<int>(...)`, `Box<f64>`.
+You write the type at every use: `largest<int>(...)`, `Box<double>`.
 
 ```jk
+import std
+using std
+
 T largest<T>(T a, T b) {
     if a > b { return a; }
     return b;
@@ -443,7 +479,7 @@ struct Box<T> {
 
 void main() {
     cout << largest<int>(3, 9) << "\n";
-    coutf << largest<f64>(2.5, 1.5) << "\n";
+    coutf << largest<double>(2.5, 1.5) << "\n";
     Box<int> b = {7};
     cout << b.get() << "\n";
 }
@@ -464,6 +500,9 @@ A generic must be written before the first place that uses it.
 `throw "text"` stops what you are doing and jumps to the nearest `catch`. Without a `catch` the program stops and prints `uncaught exception: text`.
 
 ```jk
+import std
+using std
+
 int divide(int a, int b) {
     if b == 0 { throw "cannot divide by zero"; }
     return a / b;
@@ -488,21 +527,21 @@ error: cannot divide by zero
 
 ## Lesson 15. Decimals and the Math library
 
-`import std` brings the standard library; `using std::math` lets you write `sqrt(x)` instead of `Math::sqrt(x)`. Casts are explicit: `(int)x`, `(f64)n`.
+`import std` brings the standard library and `using std` lets you write `sqrt(x)` instead of `Math::sqrt(x)` (every program that prints needs both lines; the tutorial adds them at the top). If two modules have the same function name (`write` is in `Sys` and `File`), write the module: `File::write(...)`. Casts are explicit: `(int)x`, `(double)n`.
 
 ```jk
 import std
-using std::math
 
+using std
 void main() {
-    f64 a = 3.0;
-    f64 b = 4.0;
+    double a = 3.0;
+    double b = 4.0;
     coutf << "hypotenuse = " << sqrt(a * a + b * b) << "\n";
 
     int whole = (int)floor(7.9);
     cout << whole << "\n";
 
-    f64 half = (f64)whole / 2.0;
+    double half = (double)whole / 2.0;
     coutf << half << "\n";
 }
 ```
@@ -523,18 +562,18 @@ The library has `Sys` (system calls), `Mem` (memory), `Str` (text), `Math` and `
 
 ```jk
 import std
-using std::fs
 
+using std
 void main() {
     i32 f = File::open("note.txt", FileMode::Write);
     if f < 0 { throw "cannot create note.txt"; }
-    write(f, "J2K can write files\n");
-    close(f);
+    File::write(f, "J2K can write files\n");
+    File::close(f);
 
     char line[64];
     i32 g = File::open("note.txt", FileMode::Read);
-    read_line(g, line);
-    close(g);
+    File::read_line(g, line);
+    File::close(g);
     cout << line << "\n";
 }
 ```
@@ -562,6 +601,9 @@ int cube(int x) {
 `multi.jk`:
 
 ```jk
+import std
+using std
+
 import "mathx"
 
 void main() {
@@ -582,6 +624,9 @@ Compile only the main file: `jcmp multi.jk -o multi`; the imported file is read 
 Putting it together: read words until the input ends (reading past the end throws `end of input`) and report how many there were and the longest.
 
 ```jk
+import std
+using std
+
 int length(char^ s) {
     int n = 0;
     while s[n] != 0 { n++; }

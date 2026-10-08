@@ -1,3 +1,6 @@
+import std
+using std
+
 // fib.jk -- functions, recursion, loops
 int fib(int n) {
     if n < 2 { return n; }

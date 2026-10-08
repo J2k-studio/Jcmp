@@ -2,7 +2,7 @@
 // Build:  bin/jcmp jcmp/jcmp.jk -o jcmp1        (see bootstrap.sh)
 // Use:    jcmp1 input.jk -o program
 // the version of the compiler (also in the file VERSION; release.sh checks that they agree)
-#define JCMP_VERSION "0.4.0"
+#define JCMP_VERSION "0.5.0"
 
 import "jc_base"
 import "jc_asm"
@@ -27,6 +27,9 @@ void reset_state(char^ in_path) {
     cur_fidx = 0 - 1;
     used_fprint = 0;
     used_oob = 0;
+    old_float_warned = 0;
+    using_std_seen = 0;
+    io_warned = 0;
     used_divz = 0;
     used_uprint = 0;
     used_try = 0;

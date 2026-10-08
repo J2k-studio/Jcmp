@@ -20,7 +20,7 @@ wget -qO- https://raw.githubusercontent.com/J2k-studio/Jcmp/main/install.sh | sh
 curl -fsSL https://raw.githubusercontent.com/J2k-studio/Jcmp/main/install.sh | sh -s -- --dir ../bin
 wget -qO- https://raw.githubusercontent.com/J2k-studio/Jcmp/main/install.sh | sh -s -- --dir ../bin
 ```
-ตัวเลือก: `--dir โฟลเดอร์`, `--version 0.4.0` (เลือกรุ่น), `--with-assembler` (ติดตั้ง `j2k_asm` ด้วย)
+ตัวเลือก: `--dir โฟลเดอร์`, `--version 0.5.0` (เลือกรุ่น), `--with-assembler` (ติดตั้ง `j2k_asm` ด้วย)
 โฟลเดอร์เริ่มต้นคือ `$PREFIX/bin` (Termux) หรือ `~/.local/bin` รันซ้ำเพื่ออัปเดต ลบไฟล์เพื่อถอนการติดตั้ง
 
 **วิธีที่ 2 — คำสั่งเดียวด้วย `tar` (ไฟล์ที่ได้รันได้ทันที):** ไฟล์ธรรมดาที่โหลดจาก release จะ **ไม่มีสิทธิ์รัน** (GitHub ไม่เก็บสิทธิ์ของไฟล์)
@@ -48,14 +48,14 @@ chmod +x jcmp && rm SHA256SUMS
 ```bash
 export PATH="$PWD:$PATH"                      # รันในโฟลเดอร์ที่ลง jcmp
 jcmp -version
-printf 'void main() { cout << "hi\\n"; }\n' > hi.jk
+printf 'import std\nusing std\nvoid main() { cout << "hi\\n"; }\n' > hi.jk
 jcmp hi.jk -o hi && ./hi
 ```
 ไม่ตั้ง `PATH` ก็เรียกด้วยที่อยู่เต็มได้ เช่น `../bin/jcmp hi.jk -o hi`
 ถ้าอยากอ่าน/สร้างคอมไพเลอร์เอง: `git clone https://github.com/J2k-studio/Jcmp.git` (มี `bin/jcmp` พร้อมใช้)
 
 ## สถานะ
-* ใช้ได้แล้ว: ชนิดจำนวนเต็ม (`int i32 i8 char bool`), `f32/f64`, array (สูงสุด 3 มิติ), pointer,
+* ใช้ได้แล้ว: ชนิดจำนวนเต็ม (`int i32 i8 char bool`), `float/double`, array (สูงสุด 3 มิติ), pointer,
   struct + method, enum, `switch`, `for`/`while`, string, `#define`, `import`
 * ไลบรารีมาตรฐาน (`std/`): `Sys`, `Mem` (heap), `Str`, `Math`, `File`
 * ข้อความ error/warning แบบ `ไฟล์:บรรทัด:คอลัมน์: error: ...` พร้อมบรรทัดซอร์สและ `^`
