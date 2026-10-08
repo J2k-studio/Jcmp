@@ -24,11 +24,13 @@ For the complete list of features see [LANGUAGE.md](LANGUAGE.md); for the comman
 9. Enums and switch
 10. Pointers
 11. Growing arrays and memory
-12. Errors with try and catch
-13. Decimals and the Math library
-14. Files
-15. A program in several files
-16. A small project: counting words
+12. Strings
+13. Generics
+14. Errors with try and catch
+15. Decimals and the Math library
+16. Files
+17. A program in several files
+18. A small project: counting words
 
 ## Lesson 1. Hello, world
 
@@ -386,7 +388,78 @@ Output:
 
 Handing memory to someone else: `return p;`, storing it in a field, or `move(p)`. A `-d` build tells you at the end how many blocks were never freed.
 
-## Lesson 12. Errors with try and catch
+## Lesson 12. Strings
+
+`String` holds text that can grow. `String s = "hello";` makes a copy of the text; `a + b` joins; `==` compares; `s.len` is the length and `s[i]` one character.
+Methods: `push`, `append`, `pop`, `clear`, `find`, `slice(from, to)`, `c()` (the characters as a plain text). `cin >> s` reads one word.
+A `String` is freed at the end of its block, and `String b = a;` makes a separate copy.
+
+```jk
+String shout(String s) {
+    String r = s + "!";
+    return r;
+}
+
+void main() {
+    String a = "abc";
+    String b = a;
+    b.push('d');
+    cout << a << " " << b << "\n";
+
+    String line = "Hello, " + shout("Jao");
+    cout << line << " (" << line.len << " characters)\n";
+    cout << line.find("Jao") << " " << line.slice(0, 5) << "\n";
+    if a == "abc" { cout << "same\n"; }
+}
+```
+
+Output:
+
+```
+abc abcd
+Hello, Jao! (11 characters)
+7 Hello
+same
+```
+
+A new `String` made by an expression (`a + b`, a call, `slice`) is freed for you at the end of the statement. `s.c()` points into the String: it is valid until you change it.
+A String parameter only borrows the caller's String, so inside the function you cannot assign to it.
+
+## Lesson 13. Generics
+
+A function or struct can take a type as a parameter: write it in `<>` after the name. The compiler makes one copy for every type you use.
+You write the type at every use: `largest<int>(...)`, `Box<f64>`.
+
+```jk
+T largest<T>(T a, T b) {
+    if a > b { return a; }
+    return b;
+}
+
+struct Box<T> {
+    T value;
+    T get(self) { return self.value; }
+}
+
+void main() {
+    cout << largest<int>(3, 9) << "\n";
+    coutf << largest<f64>(2.5, 1.5) << "\n";
+    Box<int> b = {7};
+    cout << b.get() << "\n";
+}
+```
+
+Output:
+
+```
+9
+2.500000
+7
+```
+
+A generic must be written before the first place that uses it.
+
+## Lesson 14. Errors with try and catch
 
 `throw "text"` stops what you are doing and jumps to the nearest `catch`. Without a `catch` the program stops and prints `uncaught exception: text`.
 
@@ -413,7 +486,7 @@ Output:
 error: cannot divide by zero
 ```
 
-## Lesson 13. Decimals and the Math library
+## Lesson 15. Decimals and the Math library
 
 `import std` brings the standard library; `using std::math` lets you write `sqrt(x)` instead of `Math::sqrt(x)`. Casts are explicit: `(int)x`, `(f64)n`.
 
@@ -444,7 +517,7 @@ hypotenuse = 5.000000
 
 The library has `Sys` (system calls), `Mem` (memory), `Str` (text), `Math` and `File`.
 
-## Lesson 14. Files
+## Lesson 16. Files
 
 `File::open(path, mode)` gives a number (negative if it failed). `read`, `write`, `read_line` and `close` use it.
 
@@ -472,7 +545,7 @@ Output:
 J2K can write files
 ```
 
-## Lesson 15. A program in several files
+## Lesson 17. A program in several files
 
 A file that ends in `.jk` is a program (it has `main`). A file that ends in `.j` is a component that other files `import`; it must not have `main`.
 `import "mathx"` finds `mathx.j` next to the file; `import "tools.mathx"` finds `tools/mathx.j`.
@@ -504,7 +577,7 @@ Output:
 
 Compile only the main file: `jcmp multi.jk -o multi`; the imported file is read automatically (once).
 
-## Lesson 16. A small project: counting words
+## Lesson 18. A small project: counting words
 
 Putting it together: read words until the input ends (reading past the end throws `end of input`) and report how many there were and the longest.
 

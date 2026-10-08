@@ -189,6 +189,44 @@ use the same array, and `f(a)` shares it. A variable that was never given an arr
 using it throws `the dynamic array is null` (catch it with `try`/`catch`). Indexing is checked against the
 length in a `-d` build.
 
+## Strings
+
+`String` is text that can grow. It lives on the heap and is freed at the end of its block, like a dynamic array.
+
+```jk
+String a = "abc";            // a copy of the text
+String b = a;                // a separate copy
+b.push('d');                 // a stays "abc"
+String c = a + "-" + b;      // joins; == and != compare
+cout << c << " " << c.len << " " << c[0] << "\n";
+cout << c.find("-") << " " << c.slice(2, 5) << "\n";    // 3 and a new String
+c += "!";                    // append (a String, a text or a char)
+cin >> a;                    // one word
+```
+
+* Methods: `push(char)`, `pop()`, `append(x)`, `clear()`, `find(x)` (index or -1), `slice(from, to)`, `c()` (the characters as a plain text, valid until the String changes), `len`, `free()`.
+* A new String made by an expression (`a + b`, `slice`, a call that returns a String) is a temporary: the compiler frees it at the end of the statement unless it is stored in a variable. It cannot be made on the right of `&&` or `||` (the right side may not run): put it in a variable first.
+* `return s;` moves a local String out; returning a parameter or a field copies it. A String parameter only borrows, so it cannot be assigned inside the function.
+* A `String` that is a field of a struct or a global is not freed by itself: call `free()`.
+* Text is bytes (UTF-8): `len` counts bytes.
+* Index checks happen in `-d` builds, like for every array.
+
+## Generics
+
+A function or struct takes types as parameters, written in `<>` after the name; the compiler makes one copy of it for every combination you use.
+
+```jk
+T largest<T>(T a, T b) { if a > b { return a; } return b; }
+struct Pair<A, B> { A first; B second; }
+
+cout << largest<int>(3, 9) << "\n";
+Pair<int, f64> p = {1, 2.5};
+```
+
+* The type is written at every use (`largest<int>(...)`); it is not worked out from the arguments.
+* A generic must be written before the first place that uses it. Errors inside an instance point at the line of the generic.
+* Instances are ordinary functions and structs (`largest<int>` is called `largest__int`), so the limit of 80 structs counts them.
+
 ## Heap memory that frees itself
 
 ```jk

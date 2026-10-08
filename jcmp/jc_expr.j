@@ -384,7 +384,7 @@ void check_assign(int want) {
     if want == 91 && (ex_ty == 91 || ex_ty == 92) { ok = 1; }
     if ok == 1 && want == 90 && ex_ty == 92 { lit_to_f32(0); }
     if want == 0 && (ex_ty == 0 || ex_ty == 2 || ex_ty == 96 || ex_ty == 97) { ok = 1; }
-    if want == 99 && (ex_ty == 99 || ex_ty == 97) { ok = 1; }          // a dynamic array (or null)
+    if want == 99 && (ex_ty == 99 || ex_ty == 97 || ex_ty == 80) { ok = 1; }          // a dynamic array (or null)
     if want < 0 && (ex_ty == want || ex_ty == 97) { ok = 1; }          // a function pointer: the same signature, or null
     if is_unsigned(want) && (ex_ty == 2 || ex_ty == 96) { ok = 1; }
     if is_unsigned(want) && is_unsigned(ex_ty) && ex_ty <= want { ok = 1; }      // widening needs no cast
@@ -458,6 +458,8 @@ int ginit_count;
 char fname[1048576];          // 2048 x 64
 int fnpar[16384];             // declared parameters (an array parameter counts once)
 int fvoid[16384];            // 1 if the function returns void
+int fpstr[131072];             // 1 for a parameter of type String (8 per function)
+int fretstr[16384];             // 1 if the function returns a String
 int fowned[16384];           // 1 if the function returns memory it owned (return p; moves it out)
 int fcharret[16384];            // 1 if the function returns a char: cout prints the result as a character
 int fret[16384];              // type of the result
@@ -966,6 +968,10 @@ int parse_args() {
             n += 2;
         } else {
             parse_expr();
+            if pfi >= 0 && argno + pskip < 8 && fpstr[pfi * 8 + argno + pskip] == 1 && ex_ty != 80 && ex_w == 9 {
+                rt_call("__Str__from");      // a text for a String parameter: a temporary String is made
+                str_temp();
+            }
             if pfi >= 0 && argno + pskip < fnpar[pfi] && argno + pskip < 8 { check_assign(fptid[pfi * 8 + argno + pskip]); }
             if psig >= 0 && argno < sig_n[psig] { check_assign(sig_p[psig * 16 + argno]); }
             push_x0();
@@ -1075,7 +1081,7 @@ void own_add(int off, int kind) {
 
 void emit_owner_free(int i) {
     ins_mem("ldr", "x0", "x29", own_off[i]);
-    if own_kind[i] == 1 {
+    if own_kind[i] >= 1 {
         rt_call("__Arr__free");
     } else {
         rt_call("Mem__free");
@@ -1254,11 +1260,16 @@ void gen_call() {
     if free_owner >= 0 { emit_owner_null(free_owner); }       // Mem::free(p) on an owner: p is null afterwards
     ex_w = 8;
     if fi >= 0 && fcharret[fi] == 1 { ex_w = 2; }
+    if fi >= 0 && fcharret[fi] == 2 { ex_w = 9; }
     ex_ty = res_ty;
     last_call_owning = 0;
     if str_eq(@callee, "Mem__alloc") { last_call_owning = 1; }
     if fi >= 0 && fowned[fi] == 1 { last_call_owning = 1; }
     rv_valid = 0;
+    if fi >= 0 && fretstr[fi] == 1 {
+        last_call_owning = 0;            // a String that is returned is a temporary that the compiler frees
+        str_temp();
+    }
 }
 
 // the type of what a pointer to `code` points at
@@ -1684,6 +1695,101 @@ int dyn_tid(int info) {
     return info / 131072 - 1024;
 }
 
+// ---------------------------------------------------------------- String
+// A String is a dynamic array of char (a header on the heap) that is marked by the type id 70 in its
+// packed element type. In expressions its type is 80. It is copied when it is assigned (a copy of
+// a String variable, a text, or a temporary that is taken over), is freed at the end of its block
+// like the other owners, and a String made by an expression (a + b, s.slice(..), a call) is a
+// temporary owner of kind 2 that is freed at the end of the statement unless it is taken over.
+bool is_str_dyn(int info) {
+    return info != 0 && dyn_code(info) == 2 && dyn_tid(info) == 70;
+}
+
+int cond_depth;              // > 0 while the right side of && or || is compiled (it may not run)
+
+// x0 = a new String: remember it as a temporary owner
+void str_temp() {
+    if cond_depth > 0 { die("a new String cannot be made on the right of && or || (put it in a variable first)"); }
+    if cur_fidx < 0 { die("a String can only be made inside a function"); }
+    ty_tid = 0;
+    add_local(".t", 0, 8, 8, 0);
+    int off = loff[lcount - 1];
+    ins_mem("str", "x0", "x29", off);
+    own_add(off, 2);
+    rv_valid = 1;
+    rv_off = off;
+    ex_ty = 80;
+    ex_w = 8;
+}
+
+// how an operand is passed to the String routines: 0 a text, 1 a String, 2 one character
+int str_kind() {
+    if ex_ty == 80 { return 1; }
+    if ex_w == 9 { return 0; }
+    if ex_w == 2 { return 2; }
+    if pass_no >= 2 { die("a String operand must be a String, a text or a char"); }
+    return 0;
+}
+
+// x0 = the value of an expression that becomes the content of a String variable: afterwards x0 is a
+// String that the destination owns (a text is copied, a String variable is copied, a temporary is taken over)
+void str_adopt() {
+    if pass_no >= 2 {
+        if ex_ty == 80 {
+            int ti = 0 - 1;
+            if rv_valid == 1 { ti = own_find(rv_off); }
+            if ti >= 0 && own_kind[ti] == 2 {
+                emit_owner_null(ti);
+                own_moved[ti] = 1;
+            } else {
+                rt_call("__Str__clone");
+            }
+        } else if ex_w == 9 {
+            rt_call("__Str__from");
+        } else {
+            die("a String can only be made from a text or another String");
+        }
+    }
+    rv_valid = 0;
+    ex_ty = 80;
+    ex_w = 8;
+}
+
+// the temporaries from own[t0..] are freed (keep = 1: x0 is kept) and leave the list
+void str_flush(int t0, int keep) {
+    int i = t0;
+    int any = 0;
+    while i < own_count {
+        if own_kind[i] == 2 && own_moved[i] == 0 { any = 1; }
+        i += 1;
+    }
+    if any == 1 {
+        if keep == 1 { push_x0(); }
+        i = own_count - 1;
+        while i >= t0 {
+            if own_kind[i] == 2 && own_moved[i] == 0 { emit_owner_free(i); }
+            i -= 1;
+        }
+        if keep == 1 {
+            emit_line("ldr x0, [sp, #0]");
+            emit_line("add sp, sp, #16");
+        }
+    }
+    int w = t0;
+    i = t0;
+    while i < own_count {
+        if own_kind[i] != 2 {
+            own_off[w] = own_off[i];
+            own_kind[w] = own_kind[i];
+            own_blk[w] = own_blk[i];
+            own_moved[w] = own_moved[i];
+            w += 1;
+        }
+        i += 1;
+    }
+    own_count = w;
+}
+
 void rt_call(char^ name) {
     note_call(name);
     emit_str("bl ");
@@ -1699,12 +1805,103 @@ void dyn_null_check() {
     place_label(lok);
 }
 
+// the members of a String that are not those of every dynamic array; true if dm was one of them
+// (x0 = the address of the variable, the token is after the name)
+bool str_member(char^ dm) {
+    if str_eq(dm, "push") {
+        expect("(");
+        load_through(8);
+        push_x0();
+        parse_expr();
+        expect(")");
+        emit_line("mov x1, x0");
+        emit_line("ldr x0, [sp, #0]");
+        emit_line("add sp, sp, #16");
+        rt_call("__Str__push");
+        ex_ty = 0;
+        lv_done = 1;
+        return true;
+    }
+    if str_eq(dm, "pop") {
+        expect("(");
+        expect(")");
+        load_through(8);
+        rt_call("__Str__pop");
+        ex_w = 2;
+        ex_ty = 0;
+        lv_done = 1;
+        return true;
+    }
+    if str_eq(dm, "clear") {
+        expect("(");
+        expect(")");
+        load_through(8);
+        rt_call("__Str__clear");
+        ex_ty = 0;
+        lv_done = 1;
+        return true;
+    }
+    if str_eq(dm, "append") || str_eq(dm, "find") {
+        bool is_find = str_eq(dm, "find");
+        expect("(");
+        load_through(8);
+        push_x0();
+        parse_expr();
+        expect(")");
+        int kb = str_kind();
+        emit_line("mov x1, x0");
+        emit_line("ldr x0, [sp, #0]");
+        emit_line("add sp, sp, #16");
+        ins_n("mov x2, ", kb);
+        if is_find {
+            rt_call("__Str__find");
+            ex_w = 8;
+        } else {
+            rt_call("__Str__append");
+        }
+        ex_ty = 0;
+        lv_done = 1;
+        return true;
+    }
+    if str_eq(dm, "slice") {
+        expect("(");
+        load_through(8);
+        push_x0();
+        parse_expr();
+        push_x0();
+        expect(",");
+        parse_expr();
+        expect(")");
+        emit_line("mov x2, x0");
+        emit_line("ldr x1, [sp, #0]");
+        emit_line("ldr x0, [sp, #16]");
+        emit_line("add sp, sp, #32");
+        rt_call("__Str__slice");
+        str_temp();
+        lv_done = 1;
+        return true;
+    }
+    if str_eq(dm, "c") {
+        expect("(");
+        expect(")");
+        load_through(8);
+        rt_call("__Str__c");
+        ex_w = 9;
+        ex_ty = 0;
+        lv_done = 1;
+        return true;
+    }
+    if str_eq(dm, "resize") { die("a String has no resize (use push, append or slice)"); }
+    return false;
+}
+
 // x[i] on a dynamic array: x0 = the address of the variable
 void dyn_index() {
     int info = lv_dyn;
     int code = dyn_code(info);
     int eptr = dyn_ptr(info);
     int etid = dyn_tid(info);
+    if is_str_dyn(info) { etid = 0; }     // the elements of a String are plain chars
     load_through(8);                     // x0 = the header
     dyn_null_check();
     push_x0();
@@ -1742,6 +1939,7 @@ void dyn_member() {
     int code = dyn_code(info);
     int eptr = dyn_ptr(info);
     int etid = dyn_tid(info);
+    if is_str_dyn(info) { etid = 0; }     // the elements of a String are plain chars
     next();                              // "."
     if tok_kind != T_IDENT { die("a member name was expected"); }
     char dm[64];
@@ -1749,6 +1947,7 @@ void dyn_member() {
     next();
     ex_w = 8;
     ex_ty = 0;
+    if is_str_dyn(info) && str_member(@dm) { return; }
     if str_eq(@dm, "len") || str_eq(@dm, "cap") {
         load_through(8);
         dyn_null_check();
@@ -1872,6 +2071,7 @@ void finish_rvalue() {
         load_through(8);                 // a dynamic array as a value: its header address
         ex_w = 8;
         ex_ty = 99;
+        if is_str_dyn(lv_dyn) { ex_ty = 80; }
         return;
     }
     if lv_kind == 1 {
@@ -2253,7 +2453,22 @@ void parse_add() {
         next();
         push_x0();
         parse_mul();
-        if is_float(alt) || is_float(ex_ty) {
+        if alt == 80 || ex_ty == 80 {
+            // String + String / text / char
+            if !str_eq(@aop, "+") { die("a String can only be joined with +"); }
+            int kb = str_kind();
+            int ka = 0;
+            if alt == 80 { ka = 1; } else if alw == 2 { ka = 2; }
+            emit_line("mov x2, x0");
+            emit_line("ldr x0, [sp, #0]");
+            emit_line("add sp, sp, #16");
+            ins_n("mov x1, ", ka);
+            ins_n("mov x3, ", kb);
+            rt_call("__Str__cat");
+            str_temp();
+            alt = 80;
+            alw = 8;
+        } else if is_float(alt) || is_float(ex_ty) {
             int art = ex_ty;
             take_operands();
             alt = fp_binop(@aop, alt, art);
@@ -2422,10 +2637,30 @@ void parse_equality() {
         char eqop[4];
         str_copy(@eqop, @tok_text, 4);
         int eq_left = ex_ty;
+        int eq_lw = ex_w;
         next();
         push_x0();
         parse_relational();
         int eq_right = ex_ty;
+        if eq_left == 80 || eq_right == 80 {
+            // String == String / text
+            int kb = str_kind();
+            int ka = 0;
+            if eq_left == 80 { ka = 1; } else if eq_lw == 2 { ka = 2; }
+            emit_line("mov x2, x0");
+            emit_line("ldr x0, [sp, #0]");
+            emit_line("add sp, sp, #16");
+            ins_n("mov x1, ", ka);
+            ins_n("mov x3, ", kb);
+            rt_call("__Str__eq");
+            if str_eq(@eqop, "!=") {
+                emit_line("mov x1, 1");
+                emit_line("eor x0, x0, x1");
+            }
+            ex_w = 8;
+            ex_ty = 1;
+            rv_valid = 0;
+        } else {
         if !is_float(eq_left) && !is_float(eq_right) { check_comparable(eq_left, eq_right); }
         take_operands();
         if is_float(eq_left) || is_float(eq_right) {
@@ -2437,6 +2672,7 @@ void parse_equality() {
         }
         ex_w = 8;
         ex_ty = 1;
+        }
     }
 }
 
@@ -2452,7 +2688,9 @@ void parse_land() {
             next();
             emit_line("cmp x0, 0");
             jump_if("eq", lfalse);
+            cond_depth += 1;
             parse_equality();
+            cond_depth -= 1;
         }
         need_bool();
         emit_line("cmp x0, 0");
@@ -2481,7 +2719,9 @@ void parse_expr() {
             next();
             emit_line("cmp x0, 0");
             jump_if("ne", ltrue);
+            cond_depth += 1;
             parse_land();
+            cond_depth -= 1;
         }
         need_bool();
         emit_line("cmp x0, 0");

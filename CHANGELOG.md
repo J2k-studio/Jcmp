@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.0
+* **`String`**: text that grows. `String s = "hi";`, `a + b`, `a == b`, `s += x`, `s.len`, `s[i]`, `push pop append clear find slice c`, `cin >> s`. `String b = a;` makes a copy; Strings are freed at the end of their block, and a String made by an expression is freed at the end of the statement.
+* **Generics** (since 0.3.1) are described in the tour (`docs/LANGUAGE.md`) and the tutorial (lessons 12 and 13).
+* Functions that return `char^` (a text) can be printed with `cout`.
+
 ## 0.3.3
 * **Fixed:** declaring a name twice in a block (or a local with the name of a global) reported the error at the *next* statement; it now points at the name that is declared again.
 

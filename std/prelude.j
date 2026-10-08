@@ -171,6 +171,165 @@ struct __Arr {
     }
 }
 
+// String: a dynamic array of char (header [length, capacity, data, 1]) whose data always ends
+// in a 0 byte after the length, so that the data is also a C-style text (cout, c()).
+// An operand is a text (kind 0), another String (kind 1) or one character (kind 2).
+char std_str_ch[16];
+struct __Str {
+    static void^ make(int cap) {
+        int^ h = (int^)__Arr::make(1, cap + 1);
+        char^ d = (char^)h[2];
+        d[0] = 0;
+        return (void^)h;
+    }
+    static int textlen(char^ t) {
+        int n = 0;
+        while t[n] != 0 { n += 1; }
+        return n;
+    }
+    static void check(void^ hv) {
+        if (int)hv == 0 { throw "the String is null"; }
+    }
+    // the characters of an operand
+    static char^ ptr(void^ x, int k, int slot) {
+        if k == 1 {
+            __Str::check(x);
+            int^ h = (int^)x;
+            return (char^)h[2];
+        }
+        if k == 2 {
+            std_str_ch[slot * 8] = (int)x;
+            std_str_ch[slot * 8 + 1] = 0;
+            return @std_str_ch + slot * 8;
+        }
+        return (char^)x;
+    }
+    static int len(void^ x, int k) {
+        if k == 1 {
+            __Str::check(x);
+            int^ h = (int^)x;
+            return h[0];
+        }
+        if k == 2 { return 1; }
+        return __Str::textlen((char^)x);
+    }
+    // a new String holding a copy of the text
+    static void^ from(char^ t) {
+        int n = __Str::textlen(t);
+        int^ h = (int^)__Str::make(n);
+        Mem::copy((void^)h[2], (void^)t, n);
+        char^ d = (char^)h[2];
+        d[n] = 0;
+        h[0] = n;
+        return (void^)h;
+    }
+    // a copy of a String
+    static void^ clone(void^ x) {
+        return __Str::cat(x, 1, (void^)"", 0);
+    }
+    // a new String: a followed by b
+    static void^ cat(void^ a, int ka, void^ b, int kb) {
+        int na = __Str::len(a, ka);
+        int nb = __Str::len(b, kb);
+        int^ h = (int^)__Str::make(na + nb);
+        char^ d = (char^)h[2];
+        Mem::copy((void^)d, (void^)__Str::ptr(a, ka, 0), na);
+        Mem::copy((void^)(d + na), (void^)__Str::ptr(b, kb, 1), nb);
+        d[na + nb] = 0;
+        h[0] = na + nb;
+        return (void^)h;
+    }
+    // a followed by b, in a (returns a)
+    static void^ append(void^ a, void^ b, int kb) {
+        __Str::check(a);
+        if kb == 1 && (int)b == (int)a {                 // s.append(s): the data may move
+            void^ same = __Str::clone(a);
+            __Str::append(a, same, 1);
+            __Arr::free(same);
+            return a;
+        }
+        int^ h = (int^)a;
+        int nb = __Str::len(b, kb);
+        char^ src = __Str::ptr(b, kb, 1);
+        __Arr::grow(h, h[0] + nb + 1);
+        Mem::copy((void^)(h[2] + h[0]), (void^)src, nb);
+        h[0] += nb;
+        char^ d = (char^)h[2];
+        d[h[0]] = 0;
+        return a;
+    }
+    static void push(void^ a, int c) {
+        __Str::check(a);
+        int^ h = (int^)a;
+        __Arr::grow(h, h[0] + 2);
+        char^ d = (char^)h[2];
+        d[h[0]] = c;
+        h[0] += 1;
+        d[h[0]] = 0;
+    }
+    static int pop(void^ a) {
+        __Str::check(a);
+        int^ h = (int^)a;
+        if h[0] == 0 { throw "pop from an empty String"; }
+        h[0] -= 1;
+        char^ d = (char^)h[2];
+        int c = d[h[0]];
+        d[h[0]] = 0;
+        return c;
+    }
+    static void clear(void^ a) {
+        __Str::check(a);
+        int^ h = (int^)a;
+        h[0] = 0;
+        char^ d = (char^)h[2];
+        d[0] = 0;
+    }
+    // 1 if the two operands hold the same characters
+    static int eq(void^ a, int ka, void^ b, int kb) {
+        int na = __Str::len(a, ka);
+        int nb = __Str::len(b, kb);
+        if na != nb { return 0; }
+        char^ pa = __Str::ptr(a, ka, 0);
+        char^ pb = __Str::ptr(b, kb, 1);
+        int i = 0;
+        while i < na {
+            if pa[i] != pb[i] { return 0; }
+            i += 1;
+        }
+        return 1;
+    }
+    // the first place of t in s at or after `from`, or -1
+    static int find(void^ s, void^ t, int kt) {
+        int ns = __Str::len(s, 1);
+        int nt = __Str::len(t, kt);
+        char^ ps = __Str::ptr(s, 1, 0);
+        char^ pt = __Str::ptr(t, kt, 1);
+        int i = 0;
+        while i + nt <= ns {
+            int j = 0;
+            while j < nt && ps[i + j] == pt[j] { j += 1; }
+            if j == nt { return i; }
+            i += 1;
+        }
+        return 0 - 1;
+    }
+    // a new String: the characters a .. b - 1
+    static void^ slice(void^ s, int a, int b) {
+        int n = __Str::len(s, 1);
+        if a < 0 || b > n || a > b { throw "String slice out of range"; }
+        int^ h = (int^)__Str::make(b - a);
+        char^ d = (char^)h[2];
+        char^ ps = __Str::ptr(s, 1, 0);
+        Mem::copy((void^)d, (void^)(ps + a), b - a);
+        d[b - a] = 0;
+        h[0] = b - a;
+        return (void^)h;
+    }
+    static char^ c(void^ s) {
+        return __Str::ptr(s, 1, 0);
+    }
+}
+
 // Reading the keyboard (cin >> x, cinf >> x): a buffer over file descriptor 0.
 char std_in_buf[4096];
 int std_in_pos;
@@ -198,6 +357,17 @@ struct __In {
             c = __In::peek();
         }
         return c;
+    }
+    // a word into a String
+    static void str(void^ h) {
+        int c = __In::start();
+        if c < 0 { throw "end of input"; }
+        __Str::clear(h);
+        while c >= 0 && !__In::space(c) {
+            __Str::push(h, c);
+            std_in_pos += 1;
+            c = __In::peek();
+        }
     }
     // a whole number (an error unless lo <= value <= hi; no limits when lo > hi; uns = 1: no minus sign)
     static int num(int lo, int hi, int uns) {

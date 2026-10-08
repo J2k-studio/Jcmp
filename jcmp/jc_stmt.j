@@ -45,6 +45,7 @@ int cp_src[8];               // struct parameters to copy in the prologue
 int cp_dst[8];
 int cp_size[8];
 int cp_count;
+int cur_ret_str;             // 1 if the function returns a String
 int cur_ret_isptr;           // 1 if the function returns a pointer or a dynamic array
 int cur_ret_tid;
 int cur_is_main;             // compiling main?
@@ -68,6 +69,7 @@ int parse_fn_type_ok = 1;      // parse_type may read RET(PARAMS)^
 bool at_type() {
     if tok_kind == T_IDENT && find_enum(@tok_text) >= 0 { return true; }
     if tok_kind == T_IDENT && find_struct(@tok_text) >= 0 { return true; }
+    if tok_kind == T_IDENT && tok_is("String") { return true; }
     return tok_is("int") || tok_is("char") || tok_is("bool") || tok_is("void") || tok_is("i8") || tok_is("i32") || tok_is("f32") || tok_is("f64") || tok_is("u8") || tok_is("u32") || tok_is("u64");
 }
 
@@ -77,6 +79,15 @@ void parse_type() {
     ty_ptr = 0;
     ty_tid = 0;
     ty_dyn = 0;
+    if tok_kind == T_IDENT && tok_is("String") && find_struct(@tok_text) < 0 {
+        // String: a dynamic array of char marked with the type id 70 (see is_str_dyn)
+        next();
+        ty_dyn = dyn_pack(2, 0, 70);
+        ty_tid = 99;
+        ty_elem = 8;
+        ty_width = 8;
+        return;
+    }
     if tok_is("int") {
         ty_elem = 8;
         ty_width = 8;
@@ -298,6 +309,41 @@ void parse_assign_core(char^ target) {
         if for_step == 0 { expect(";"); }
         return;
     }
+    if a_kind == 3 && is_str_dyn(lv_dyn_saved) {
+        // a String: = copies (frees the old content), += appends
+        if is_incr == 1 { die("++ and -- do not work on a String"); }
+        if a_fresh == 1 && a_base_local == 1 && own_find(a_base_off) < 0 && own_ok == 1 {
+            die_name("this String is only borrowed (a parameter); copy it into a local String first", target);
+        }
+        parse_expr();
+        if op[0] == 0 {
+            str_adopt();
+            push_x0();                   // [sp] = the new String, [sp+16] = the target's address
+            emit_line("ldr x1, [sp, #16]");
+            emit_line("ldr x0, [x1, #0]");
+            rt_call("__Arr__free");      // the old content goes (null is ignored)
+            emit_line("ldr x0, [sp, #0]");
+            emit_line("ldr x3, [sp, #16]");
+            emit_line("add sp, sp, #32");
+            emit_line("str x0, [x3, #0]");
+        } else if op[0] == '+' && op[1] == 0 {
+            int kb = str_kind();
+            emit_line("mov x1, x0");
+            emit_line("ldr x3, [sp, #0]");
+            emit_line("ldr x0, [x3, #0]");
+            emit_line("add sp, sp, #16");
+            ins_n("mov x2, ", kb);
+            rt_call("__Str__append");
+        } else {
+            die("a String can be changed with = and += only");
+        }
+        if for_step == 0 { expect(";"); }
+        if a_fresh == 1 && a_base_local == 1 && op[0] == 0 {
+            int me = own_find(a_base_off);
+            if me >= 0 { own_moved[me] = 0; }
+        }
+        return;
+    }
     int src_owner = 0 - 1;               // the owner variable whose value is being stored, if any
     if is_incr == 1 {
         emit_line("mov x0, 1");
@@ -424,8 +470,10 @@ void parse_block() {
 
 // "cond {": the condition value in x0, then a jump to `lfalse` if it is 0
 void parse_condition(int lfalse) {
+    int t0 = own_count;
     parse_expr();
     need_bool();
+    str_flush(t0, 1);                    // the Strings made by the condition are freed before the jump
     emit_line("cmp x0, 0");
     jump_if("eq", lfalse);
 }
@@ -661,7 +709,12 @@ void parse_cout() {
         parse_bitor();
         in_cout = 0;
         c_last = ex_w;
-        if is_float(ex_ty) {
+        if ex_ty == 80 {
+            dyn_null_check();
+            emit_line("ldr x0, [x0, #16]");        // the characters
+            emit_line("bl j2k_print_str");
+            c_last = 9;
+        } else if is_float(ex_ty) {
             if c_float == 0 { die("cout prints numbers and text; use coutf for floats"); }
             if ex_ty == 90 { f32_to_f64(0); }
             emit_line("bl j2k_print_f64");
@@ -694,6 +747,13 @@ void parse_cout() {
 // bad or missing input throws "invalid input" / "end of input" / "number out of range"
 void read_into_object(int is_f) {
     used_try = 1;
+    if lv_kind == 3 && is_str_dyn(lv_dyn) {
+        if is_f == 1 { die("cinf reads floats; use cin for a String"); }
+        load_through(8);                 // the String (cin reads one word into it)
+        dyn_null_check();
+        rt_call("__In__str");
+        return;
+    }
     if lv_kind == 1 {
         if lv_code != 2 || lv_nd != 1 || is_f == 1 { die("cin can read into a char array (a word) but not into other arrays"); }
         push_x0();                       // the array's address
@@ -1264,6 +1324,24 @@ void parse_local_decl() {
         }
         return;
     }
+    if d_dyn != 0 && is_str_dyn(d_dyn) {
+        // String name;   String name = "text";   String name = other (a copy) / a + b (taken over)
+        if tok_is("=") {
+            next();
+            parse_expr();
+            str_adopt();
+        } else {
+            place_text("", 0);
+            rt_call("__Str__from");
+        }
+        expect(";");
+        ty_tid = 99;
+        ty_dyn = d_dyn;
+        add_local(@d_name, 3, 8, 8, 0);
+        ins_mem("str", "x0", "x29", loff[lcount - 1]);
+        if own_ok == 1 { own_add(loff[lcount - 1], 1); }
+        return;
+    }
     if d_dyn != 0 {
         // T[] name;   T[] name = arr(n);   T[] name = other;
         int dd_start = 0;                // 1: this variable owns the array
@@ -1342,7 +1420,14 @@ void parse_local_decl() {
     }
 }
 
+// a statement; the Strings that its expressions made are freed at its end
 void parse_statement() {
+    int t0 = own_count;
+    parse_statement_inner();
+    str_flush(t0, 0);
+}
+
+void parse_statement_inner() {
     if mt_pending == 1 {
         mt_pending = 0;
         if !tok_is("for") { die("#multithread must be followed by a for loop"); }
@@ -1409,6 +1494,20 @@ void parse_statement() {
             if cur_is_main == 1 { emit_line("mov x0, 0"); }
         } else {
             parse_expr();
+            if cur_ret_str == 1 && pass_no >= 2 {
+                // a String result: an owner or a temporary moves out, anything else is copied
+                if ex_ty == 80 {
+                    int rv_own = 0 - 1;
+                    if rv_valid == 1 { rv_own = own_find(rv_off); }
+                    if rv_own < 0 { rt_call("__Str__clone"); }
+                } else if ex_w == 9 {
+                    rt_call("__Str__from");
+                    ex_ty = 80;
+                    rv_valid = 0;
+                } else {
+                    die("this function returns a String");
+                }
+            }
             check_assign(cur_ret_tid);
             if rv_valid == 1 && cur_ret_isptr == 1 { ret_mv = own_find(rv_off); }
             if cur_ret_tid >= 100 {
@@ -1495,6 +1594,8 @@ void parse_function() {
     int f_void = ty_void;
     int f_rettid = ty_tid;
     cur_ret_isptr = 0;
+    cur_ret_str = 0;
+    if is_str_dyn(ty_dyn) { cur_ret_str = 1; }
     if ty_ptr != 0 || ty_dyn != 0 { cur_ret_isptr = 1; }
     if ty_ptr != 0 { f_rettid = 0; }
     cur_ret_tid = f_rettid;
@@ -1509,7 +1610,10 @@ void parse_function() {
         fnpar[fcount] = 0;
         fret[fcount] = f_rettid;
         fcharret[fcount] = 0;
+        fretstr[fcount] = 0;
+        if is_str_dyn(ty_dyn) { fretstr[fcount] = 1; }
         if ty_elem == 2 && ty_ptr == 0 && ty_dyn == 0 && ty_void == 0 { fcharret[fcount] = 1; }
+        if ty_ptr == 2 && ty_dyn == 0 && ty_void == 0 { fcharret[fcount] = 2; }
         f_idx = fcount;
         fcount += 1;
     }
@@ -1597,6 +1701,7 @@ void parse_function() {
             int p_dyn = ty_dyn;
             if ty_ptr != 0 { p_tid = 0; }
             if f_declared < 8 { fptid[f_idx * 8 + f_declared] = p_tid; }
+            if f_declared < 8 { fpstr[f_idx * 8 + f_declared] = 0; if is_str_dyn(p_dyn) { fpstr[f_idx * 8 + f_declared] = 1; } }
             next();
             if tok_is("[") {
                 // T name[] : an address and a length (name__len) arrive together
