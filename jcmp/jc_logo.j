@@ -157,10 +157,6 @@ char lg_pick(double v) {
     if k > lg_n2 - 1 { k = lg_n2 - 1; }
     return lg_ramp2[k];
 }
-    int k = (int)(v * 9.99);
-    if k > 9 { k = 9; }
-    return lg_ramp[k];
-}
 
 // puts a ring dot in a cell (the brighter character wins)
 void lg_dot(int x, int y, double v) {
@@ -628,7 +624,16 @@ void lg_run(int frames, int speed) {
                     if shadow == 1 { v = v * 0.16; }
                     lg_ch[y * LW + x] = lg_pick(v * pulse * 1.15);
                     lg_col[y * LW + x] = lg_scale(tint, 0.35 + 0.9 * v * pulse);
-                    if shadow == 1 { lg_col[y * LW + x] = lg_mix(lg_col[y * LW + x], 1317434, 0.6); }     // the shadow is bluish dark
+                    // the sun glints on the rings here and there: where the gas faces the light and is in a clump
+                    double sun_az = lg_atan2(lz, lx);
+                    double gl = lg_cos(ra - sun_az);
+                    if gl > 0.0 && shadow == 0 {
+                        double g2 = gl * gl * gl * gl * gl * gl;
+                        double gg = g2 * g2 * (0.4 + 0.6 * clump * clump);
+                        lg_col[y * LW + x] = lg_mix(lg_col[y * LW + x], 14803420, gg * 0.9);
+                        lg_ch[y * LW + x] = lg_pick(v * pulse * 1.15 + gg * 0.35);
+                    }
+                    if shadow == 1 { lg_col[y * LW + x] = lg_mix(lg_col[y * LW + x], 3947584, 0.7); }     // the shadow is bluish dark
                     lg_dep[y * LW + x] = tp;
                 } else if hit == 1 {
                     double hx = ox + lg_fx * tt;
@@ -678,9 +683,9 @@ void lg_run(int frames, int speed) {
                     double bright = (0.08 + 0.80 * day) * (0.84 + 0.22 * belt) + 0.25 * rim * (0.30 + day) + 0.30 * refl;
                     if bright > 1.0 { bright = 1.0; }
                     lg_ch[y * LW + x] = lg_pick(bright * pulse);
-                    int c = lg_mix(1778228, 16245412, day);                // from a dark night blue to warm gold
+                    int c = lg_mix(2368554, 16245412, day);                // from a dark night blue to warm gold
                     c = lg_mix(c, 13476196, belt * 0.45 * day);            // the belts are a little browner
-                    c = lg_mix(c, 9482495, rim * 0.5);                     // a bluish glow at the edge
+                    c = lg_mix(c, 12632304, rim * 0.5);                    // a pale grey glow at the edge
                     c = lg_mix(c, 16777215, refl * 0.8);
                     lg_col[y * LW + x] = lg_scale(c, 0.6 + 0.4 * pulse);
                     lg_dep[y * LW + x] = tt;

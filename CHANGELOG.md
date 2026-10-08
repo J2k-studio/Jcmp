@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.35
+* **Fixed (serious, my mistake in the release of 0.9.34):** the source of 0.9.34 on GitHub had a half-written change in `jcmp/jc_logo.j` and could not be compiled (the released binary `jcmp` was fine). This release has a source that builds (`./bootstrap.sh` passes) and the finished change: 
+* **The mascot, more detail:** the J hangs lower, so that the plane of the rings crosses its upper part and its tail shows below; finer shading with a long ramp of 68 characters; belts of clouds on the planet that turn with it; fine ringlets in the rings, the thin F ring and the Encke gap; three small moons that run beside the rings at their real distances (Prometheus, Pandora, Janus) with Kepler speeds; **shadows are grey** (the night side, the shadow of the rings and of the planet), and the sun **glints on the rings** here and there in whitish grey.
+
 ## 0.9.34
 * **The mascot is 50 x 20 characters** and shows **Earth time** under the picture: the clock of the computer now (UTC, `HH:MM:SS`) and how many hours have passed on the planet in the film (`film = 12.4 h`, from the speed N).
 
