@@ -463,7 +463,7 @@ A String parameter only borrows the caller's String, so inside the function you 
 ## Lesson 13. Generics
 
 A function or struct can take a type as a parameter: write it in `<>` after the name. The compiler makes one copy for every type you use.
-You write the type at every use: `largest<int>(...)`, `Box<double>`.
+A function finds the type from its arguments: `largest(3, 9)`; you can also write it, `largest<int>(3, 9)`. A struct always has it written: `Box<double>`.
 
 ```jk
 #import <stdlib>
@@ -480,8 +480,9 @@ struct Box<T> {
 }
 
 void main() {
-    cout << largest<int>(3, 9) << "\n";
-    cout << largest<double>(2.5, 1.5) << "\n";
+    cout << largest(3, 9) << "\n";
+    cout << largest(2.5, 1.5) << "\n";
+    cout << largest<int>(8, 2) << "\n";
     Box<int> b = {7};
     cout << b.get() << "\n";
 }
@@ -492,10 +493,11 @@ Output:
 ```
 9
 2.500000
+8
 7
 ```
 
-A generic must be written before the first place that uses it.
+A generic must be written before the first place that uses it. `largest(1, 2.5)` is an error (a whole number and a decimal number do not mix): write `largest(1.0, 2.5)`. When the type cannot be worked out, the compiler says so and you write it.
 
 ## Lesson 14. Lists, maps and sets
 

@@ -2339,6 +2339,7 @@ void parse_one_item() {
         parse_top_item();
     }
     gen_lambdas();                       // the lambdas written in this item become functions now
+    gen_pending();                       // so do the generic instances found by a call without <...>
 }
 
 void parse_program() {

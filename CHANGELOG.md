@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9.2
+* **A generic function finds its types from the arguments:** `largest(3, 9)`, `swap(@x, @y)`, `first(names)`. Numbers, chars, texts, variables, `@variable` and arrays are understood; anything else, a mix of types (`largest(1, 2.5)`) or a `T` that no parameter shows must be written with `<type>`. A struct (`Box<int>`) is still always written.
+
 ## 0.9.1
 * **A lambda is written like a function without a name** (the way functions are declared: result type first, no `->`): `int(int a, int b) { return a + b; }`, `void() { ... }`. The form of 0.9.0, `(int a, int b) -> int { ... }`, still works with a warning.
 

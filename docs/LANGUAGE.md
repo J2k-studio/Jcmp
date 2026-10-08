@@ -228,11 +228,16 @@ A function or struct takes types as parameters, written in `<>` after the name; 
 T largest<T>(T a, T b) { if a > b { return a; } return b; }
 struct Pair<A, B> { A first; B second; }
 
-cout << largest<int>(3, 9) << "\n";
-Pair<int, double> p = {1, 2.5};
+cout << largest(3, 9) << "\n";            // T is worked out from the arguments: int
+cout << largest<int>(3, 9) << "\n";        // or written
+Pair<int, double> p = {1, 2.5};          // a struct always has its types written
 ```
 
-* The type is written at every use (`largest<int>(...)`); it is not worked out from the arguments.
+* A **function** finds its types from the arguments: numbers (a whole number is an `int`, one with a point a `double`, and it follows the variable beside it:
+  `largest(3, n)` with `n` an `i32` is `i32`), chars, texts, `true`/`false`, variables, `@variable` (for `T^`) and arrays (for `T[]`, the element type).
+  `largest(1, 2.5)` and `largest(d, i)` (a `double` and an `int`) are errors: the types do not mix, cast one or write `largest<double>(...)`.
+  Anything else (`largest(f(1), 2)`) and a `T` that no parameter shows (`T make<T>()`) must be written: `make<int>()`. A **struct** (`Box<int>`) is always written.
+  A plain function with the same name wins over the generic.
 * A generic must be written before the first place that uses it. Errors inside an instance point at the line of the generic.
 * Instances are ordinary functions and structs (`largest<int>` is called `largest__int`), so the limit of 80 structs counts them.
 

@@ -1050,6 +1050,10 @@ void drop_args(int n) {
 // a struct made visible by "using": id_name becomes Struct__name
 void resolve_callee() {
     if find_func(@id_name) >= 0 { return; }
+    if gen_is_template(@id_name) {
+        gen_infer_call();                // a generic called without <...>: T comes from the arguments
+        return;
+    }
     if str_eq(@id_name, "syscall") || str_eq(@id_name, "argc") || str_eq(@id_name, "arg") { return; }
     int k = 0;
     int found = 0 - 1;
