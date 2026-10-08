@@ -197,6 +197,7 @@ void write_err_int(int v) {
 // command-line options (set by main in jc_stmt.jk)
 int opt_debug;               // -d : a debug build
 int opt_strict;              // -st : warnings are errors
+int opt_peep = 1;            // 1: the peephole pass makes the code shorter (-nopeep switches it off, to look for a fault)
 char inc_dir[256];           // -I dir : where `import "name"` looks if the file is not next to the importer
 int warn_count;
 int used_fprint;             // 1 if coutf was used: the float printing routine is emitted

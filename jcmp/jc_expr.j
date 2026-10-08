@@ -809,6 +809,42 @@ int tail_add_base() {
     return n;
 }
 
+// is the last line written "ldr x0, [x29, #N]" (or x28, 8-byte)? then N (and tail_start, tail_base are set), else -1
+int tail_ldr_base() {
+    int e = out_len;
+    if e < 16 || out_buf[e - 1] != 10 { return 0 - 1; }
+    int st = e - 1;
+    while st > 0 && out_buf[st - 1] != 10 { st -= 1; }
+    char^ want = "ldr x0, [x2";
+    int i = 0;
+    while want[i] != 0 {
+        if out_buf[st + i] != want[i] { return 0 - 1; }
+        i += 1;
+    }
+    int bch = out_buf[st + i];
+    if bch != '8' && bch != '9' { return 0 - 1; }
+    char^ rest = ", #";
+    int k = st + i + 1;
+    int j = 0;
+    while rest[j] != 0 {
+        if out_buf[k + j] != rest[j] { return 0 - 1; }
+        j += 1;
+    }
+    k = k + j;
+    int n = 0;
+    while k < e - 2 {
+        int c = out_buf[k];
+        if c < '0' || c > '9' { return 0 - 1; }
+        n = n * 10 + (c - '0');
+        k += 1;
+    }
+    if out_buf[e - 2] != ']' { return 0 - 1; }
+    if n >= 4096 || n % 8 != 0 { return 0 - 1; }
+    tail_start = st;
+    tail_base = 20 + (bch - '0');
+    return n;
+}
+
 // "add x0, x29, #N" just before, then the load becomes one instruction: ldr x0, [x29, #N]
 bool load_direct(char^ op, int scale) {
     int n = tail_add_base();
@@ -1684,12 +1720,59 @@ void lvalue_loop() {
                 s_tid = pointee_tid(s_ptr);
                 s_ptr = 0;
             }
-            push_x0();                       // the base address
+            // the base address waits on the stack, unless it is a fixed address or a plain pointer variable and the index is made
+            // of plain things: then it is written again after the index (the index is worked out first)
+            int bkind = 0;
+            int bnum = 0;
+            int bbase = 29;
+            if pure_raw_ahead(100) {
+                int tn = tail_add_base();
+                if tn >= 0 && tn < 4096 {
+                    bkind = 1;
+                    bnum = tn;
+                    bbase = tail_base;
+                    out_len = tail_start;
+                } else {
+                    int ln = tail_ldr_base();
+                    if ln >= 0 {
+                        bkind = 2;
+                        bnum = ln;
+                        bbase = tail_base;
+                        out_len = tail_start;
+                    }
+                }
+            }
+            if bkind == 0 { push_x0(); }       // the base address
             parse_index_chain();
-            ins_n("mov x1, ", size_of(s_code));
-            emit_line("mul x0, x0, x1");
-            pop_x1();
-            emit_line("add x0, x0, x1");
+            int es = size_of(s_code);
+            if es == 1 {
+                // nothing to multiply
+            } else if es == 2 || es == 4 || es == 8 || es == 16 {
+                int sk = 1;
+                if es == 4 { sk = 2; }
+                if es == 8 { sk = 3; }
+                if es == 16 { sk = 4; }
+                ins_n("lsl x0, x0, #", sk);
+            } else {
+                ins_n("mov x1, ", es);
+                emit_line("mul x0, x0, x1");
+            }
+            if bkind == 0 {
+                pop_x1();
+                emit_line("add x0, x0, x1");
+            } else if bkind == 1 {
+                emit_str("add x0, x");
+                emit_int(bbase);
+                emit_line(", x0");
+                if bnum != 0 { ins_n("add x0, x0, #", bnum); }
+            } else {
+                emit_str("ldr x1, [x");
+                emit_int(bbase);
+                emit_str(", #");
+                emit_int(bnum);
+                emit_line("]");
+                emit_line("add x0, x0, x1");
+            }
             if s_code >= 400 {
                 // an element that is itself a pointer (T^^ p; p[i])
                 s_ptr = s_code - 400;
@@ -3291,6 +3374,24 @@ void emit_divzero_check() {
 // any other number d is a multiplication by a "magic" number and a shift (Hacker's Delight, chapter 10): the high half of
 // x0 * M (smulh), a correction, a shift, and the sign bit added. x1..x4 are used.
 void emit_div_const(int d, bool is_mod) {
+    // the divisor was loaded into x1 just before (mov x1, d): it is not needed
+    int dl = out_len - 1;
+    if dl > 12 && out_buf[dl] == 10 {
+        int st = dl;
+        while st > 0 && out_buf[st - 1] != 10 { st -= 1; }
+        if out_buf[st] == 'm' && out_buf[st + 1] == 'o' && out_buf[st + 2] == 'v' && out_buf[st + 3] == ' ' && out_buf[st + 4] == 'x' && out_buf[st + 5] == '1' && out_buf[st + 6] == ',' {
+            int v = 0;
+            int q = st + 8;
+            bool digits = q < dl;
+            while q < dl {
+                int c = out_buf[q];
+                if c < '0' || c > '9' { digits = false; }
+                v = v * 10 + (c - '0');
+                q += 1;
+            }
+            if digits && v == d { out_len = st; }
+        }
+    }
     if d == 1 {
         if is_mod { emit_line("mov x0, 0"); }
         return;
@@ -3518,6 +3619,13 @@ bool pure_right_ahead(int lvl) {
     } else {
         return false;
     }
+    return pure_raw_ahead(lvl);
+}
+
+// the same for the raw text that follows the current token (nothing of it is read yet): is it free of calls, parentheses, strings
+// and anything else that could change a variable or use the registers of the stash, up to the end of the operand that the
+// parser of level lvl reads (or up to ; ) , { } or an unmatched ] )?
+bool pure_raw_ahead(int lvl) {
     int o = 0;
     int bd = 0;
     while o < 240 {

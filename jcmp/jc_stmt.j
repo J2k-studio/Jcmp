@@ -389,7 +389,17 @@ void parse_assign_core(char^ target) {
             out_len = tail_start;
         }
     }
-    if tgt_off < 0 { push_x0(); }
+    int tgt_reg = 0;
+    if tgt_off < 0 && a_kind == 0 && a_code < 16 && stash_depth < 5 && pure_raw_ahead(100) {
+        // the value on the right is made of plain things (no call): the address of the target waits in a register
+        tgt_reg = 10 + stash_depth;
+        stash_depth += 1;
+        emit_str("mov x");
+        emit_int(tgt_reg);
+        emit_line(", x0");
+    } else if tgt_off < 0 {
+        push_x0();
+    }
     int is_incr = 0;
     if tok_is("=") {
         next();
@@ -507,6 +517,11 @@ void parse_assign_core(char^ target) {
         emit_int(tgt_base);
         emit_str(", #");
         emit_int(tgt_off);
+        emit_nl();
+    } else if tgt_reg != 0 {
+        stash_depth -= 1;
+        emit_str("mov x3, x");           // x3 = the target's address, x0 = the value
+        emit_int(tgt_reg);
         emit_nl();
     } else {
         emit_line("ldr x3, [sp, #0]");       // x3 = the target's address, x0 = the value
@@ -776,6 +791,8 @@ void parse_for_each(char^ f_name, int lstart, int lbody, int lstep, int lend, in
     lcount = for_mark;
 }
 
+char for_tmp[65536];           // the text of the condition of a for loop while the step is written
+
 void parse_for() {
     int for_mark = lcount;
     int lstart = new_label();
@@ -786,16 +803,32 @@ void parse_for() {
     if loop_depth >= 63 { die("loops nested too deeply"); }
     if at_type() {
         parse_local_decl();              // the declaration ends with ';'
-        place_label(lstart);
+        // the layout:  init; jump to the condition; step; condition (jumps out when false); body; jump to the step.
+        // One jump a turn. The condition is read before the step is, so its text is cut out and put back after the step.
+        int c_start = out_len;
         parse_condition(lend);
         expect(";");
-        jump(lbody);
+        int c_len = out_len - c_start;
+        if c_len >= 65536 { die("the condition of this for loop is too long"); }
+        int c_k = 0;
+        while c_k < c_len {
+            for_tmp[c_k] = out_buf[c_start + c_k];
+            c_k += 1;
+        }
+        out_len = c_start;
+        int lcond = new_label();
+        jump(lcond);
         place_label(lstep);
         for_step = 1;
         parse_statement();
         for_step = 0;
-        jump(lstart);
-        place_label(lbody);
+        place_label(lcond);
+        c_k = 0;
+        while c_k < c_len {
+            out_buf[out_len] = for_tmp[c_k];
+            out_len += 1;
+            c_k += 1;
+        }
     } else {
         // for i in a..b : i counts a, a+1, ... b-1
         if tok_kind != T_IDENT { die("a loop variable was expected"); }
@@ -824,18 +857,29 @@ void parse_for() {
         add_local("..end", 0, 8, 8, 0);
         int e_off = loff[lcount - 1];
         ins_mem("str", "x0", "x29", e_off);
-        place_label(lstart);
-        ins_mem("ldr", "x0", "x29", f_off);
-        ins_mem("ldr", "x1", "x29", e_off);
-        emit_line("cmp x0, x1");
-        jump_if("ge", lend);
-        jump(lbody);
+        // the layout: jump to the condition; body; step; condition (jumps back to the body); one jump a turn
+        int lcond2 = new_label();
+        jump(lcond2);
+        place_label(lbody);
+        brk_stack[loop_depth] = lend;
+        cont_stack[loop_depth] = lstep;
+        loop_try[loop_depth] = try_depth;
+        loop_own[loop_depth] = own_count;
+        loop_depth += 1;
+        parse_block();
+        loop_depth -= 1;
         place_label(lstep);
         ins_mem("ldr", "x0", "x29", f_off);
         emit_line("add x0, x0, #1");
         ins_mem("str", "x0", "x29", f_off);
-        jump(lstart);
-        place_label(lbody);
+        place_label(lcond2);
+        ins_mem("ldr", "x0", "x29", f_off);
+        ins_mem("ldr", "x1", "x29", e_off);
+        emit_line("cmp x0, x1");
+        jump_if("lt", lbody);
+        place_label(lend);
+        lcount = for_mark;
+        return;
     }
     brk_stack[loop_depth] = lend;
     cont_stack[loop_depth] = lstep;
@@ -2034,6 +2078,7 @@ void parse_local_decl_core() {
 
 // a statement; the Strings that its expressions made are freed at its end
 void parse_statement() {
+    stash_depth = 0;                     // no operand waits in a register between two statements
     int t0 = own_count;
     int saved_t0 = stmt_t0;
     stmt_t0 = t0;
