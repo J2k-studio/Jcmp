@@ -1,0 +1,10 @@
+int main() {
+    i8 buf[16];
+    int t[2];
+    buf[0] = 100;
+    buf[15] = 27;
+    buf[1] = 300;
+    t[0] = 1000;
+    t[1] = buf[0] + buf[15] + buf[1];
+    return t[1] - t[0] + 900;
+}

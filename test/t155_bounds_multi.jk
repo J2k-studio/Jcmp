@@ -1,0 +1,14 @@
+struct Row {
+    int cells[4];
+}
+
+int main() {
+    int m[2][3];
+    Row r;
+    int i = 3;
+    r.cells[3] = 1;               // fine
+    m[1][2] = 5;                  // fine
+    if m[1][2] == 5 { i = 1 - 2; }
+    m[0][i] = 7;                  // -1: out of range for a dimension of size 3
+    return 0;
+}

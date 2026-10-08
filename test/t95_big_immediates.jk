@@ -1,0 +1,14 @@
+int main() {
+    i32 x = 600000;
+    int r = 0;
+    if x == 600000 { r += 1; }
+    if x > 599999 { r += 2; }
+    int big = 5000000000;
+    if big == 5000000000 { r += 4; }
+    int d = big - 4999999990;
+    r += d;                          // 10
+    int a[20000];                    // 160000-byte frame: sub sp needs a > 65535 value
+    a[19999] = 7;
+    r += a[19999];                   // 7
+    return r;                        // 1 + 2 + 4 + 10 + 7 = 24
+}

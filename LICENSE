@@ -1,81 +1,152 @@
-J2K / Jcmp Proprietary License
-Copyright (c) 2026 Jao (J2k-studio)
-All Rights Reserved.
+J2K / Jcmp Proprietary Source-Available License
+Version 1.1 (2026-10-08)
+
+Copyright (c) 2026 Jao (J2k-studio). All Rights Reserved.
 
 ================================================================================
-SUMMARY (ภาษาไทย)
+SUMMARY (ภาษาไทย) — สรุปเท่านั้น ข้อความเต็มภาษาอังกฤษด้านล่างเป็นฉบับที่ใช้บังคับ
 ================================================================================
 
 อนุญาต:
-  - อ่าน (view / study) ซอร์สโค้ดและเอกสารได้
-  - ใช้ (compile / run) บนเครื่องของตนเองเพื่อวัตถุประสงค์ส่วนตัวหรือการศึกษา
+  - อ่านและศึกษาซอร์สโค้ดและเอกสาร
+  - คอมไพล์และรันบนเครื่องของตนเอง เพื่อการเรียนรู้ ใช้ส่วนตัว หรือวิจัย
+    โดยไม่แสวงกำไร
+  - เขียนโปรแกรมด้วยภาษา J2K ของตนเอง โปรแกรมที่คุณเขียนเป็นของคุณ
+  - ดู/ fork ผ่านฟังก์ชันของ GitHub ตามข้อกำหนดของ GitHub
 
 ไม่อนุญาต:
-  - คัดลอก ดัดแปลง หรือนำโค้ด/เอกสารไปใช้เป็นของตนเอง (ห้ามลอก / ห้ามก็อปปี้)
-  - เผยแพร่ซ้ำ แจกจ่าย หรืออัพโหลดซอร์สโค้ดหรือไบนารีไปยังที่อื่น
-  - อ้างสิทธิ์ความเป็นเจ้าของ หรือใช้ชื่อ/แบรนด์ J2K, Jcmp, J2k-studio
-    ในลักษณะที่ทำให้เข้าใจผิดว่าเป็นผลงานของตนเอง
-  - ใช้ในเชิงพาณิชย์โดยไม่ได้รับอนุญาตเป็นลายลักษณ์อักษร
+  - คัดลอก ดัดแปลง หรือนำโค้ด/เอกสารไปทำเป็นผลงานของตนเอง
+  - เผยแพร่ซ้ำ แจกจ่าย อัปโหลดซอร์สหรือไบนารีไปที่อื่น (นอกจากที่ระบุข้างต้น)
+  - อ้างความเป็นเจ้าของ หรือใช้ชื่อ J2K, Jcmp, J2k-studio ให้เข้าใจผิด
+  - ใช้เชิงพาณิชย์โดยไม่ได้รับอนุญาตเป็นลายลักษณ์อักษร
+  ขออนุญาตกรณีพิเศษได้ที่ GitHub: J2k-studio
 
 ================================================================================
 FULL TERMS (English)
 ================================================================================
 
-1. Grant of Limited Permission
+0. Definitions
 
-   Subject to the terms below, you may:
+   "Software" means everything in this repository: the J2K language
+   specification, the Jcmp compiler and assembler (source and binaries), the
+   standard library (the "std" files), the examples, the tests and the
+   documentation, including every copy or part of them.
 
-   (a) View and study the source code, documentation, and related materials
-       in this repository for personal learning and research purposes.
+   "Licensor" means Jao (J2k-studio), the copyright holder.
 
-   (b) Compile and run the software on machines under your own control for
-       personal, non-commercial, and non-redistributive use.
+   "You" means any person or organisation using the Software.
 
-2. Restrictions
+   "Your Programs" means source code that You write yourself in the J2K
+   language, without copying parts of the Software into it.
+
+1. Limited Permission
+
+   Subject to these terms, You may:
+
+   (a) view and study the Software for personal learning and research;
+
+   (b) compile and run the Software on machines under Your control, for
+       personal, educational or research use that is not commercial;
+
+   (c) write Your Programs and compile them with the Software on machines
+       under Your control;
+
+   (d) view the repository and use the "fork" feature of the hosting service
+       (GitHub) to the extent that the hosting service's own terms of service
+       give every user that right for public repositories. A fork made this
+       way remains subject to this license, and it gives You no right to
+       redistribute the Software anywhere else.
+
+2. Your Programs and the output of the compiler
+
+   (a) Your Programs belong to You. This license does not cover them.
+
+   (b) A program built by the compiler from Your Programs contains parts of
+       the Software (the runtime code that the compiler emits, and the
+       standard library functions that Your Programs use). Those parts remain
+       under this license. Running such programs for Your own personal or
+       educational use is permitted by 1(b). Any other use of them,
+       including distribution to others or commercial use, requires prior
+       written permission from the Licensor.
+
+3. Restrictions
 
    You may NOT:
 
-   (a) Copy, reproduce, or substantially reproduce any portion of the source
-       code, documentation, or binaries for the purpose of creating a
-       derivative work, submitting as your own work, or claiming authorship.
+   (a) copy, reproduce or substantially reproduce any part of the Software
+       in order to create a derivative work, to submit it as Your own work,
+       or to claim authorship of it;
 
-   (b) Redistribute, publish, upload, or otherwise make available the source
-       code, object code, binaries, or documentation (in whole or in part)
-       to any third party or public platform, including but not limited to
-       other GitHub repositories, mirrors, or package registries.
+   (b) redistribute, publish, upload, sublicense, sell, rent or otherwise make
+       available the Software, in whole or in part, in source or binary form,
+       to any third party or public platform (including other repositories,
+       mirrors, archives and package registries), except as permitted by 1(d);
 
-   (c) Claim ownership of, or authorship of, this software, the J2K language,
-       the Jcmp compiler, or any substantial portion thereof.
+   (c) claim ownership or authorship of the Software, the J2K language or the
+       Jcmp compiler, or of any substantial part of them;
 
-   (d) Use the names "J2K", "Jcmp", "J2k-studio", or any confusingly similar
-       name in a way that suggests endorsement or that the work is yours.
+   (d) use the names "J2K", "Jcmp" or "J2k-studio", or any confusingly similar
+       name, in a way that suggests that Your work is the Software, is
+       endorsed by the Licensor, or comes from the Licensor;
 
-   (e) Use the software or any part of it for commercial purposes without
-       prior written permission from the copyright holder.
+   (e) use the Software, or any part of it, for commercial purposes without
+       prior written permission from the Licensor. "Commercial purposes"
+       means any use intended for, or directed toward, commercial advantage
+       or monetary compensation, including use inside a paid product or
+       service;
 
-3. No Warranty
+   (f) remove or change the copyright notice or this license;
 
-   THIS SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-   OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-   FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. IN NO EVENT SHALL
-   THE COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY.
+   (g) use the Software to build a competing language implementation by
+       copying its design documents or source code (studying them to
+       learn is allowed by 1(a)).
 
-4. Termination
+4. Feedback
 
-   Any violation of these terms automatically terminates the limited
-   permissions granted above. Upon termination you must cease all use and
-   destroy any copies in your possession.
+   If You send the Licensor suggestions, bug reports or code, You grant the
+   Licensor a perpetual, worldwide, royalty-free, irrevocable right to use
+   them in the Software without any obligation to You. Sending a contribution
+   does not give You any right in the Software.
 
-5. Reservation of Rights
+5. No Warranty
 
-   All rights not expressly granted are reserved by the copyright holder.
-   This license does not grant any patent, trademark, or other intellectual
-   property rights beyond the limited permissions stated herein.
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+   FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. THE SOFTWARE IS UNDER
+   ACTIVE DEVELOPMENT AND MAY CONTAIN ERRORS, INCLUDING COMPILER ERRORS THAT
+   PRODUCE INCORRECT PROGRAMS.
 
-6. Contact
+6. Limitation of Liability
 
-   For permission requests (commercial use, redistribution exceptions, etc.)
-   contact the copyright holder via the GitHub profile: J2k-studio
+   IN NO EVENT SHALL THE LICENSOR BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+   LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+   OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+   THE SOFTWARE, TO THE FULLEST EXTENT PERMITTED BY APPLICABLE LAW.
+
+7. Termination
+
+   Any violation of these terms automatically terminates the permissions
+   granted above. After termination You must stop using the Software and
+   delete the copies in Your possession. Sections 3 to 9 survive termination.
+
+8. Reservation of Rights
+
+   All rights not expressly granted are reserved by the Licensor. This license
+   grants no patent, trademark or other intellectual property rights beyond
+   the limited permissions stated here.
+
+9. General
+
+   If a provision of this license is found to be unenforceable, the remaining
+   provisions stay in effect. A failure to enforce a provision is not a waiver
+   of it. This license is the whole agreement about the Software between You
+   and the Licensor. Where the Thai summary and the English text differ, the
+   English text applies.
+
+10. Contact
+
+   For permission requests (commercial use, redistribution, special cases)
+   contact the Licensor through the GitHub profile: J2k-studio
 
 ================================================================================
 END OF LICENSE

@@ -1,0 +1,6 @@
+int main() {
+    int x = 3;
+    x *= 14;
+    cout << x;
+    return x;
+}

@@ -1,0 +1,11 @@
+mov x0, 1
+mov x1, 10
+cmp x0, x1
+b.ge fail
+mov x0, 3
+mov x8, 93
+svc 0
+fail:
+mov x0, 0
+mov x8, 93
+svc 0

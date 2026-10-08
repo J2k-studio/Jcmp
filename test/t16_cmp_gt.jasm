@@ -1,0 +1,11 @@
+mov x0, 20
+mov x1, 4
+cmp x0, x1
+b.le fail
+mov x0, 4
+mov x8, 93
+svc 0
+fail:
+mov x0, 0
+mov x8, 93
+svc 0

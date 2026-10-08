@@ -1,0 +1,13 @@
+// comment at the top
+int main() {
+    bool a = true;    // bool takes true / false
+    int b = 0;
+    int c = null;     // 0
+    char s[] = "// not a comment";
+    int t = 2;
+    if a == true && b == 0 {
+        t = t + 10;   // 12
+    }
+    return t + 1 + b + c + 0 * s[0]; // 13
+}
+// comment at the end

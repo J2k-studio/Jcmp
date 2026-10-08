@@ -1,0 +1,15 @@
+int main() {
+    int s = 0;
+    for int i = 0; i < 10; i += 1 + 1 {
+        s += i * 2 + 1;
+    }
+    int a = 100;
+    a -= (s - 40) * 3;
+    a *= 2 + 1;
+    a /= s - 40;
+    a %= dbl(5) + 3;
+    return s + a;
+}
+int dbl(int n) {
+    return n * 2;
+}

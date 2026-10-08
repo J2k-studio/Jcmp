@@ -1,0 +1,6 @@
+import "imp.mathlib"
+import "imp.helpers"
+
+int main() {
+    return twice(21);
+}

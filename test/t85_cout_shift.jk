@@ -1,0 +1,9 @@
+int main() {
+    int a = 6;
+    cout << a shl 2;
+    cout << (a << 1);
+    cout << a shr 1;
+    cout << (a >> 1) + 10;
+    cout << a & 3;
+    return 0;
+}

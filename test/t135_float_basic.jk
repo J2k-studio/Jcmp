@@ -1,0 +1,19 @@
+int main() {
+    f64 a = 1.5;
+    f64 b = 2.25;
+    f64 c = a + b * 2.0;
+    coutf << c << "\n";
+    f32 x = 0.1;
+    f32 y = x + x;
+    coutf << y << "\n";
+    int n = (int)c;
+    f64 d = (f64)n / 4.0;
+    coutf << d << "\n";
+    if a < b && !(a > b) { n += 10; }
+    if a == 1.5 && b != 2.25 == false { n += 100; }
+    f64 neg = -a;
+    coutf << neg << "\n";
+    coutf << 3.14159265 << "\n";
+    coutf << 1e3 << " " << 2.5e-3 << " " << 100.0 / 3.0 << "\n";
+    return n;
+}

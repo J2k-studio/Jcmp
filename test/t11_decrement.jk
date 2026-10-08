@@ -1,7 +1,6 @@
-i main() {
-    i x = 10;
-    while x > 3 {
-        x--;
-    }
+int main() {
+    int x = 5;
+    x--;
+    x--;
     return x;
 }

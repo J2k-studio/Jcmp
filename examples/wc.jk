@@ -1,0 +1,39 @@
+// wc: count lines, words and bytes of the file named by the first argument.
+import std
+using std::fs
+
+char data[65536];
+
+bool is_space(int c) {
+    return c == 32 || c == 10 || c == 9 || c == 13;
+}
+
+void main() {
+    if argc() < 2 {
+        cout << "usage: wc file\n";
+        return;
+    }
+    i32 f = File::open(arg(1), FileMode::Read);
+    if f < 0 {
+        cout << "cannot open file\n";
+        return;
+    }
+    int size = read(f, data);
+    close(f);
+    int lines = 0;
+    int words = 0;
+    bool in_word = false;
+    int i = 0;
+    while i < size {
+        int c = data[i];
+        if c == 10 { lines += 1; }
+        if is_space(c) {
+            in_word = false;
+        } else if !in_word {
+            in_word = true;
+            words += 1;
+        }
+        i += 1;
+    }
+    cout << lines << " " << words << " " << size << "\n";
+}

@@ -1,0 +1,5 @@
+import "imp.bad_main"
+
+int main() {
+    return 1;
+}

@@ -1,0 +1,57 @@
+import std
+using std::mem
+
+struct Node { int value; Node^ next; }
+
+Node^ make(int v) {
+    Node^ n = (Node^)alloc(sizeof(Node));
+    n^.value = v;
+    n^.next = null;
+    return n;                           // the memory goes out with the result: not freed here
+}
+
+Node^ keeper;                           // a global that keeps one node
+
+void keep(Node^ n) { keeper = n; }      // stores a borrowed pointer: the caller must give it away
+
+int first_addr;
+int same_addr;
+
+int main() {
+    int r = 0;
+    for i in 0..50 {
+        int^ t = (int^)alloc(64);       // freed at the end of every iteration (also on continue)
+        t[0] = i;
+        if i == 0 { first_addr = (int)t; }
+        if (int)t == first_addr { same_addr += 1; }
+        if i == 25 { continue; }
+        r += t[0] - i;                  // 0
+    }
+    r += same_addr;                     // 50: the same block every time
+
+    int^ warm = (int^)alloc(8);           // the first allocation takes a whole chunk from the system
+    free(warm);
+    int before = std_heap_cur;
+    for i in 0..1000 {
+        int[] list = arr(100);          // a dynamic array that is freed at the end of the block
+        list.push(i);
+        r += list.len;                  // 1 each: 1000
+    }
+    if std_heap_cur - before < 4000 { r += 7; }     // the heap did not grow
+
+    Node^ a = make(10);                 // owner: freed at the end of main
+    r += a^.value;                      // 10
+    Node^ b = make(20);
+    keep(move(b));                      // ownership goes to the global
+    r += keeper^.value;                 // 20
+    free(keeper);
+    keeper = null;
+    Node^ c = make(30);
+    free(c);                            // freed by hand: c is null afterwards, no double free at the end
+    Node^[] nodes = arr(2);
+    Node^ d = make(40);
+    nodes.push(d);                      // the array holds the pointer now (d is null)
+    r += nodes[0]^.value;               // 40
+    free(nodes[0]);
+    return r % 256;                     // 0 + 50 + 1000 + 7 + 10 + 20 + 40 = 1127 -> 103
+}

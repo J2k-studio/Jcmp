@@ -1,0 +1,4 @@
+test/t145_warn_switch.jk:6:5: warning: enumeration value(s) 'Blue' not handled in switch [-Wswitch]
+    switch c {
+    ^
+1 warning(s) generated.

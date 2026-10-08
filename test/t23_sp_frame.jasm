@@ -1,0 +1,7 @@
+sub sp, sp, 32
+mov x1, 7
+str x1, [sp]
+ldr x0, [sp]
+add sp, sp, 32
+mov x8, 93
+svc 0

@@ -1,0 +1,5 @@
+# build products (rebuilt by run_all_tests.sh / bootstrap.sh)
+/build/
+/_test_out/
+*.o
+/dist/

@@ -1,0 +1,5 @@
+int main() {
+    int x = 5;
+    throw x;
+    return 0;
+}

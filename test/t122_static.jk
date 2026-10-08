@@ -1,0 +1,31 @@
+enum class Mode { Read, Write, Append };
+
+struct Math {
+    static int square(int x) { return x * x; }
+    static int clamp(int v, int lo, int hi) {
+        if v < lo { return lo; }
+        if v > hi { return hi; }
+        return v;
+    }
+    static bool is_write(Mode m) { return m == Mode::Write; }
+}
+
+struct Acc {
+    int total;
+    void add(self, int v) { self.total += Math::square(v); }
+}
+
+int main() {
+    int r = Math::square(7);                 // 49
+    r += Math::clamp(50, 0, 10);             // 10
+    r += Math::clamp(-5, 0, 10);             // 0
+    Acc a;
+    a.total = 0;
+    a.add(3);
+    a.add(2);                                // 13
+    r += a.total;
+    if Math::is_write(Mode::Write) { r += 1; }
+    if !Math::is_write(Mode::Read) { r += 2; }
+    Math::square(3);                         // result discarded
+    return r;                                // 49 + 10 + 0 + 13 + 3 = 75
+}

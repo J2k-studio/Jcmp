@@ -1,0 +1,4 @@
+mov x0, 50
+sub x0, x0, 8
+mov x8, 93
+svc 0

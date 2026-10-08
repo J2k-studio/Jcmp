@@ -1,0 +1,27 @@
+int sum(int n, int a[]) {
+    int s = 0;
+    int i = 0;
+    while i < a__len { s += a[i]; i += 1; }
+    return s + n;
+}
+
+int count_chars(char text[]) {
+    int n = 0;
+    while n < text__len && text[n] != 0 { n += 1; }
+    return n;
+}
+
+int table[5];
+
+int main() {
+    int small[3];
+    small[0] = 1; small[1] = 2; small[2] = 3;
+    int i = 0;
+    while i < 5 { table[i] = i * 10; i += 1; }
+    char word[16] = "hello";
+    int r = sum(100, small);          // 100 + 6 = 106
+    r += sum(0, table);               // 100
+    r += count_chars(word);           // 5
+    r += count_chars("abcdefg");      // 7
+    return r % 251;                   // 218
+}

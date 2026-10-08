@@ -1,0 +1,7 @@
+int main() {
+    int arr[2];
+    arr[0] = 2 + 3 * 4;
+    int x = 1;
+    x = (arr[0] + 1) * 2;
+    return x;
+}

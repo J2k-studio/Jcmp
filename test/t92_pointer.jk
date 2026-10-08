@@ -1,0 +1,30 @@
+void set(int^ p, int v) {
+    p^ = v;
+}
+
+void add_to(int^ p, int v) {
+    p^ += v;
+}
+
+int main() {
+    int x = 10;
+    int^ p = @x;
+    p^ = p^ + 5;          // x = 15
+    add_to(@x, 4);        // x = 19
+    int y = 0;
+    set(@y, 7);           // y = 7
+    i8 small = 100;
+    i8^ q = @small;
+    q^ = q^ + 100;        // wraps: 200 -> -56
+    char c = 'a';
+    char^ cp = @c;
+    cp^ = 'b';
+    int a[3];
+    a[0] = 1;
+    int^ ap = @a;         // address of the first element
+    ap^ = 40;             // a[0] = 40
+    int e = 0;
+    if small == -56 { e = 1; }
+    int r = x + y + e + (c - 'a') + a[0];   // 19 + 7 + 1 + 1 + 40 = 68
+    return r;
+}

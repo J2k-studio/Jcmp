@@ -1,0 +1,27 @@
+int table[10];
+char name[] = "jk";
+i32 grid[3][4];
+int total;
+
+void fill() {
+    int i = 0;
+    while i < 10 { table[i] = i * i; i += 1; }
+    grid[2][3] = 7;
+    grid[1][1] += 5;
+}
+
+int sum() {
+    int i = 0;
+    int s = 0;
+    while i < 10 { s += table[i]; i += 1; }
+    return s;
+}
+
+int main() {
+    fill();
+    total = sum();                 // 285
+    cout << name << "\n";
+    cout << grid[2][3] + grid[1][1] << "\n";   // 12
+    table[3] <<= 2;                // 36
+    return (total + table[3] + name[0] - 'j') % 256;   // (285 + 36 + 0) % 256 = 65
+}

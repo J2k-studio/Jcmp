@@ -1,0 +1,9 @@
+int main() {
+    int a[4];
+    a[2] = 99;
+    int x = a[double(1)];
+    return x;
+}
+int double(int n) {
+    return n + n;
+}

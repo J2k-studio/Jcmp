@@ -1,0 +1,36 @@
+u32 hash(char^ s) {
+    u32 h = 2166136261;                 // FNV-1a: > 2^31
+    int i = 0;
+    while s[i] != 0 {
+        h = h xor (u32)s[i];
+        h = h * 16777619;               // wraps at 32 bits when stored
+        i += 1;
+    }
+    return h;
+}
+
+int main() {
+    u8 b = 250;
+    b += 10;                            // 260 -> 4
+    u32 big = 4000000000;               // would be negative as i32
+    u64 huge = 18446744073709551615;    // 2^64 - 1
+    int r = 0;
+    if b == 4 { r += 1; }
+    if big > 3000000000 { r += 2; }                 // unsigned compare
+    if huge > big { r += 4; }
+    if (huge >> 63) == 1 { r += 8; }                // logical shift: no sign copies
+    if (big / 3) == 1333333333 { r += 16; }         // unsigned division
+    u32 h = hash("hello");
+    if h == 1335831723 { r += 32; }                 // FNV-1a of "hello"
+    i8 neg = -1;
+    u32 back = (u32)neg;                            // explicit: all 32 bits set
+    if back == 4294967295 { r += 64; }
+    cout << big << " " << huge << " " << h << "\n";
+    u8 arr[3];
+    arr[0] = 200; arr[1] = 100;
+    arr[2] = arr[0] + arr[1];                       // 300 -> 44
+    cout << arr[2] << "\n";
+    f64 f = (f64)(huge >> 1);                       // 2^63 - 1 rounds to 2^63
+    coutf << f << "\n";
+    return r;                                       // 127
+}

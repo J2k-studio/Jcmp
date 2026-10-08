@@ -1,0 +1,12 @@
+int main() {
+    char s[] = "hello world";
+    char t[16] = "abc";
+    int n = 0;
+    while s[n] != 0 {
+        n++;
+    }
+    int z = t[3] + t[15];
+    t[0] = 'X';
+    int sum = n + z + t[1] - 'b' + t[0] - 'X';
+    return sum + 31;
+}

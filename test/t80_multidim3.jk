@@ -1,0 +1,25 @@
+int sum(int k) {
+    int c[2][3][4];
+    int i = 0;
+    while i < 2 {
+        int j = 0;
+        while j < 3 {
+            int l = 0;
+            while l < 4 {
+                c[i][j][l] = i + j + l + k;
+                l += 1;
+            }
+            j += 1;
+        }
+        i += 1;
+    }
+    return c[1][2][3] + c[0][0][0] + c[1][0][2];
+}
+int main() {
+    char g[3][3];
+    i8 w[2][2];
+    g[1][2] = 'A';
+    w[1][1] = -5;
+    int t = sum(1);
+    return t + g[1][2] - 'A' + w[1][1] + 10;
+}

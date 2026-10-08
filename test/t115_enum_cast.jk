@@ -1,0 +1,40 @@
+enum class Status { OK = 0, NotFound = 404, ServerError = 500 };
+enum class Color { Red, Green, Blue = 10, Alpha };
+
+struct Reply {
+    Status status;
+    int bytes;
+}
+
+Status last = Status::OK;
+
+Status classify(int code) {
+    if code == 404 { return Status::NotFound; }
+    if code >= 500 { return Status::ServerError; }
+    return Status::OK;
+}
+
+int main() {
+    Status s = Status::NotFound;
+    i32 code = (i32)s;                  // 404
+    Color c = Color::Alpha;             // 11
+    int r = 0;
+    if s == Status::NotFound { r += 1; }
+    if s != Status::OK { r += 2; }
+    if classify(503) == Status::ServerError { r += 4; }
+    last = classify(404);
+    if last == Status::NotFound { r += 8; }
+    Reply rep;
+    rep.status = Status::ServerError;
+    rep.bytes = 12;
+    if rep.status == Status::ServerError { r += 16; }
+    Status t = (Status)500;             // number -> enum needs a cast
+    if t == rep.status { r += 32; }
+    i8 small = (i8)300;                 // wraps: 44
+    char ch = (char)321;                // 65
+    using enum Color;
+    Color g = Green;                    // 1
+    int gi = (int)g + (int)Blue;        // 1 + 10 = 11
+    return r + (int)c + code % 100 + gi + small + (ch - 'A');
+    // 63 + 11 + 4 + 11 + 44 + 0 = 133
+}

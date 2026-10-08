@@ -1,0 +1,32 @@
+// heap.jk -- std: Mem (alloc/free), Str, pointers
+import std
+using std::mem
+using std::str
+
+struct Node {
+    int value;
+    Node^ next;
+}
+
+void main() {
+    Node^ head = null;
+    for i in 1..6 {
+        Node^ n = (Node^)alloc(16);
+        n^.value = i * i;
+        n^.next = head;
+        head = n;
+    }
+    char text[64];
+    int len = 0;
+    Node^ p = head;
+    while (int)p != 0 {
+        char num[24];
+        from_int(@num, 24, p^.value);
+        if len > 0 { append(@text, 64, " -> "); } else { text[0] = 0; }
+        len = append(@text, 64, @num);
+        Node^ done = p;
+        p = p^.next;
+        free(done);
+    }
+    cout << text << "\n";
+}

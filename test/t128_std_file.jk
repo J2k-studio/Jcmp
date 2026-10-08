@@ -1,0 +1,38 @@
+import std
+using std::fs
+
+void main() {
+    i32 f = File::open("test/t128_data.txt", FileMode::Read);
+    if f < 0 {
+        return;
+    }
+    char line[64];
+    int n1 = read_line(f, line);               // "first line"
+    cout << line << "\n";
+    int n2 = read_line(f, line);               // "second line"
+    cout << line << "\n";
+    char buf[64];
+    int n3 = read(f, buf);                     // the rest: "last"
+    cout << buf << "\n";
+    int n4 = read_line(f, line);               // end of file: -1
+    close(f);
+
+    i32 g = File::open("_test_out/t128_out.txt", FileMode::Write);
+    write(g, "written by J2K\n");
+    close(g);
+    i32 h = File::open("_test_out/t128_out.txt", FileMode::Read);
+    char back[64];
+    int n5 = read(h, back);
+    File::close(h);
+    cout << back;
+
+    i32 missing = File::open("/no/such/file", FileMode::Read);
+    int ok = 0;
+    if n1 == 10 { ok += 1; }
+    if n2 == 11 { ok += 2; }
+    if n3 == 4 { ok += 4; }
+    if n4 == -1 { ok += 8; }
+    if n5 == 15 { ok += 16; }
+    if missing < 0 { ok += 32; }
+    syscall(93, ok);
+}

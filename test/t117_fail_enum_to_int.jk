@@ -1,0 +1,5 @@
+enum class S { A, B };
+int main() {
+    int x = S::B;
+    return x;
+}

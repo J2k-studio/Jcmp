@@ -1,0 +1,27 @@
+struct Box {
+    int items[6];
+}
+
+int g[7];
+
+int total(int a[]) {
+    int s = a.len;
+    int i = 0;
+    while i < a.len { s += a[i]; i += 1; }
+    return s;
+}
+
+int main() {
+    int small[3];
+    small[0] = 1; small[1] = 2; small[2] = 3;
+    int m[2][5];
+    char word[16] = "hello";
+    Box b;
+    int r = small.len;            // 3
+    r += g.len;                   // 7
+    r += m.len;                   // 2 (first dimension)
+    r += word.len;                // 16
+    r += b.items.len;             // 6
+    r += total(small);            // 3 + 6 = 9
+    return r;                     // 43
+}

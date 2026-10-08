@@ -1,0 +1,18 @@
+mov x0, 0
+mov x1, 0
+outer:
+cmp x1, 3
+b.ge outer_done
+mov x2, 0
+inner:
+cmp x2, 2
+b.ge inner_done
+add x0, x0, 1
+add x2, x2, 1
+b inner
+inner_done:
+add x1, x1, 1
+b outer
+outer_done:
+mov x8, 93
+svc 0

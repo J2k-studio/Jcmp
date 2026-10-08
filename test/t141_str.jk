@@ -1,0 +1,23 @@
+import std
+using std::str
+
+int main() {
+    char buf[64];
+    int n = copy(@buf, 64, "hello");
+    n = append(@buf, 64, ", world");        // 12
+    cout << buf << "\n";
+    int r = n;
+    if eq("abc", "abc") { r += 1; }
+    if !eq("abc", "abd") { r += 2; }
+    if cmp("a", "b") < 0 { r += 4; }
+    if cmp("b", "a") > 0 { r += 8; }
+    r += find(@buf, "world");                // 7
+    if starts_with(@buf, "hell") { r += 16; }
+    r += len("four");                        // 4
+    r += to_int("  -42x") + 42;              // 0
+    char num[24];
+    int m = from_int(@num, 24, -9075);
+    cout << num << "\n";
+    r += m;                                  // 5
+    return r;                                // 12+1+2+4+8+7+16+4+0+5 = 59
+}

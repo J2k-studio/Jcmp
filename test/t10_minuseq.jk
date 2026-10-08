@@ -1,9 +1,5 @@
-i main() {
-    i x = 20;
-    i i = 0;
-    while i < 4 {
-        x -= 3;
-        i++;
-    }
+int main() {
+    int x = 15;
+    x -= 7;
     return x;
 }

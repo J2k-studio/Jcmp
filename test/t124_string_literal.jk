@@ -1,0 +1,38 @@
+int length(char^ s) {
+    int n = 0;
+    while s[n] != 0 { n += 1; }
+    return n;
+}
+
+bool same(char^ a, char^ b) {
+    int i = 0;
+    while a[i] != 0 && b[i] != 0 {
+        if a[i] != b[i] { return false; }
+        i += 1;
+    }
+    return a[i] == b[i];
+}
+
+void say(char^ s) {
+    syscall(64, 1, s, length(s));
+}
+
+struct Op {
+    char^ name;
+    int arity;
+}
+
+int main() {
+    say("hello ");
+    say("world\n");
+    char^ p = "abc";
+    int r = length(p) + length("hello, world");      // 3 + 12 = 15
+    if same("abc", p) { r += 1; }                     // true
+    if !same("abc", "abd") { r += 2; }                // true
+    Op add;
+    add.name = "add";
+    add.arity = 2;
+    r += length(add.name) + add.arity;                // 3 + 2 = 5
+    if p[1] == 'b' { r += 4; }                        // true
+    return r;                                         // 15 + 1 + 2 + 5 + 4 = 27
+}

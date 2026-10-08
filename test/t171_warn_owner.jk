@@ -1,0 +1,12 @@
+import std
+using std::mem
+
+void take(void^ p) { free(p); }
+
+int main() {
+    alloc(16);                           // the result is thrown away: it can never be freed
+    int^ p = (int^)alloc(8);
+    take(move(p));                       // p gives its memory away
+    if (int)p == 0 { return 1; }         // p is null now: the compiler warns about reading it
+    return 0;
+}

@@ -1,0 +1,13 @@
+int main() {
+    char s[] = "J2K string\n";
+    cout << s;
+    cout << "tab:\there \"quoted\" back\\slash\n";
+    char c = 'Z';
+    cout << c;
+    cout << s[0];
+    cout << '\n';
+    cout << c + 1;
+    int x = 7;
+    cout << x;
+    return 0;
+}

@@ -1,0 +1,14 @@
+import std
+using std::sys
+
+int main() {
+    char msg[] = "via Sys\n";
+    int n = write(1, @msg, 8);
+    char^ prog = arg(0);
+    int r = 0;
+    if argc() == 1 { r += 1; }
+    if n == 8 { r += 2; }
+    if prog[0] == '.' { r += 4; }
+    exit(r + 10);
+    return 0;
+}

@@ -1,0 +1,8 @@
+b skip
+mov x0, 99
+mov x8, 93
+svc 0
+skip:
+mov x0, 11
+mov x8, 93
+svc 0

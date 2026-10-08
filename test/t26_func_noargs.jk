@@ -1,0 +1,6 @@
+int main() {
+    return answer();
+}
+int answer() {
+    return 42;
+}

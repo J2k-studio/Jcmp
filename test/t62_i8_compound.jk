@@ -1,0 +1,8 @@
+int main() {
+    i8 x = 120;
+    x += 10;
+    i8 y = 127;
+    y++;
+    int r = x + y;
+    return r + 300;
+}

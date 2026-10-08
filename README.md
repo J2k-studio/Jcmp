@@ -1,137 +1,200 @@
 # J2K & Jcmp
 
-**J2K** is a systems programming language designed from scratch.  
-**Jcmp** is its native compiler that emits raw machine code (no LLVM, no GCC backend).
+**J2K** is a small systems programming language, designed from scratch and close to the machine.
+**Jcmp** is its native compiler: it reads `.jk` / `.j` source and writes a Linux ARM64 executable
+directly (its own assembler and ELF writer — no LLVM, no GCC, no `as`, no `ld`).
 
-> Status: early development (Phase 1) — ARM64 ELF target, built and tested on mobile (Termux).
-
----
-
-## Philosophy
-
-1. **Maximum self-reliance** — write the compiler, assembler, and code emitter yourself.
-2. **Close to the metal** — compile directly to machine code bytes; no intermediate IR dependency.
-3. **Self-hosting as a milestone** — the compiler will eventually be written in J2K itself.
-4. **Document everything** — the roadmap is updated weekly so the current state is always clear.
-5. **A new language** — not a continuation of previous experiments; lessons are kept, code is not.
-
-Inspired by **HolyC** (Terry Davis) and **C++**, while deliberately avoiding the weak typing of the former and the full complexity of templates / multiple inheritance of the latter.
-
----
-
-## Current Status (as of 2026-08)
-
-| Component              | State                          |
-|------------------------|--------------------------------|
-| Roadmap & design docs  | Active, weekly updates         |
-| Syntax design          | Draft locked for core features |
-| Hand-written ARM64 ELF | Done (Phase 0 exit criteria)   |
-| J2K Assembler (v1)     | In progress                    |
-| Jcmp (compiler)        | Early stages                   |
-| Self-hosting           | Planned (Phase 2)              |
-| x86_64 backend         | Planned later                  |
-| Freestanding / toy OS  | Long-term goal                 |
-
-**Progress is public and inspectable** — see `roadmap-j2k.md` (weekly log + decisions), the binaries (`Jcmp`, `j2k_asm_v1`), and assembly artifacts (`.s` / `.o`) in this repository.
-
-Primary development environment: **ARM64 + Termux** (no desktop PC required).
-
----
-
-## Repository Layout
-
-```
-Jcmp/
-├── roadmap-j2k.md      # Full project roadmap & design decisions
-├── syntax-design.md    # Language syntax specification (draft)
-├── Jcmp                # Compiler binary (current)
-├── j2k_asm_v1          # Assembler binary
-├── *.s / *.o           # Assembly / object artifacts
-├── test/               # Test sources
-├── _test_out/          # Test outputs
-└── run_all_tests.sh    # Test runner
-```
-
----
-
-## Quick Overview of the Language (J2K)
-
-- **File extension**: `.jk`
-- **Entry point**: `main()`
-- **Style**: C/C++-like declarations, HolyC-inspired simplicity
-- **Pointers**: `@` (address-of) and `^` (pointer type / dereference)
-- **I/O**: `cout <<` is **language magic** (built into the compiler, not a library)
-- **Memory**: hybrid — automatic free where lifetime is proven, manual `alloc`/`free` otherwise
-- **No LLVM / no external compiler backend** — the goal is direct machine-code emission
-
-Example (illustrative; syntax still evolving):
+The compiler is **written in J2K itself** and builds itself (self-hosting).
+Everything was developed on a phone (ARM64, Termux).
 
 ```jk
-i32 add(i32 a, i32 b) {
-    return a + b;
+// hello.jk
+void main() {
+    cout << "Hello from J2K!\n";
+}
+```
+
+```console
+$ bin/jcmp examples/hello.jk -o hello
+$ ./hello
+Hello from J2K!
+```
+
+> [ภาษาไทย → README.th.md](README.th.md)
+
+---
+
+## Status
+
+| Component                                   | State |
+|---------------------------------------------|-------|
+| Compiler written in J2K (`jcmp/`)           | **Working, self-hosting** (two generations are identical, byte for byte) |
+| Assembler written in J2K (`jcmp/jc_asm.j`)  | Working, built into the compiler |
+| Language                                    | Integers (`i8 i32 int char bool`, unsigned `u8 u32 u64`), floats (`f32 f64`), arrays (up to 3 dimensions), pointers (`T^`, `T^^`), function pointers, structs with methods, enums, `switch`, `for`/`while`, `try`/`catch`, `sizeof`, dynamic arrays (`T[]`), strings, `#define`, imports |
+| Standard library (`std/`)                   | `Sys`, `Mem` (heap), `Str`, `Math`, `File` |
+| Diagnostics                                 | `file:line:col: error/warning:` with the source line and `^`; `-st` makes warnings errors |
+| Debug build (`-d`)                          | array bounds checks |
+| Errors                                      | `try` / `catch` / `throw` with text |
+| Memory                                      | `alloc`/`free`, dynamic arrays, automatic freeing of owned memory at the end of a block |
+| Not done yet                                | `cin`, threads/`Mutex`, optimisation |
+| Target                                      | Linux **ARM64** only |
+
+The test suite passes (more than 160 programs with the J2K compiler).
+Release history: [CHANGELOG.md](CHANGELOG.md).
+
+---
+
+## Install
+
+You need a Linux **ARM64** machine (a phone with Termux works) and `curl` or `wget`
+(Termux: `pkg install curl wget`). The compiler is a single file, published as a
+[release](https://github.com/J2k-studio/Jcmp/releases).
+
+**One line** (downloads the latest release, checks its SHA-256, installs `jcmp` into `$PREFIX/bin` on
+Termux or `~/.local/bin` elsewhere):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/J2k-studio/Jcmp/main/install.sh | sh
+# or
+wget -qO- https://raw.githubusercontent.com/J2k-studio/Jcmp/main/install.sh | sh
+```
+
+**By hand** (to see exactly what you get):
+
+```bash
+curl -fLO https://github.com/J2k-studio/Jcmp/releases/latest/download/jcmp-linux-arm64
+curl -fLO https://github.com/J2k-studio/Jcmp/releases/latest/download/SHA256SUMS
+sha256sum -c --ignore-missing SHA256SUMS          # must say: jcmp-linux-arm64: OK
+chmod +x jcmp-linux-arm64
+mv jcmp-linux-arm64 ~/.local/bin/jcmp              # any folder on your PATH
+# wget works the same:  wget https://github.com/J2k-studio/Jcmp/releases/latest/download/jcmp-linux-arm64
+```
+
+A specific version: replace `latest/download` with `download/v0.1.0`
+(`JCMP_VERSION=0.1.0` for `install.sh`). The bundle `jcmp-<version>-linux-arm64.tar.gz` holds
+the compiler, the assembler, the examples and the docs:
+
+```bash
+curl -fLO https://github.com/J2k-studio/Jcmp/releases/latest/download/jcmp-0.1.0-linux-arm64.tar.gz
+tar -xzf jcmp-0.1.0-linux-arm64.tar.gz
+```
+
+Check it works:
+
+```bash
+jcmp --version                       # jcmp 0.1.0 (J2K compiler, Linux ARM64)
+printf 'void main() { cout << "hi\\n"; }\n' > hi.jk
+jcmp hi.jk -o hi && ./hi
+```
+
+**From the source repository** (to read or rebuild the compiler; it contains a ready `bin/jcmp`):
+
+```bash
+git clone https://github.com/J2k-studio/Jcmp.git
+cd Jcmp
+bin/jcmp examples/fib.jk -o fib && ./fib
+./bootstrap.sh                       # rebuild the compiler with itself
+```
+
+If the repository or its releases are private, `curl`/`wget` need a token
+(`curl -fL -H "Authorization: Bearer $TOKEN" ...`) or use `gh release download`.
+
+More: [docs/USAGE.md](docs/USAGE.md) (command line, building, testing) and
+[docs/LANGUAGE.md](docs/LANGUAGE.md) (a tour of the language).
+
+---
+
+## The language in one screen
+
+```jk
+import std                      // the standard library: Sys, Mem, Str, Math, File
+using std::math
+
+enum class Color { Red, Green, Blue };
+
+struct Point {
+    f64 x;
+    f64 y;
+    f64 length(self) { return sqrt(self.x * self.x + self.y * self.y); }
+}
+
+int sum(int a[]) {              // arrays arrive with their length: a.len
+    int total = 0;
+    for i in 0..a.len { total += a[i]; }
+    return total;
 }
 
 void main() {
-    i32 x = 42;
-    i32^ p = @x;
-    cout << "value = " << p^;
+    int numbers[4];
+    for i in 0..4 { numbers[i] = i * 10; }
+    cout << "sum = " << sum(numbers) << "\n";
+
+    Point p = {3.0, 4.0};
+    coutf << "length = " << p.length() << "\n";     // 5.000000
+
+    Color c = Color::Green;
+    switch c {
+        Color::Red: cout << "red\n";
+        Color::Green: cout << "green\n";
+        _: cout << "other\n";
+    }
 }
 ```
 
-Full design notes live in `syntax-design.md` and `roadmap-j2k.md`.
+Design goals: **fast and close to the CPU** (values live in registers, struct layout like C,
+arithmetic at register width), **strict where it prevents bugs** (a `bool` is not an `int`,
+an enum is not a number, `int` and `float` do not mix without a cast), **no hidden magic**
+(no garbage collector, no pointer arithmetic — use `p[i]`).
 
 ---
 
-## Build & Usage (current)
+## Repository layout
 
-```bash
-# Typical invocation once the toolchain is ready
-./Jcmp main.jk -o main
-
-# Flags (planned / partial)
-#   -d   debug (bounds checks, guard bytes)
-#   -st  strict mode (warnings become errors)
-#   -I   additional search path for imports
+```
+Jcmp/
+├── README.md, README.th.md, LICENSE, VERSION, CHANGELOG.md
+├── install.sh            download + check + install the latest release
+├── release.sh            builds the release files into dist/ (for the maintainer)
+├── bin/                  the compiler and assembler binaries (built by themselves)
+│   ├── jcmp              the compiler (J2K -> ARM64 ELF)
+│   └── j2k_asm_j2k       the stand-alone assembler (.jasm -> ELF)
+├── jcmp/                 the compiler's own source, in J2K
+│   ├── jcmp.jk             entry point (main, command line)
+│   ├── jc_base.j  jc_lex.j  jc_expr.j  jc_stmt.j   the four parts
+│   ├── jc_asm.j            the assembler (a library)
+│   └── jc_std.j            generated from std/ by gen_std.sh
+├── std/                  the standard library (J2K): sys, mem, str, math, fs
+├── examples/             small programs
+├── test/                 the test programs (+ expected output in .out / .warn files)
+├── docs/                 language specification and guides
+│   ├── syntax-design.md    the language specification (decisions are recorded here)
+│   └── LANGUAGE.md  USAGE.md
+├── j2k_asm.jk            command-line wrapper of the assembler
+├── bootstrap.sh          rebuild the compiler with itself and compare
+├── bootstrap-from-binary.sh   the short version of the same check
+├── run_all_tests.sh      the test suite
+└── gen_std.sh            std/*.j -> jcmp/jc_std.j
 ```
 
-Exact capabilities of the current binaries are still evolving. See the roadmap for the precise Phase 1 targets.
-
 ---
 
-## Roadmap (high level)
+## How it was built (bootstrapping)
 
-| Phase | Goal                                              |
-|-------|---------------------------------------------------|
-| 0     | Hand-written ARM64 ELF that runs on Termux        |
-| 1     | Assembler + Compiler v0/v1 targeting ARM64        |
-| 2     | Self-hosting (compiler written in J2K)            |
-| 3     | x86_64 backend                                    |
-| 4–5   | Freestanding runtime + toy OS experiments         |
-
-Detailed decisions, weekly logs, and open questions are kept in `roadmap-j2k.md`.
+The first assembler and compiler were hand-written in ARM64 assembly. The assembler was then
+rewritten in J2K, then the compiler, in four parts. Today the compiler compiles itself:
+`bootstrap.sh` starts from the committed `bin/jcmp`, builds three generations and checks that
+the last two are byte-for-byte identical. The assembly versions are no longer part of this
+repository.
 
 ---
 
 ## License
 
-This project is **proprietary**.  
-You may **read** and **run** the code for personal study.  
-You may **not** copy it as your own work, redistribute it, or claim ownership.
-
-See the full terms in the [LICENSE](LICENSE) file.
-
----
+This project is **proprietary, source-available**: you may read it and run it for personal study
+and non-commercial use; you may not copy it, redistribute it, or claim it as your own.
+See [LICENSE](LICENSE) for the full terms (English + Thai summary).
 
 ## Author
 
-**Jao** (J2k-studio)  
-Thailand · IT student · developing entirely on mobile (ARM64 + Termux)
-
----
-
-## Contributing / Contact
-
-The repository is currently under active solo development.  
-Design decisions are recorded in the roadmap; external contributions are not accepted at this stage.
-
-For questions or permission requests, open an issue or contact via the GitHub profile **J2k-studio**.
+**Jao** (J2k-studio) — Thailand. Contact for permission requests: the GitHub profile **J2k-studio**.
+The project is developed by a single author; outside contributions are not accepted at this stage.

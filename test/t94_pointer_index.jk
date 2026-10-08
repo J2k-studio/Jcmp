@@ -1,0 +1,35 @@
+int total(int^ p, int n) {
+    int i = 0;
+    int s = 0;
+    while i < n { s += p[i]; i += 1; }
+    return s;
+}
+
+void fill(char^ buf, int n, char v) {
+    int i = 0;
+    while i < n { buf[i] = v + i; i += 1; }
+}
+
+int g[4];
+
+int main() {
+    int a[5];
+    int i = 0;
+    while i < 5 { a[i] = i + 1; i += 1; }       // 1..5
+    int^ p = @a;
+    p[2] = 30;                                  // a[2] = 30
+    p[4] += 10;                                 // a[4] = 15
+    int t = total(@a, 5);                       // 1 + 2 + 30 + 4 + 15 = 52
+    char b[4];
+    fill(@b, 4, 'a');                           // a b c d
+    i32 w[2];
+    i32^ wp = @w;
+    wp[1] = 300000;
+    wp[0] = wp[1] * 2;                          // 600000
+    g[3] = 7;
+    int^ gp = @g;
+    int e = 0;
+    if wp[0] == 600000 { e = 1; }
+    int r = t + (b[3] - 'a') + e + gp[3];   // 52 + 3 + 1 + 7 = 63
+    return r;
+}

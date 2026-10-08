@@ -1,0 +1,10 @@
+int f() { cout << "f"; return 0; }
+int g() { cout << "g"; return 1; }
+int main() {
+    int r = 0;
+    if f() > 0 && g() > 0 { r += 100; }
+    if g() > 0 || f() > 0 { r += 1; }
+    if f() > 0 || g() > 0 { r += 2; }
+    if g() > 0 && f() > 0 || g() > 0 { r += 4; }
+    return r;
+}

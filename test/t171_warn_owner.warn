@@ -1,0 +1,7 @@
+test/t171_warn_owner.jk:7:14: warning: the memory returned here is not kept, so it can never be freed [-Wleak]
+    alloc(16);                           // the result is thrown away: it can never be freed
+             ^
+test/t171_warn_owner.jk:10:15: warning: this variable was moved and is used afterwards (it is null now) [-Wmoved]
+    if (int)p == 0 { return 1; }         // p is null now: the compiler warns about reading it
+              ^
+2 warning(s) generated.

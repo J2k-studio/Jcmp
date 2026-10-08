@@ -1,0 +1,26 @@
+int use(int a, int b) {
+    int c = a + 1;
+    int d = a + 2;
+    int e = a + 3;
+    int f = a + 4;
+    int g = a + 5;
+    int h = a + 6;
+    int i = a + 7;
+    int j = a + 8;
+    int k = a + 9;
+    int arr[4];
+    arr[0] = 100;
+    arr[3] = 7;
+    int^ p = @d;
+    p^ += 1000;
+    int m = b * 2;
+    int n = m + 3;
+    return c + d + e + f + g + h + i + j + k + arr[0] + arr[3] + m + n;
+}
+
+int main() {
+    int r = use(10, 5);
+    // c..k = 11..19 with d += 1000: sum(11..19) = 135, + 1000 = 1135; + 100 + 7 + 10 + 13
+    // = 1265; 1265 % 256 = 241
+    return r % 256;
+}

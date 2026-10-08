@@ -1,0 +1,22 @@
+// j2k_asm.jk -- the J2K assembler written in J2K (roadmap Phase 2a).
+// Same job and the same output as j2k_asm_v1.s (ARM64 assembly): reads a
+// .jasm text file, writes an ELF64 executable.   usage: j2k_asm in.jasm out
+// The assembler itself is the library jcmp/jc_asm.jk (also used inside jcmp).
+//
+// Build:  jcmp j2k_asm.jk j2k_asm.jasm && j2k_asm_v1 j2k_asm.jasm j2k_asm_j2k
+import "jcmp.jc_asm"
+
+void main() {
+    if argc() < 3 {
+        char usage[64] = "usage: j2k_asm <input.jasm> <output_elf>\n";
+        syscall(64, 2, @usage, 40);
+        syscall(93, 1);
+    }
+    int fd = syscall(56, -100, arg(1), 0, 0);
+    if fd < 0 { as_fail(); }
+    int len = syscall(63, fd, @as_src, 16777215);
+    if len < 0 || len >= 16777215 { as_fail(); }
+    syscall(57, fd);
+    as_assemble(len);
+    as_write_elf(arg(2));
+}

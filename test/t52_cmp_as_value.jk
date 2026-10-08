@@ -1,0 +1,14 @@
+int main() {
+    int a = 5;
+    int b = 5;
+    bool flag = (a == b);
+    int c = 10;
+    int d = 3;
+    bool big = c > d;
+    bool diff = a != c;
+    int r = 0;
+    if flag { r += 1; }
+    if big { r += 1; }
+    if diff { r += 1; }
+    return r;
+}

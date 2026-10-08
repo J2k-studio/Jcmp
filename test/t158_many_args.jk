@@ -1,0 +1,26 @@
+int sum12(int a, int b, int c, int d, int e, int f, int g, int h, int i, int j, int k, int l) {
+    return a + b * 2 + c * 3 + d * 4 + e * 5 + f * 6 + g * 7 + h * 8 + i * 9 + j * 10 + k * 11 + l * 12;
+}
+
+int pick(int n, int a, int b, int c, int d, int e, int f, int g, int h, int i, int j) {
+    if n == 0 { return a; }
+    if n == 9 { return j; }
+    return pick(n - 1, b, c, d, e, f, g, h, i, j, 0) + 0;
+}
+
+struct Acc {
+    int total;
+    void add10(self, int a, int b, int c, int d, int e, int f, int g, int h, int i, int j) {
+        self.total += a + b + c + d + e + f + g + h + i + j;
+    }
+}
+
+int main() {
+    int r = sum12(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12);       // 650
+    // nested calls inside the argument list of a call with many arguments
+    int t = sum12(1, 1, 1, 1, 1, 1, 1, 1, sum12(0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1), 1, 1, sum12(1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0));
+    Acc acc;
+    acc.total = 0;
+    acc.add10(1, 2, 3, 4, 5, 6, 7, 8, 9, 10);                    // 55
+    return (r + t + acc.total + pick(3, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10)) % 256;
+}

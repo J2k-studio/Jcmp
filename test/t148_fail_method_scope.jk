@@ -1,0 +1,8 @@
+struct Counter {
+    int n;
+    int get(self) { return self.n; }
+}
+
+int main() {
+    return Counter::get();
+}

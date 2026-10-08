@@ -1,0 +1,4 @@
+mov x0, 200
+add x0, x0, 34
+mov x8, 93
+svc 0

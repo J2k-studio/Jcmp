@@ -1,11 +1,10 @@
-i main() {
-    i x = 10;
-    i y = 20;
+int main() {
+    int x = 10;
     if x > 5 {
-        if y > 15 {
+        if x > 8 {
             return 42;
         } else {
-            return 1;
+            return 20;
         }
     } else {
         return 0;

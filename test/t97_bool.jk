@@ -1,0 +1,35 @@
+bool ready = true;
+bool flags[4];
+
+bool is_even(int n) {
+    return n % 2 == 0;
+}
+
+bool in_range(int x, int lo, int hi) {
+    return x >= lo && x <= hi;
+}
+
+bool either(bool a, bool b) {
+    return a || b;
+}
+
+int main() {
+    int r = 0;
+    bool b = 5 > 3;                       // true
+    bool c = 5 < 3;                       // false
+    if b { r += 1; }
+    if !c { r += 2; }
+    if is_even(10) { r += 4; }
+    if !is_even(7) { r += 8; }
+    bool d = in_range(5, 1, 10) && !in_range(50, 1, 10);
+    if d { r += 16; }
+    if either(c, b) { r += 32; }
+    flags[2] = r > 10;
+    if flags[2] { r += 64; }
+    if ready { r += 128; }
+    ready = false;
+    bool e = ready || 3 == 4;
+    if e { r += 1000; }                   // must stay false
+    cout << b << c << "\n";               // numbers: 1 then 0 -> "1" "0"
+    return r;                             // 1+2+4+8+16+32+64+128 = 255
+}

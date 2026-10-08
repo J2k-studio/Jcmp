@@ -1,0 +1,6 @@
+int main() {
+    int n = 2;
+    f64 x = 1.5;
+    f64 y = x + n;
+    return 0;
+}

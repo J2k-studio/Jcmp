@@ -1,0 +1,11 @@
+mov x0, 1
+mov x1, 5
+fact_loop:
+cmp x1, 1
+b.le fact_done
+mul x0, x0, x1
+sub x1, x1, 1
+b fact_loop
+fact_done:
+mov x8, 93
+svc 0
