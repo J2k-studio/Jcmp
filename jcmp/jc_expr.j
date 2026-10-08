@@ -2019,6 +2019,113 @@ bool str_member(char^ dm) {
         lv_done = 1;
         return true;
     }
+    if str_eq(dm, "trim") || str_eq(dm, "upper") || str_eq(dm, "lower") {
+        expect("(");
+        expect(")");
+        load_through(8);
+        if str_eq(dm, "trim") { rt_call("__Str__trim"); }
+        if str_eq(dm, "upper") { rt_call("__Str__upper"); }
+        if str_eq(dm, "lower") { rt_call("__Str__lower"); }
+        str_temp();
+        lv_done = 1;
+        return true;
+    }
+    if str_eq(dm, "to_int") || str_eq(dm, "to_double") {
+        expect("(");
+        expect(")");
+        load_through(8);
+        if str_eq(dm, "to_int") {
+            rt_call("__Str__to_int");
+            ex_ty = 0;
+        } else {
+            rt_call("__Str__to_double");
+            ex_ty = 91;
+        }
+        ex_w = 8;
+        rv_valid = 0;
+        lv_done = 1;
+        return true;
+    }
+    if str_eq(dm, "starts_with") || str_eq(dm, "ends_with") || str_eq(dm, "contains") {
+        expect("(");
+        load_through(8);
+        push_x0();
+        parse_expr();
+        expect(")");
+        int kx = str_kind();
+        emit_line("mov x1, x0");
+        emit_line("ldr x0, [sp, #0]");
+        emit_line("add sp, sp, #16");
+        ins_n("mov x2, ", kx);
+        if str_eq(dm, "starts_with") { rt_call("__Str__starts_with"); }
+        if str_eq(dm, "ends_with") { rt_call("__Str__ends_with"); }
+        if str_eq(dm, "contains") {
+            rt_call("__Str__find");
+            emit_line("mov x1, 0");
+            compare("ge");
+        }
+        ex_w = 8;
+        ex_ty = 1;
+        rv_valid = 0;
+        lv_done = 1;
+        return true;
+    }
+    if str_eq(dm, "replace") {
+        expect("(");
+        load_through(8);
+        push_x0();
+        parse_expr();
+        int ka = str_kind();
+        push_x0();
+        expect(",");
+        parse_expr();
+        expect(")");
+        int kb = str_kind();
+        emit_line("mov x3, x0");
+        ins_n("mov x4, ", kb);
+        emit_line("ldr x1, [sp, #0]");
+        ins_n("mov x2, ", ka);
+        emit_line("ldr x0, [sp, #16]");
+        emit_line("add sp, sp, #32");
+        rt_call("__Str__replace");
+        str_temp();
+        lv_done = 1;
+        return true;
+    }
+    if str_eq(dm, "repeat") {
+        expect("(");
+        load_through(8);
+        push_x0();
+        parse_expr();
+        expect(")");
+        emit_line("mov x1, x0");
+        emit_line("ldr x0, [sp, #0]");
+        emit_line("add sp, sp, #16");
+        rt_call("__Str__repeat");
+        str_temp();
+        lv_done = 1;
+        return true;
+    }
+    if str_eq(dm, "split") {
+        expect("(");
+        load_through(8);
+        push_x0();
+        parse_expr();
+        expect(")");
+        int ks = str_kind();
+        emit_line("mov x1, x0");
+        emit_line("ldr x0, [sp, #0]");
+        emit_line("add sp, sp, #16");
+        ins_n("mov x2, ", ks);
+        rt_call("__Str__split");
+        ex_w = 8;
+        ex_ty = 99;
+        ex_dyn = dyn_pack(8, 0, 71);       // a String[] that the caller owns
+        last_call_owning = 1;
+        rv_valid = 0;
+        lv_done = 1;
+        return true;
+    }
     if str_eq(dm, "resize") { die("a String has no resize (use push, append or slice)"); }
     return false;
 }
@@ -2125,6 +2232,22 @@ bool strarr_member(char^ dm) {
         emit_line("mov x1, 0");
         store_through(8);
         ex_ty = 0;
+        lv_done = 1;
+        return true;
+    }
+    if str_eq(dm, "join") {
+        expect("(");
+        load_through(8);
+        push_x0();
+        parse_expr();
+        expect(")");
+        int kj = str_kind();
+        emit_line("mov x1, x0");
+        emit_line("ldr x0, [sp, #0]");
+        emit_line("add sp, sp, #16");
+        ins_n("mov x2, ", kj);
+        rt_call("__Str__ajoin");
+        str_temp();
         lv_done = 1;
         return true;
     }

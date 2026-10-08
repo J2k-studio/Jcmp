@@ -214,6 +214,9 @@ cin >> a;                    // one word
 ```
 
 * Methods: `push(char)`, `pop()`, `append(x)`, `clear()`, `find(x)` (index or -1), `slice(from, to)`, `c()` (the characters as a plain text, valid until the String changes), `len`, `free()`.
+* More methods: `trim()`, `upper()`, `lower()` (ASCII letters), `replace(a, b)`, `repeat(n)` (each gives a new String); `starts_with(x)`, `ends_with(x)`, `contains(x)` (true/false);
+  `to_int()`, `to_double()` (the whole String must be a number, else it throws `not a number`); `split(sep)` gives a new `String[]` and `join(sep)` on a `String[]` joins it again.
+  Methods work on a variable (`t.trim()`), not on a text written in the program (`"abc".trim()`).
 * A new String made by an expression (`a + b`, `slice`, a call that returns a String) is a temporary: the compiler frees it at the end of the statement unless it is stored in a variable. It cannot be made on the right of `&&` or `||` (the right side may not run): put it in a variable first.
 * `return s;` moves a local String out; returning a parameter or a field copies it. A String parameter only borrows, so it cannot be assigned inside the function.
 * A `String` that is a field of a struct or a global is not freed by itself: call `free()`.

@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9.6
+* **More String methods:** `trim`, `upper`, `lower`, `replace`, `repeat`, `starts_with`, `ends_with`, `contains`, `to_int`, `to_double`, `split` (gives a `String[]`) and `join` on a `String[]`.
+
 ## 0.9.5
 * **Where the program goes:** `jcmp sub/test.jk -o sub/` (or `-o sub` when `sub` is a folder) writes `sub/test`; `jcmp test.jk sub/test` also names the program (a second name that ends in `.jasm` still means only the assembler text).
 

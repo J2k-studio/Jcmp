@@ -484,6 +484,211 @@ struct __Str {
         return 1;
     }
 
+    // ---- more String functions (the bytes are treated as ASCII where case matters)
+    static bool isspace(int c) {
+        return c == 32 || c == 9 || c == 10 || c == 13;
+    }
+    // a new String: s without the white space at both ends
+    static void^ trim(void^ s) {
+        int n = __Str::len(s, 1);
+        char^ p = __Str::ptr(s, 1, 0);
+        int a = 0;
+        int b = n;
+        while a < b && __Str::isspace(p[a]) { a += 1; }
+        while b > a && __Str::isspace(p[b - 1]) { b -= 1; }
+        return __Str::slice(s, a, b);
+    }
+    static void^ upper(void^ s) {
+        void^ r = __Str::clone(s);
+        char^ p = __Str::ptr(r, 1, 0);
+        int i = 0;
+        while p[i] != 0 {
+            if p[i] >= 'a' && p[i] <= 'z' { p[i] = p[i] - 32; }
+            i += 1;
+        }
+        return r;
+    }
+    static void^ lower(void^ s) {
+        void^ r = __Str::clone(s);
+        char^ p = __Str::ptr(r, 1, 0);
+        int i = 0;
+        while p[i] != 0 {
+            if p[i] >= 'A' && p[i] <= 'Z' { p[i] = p[i] + 32; }
+            i += 1;
+        }
+        return r;
+    }
+    static int starts_with(void^ s, void^ x, int kx) {
+        int ns = __Str::len(s, 1);
+        int nx = __Str::len(x, kx);
+        if nx > ns { return 0; }
+        char^ ps = __Str::ptr(s, 1, 0);
+        char^ px = __Str::ptr(x, kx, 1);
+        int i = 0;
+        while i < nx {
+            if ps[i] != px[i] { return 0; }
+            i += 1;
+        }
+        return 1;
+    }
+    static int ends_with(void^ s, void^ x, int kx) {
+        int ns = __Str::len(s, 1);
+        int nx = __Str::len(x, kx);
+        if nx > ns { return 0; }
+        char^ ps = __Str::ptr(s, 1, 0);
+        char^ px = __Str::ptr(x, kx, 1);
+        int i = 0;
+        while i < nx {
+            if ps[ns - nx + i] != px[i] { return 0; }
+            i += 1;
+        }
+        return 1;
+    }
+    // a new String: every a in s replaced by b
+    static void^ replace(void^ s, void^ a, int ka, void^ b, int kb) {
+        int na = __Str::len(a, ka);
+        if na == 0 { throw "replace: the text to look for is empty"; }
+        void^ r = __Str::make(__Str::len(s, 1));
+        int ns = __Str::len(s, 1);
+        char^ ps = __Str::ptr(s, 1, 0);
+        char^ pa = __Str::ptr(a, ka, 1);
+        int i = 0;
+        while i < ns {
+            int j = 0;
+            while j < na && i + j < ns && ps[i + j] == pa[j] { j += 1; }
+            if j == na {
+                __Str::append(r, b, kb);
+                i += na;
+            } else {
+                __Str::push(r, ps[i]);
+                i += 1;
+            }
+        }
+        return r;
+    }
+    // a new String: s repeated n times
+    static void^ repeat(void^ s, int n) {
+        void^ r = __Str::make(__Str::len(s, 1) * (n + 1));
+        int i = 0;
+        while i < n {
+            __Str::append(r, s, 1);
+            i += 1;
+        }
+        return r;
+    }
+    // the whole String as a number (an optional sign and digits); throws "not a number"
+    static int to_int(void^ s) {
+        char^ p = __Str::ptr(s, 1, 0);
+        int n = __Str::len(s, 1);
+        int i = 0;
+        while i < n && __Str::isspace(p[i]) { i += 1; }
+        int neg = 0;
+        if i < n && (p[i] == '-' || p[i] == '+') {
+            if p[i] == '-' { neg = 1; }
+            i += 1;
+        }
+        if i >= n || p[i] < '0' || p[i] > '9' { throw "not a number"; }
+        int v = 0;
+        while i < n && p[i] >= '0' && p[i] <= '9' {
+            v = v * 10 + (p[i] - '0');
+            i += 1;
+        }
+        while i < n && __Str::isspace(p[i]) { i += 1; }
+        if i != n { throw "not a number"; }
+        if neg == 1 { return 0 - v; }
+        return v;
+    }
+    // the whole String as a decimal number (sign, digits, a point, digits, e and an exponent); throws "not a number"
+    static double to_double(void^ s) {
+        char^ p = __Str::ptr(s, 1, 0);
+        int n = __Str::len(s, 1);
+        int i = 0;
+        while i < n && __Str::isspace(p[i]) { i += 1; }
+        int neg = 0;
+        if i < n && (p[i] == '-' || p[i] == '+') {
+            if p[i] == '-' { neg = 1; }
+            i += 1;
+        }
+        double v = 0.0;
+        int any = 0;
+        while i < n && p[i] >= '0' && p[i] <= '9' {
+            v = v * 10.0 + (double)(p[i] - '0');
+            any = 1;
+            i += 1;
+        }
+        if i < n && p[i] == '.' {
+            i += 1;
+            double scale = 0.1;
+            while i < n && p[i] >= '0' && p[i] <= '9' {
+                v = v + (double)(p[i] - '0') * scale;
+                scale = scale / 10.0;
+                any = 1;
+                i += 1;
+            }
+        }
+        if any == 0 { throw "not a number"; }
+        if i < n && (p[i] == 'e' || p[i] == 'E') {
+            i += 1;
+            int eneg = 0;
+            if i < n && (p[i] == '-' || p[i] == '+') {
+                if p[i] == '-' { eneg = 1; }
+                i += 1;
+            }
+            if i >= n || p[i] < '0' || p[i] > '9' { throw "not a number"; }
+            int e = 0;
+            while i < n && p[i] >= '0' && p[i] <= '9' {
+                e = e * 10 + (p[i] - '0');
+                i += 1;
+            }
+            while e > 0 {
+                if eneg == 1 { v = v / 10.0; } else { v = v * 10.0; }
+                e -= 1;
+            }
+        }
+        while i < n && __Str::isspace(p[i]) { i += 1; }
+        if i != n { throw "not a number"; }
+        if neg == 1 { return 0.0 - v; }
+        return v;
+    }
+    // a String[] with the pieces of s between the separators (an empty separator throws)
+    static void^ split(void^ s, void^ sep, int ksep) {
+        int nsep = __Str::len(sep, ksep);
+        if nsep == 0 { throw "split: the separator is empty"; }
+        void^ r = __Arr::make(8, 4);
+        int ns = __Str::len(s, 1);
+        char^ ps = __Str::ptr(s, 1, 0);
+        char^ pp = __Str::ptr(sep, ksep, 1);
+        int start = 0;
+        int i = 0;
+        while i + nsep <= ns {
+            int j = 0;
+            while j < nsep && ps[i + j] == pp[j] { j += 1; }
+            if j == nsep {
+                __Str::apush(r, __Str::slice(s, start, i));
+                i += nsep;
+                start = i;
+            } else {
+                i += 1;
+            }
+        }
+        __Str::apush(r, __Str::slice(s, start, ns));
+        return r;
+    }
+    // a new String: the elements of a String[] with sep between them
+    static void^ ajoin(void^ hv, void^ sep, int ksep) {
+        __Str::aprep(hv);
+        int^ h = (int^)hv;
+        int^ el = (int^)h[2];
+        void^ r = __Str::make(16);
+        int i = 0;
+        while i < h[0] {
+            if i > 0 { __Str::append(r, sep, ksep); }
+            __Str::append(r, (void^)el[i], 1);
+            i += 1;
+        }
+        return r;
+    }
+
     // ---- String[] : an array whose elements are String headers owned by the array
     static void aprep(void^ hv) {
         if (int)hv == 0 { throw "the array is null"; }
