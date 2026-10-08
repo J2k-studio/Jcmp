@@ -1,6 +1,8 @@
 int main() {
     char x;
-    cout << "panel";
+    cout << "panel\n";
     cin >> x;
+    f64 p = 0.01;
     cout << "Hello from J2K!\n";
+    return x;
 }

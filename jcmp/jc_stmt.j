@@ -1223,6 +1223,7 @@ void parse_local_decl() {
     if tok_kind != T_IDENT { die("a variable name was expected"); }
     char d_name[256];
     str_copy(@d_name, @tok_text, 256);
+    check_local_name(@d_name);
     next();
     if tok_is("[") {
         int d_count = parse_dims();

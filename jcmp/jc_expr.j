@@ -551,17 +551,22 @@ bool lookup_var(char^ name) {
     return false;
 }
 
+// a new local may not hide a global or repeat a name of its block (called while the token is still
+// the name, so the message points at it)
+void check_local_name(char^ name) {
+    if name[0] == '.' { return; }
+    if find_global(name) >= 0 { die_name("a local variable hides a global of the same name", name); }
+    int dup = find_local(name);
+    if dup >= scope_base && dup >= 0 { die_name("this name is already declared in this block", name); }
+}
+
 int luninit[8192];           // 1: a scalar declared without a value that nothing has written yet
 int lunloop[8192];           // the loop depth where it was declared
 
 // declare a local: bytes = 8 for a scalar, the (rounded) size for an array
 void add_local(char^ name, int kind, int elem, int bytes, int ptr) {
     if lcount >= 8192 { die("too many local variables"); }
-    if name[0] != '.' && find_global(name) >= 0 { die_name("a local variable hides a global of the same name", name); }
-    if name[0] != '.' {
-        int dup = find_local(name);
-        if dup >= scope_base && dup >= 0 { die_name("this name is already declared in this block", name); }
-    }
+    check_local_name(name);
     str_copy(@lname + lcount * 64, name, 64);
     lkind[lcount] = kind;
     lelem[lcount] = elem;
