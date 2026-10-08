@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9.34
+* **The mascot is 50 x 20 characters** and shows **Earth time** under the picture: the clock of the computer now (UTC, `HH:MM:SS`) and how many hours have passed on the planet in the film (`film = 12.4 h`, from the speed N).
+
 ## 0.9.33
 * **The mascot looks like a lit planet:** with a 24-bit colour terminal (`COLORTERM=truecolor`, as in Termux) the characters get colours: the J has a day side (warm gold), a night side (dark blue) with a soft edge between, a bluish glow at its rim where the atmosphere is seen edge-on, and a small bright spot of reflected light; the rings are sand-coloured (the C ring greyer); the shadow cast by the rings and by the planet is bluish dark; stars are pale blue-white. Without that variable it stays plain characters.
 * **`jcmp -space N`:** N is how many times faster than real time the planet and rings go (default 1500; 4000 was too fast to read the letter). The line under the picture says it. Saturn's real ring radii, Kepler speeds from its real mass, its 10.56 hour day and its 26.73 degree tilt are used at any speed.

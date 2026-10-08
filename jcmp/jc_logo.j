@@ -1,11 +1,11 @@
 // jc_logo.j -- the mascot: jcmp -space shows the J2K logo in ASCII style and in 3D (isometric): a solid J, lit from above and
-// shaded with characters, with bodies that go round it by Kepler's laws, twinkling stars, 24 frames a second. Small and of a fixed size (48 x 18 characters), in the middle of the terminal,
+// shaded with characters, with bodies that go round it by Kepler's laws, twinkling stars, 24 frames a second. Small and of a fixed size (50 x 20 characters), in the middle of the terminal,
 // all in J2K with no library. Stops on Ctrl-C or Enter.
 
-#define LW 48
-#define LH 18
-#define LN 864
-char lg_ch[LN];            // 48 x 18 characters of the picture
+#define LW 50
+#define LH 20
+#define LN 1000
+char lg_ch[LN];            // 50 x 20 characters of the picture
 double lg_dep[LN];         // how far from the eye what is drawn in each cell is (to hide the dots of the orbits behind the J)
 double lg_bx[4];           // the bodies that go round: their places
 double lg_by[4];
@@ -19,18 +19,21 @@ double lg_rz;
 double lg_ux;
 double lg_uy;
 double lg_uz;
+double lg_t;               // seconds of the film so far
 double lg_ts;              // how many times faster than real time the film runs
 int lg_col[LN];            // the colour of each character (0xRRGGBB), used if the terminal has 24-bit colour
 int lg_color_on;           // 1: use the colours
 double lg_cs;              // the planet turns about its axis: cos and sin of the angle now
 double lg_sn;
-char lg_buf[24576];           // the text of one frame
+char lg_buf[49152];           // the text of one frame
 int lg_len;
 double lg_sx[60];            // the stars: place, speed and phase of the twinkling
 double lg_sy[60];
 double lg_sf[60];
 double lg_sp[60];
-char lg_ramp[16];            // " .:-=+*#%@": from nothing to the brightest
+char lg_ramp[16];
+char lg_ramp2[96];           // a long ramp of characters from empty to dense: many steps of shade
+int lg_n2;            // " .:-=+*#%@": from nothing to the brightest
 
 double lg_abs(double x) {
     if x < 0.0 { return 0.0 - x; }
@@ -150,6 +153,10 @@ void lg_find_color() {
 // the character for a brightness 0..1
 char lg_pick(double v) {
     if v < 0.0 { v = 0.0; }
+    int k = (int)(v * (double)(lg_n2 - 1) + 0.5);
+    if k > lg_n2 - 1 { k = lg_n2 - 1; }
+    return lg_ramp2[k];
+}
     int k = (int)(v * 9.99);
     if k > 9 { k = 9; }
     return lg_ramp[k];
@@ -175,6 +182,31 @@ void lg_dot(int x, int y, double v) {
     if now >= old { lg_ch[at] = c; }
 }
 
+// HH:MM:SS of the clock of the computer now (UTC)
+void lg_clock() {
+    char ts[16];
+    syscall(113, 0, @ts);                                   // the real-time clock
+    int sec = 0;
+    int k = 7;
+    while k >= 0 {
+        sec = sec * 256 + (ts[k] & 255);
+        k -= 1;
+    }
+    int day = sec % 86400;
+    int h = day / 3600;
+    int m = (day % 3600) / 60;
+    int sc = day % 60;
+    lg_buf[lg_len] = '0' + h / 10;
+    lg_buf[lg_len + 1] = '0' + h % 10;
+    lg_buf[lg_len + 2] = ':';
+    lg_buf[lg_len + 3] = '0' + m / 10;
+    lg_buf[lg_len + 4] = '0' + m % 10;
+    lg_buf[lg_len + 5] = ':';
+    lg_buf[lg_len + 6] = '0' + sc / 10;
+    lg_buf[lg_len + 7] = '0' + sc % 10;
+    lg_len += 8;
+}
+
 int lg_cols;                 // the size of the terminal, read once
 int lg_rows;
 
@@ -193,7 +225,7 @@ void lg_read_size() {
 // the picture as text, in the middle of the terminal (every line is put in place with a cursor move)
 void lg_show() {
     int left = (lg_cols - LW) / 2 + 1;
-    int top = (lg_rows - LH - 3) / 2 + 1;
+    int top = (lg_rows - LH - 4) / 2 + 1;
     if left < 1 { left = 1; }
     if top < 1 { top = 1; }
     lg_len = 0;
@@ -259,6 +291,21 @@ void lg_show() {
     lg_num(left + LW / 2 - 21);
     lg_text("Hreal Saturn speeds, time x");
     lg_num((int)lg_ts);
+    // the time on Earth: the clock now (UTC), and how much time has passed on the planet in the film
+    lg_buf[lg_len] = 27;
+    lg_len += 1;
+    lg_text("[");
+    lg_num(top + LH + 3);
+    lg_text(";");
+    lg_num(left + LW / 2 - 19);
+    lg_text("HEarth time (UTC) ");
+    lg_clock();
+    lg_text("  film = ");
+    double hours = lg_t * lg_ts / 3600.0;
+    lg_num((int)hours);
+    lg_text(".");
+    lg_num((int)((hours - (double)(int)hours) * 10.0));
+    lg_text(" h");
     syscall(64, 1, @lg_buf, lg_len);
 }
 
@@ -337,7 +384,7 @@ double lg_jsd(double xw, double y0, double zw) {
     double z0 = 0.0 - xw * lg_sn + zw * lg_cs;
     double k = 0.80;                                       // the letter is drawn at 1 / 0.62 times its size
     double x = x0 * k;
-    double y = y0 * k + 0.095;                            // the middle of the letter is at height 0, like the orbits
+    double y = y0 * k - 0.12;                             // the letter hangs down: the plane of the rings crosses its upper part, and its tail shows below
     double z = z0 * k;
     double yd = 0.0 - y;
     double d = 9.0;
@@ -392,7 +439,9 @@ double lg_scene(double x, double y, double z) {
 // broad ring, a dark gap, and an outer ring
 double lg_ring(double r) {
     double km = r / 0.85 * 60268.0;                         // the planet is 60268 km in radius and 0.85 units here
+    if km > 139700.0 && km < 140700.0 { return 0.55; }      // the thin F ring
     if km < 74658.0 || km > 136775.0 { return 0.0; }       // the C ring starts, the A ring ends
+    if km > 133300.0 && km < 133900.0 { return 0.0; }      // the Encke gap in the A ring
     if km < 92000.0 { return 0.30; }                        // C ring
     if km < 117580.0 { return 0.78; }                       // B ring
     if km < 122170.0 { return 0.0; }                        // the Cassini division
@@ -404,6 +453,12 @@ void lg_run(int frames, int speed) {
     if speed < 1 { speed = 1500; }
     lg_ts = (double)speed;
     lg_find_color();
+    char^ rp = " .'`^,:;Il!i><~+_-?][}{1)(|/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$";
+    lg_n2 = 0;
+    while rp[lg_n2] != 0 && lg_n2 < 90 {
+        lg_ramp2[lg_n2] = rp[lg_n2];
+        lg_n2 += 1;
+    }
     lg_ramp[0] = ' ';
     lg_ramp[1] = '.';
     lg_ramp[2] = ':';
@@ -438,7 +493,7 @@ void lg_run(int frames, int speed) {
     write_out(@clear);
     double cxs = (double)LW / 2.0;
     double cys = (double)LH / 2.0;
-    double unit = (double)LH * 0.33;                      // rows for one unit of the scene (a character is twice as high as wide)
+    double unit = (double)LH * 0.29;                      // rows for one unit of the scene (a character is twice as high as wide)
     // the light: from above, a little from the left and the front (y is up)
     double lx = 0.0 - 0.42;
     double ly = 0.80;
@@ -451,6 +506,7 @@ void lg_run(int frames, int speed) {
     int t0 = lg_now();
     while frames == 0 || frame < frames {
         double t = (double)frame / 24.0;
+        lg_t = t;
         double pulse = 0.9 + 0.1 * lg_sin(t * 2.0);
         // the view turns a little to and fro: that is what makes it look solid
         // the view does not move: all the motion is the planet's and the rings' own. The planet turns once in 10.56 hours
@@ -550,7 +606,9 @@ void lg_run(int frames, int speed) {
                     double rho = sr / 0.85;
                     double omega = 0.00041626 * lg_ts / (rho * __fsqrt(rho));
                     double clump = 0.5 + 0.5 * lg_sin(5.0 * (ra - omega * t) + 7.0 * (double)sub);
-                    double v = band * (0.55 + 0.45 * clump);
+                    double kmv = rr / 0.85 * 60268.0;
+                    double ringlet = 0.84 + 0.16 * lg_sin(kmv / 420.0);       // fine rings, side by side
+                    double v = band * (0.55 + 0.45 * clump) * ringlet;
                     // the shadow of the planet: a ray from here towards the light meets the letter?
                     double sd = 0.12;
                     int shadow = 0;
@@ -613,10 +671,15 @@ void lg_run(int frames, int speed) {
                     }
                     double day = lam;
                     if day > 1.0 { day = 1.0; }
-                    double bright = 0.14 + 0.78 * day + 0.25 * rim * (0.35 + day) + 0.30 * refl;
+                    // the belts of the clouds: stripes round the planet, a little wavy, that turn with it
+                    double bx = hx * lg_cs + hz * lg_sn;
+                    double bz = 0.0 - hx * lg_sn + hz * lg_cs;
+                    double belt = 0.5 + 0.5 * lg_sin(hy * 14.0 + 0.8 * lg_sin(bx * 6.0 + bz * 4.0) + 1.0);
+                    double bright = (0.08 + 0.80 * day) * (0.84 + 0.22 * belt) + 0.25 * rim * (0.30 + day) + 0.30 * refl;
                     if bright > 1.0 { bright = 1.0; }
                     lg_ch[y * LW + x] = lg_pick(bright * pulse);
                     int c = lg_mix(1778228, 16245412, day);                // from a dark night blue to warm gold
+                    c = lg_mix(c, 13476196, belt * 0.45 * day);            // the belts are a little browner
                     c = lg_mix(c, 9482495, rim * 0.5);                     // a bluish glow at the edge
                     c = lg_mix(c, 16777215, refl * 0.8);
                     lg_col[y * LW + x] = lg_scale(c, 0.6 + 0.4 * pulse);
@@ -625,6 +688,35 @@ void lg_run(int frames, int speed) {
                 x += 1;
             }
             y += 1;
+        }
+        // the small moons that run beside the rings (their real distances): Prometheus 139 350 km, Pandora 141 700 km,
+        // Janus 151 472 km; Kepler's law with Saturn's mass, like the rings. A moon hides behind the planet or a ring.
+        int mo = 0;
+        while mo < 3 {
+            double mkm = 139350.0;
+            double mph = 0.4;
+            char mch = 'o';
+            if mo == 1 { mkm = 141700.0; mph = 2.6; }
+            if mo == 2 { mkm = 151472.0; mph = 4.5; mch = '*'; }
+            double mr = mkm / 60268.0 * 0.85;
+            double mrho = mkm / 60268.0;
+            double mom = 0.00041626 * lg_ts / (mrho * __fsqrt(mrho));
+            double ma = mph + mom * t;
+            double mx = mr * lg_cos(ma);
+            double mz = mr * lg_sin(ma);
+            double sxr = mx * lg_rx + mz * lg_rz;
+            double syr = mx * lg_ux + mz * lg_uz;
+            int mdx = (int)(cxs + sxr * unit * 2.0);
+            int mdy = (int)(cys - syr * unit);
+            if mdx >= 0 && mdx < LW && mdy >= 0 && mdy < LH {
+                double md = mx * lg_fx + mz * lg_fz;
+                if md < lg_dep[mdy * LW + mdx] + 0.02 {
+                    lg_ch[mdy * LW + mdx] = mch;
+                    lg_col[mdy * LW + mdx] = 15132390;
+                    lg_dep[mdy * LW + mdx] = md;
+                }
+            }
+            mo += 1;
         }
         lg_show();
         if frames == 0 && lg_key() { frame = 0 - 1; break; }
