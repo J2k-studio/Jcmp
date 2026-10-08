@@ -24,6 +24,21 @@ int lam_count;
 int lam_done;
 int lam_seq;
 int lam_warned;
+// data enums (enum class E { A(int x), B, ... }): rewritten as a struct with a tag, see gen_data_enum
+char dv_name[4096];          // 64 x 64
+int dv_count;
+int dv_first[64];            // first variant of each
+int dv_nvar[64];
+char dvv_name[65536];        // 1024 x 64: variant names
+int dvv_nparam[1024];
+int dvv_pfirst[1024];
+char dvp_field[262144];      // 4096 x 64: the field of the struct that holds each parameter
+char dvp_pname[262144];      // 4096 x 64: the name the parameter was given
+int dvv_count;
+int dvp_count;
+char de_buf[262144];
+int de_len;
+
 char tpl_text[1048576];      // the texts of the generic declarations
 int tpl_used;
 char tpl_name[4096];         // 64 x 64
@@ -66,6 +81,9 @@ void gen_reset() {
     lam_done = 0;
     lam_seq = 0;
     lam_warned = 0;
+    dv_count = 0;
+    dvv_count = 0;
+    dvp_count = 0;
     tpl_used = 0;
     tpl_count = 0;
     ins_count = 0;
@@ -493,6 +511,17 @@ int gen_declaration(char^ b, int s, int n, int line) {
         int e = gen_word(b, a, n, @name);
         int nx = gen_blanks(b, e, n);
         if e > a && nx < n && b[nx] == '<' { open = nx; }
+    } else if str_eq(@word, "enum") && w < n {
+        // enum class Name<T> { ... }
+        is_struct = 1;
+        int a1 = gen_blanks(b, w, n);
+        int e1 = gen_word(b, a1, n, @word);
+        if str_eq(@word, "class") {
+            int a2 = gen_blanks(b, e1, n);
+            int e2 = gen_word(b, a2, n, @name);
+            int nx2 = gen_blanks(b, e2, n);
+            if e2 > a2 && nx2 < n && b[nx2] == '<' { open = nx2; }
+        }
     } else {
         // the first ( = ; { of the head: a function if it is a ( with a > in front of it
         while i < n {
@@ -580,7 +609,7 @@ int gen_declaration(char^ b, int s, int n, int line) {
 void gen_item() {
     if tok_kind != T_IDENT { return; }
     if err_base != cur_base { return; }
-    if tok_is("import") || tok_is("enum") || tok_is("using") { return; }
+    if tok_is("import") || tok_is("using") { return; }
     char^ b = @src_bufs + cur_base;
     int s = err_ls + err_col - 1;
     int n = cur_len;
@@ -593,6 +622,16 @@ void gen_item() {
         next();
         gen_item();
         return;
+    }
+    if tok_is("enum") {
+        int de = gen_data_enum(b, s, n, line);
+        if de >= 0 {
+            // a data enum: its struct was compiled; skip the text of the enum
+            while cur_pos < de && cur_pos < cur_len { adv(); }
+            next();
+            gen_item();
+            return;
+        }
     }
     if tpl_count == 0 { return; }
     // look for uses of a generic in the text of this item
@@ -1305,4 +1344,298 @@ void gen_infer_call() {
     }
     int ins = gen_register(ti, @args);
     str_copy(@id_name, @ins_name + ins * 64, 256);
+}
+
+// ------------------------------------------------------------- data enums
+//   enum class Shape { Circle(double r), Rect(double w, double h), Empty;  methods... };
+// is rewritten as the text of
+//   struct Shape { int __tag; double Circle_r; double Rect_w; double Rect_h;
+//                  static Shape Circle(double r) { Shape s; s.__tag = 0; s.Circle_r = r; return s; } ...  methods }
+// so a value is a struct (copy, pass, return, fields of other structs, arrays all work); `switch` knows the tags.
+
+void de_put(int c) {
+    if de_len >= 262000 { die("the enum is too large"); }
+    de_buf[de_len] = c;
+    de_len += 1;
+}
+
+void de_str(char^ t) {
+    int i = 0;
+    while t[i] != 0 {
+        de_put(t[i]);
+        i += 1;
+    }
+}
+
+void de_range(char^ b, int s, int e) {
+    while s < e {
+        de_put(b[s]);
+        s += 1;
+    }
+}
+
+int dv_find(char^ name) {
+    int i = 0;
+    while i < dv_count {
+        if str_eq(@dv_name + i * 64, name) { return i; }
+        i += 1;
+    }
+    return 0 - 1;
+}
+
+// the variant `name` of data enum d: its global index, or -1
+int dv_variant(int d, char^ name) {
+    int v = 0;
+    while v < dv_nvar[d] {
+        if str_eq(@dvv_name + (dv_first[d] + v) * 64, name) { return dv_first[d] + v; }
+        v += 1;
+    }
+    return 0 - 1;
+}
+
+// b[s..e) split at the commas that are not inside ( ) [ ] < >: the start and end of piece k, or false
+bool de_piece(char^ b, int s, int e, int k, int^ ps, int^ pe) {
+    int depth = 0;
+    int cur = 0;
+    int start = s;
+    int i = s;
+    while i <= e {
+        int c = 0;
+        if i < e { c = b[i]; }
+        if i < e {
+            int j = gen_skip_lit(b, i, e);
+            if j != i {
+                i = j;
+                continue;
+            }
+        }
+        if c == '(' || c == '[' || c == '<' { depth += 1; }
+        if c == ')' || c == ']' || c == '>' { depth -= 1; }
+        if i == e || (c == ',' && depth == 0) {
+            if cur == k {
+                ps[0] = start;
+                pe[0] = i;
+                return true;
+            }
+            cur += 1;
+            start = i + 1;
+        }
+        i += 1;
+    }
+    return false;
+}
+
+// the item at b[s] is `enum class Name { ... }`: with a member that has parameters it is a data enum: the struct text is
+// compiled here and the end of the item is returned; else -1
+int gen_data_enum(char^ b, int s, int n, int line) {
+    char word[64];
+    char en_name[64];
+    int i = gen_word(b, s, n, @word);
+    i = gen_blanks(b, i, n);
+    int w = gen_word(b, i, n, @word);
+    if !str_eq(@word, "class") { return 0 - 1; }
+    i = gen_blanks(b, w, n);
+    w = gen_word(b, i, n, @en_name);
+    if w == i { return 0 - 1; }
+    i = gen_blanks(b, w, n);
+    if i >= n || b[i] != '{' { return 0 - 1; }
+    int body = i + 1;
+    int end = gen_item_end(b, s, n);
+    int close = end - 1;
+    // the members: name, and the text between ( ) if there is one
+    int m_n = 0;
+    int m_ps[64];
+    int m_pe[64];
+    char m_name[4096];
+    int any = 0;
+    int has_eq = 0;
+    int methods = close;
+    int q = body;
+    while q < close {
+        q = gen_blanks(b, q, close);
+        int sk = gen_skip_lit(b, q, close);
+        if sk != q {
+            q = sk;
+            continue;
+        }
+        if q >= close { break; }
+        if b[q] == ';' {
+            methods = q + 1;
+            break;
+        }
+        if !is_letter(b[q]) { die("an enum member name was expected"); }
+        if m_n >= 64 { die("too many members in a data enum"); }
+        int we = gen_word(b, q, close, @m_name + m_n * 64);
+        m_ps[m_n] = 0 - 1;
+        m_pe[m_n] = 0 - 1;
+        q = gen_blanks(b, we, close);
+        if q < close && b[q] == '(' {
+            int depth = 1;
+            int r = q + 1;
+            while r < close && depth > 0 {
+                int sk2 = gen_skip_lit(b, r, close);
+                if sk2 != r {
+                    r = sk2;
+                } else {
+                    if b[r] == '(' { depth += 1; }
+                    if b[r] == ')' { depth -= 1; }
+                    r += 1;
+                }
+            }
+            m_ps[m_n] = q + 1;
+            m_pe[m_n] = r - 1;
+            any = 1;
+            q = gen_blanks(b, r, close);
+        } else if q < close && b[q] == '=' {
+            has_eq = 1;
+            while q < close && b[q] != ',' && b[q] != ';' { q += 1; }
+        }
+        m_n += 1;
+        if q < close && b[q] == ',' { q += 1; }
+    }
+    if any == 0 { return 0 - 1; }
+    if has_eq == 1 { die("a member of a data enum cannot be given a number"); }
+    // register
+    if dv_count >= 64 { die("too many data enums"); }
+    int d = dv_count;
+    dv_count += 1;
+    str_copy(@dv_name + d * 64, @en_name, 64);
+    dv_first[d] = dvv_count;
+    dv_nvar[d] = m_n;
+    // the struct
+    de_len = 0;
+    de_str("struct ");
+    de_str(@en_name);
+    de_str(" {\n    int __tag;\n");
+    int v = 0;
+    while v < m_n {
+        int gv = dvv_count;
+        if gv >= 1024 { die("too many data enum members"); }
+        dvv_count += 1;
+        str_copy(@dvv_name + gv * 64, @m_name + v * 64, 64);
+        dvv_pfirst[gv] = dvp_count;
+        dvv_nparam[gv] = 0;
+        if m_ps[v] >= 0 {
+            int k = 0;
+            int ps = 0;
+            int pe = 0;
+            while de_piece(b, m_ps[v], m_pe[v], k, @ps, @pe) {
+                // the piece is "TYPE NAME"
+                ps = gen_blanks(b, ps, pe);
+                while pe > ps && is_space(b[pe - 1]) { pe -= 1; }
+                if pe <= ps {
+                    k += 1;
+                    continue;
+                }
+                int nb = pe;
+                while nb > ps && is_alnum(b[nb - 1]) { nb -= 1; }
+                if nb == pe || nb == ps { die("a parameter of an enum member is written: type name"); }
+                if dvp_count >= 4096 { die("too many enum parameters"); }
+                int px = dvp_count;
+                dvp_count += 1;
+                dvv_nparam[gv] += 1;
+                // the name the parameter was given, and the field that holds it
+                int z = 0;
+                while nb + z < pe && z < 62 {
+                    dvp_pname[px * 64 + z] = b[nb + z];
+                    z += 1;
+                }
+                dvp_pname[px * 64 + z] = 0;
+                str_copy(@dvp_field + px * 64, @m_name + v * 64, 64);
+                append_text(@dvp_field + px * 64, "_");
+                append_text(@dvp_field + px * 64, @dvp_pname + px * 64);
+                de_str("    ");
+                de_range(b, ps, nb);
+                de_str(@dvp_field + px * 64);
+                de_str(";\n");
+                k += 1;
+            }
+        }
+        v += 1;
+    }
+    // one constructor per member
+    v = 0;
+    while v < m_n {
+        int gv2 = dv_first[d] + v;
+        de_str("    static ");
+        de_str(@en_name);
+        de_put(' ');
+        de_str(@m_name + v * 64);
+        de_put('(');
+        if m_ps[v] >= 0 { de_range(b, m_ps[v], m_pe[v]); }
+        de_str(") { ");
+        de_str(@en_name);
+        de_str(" s; s.__tag = ");
+        append_int_to_de(v);
+        de_put(';');
+        int pk = 0;
+        while pk < dvv_nparam[gv2] {
+            int px2 = dvv_pfirst[gv2] + pk;
+            de_str(" s.");
+            de_str(@dvp_field + px2 * 64);
+            de_str(" = ");
+            de_str(@dvp_pname + px2 * 64);
+            de_put(';');
+            pk += 1;
+        }
+        de_str(" return s; }\n");
+        v += 1;
+    }
+    // the methods (written after a ;)
+    if methods < close { de_range(b, methods, close); }
+    de_str("\n}\n");
+    de_put(0);
+    de_len -= 1;
+    int dd = lx_depth;
+    gen_save(dd);
+    push_text(@de_buf, de_len, @err_file, line);
+    next();
+    while tok_kind != T_EOF { parse_one_item(); }
+    pop_file();
+    gen_restore(dd);
+    int tail = gen_blanks(b, end, n);
+    if tail < n && b[tail] == ';' { end = tail + 1; }
+    return end;
+}
+
+void append_int_to_de(int v) {
+    char t[24];
+    t[0] = 0;
+    append_int(@t, v);
+    de_str(@t);
+}
+
+// Shape::Empty without ( ): is it a member of data enum `enum_name` with no parameters? (sc_full is Enum__Member)
+bool gen_bare_variant(char^ enum_name, char^ sc_full) {
+    int d = dv_find(enum_name);
+    if d < 0 { return false; }
+    int hit = 0 - 1;
+    int v = 0;
+    while v < dv_nvar[d] {
+        char full[160];
+        str_copy(@full, enum_name, 64);
+        append_text(@full, "__");
+        append_text(@full, @dvv_name + (dv_first[d] + v) * 64);
+        if str_eq(@full, sc_full) { hit = dv_first[d] + v; }
+        v += 1;
+    }
+    if hit < 0 { return false; }
+    return dvv_nparam[hit] == 0;
+}
+
+// accessors for jc_stmt (it is read before this file, so it cannot name these tables)
+char^ dv_name_of(int d) { return @dv_name + d * 64; }
+int dv_nvar_of(int d) { return dv_nvar[d]; }
+int dv_first_of(int d) { return dv_first[d]; }
+char^ dv_vname(int g) { return @dvv_name + g * 64; }
+int dv_nparam_of(int g) { return dvv_nparam[g]; }
+char^ dv_pfield(int g, int k) { return @dvp_field + (dvv_pfirst[g] + k) * 64; }
+
+// a case label of a switch on data enum d is written with the name of the enum, or (a generic enum) the name without its types
+bool dv_label_ok(int d, char^ text) {
+    char^ nm = @dv_name + d * 64;
+    if str_eq(nm, text) { return true; }
+    int i = 0;
+    while text[i] != 0 && nm[i] == text[i] { i += 1; }
+    return text[i] == 0 && nm[i] == '_' && nm[i + 1] == '_';
 }

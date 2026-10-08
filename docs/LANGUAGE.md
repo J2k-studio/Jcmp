@@ -360,6 +360,37 @@ parameter types), which the compiler checks. Pointers may live in variables, arr
 (`table[i](x)`, `object.callback(x)`) and may be returned (`pick(1)(5, 5)`).
 Methods (with `self`) and functions with array parameters cannot be used as values; at most 8 parameters.
 
+## Enums that carry values
+
+A member of an `enum class` can hold values. A value of such an enum is one thing that is a different member at different times:
+
+```jk
+enum class Shape { Circle(double r), Rect(double w, double h), Empty;      // the ; ends the members; methods may follow
+    double area(self) {
+        switch self^ {
+            Shape::Circle(r):  return 3.14 * r * r;
+            Shape::Rect(w, h): return w * h;
+            Shape::Empty:      return 0.0;
+        }
+        return 0.0;
+    }
+};
+
+Shape s = Shape::Rect(2.0, 3.0);          // Shape::Empty (no parameters): no ( )
+cout << s.area() << "\n";                 // 6
+switch s {
+    Shape::Circle(r):  cout << "radius " << r << "\n";
+    Shape::Rect(w, _): cout << "width " << w << "\n";    // _ ignores a value
+    _:                 cout << "something else\n";
+}
+```
+
+* The names after `Shape::Rect(` are new variables for that case: copies of the values (a String or an array is only borrowed).
+* `switch` checks that every member is handled (a warning, an error with `-st`) unless there is a `_` case.
+* A data enum is a struct inside (a tag and the members' values), so it can be copied, passed, returned and kept in arrays and other structs.
+* It can be generic: `enum class Maybe<T> { Some(T value), Nothing; ... }` and `Maybe<int>::Some(5)`.
+* A member of a data enum cannot be given a number (`= 5`); a plain `enum class` is as before.
+
 ## Lambdas
 
 A lambda is a function without a name, written where you use it. It looks like a function declaration without the name (the result type first, then the parameters):

@@ -1238,6 +1238,172 @@ int parse_const() {
 }
 
 // switch e { 1, 2: stmt;  Kind::A: { ... }  _: stmt; }
+// a switch on a data enum (a struct with a tag, see gen_data_enum): the cases are  Name::Member  or
+// Name::Member(a, b)  which also makes a and b (copies of the members' values) for the case
+void parse_switch_data(int sw_off, int sd, int sv_line, int sv_col, int sv_base, int sv_ls) {
+    int d = dv_find(@sname + sd * 64);
+    int covered[64];
+    int ci = 0;
+    while ci < 64 {
+        covered[ci] = 0;
+        ci += 1;
+    }
+    int lend = new_label();
+    int ldef = 0;
+    expect("{");
+    while !tok_is("}") {
+        if tok_kind == T_EOF { die("} expected"); }
+        int lbody = new_label();
+        int lnext = new_label();
+        int mark = lcount;
+        int saved_base = scope_base;
+        int bind_gv = 0 - 1;
+        char bind_name[512];             // up to 8 names of 64
+        int bind_n = 0;
+        if tok_is("_") {
+            next();
+            expect(":");
+            ldef = new_label();
+            jump(lnext);
+            place_label(ldef);
+        } else {
+            int labels = 0;
+            while true {
+                if tok_kind != T_IDENT || !dv_label_ok(d, @tok_text) {
+                    die_name("a case of this switch is written Enum::Member; the enum is", dv_name_of(d));
+                }
+                next();
+                expect("::");
+                if tok_kind != T_IDENT { die("a member name was expected"); }
+                int gv = dv_variant(d, @tok_text);
+                if gv < 0 { die_name("not a member of the enum", @tok_text); }
+                next();
+                int vi = gv - dv_first_of(d);
+                covered[vi] = 1;
+                ins_mem("ldr", "x0", "x29", sw_off);
+                emit_line("ldr x0, [x0, #0]");
+                ins_n("mov x1, ", vi);
+                emit_line("cmp x0, x1");
+                jump_if("eq", lbody);
+                labels += 1;
+                if tok_is("(") {
+                    next();
+                    bind_gv = gv;
+                    if !tok_is(")") {
+                        while true {
+                            if tok_kind != T_IDENT { die("a name was expected (or _ to ignore a value)"); }
+                            if bind_n >= 8 { die("a case can name at most 8 values"); }
+                            str_copy(@bind_name + bind_n * 64, @tok_text, 64);
+                            bind_n += 1;
+                            next();
+                            if tok_is(",") {
+                                next();
+                            } else {
+                                break;
+                            }
+                        }
+                    }
+                    expect(")");
+                    if bind_n != dv_nparam_of(gv) && pass_no >= 2 {
+                        die_name("this member has a different number of values", dv_vname(gv));
+                    }
+                }
+                if tok_is(",") {
+                    if bind_gv >= 0 { die("a case that names values must stand alone"); }
+                    next();
+                } else {
+                    break;
+                }
+            }
+            expect(":");
+            jump(lnext);
+            place_label(lbody);
+            if bind_gv >= 0 {
+                // the values: new variables, copies of the members (a String or array is only borrowed)
+                scope_base = lcount;
+                int k = 0;
+                while k < bind_n {
+                    if !str_eq(@bind_name + k * 64, "_") && pass_no >= 1 {
+                        int fi = 0 - 1;
+                        int fk = sfirst[sd];
+                        char^ want = dv_pfield(bind_gv, k);
+                        while fk < sfirst[sd] + snf[sd] {
+                            if str_eq(@fldname + fk * 64, want) { fi = fk; }
+                            fk += 1;
+                        }
+                        if fi < 0 {
+                            if pass_no >= 2 { die("internal: a member of a data enum has no field"); }
+                        } else {
+                            ins_mem("ldr", "x0", "x29", sw_off);
+                            if fldoff[fi] != 0 { ins_n("add x0, x0, #", fldoff[fi]); }
+                            if flddyn[fi] != 0 {
+                                emit_line("ldr x0, [x0, #0]");
+                                ty_tid = 99;
+                                ty_dyn = flddyn[fi];
+                                add_local(@bind_name + k * 64, 3, 8, 8, 0);
+                                ins_mem("str", "x0", "x29", loff[lcount - 1]);
+                            } else if fldcode[fi] >= 16 && fldptr[fi] == 0 {
+                                if struct_has_free(fldcode[fi] - 16) { die("a value that frees itself cannot be named in a case (use a pointer)"); }
+                                ty_tid = fldtid[fi];
+                                add_local(@bind_name + k * 64, 0, fldcode[fi], ssize[fldcode[fi] - 16], 0);
+                                ins_n("add x3, x29, #", loff[lcount - 1]);
+                                ins_n("mov x2, ", ssize[fldcode[fi] - 16]);
+                                emit_line("bl j2k_copy");
+                            } else {
+                                load_through(fldcode[fi]);
+                                ty_tid = fldtid[fi];
+                                int lcode = fldcode[fi];
+                                if fldptr[fi] != 0 { lcode = 8; }
+                                add_local(@bind_name + k * 64, 0, lcode, 8, fldptr[fi]);
+                                ins_mem("str", "x0", "x29", loff[lcount - 1]);
+                            }
+                        }
+                    }
+                    k += 1;
+                }
+            }
+        }
+        int sv_ok = own_ok;
+        if !tok_is("{") { own_ok = 0; }
+        parse_statement();
+        own_ok = sv_ok;
+        lcount = mark;
+        scope_base = saved_base;
+        jump(lend);
+        place_label(lnext);
+    }
+    expect("}");
+    if ldef != 0 { jump(ldef); }
+    place_label(lend);
+    if ldef == 0 && pass_no >= 2 {
+        char wmsg[600];
+        wmsg[0] = 0;
+        int missing = 0;
+        int mm = 0;
+        while mm < dv_nvar_of(d) {
+            if covered[mm] == 0 {
+                if missing > 0 { append_text(@wmsg, ", "); }
+                append_text(@wmsg, "'");
+                append_text(@wmsg, dv_vname(dv_first_of(d) + mm));
+                append_text(@wmsg, "'");
+                missing += 1;
+            }
+            mm += 1;
+        }
+        if missing > 0 {
+            char wfull[700];
+            str_copy(@wfull, "enumeration value(s) ", 700);
+            append_text(@wfull, @wmsg);
+            append_text(@wfull, " not handled in switch");
+            err_line = sv_line;
+            err_col = sv_col;
+            err_base = sv_base;
+            err_ls = sv_ls;
+            warn(@wfull, "switch");
+        }
+    }
+}
+
 void parse_switch() {
     int sv_line = err_line;              // where the switch is, for a warning
     int sv_col = err_col;
@@ -1256,6 +1422,10 @@ void parse_switch() {
     add_local("..switch", 0, 8, 8, 0);
     int sw_off = loff[lcount - 1];
     ins_mem("str", "x0", "x29", sw_off);
+    if sw_ty >= 100 && dv_find(@sname + (sw_ty - 100) * 64) >= 0 {
+        parse_switch_data(sw_off, sw_ty - 100, sv_line, sv_col, sv_base, sv_ls);
+        return;
+    }
     int lend = new_label();
     int ldef = 0;
     expect("{");

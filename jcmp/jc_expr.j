@@ -1248,6 +1248,8 @@ void compute_reach() {
     }
 }
 
+int call_bare;               // 1: the next gen_call is a call without ( ) (a data enum member)
+int bare_call;
 int call_pre;                // arguments already pushed (self of a method call)
 int call_method;             // 1 for a method call: arguments are counted after self
 
@@ -1260,7 +1262,12 @@ void gen_call() {
     call_pre = 0;
     int is_method = call_method;
     call_method = 0;
-    expect("(");
+    if call_bare == 1 {
+        call_bare = 0;                   // a member of a data enum written without ( )
+        bare_call = 1;
+    } else {
+        expect("(");
+    }
     int fi = find_func(@callee);
     if fi < 0 && pass_no >= 2 && !(callee[0] == '_' && callee[1] == '_') && !str_eq(@callee, "syscall") && !str_eq(@callee, "argc") && !str_eq(@callee, "arg") { die_name("unknown function", @callee); }
     int res_ty = 0;
@@ -1288,7 +1295,12 @@ void gen_call() {
     }
     call_fi = fi;
     call_skip = is_method;
-    int n = parse_args() + pre;
+    int n = pre;
+    if bare_call == 1 {
+        bare_call = 0;
+    } else {
+        n = parse_args() + pre;
+    }
     int free_owner = 0 - 1;
     if str_eq(@callee, "Mem__free") && n == 1 && rv_valid == 1 { free_owner = own_find(rv_off); }
     pop_args(n);
@@ -1618,6 +1630,13 @@ void gen_scope() {
     if find_func(@sc_full) < 0 && pass_no >= 2 { die_name("the struct has no such function", @tok_text); }
     if pass_no >= 2 && fself[find_func(@sc_full)] == 1 { die_name("this method needs an object: call it as object.name(...)", @tok_text); }
     next();
+    if !tok_is("(") && gen_bare_variant(@id_name, @sc_full) {
+        // Shape::Empty : a member of a data enum without parameters is a call without ( )
+        str_copy(@id_name, @sc_full, 256);
+        call_bare = 1;
+        gen_call();
+        return;
+    }
     if !tok_is("(") {
         // Struct::function without a call: its address
         int sfv = find_func(@sc_full);

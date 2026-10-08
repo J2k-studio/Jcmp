@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9.7
+* **Enums that carry values:** `enum class Shape { Circle(double r), Rect(double w, double h), Empty; ...methods };`, built with `Shape::Rect(2.0, 3.0)`, taken apart with `switch s { Shape::Rect(w, h): ... }`. They can be generic (`enum class Maybe<T> { Some(T value), Nothing }`). The first step of the error model (`Option`, `Result`, `?` follow).
+
 ## 0.9.6
 * **More String methods:** `trim`, `upper`, `lower`, `replace`, `repeat`, `starts_with`, `ends_with`, `contains`, `to_int`, `to_double`, `split` (gives a `String[]`) and `join` on a `String[]`.
 
