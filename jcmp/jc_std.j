@@ -2220,6 +2220,218 @@ void push_vector() {
     cur_line_start = 0;
 }
 
+// push_quat(): `using math::quat` -- quat.
+void push_quat() {
+    if lx_depth >= 15 { die("imports nested too deeply"); }
+    stk_pos[lx_depth] = cur_pos;
+    stk_line[lx_depth] = cur_line;
+    stk_ls[lx_depth] = cur_line_start;
+    str_copy(@lvl_name + (lx_depth + 1) * 128, @lvl_name + lx_depth * 128, 128);
+    lx_depth += 1;
+    lvl_lib[lx_depth] = 1;
+    cur_base = lx_depth * 524288;
+    cur_len = 0;
+    put("// quat: a rotation in 3D as four numbers (a quaternion x, y, z, w). #import <math>   using math::quat;");
+    put("//   quat q = quat::from_axis_angle(vec3::make(0.0, 1.0, 0.0), Math::pi() / 2.0);   (a quarter turn about the y axis)");
+    put("//   vec3 v = q.rotate(vec3::make(1.0, 0.0, 0.0));         q * r  turns by r first, then by q");
+    put("struct quat {");
+    put("    double x;");
+    put("    double y;");
+    put("    double z;");
+    put("    double w;");
+    put("    static quat make(double x, double y, double z, double w) {");
+    put("        quat r;");
+    put("        r.x = x;");
+    put("        r.y = y;");
+    put("        r.z = z;");
+    put("        r.w = w;");
+    put("        return r;");
+    put("    }");
+    put("    static quat identity() { return quat::make(0.0, 0.0, 0.0, 1.0); }");
+    put("    // a turn of the angle (radians) about an axis (it need not have length 1)");
+    put("    static quat from_axis_angle(vec3 axis, double angle) {");
+    put("        vec3 a = axis.normalize();");
+    put("        double s = Math::sin(angle / 2.0);");
+    put("        return quat::make(a.x * s, a.y * s, a.z * s, Math::cos(angle / 2.0));");
+    put("    }");
+    put("    // the Hamilton product: this turn after the other");
+    put("    operator quat mul(self, quat o) {");
+    put("        return quat::make(");
+    put("            self.w * o.x + self.x * o.w + self.y * o.z - self.z * o.y,");
+    put("            self.w * o.y - self.x * o.z + self.y * o.w + self.z * o.x,");
+    put("            self.w * o.z + self.x * o.y - self.y * o.x + self.z * o.w,");
+    put("            self.w * o.w - self.x * o.x - self.y * o.y - self.z * o.z);");
+    put("    }");
+    put("    operator bool eq(self, quat o) { return self.x == o.x && self.y == o.y && self.z == o.z && self.w == o.w; }");
+    put("    quat conj(self) { return quat::make(0.0 - self.x, 0.0 - self.y, 0.0 - self.z, self.w); }");
+    put("    double dot(self, quat o) { return self.x * o.x + self.y * o.y + self.z * o.z + self.w * o.w; }");
+    put("    double length(self) { return Math::sqrt(self.dot(self^)); }");
+    put("    quat normalize(self) {");
+    put("        double l = self.length();");
+    put("        if l == 0.0 { return quat::identity(); }");
+    put("        return quat::make(self.x / l, self.y / l, self.z / l, self.w / l);");
+    put("    }");
+    put("    // the vector turned by this rotation");
+    put("    vec3 rotate(self, vec3 v) {");
+    put("        quat p = quat::make(v.x, v.y, v.z, 0.0);");
+    put("        quat r = self.mul(p).mul(self.conj());");
+    put("        return vec3::make(r.x, r.y, r.z);");
+    put("    }");
+    put("    // between this rotation (t = 0) and the other (t = 1), by the shortest way on the sphere");
+    put("    quat slerp(self, quat o, double t) {");
+    put("        double d = self.dot(o);");
+    put("        quat b = o;");
+    put("        if d < 0.0 {");
+    put("            b = quat::make(0.0 - o.x, 0.0 - o.y, 0.0 - o.z, 0.0 - o.w);");
+    put("            d = 0.0 - d;");
+    put("        }");
+    put("        if d > 0.9995 {");
+    put("            // nearly the same: a straight line, then made length 1");
+    put("            return quat::make(self.x + (b.x - self.x) * t, self.y + (b.y - self.y) * t, self.z + (b.z - self.z) * t, self.w + (b.w - self.w) * t).normalize();");
+    put("        }");
+    put("        double th = Math::acos(d);");
+    put("        double s = Math::sin(th);");
+    put("        double ka = Math::sin((1.0 - t) * th) / s;");
+    put("        double kb = Math::sin(t * th) / s;");
+    put("        return quat::make(self.x * ka + b.x * kb, self.y * ka + b.y * kb, self.z * ka + b.z * kb, self.w * ka + b.w * kb);");
+    put("    }");
+    put("}");
+    put("");
+    src_bufs[cur_base + cur_len] = 0;
+    cur_pos = 0;
+    cur_line = 1;
+    cur_line_start = 0;
+}
+
+// push_complex(): `using math::complex` -- cplx.
+void push_complex() {
+    if lx_depth >= 15 { die("imports nested too deeply"); }
+    stk_pos[lx_depth] = cur_pos;
+    stk_line[lx_depth] = cur_line;
+    stk_ls[lx_depth] = cur_line_start;
+    str_copy(@lvl_name + (lx_depth + 1) * 128, @lvl_name + lx_depth * 128, 128);
+    lx_depth += 1;
+    lvl_lib[lx_depth] = 1;
+    cur_base = lx_depth * 524288;
+    cur_len = 0;
+    put("// cplx: a complex number re + im i. #import <math>   using math::complex;");
+    put("//   cplx a = cplx::make(1.0, 2.0);   cplx b = a * a + cplx::make(0.0, 1.0);   double r = b.abs();");
+    put("struct cplx {");
+    put("    double re;");
+    put("    double im;");
+    put("    static cplx make(double re, double im) {");
+    put("        cplx r;");
+    put("        r.re = re;");
+    put("        r.im = im;");
+    put("        return r;");
+    put("    }");
+    put("    static cplx from_polar(double r, double theta) { return cplx::make(r * Math::cos(theta), r * Math::sin(theta)); }");
+    put("    operator cplx add(self, cplx o) { return cplx::make(self.re + o.re, self.im + o.im); }");
+    put("    operator cplx sub(self, cplx o) { return cplx::make(self.re - o.re, self.im - o.im); }");
+    put("    operator cplx mul(self, cplx o) { return cplx::make(self.re * o.re - self.im * o.im, self.re * o.im + self.im * o.re); }");
+    put("    operator cplx div(self, cplx o) {");
+    put("        double d = o.re * o.re + o.im * o.im;");
+    put("        return cplx::make((self.re * o.re + self.im * o.im) / d, (self.im * o.re - self.re * o.im) / d);");
+    put("    }");
+    put("    operator cplx neg(self) { return cplx::make(0.0 - self.re, 0.0 - self.im); }");
+    put("    operator bool eq(self, cplx o) { return self.re == o.re && self.im == o.im; }");
+    put("    cplx conj(self) { return cplx::make(self.re, 0.0 - self.im); }");
+    put("    double abs(self) { return Math::sqrt(self.re * self.re + self.im * self.im); }");
+    put("    // the angle, -pi..pi");
+    put("    double arg(self) { return Math::atan2(self.im, self.re); }");
+    put("    cplx exp(self) { return cplx::from_polar(Math::exp(self.re), self.im); }");
+    put("    // the whole power n >= 0");
+    put("    cplx powi(self, int n) {");
+    put("        cplx r = cplx::make(1.0, 0.0);");
+    put("        cplx b = self^;");
+    put("        int k = n;");
+    put("        while k > 0 {");
+    put("            if k % 2 == 1 { r = r * b; }");
+    put("            b = b * b;");
+    put("            k = k / 2;");
+    put("        }");
+    put("        return r;");
+    put("    }");
+    put("}");
+    put("");
+    src_bufs[cur_base + cur_len] = 0;
+    cur_pos = 0;
+    cur_line = 1;
+    cur_line_start = 0;
+}
+
+// push_stats(): `using math::stats` -- Stats.
+void push_stats() {
+    if lx_depth >= 15 { die("imports nested too deeply"); }
+    stk_pos[lx_depth] = cur_pos;
+    stk_line[lx_depth] = cur_line;
+    stk_ls[lx_depth] = cur_line_start;
+    str_copy(@lvl_name + (lx_depth + 1) * 128, @lvl_name + lx_depth * 128, 128);
+    lx_depth += 1;
+    lvl_lib[lx_depth] = 1;
+    cur_base = lx_depth * 524288;
+    cur_len = 0;
+    put("// Stats: numbers about a list of numbers (double[]). #import <math>   using math::stats;");
+    put("//   double[] xs = arr(3);   xs.push(2.0);   xs.push(4.0);   xs.push(9.0);   double m = Stats::mean(xs);");
+    put("struct Stats {");
+    put("    static double sum(double[] xs) {");
+    put("        double s = 0.0;");
+    put("        for i in 0..xs.len { s += xs[i]; }");
+    put("        return s;");
+    put("    }");
+    put("    static double mean(double[] xs) {");
+    put("        if xs.len == 0 { return 0.0; }");
+    put("        return Stats::sum(xs) / (double)xs.len;");
+    put("    }");
+    put("    static double min(double[] xs) {");
+    put("        if xs.len == 0 { return 0.0; }");
+    put("        double m = xs[0];");
+    put("        for i in 1..xs.len { if xs[i] < m { m = xs[i]; } }");
+    put("        return m;");
+    put("    }");
+    put("    static double max(double[] xs) {");
+    put("        if xs.len == 0 { return 0.0; }");
+    put("        double m = xs[0];");
+    put("        for i in 1..xs.len { if xs[i] > m { m = xs[i]; } }");
+    put("        return m;");
+    put("    }");
+    put("    // the variance of the whole list (divided by n)");
+    put("    static double variance(double[] xs) {");
+    put("        if xs.len == 0 { return 0.0; }");
+    put("        double m = Stats::mean(xs);");
+    put("        double s = 0.0;");
+    put("        for i in 0..xs.len { s += (xs[i] - m) * (xs[i] - m); }");
+    put("        return s / (double)xs.len;");
+    put("    }");
+    put("    static double stddev(double[] xs) { return Math::sqrt(Stats::variance(xs)); }");
+    put("    // the middle value (the mean of the two middle ones if the number is even)");
+    put("    static double median(double[] xs) {");
+    put("        int n = xs.len;");
+    put("        if n == 0 { return 0.0; }");
+    put("        double[] c = arr(n);");
+    put("        for i in 0..n { c.push(xs[i]); }");
+    put("        for i in 1..n {");
+    put("            double v = c[i];");
+    put("            int j = i - 1;");
+    put("            while j >= 0 && c[j] > v {");
+    put("                c[j + 1] = c[j];");
+    put("                j -= 1;");
+    put("            }");
+    put("            c[j + 1] = v;");
+    put("        }");
+    put("        double r = c[n / 2];");
+    put("        if n % 2 == 0 { r = (c[n / 2 - 1] + c[n / 2]) / 2.0; }");
+    put("        c.free();");
+    put("        return r;");
+    put("    }");
+    put("}");
+    put("");
+    src_bufs[cur_base + cur_len] = 0;
+    cur_pos = 0;
+    cur_line = 1;
+    cur_line_start = 0;
+}
+
 // push_matrix(): `import <matrix>` -- Mat3, Mat4.
 void push_matrix() {
     if lx_depth >= 15 { die("imports nested too deeply"); }

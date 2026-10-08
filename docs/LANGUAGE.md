@@ -733,7 +733,7 @@ cout << (a + b).cents << "\n";   // a call can go on after a value in parenthese
 ```
 
 The math libraries are chosen with one import: `#import <math>` and then `using math::vector;` (`vec2 vec3 vec4`) or `using math::matrix;`
-(`mat3 mat4`, with vector) or `using math;` (both). A vector can be written `vec p = {1.0, 2.0, 3.0};` (the number of values says
+(`mat3 mat4`, with vector) or `using math::quat;` (rotations), `using math::complex;` (`cplx`), `using math::stats;` (`Stats`), or `using math;` (everything). A vector can be written `vec p = {1.0, 2.0, 3.0};` (the number of values says
 `vec3`) and its parts can be picked with letters: `p.xy`, `p.zyx`, `c.rgb` (several letters: a new vector, read only; one letter:
 the part itself, which can be assigned). The graphics library: `#import <gfx>` and `using gfx::canvas;` (characters, with a depth
 buffer) or `using gfx::screen;` (colour dots). The standard library has `Term::cols()`, `Term::rows()` and `Term::key_pressed()`.

@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9.47
+* **More of the math library** (parts chosen as before with `using math::NAME;`; `using math;` takes all): **`quat`** (rotations as quaternions: `quat::from_axis_angle`, the product `q * r` (turn by `r`, then by `q`), `conj`, `normalize`, `rotate(vec3)`, `slerp`), **`complex`** (`cplx`: `+ - * /`, `-z`, `==`, `conj`, `abs`, `arg`, `exp`, `powi`, `from_polar`) and **`stats`** (`Stats::sum mean min max variance stddev median` on a `double[]`). Checked by hand: a quarter turn about y turns (1, 0, 0) into (0, 0, -1), (1 + 2i)(3 - i) = 5 + 5i, e^(i pi) = -1, (1 + i)^4 = -4.
+
 ## 0.9.46
 * **Fixed (an old fault):** an index that contains `.len`, like `a[a.len - 1]`, gave the address of the element instead of the element (for a String, a `T[]`, and a fixed array): the `len` inside the index left the "finished" mark of the outer lvalue on. `v[v.len - 1]`, `s[s.len - 1]` and `m[m.len - 1][2]` work now (test `t252`).
 * **Standard library:** `Path` (`join name parent ext stem`), `Hex` (`encode`, `decode` as a `Result`) and `Base64` (`encode`, `decode` as a `Result`), checked against `base64` and `xxd`.

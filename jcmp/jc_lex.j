@@ -34,6 +34,9 @@ int cpu_loaded;              // 1 once `import cpu` has been read
 int lvl_lib[16];             // 1 for a level that is a built-in library (its warnings are not shown)
 int vector_loaded;           // 1 once `import <vector>` has been read
 int matrix_loaded;
+int quat_loaded;
+int cplx_loaded;
+int stats_loaded;
 int gfx_loaded;              // 1 once `#import <gfx>` has been read
 int canvas_loaded;
 int screen_loaded;
@@ -339,6 +342,9 @@ void lex_init(char^ path) {
     std_loaded = 0;
     vector_loaded = 0;
     matrix_loaded = 0;
+    quat_loaded = 0;
+    cplx_loaded = 0;
+    stats_loaded = 0;
     math_loaded = 0;
     gfx_loaded = 0;
     canvas_loaded = 0;
@@ -515,7 +521,7 @@ void import_file(char^ path) {
 void using_math() {
     if math_loaded == 0 { die("using math needs  #import <math>  first"); }
     skip_blanks();
-    int want = 3;                                    // 1 vector, 2 matrix, 3 both
+    int want = 31;                                   // all the parts: 1 vector, 2 matrix, 4 quat, 8 complex, 16 stats
     if lc(0) == ':' && lc(1) == ':' {
         adv();
         adv();
@@ -529,18 +535,32 @@ void using_math() {
         }
         part[n] = 0;
         if str_eq(@part, "vector") { want = 1; }
-        else if str_eq(@part, "matrix") { want = 2; }
-        else { die_name("unknown part of math (vector or matrix)", @part); }
+        else if str_eq(@part, "matrix") { want = 3; }          // matrix needs vector
+        else if str_eq(@part, "quat") { want = 5; }            // quat needs vector
+        else if str_eq(@part, "complex") { want = 8; }
+        else if str_eq(@part, "stats") { want = 16; }
+        else { die_name("unknown part of math (vector, matrix, quat, complex or stats)", @part); }
     }
     skip_blanks();
     if lc(0) == ';' { adv(); }
-    // the last one pushed is read first: vector comes before matrix
-    if (want == 2 || want == 3) && matrix_loaded == 0 {
+    // the last one pushed is read first: vector comes first, then matrix and quat, and the others
+    if (want & 16) != 0 && stats_loaded == 0 {
+        stats_loaded = 1;
+        push_stats();
+    }
+    if (want & 8) != 0 && cplx_loaded == 0 {
+        cplx_loaded = 1;
+        push_complex();
+    }
+    if (want & 4) != 0 && quat_loaded == 0 {
+        quat_loaded = 1;
+        push_quat();
+    }
+    if (want & 2) != 0 && matrix_loaded == 0 {
         matrix_loaded = 1;
         push_matrix();
-        want = 3;
     }
-    if (want == 1 || want == 3) && vector_loaded == 0 {
+    if (want & 1) != 0 && vector_loaded == 0 {
         vector_loaded = 1;
         push_vector();
     }
