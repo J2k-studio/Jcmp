@@ -1680,6 +1680,7 @@ void parse_lvalue() {
 // the object whose address is in x0 is described by lv_*: follow [index], ^, .field, .method(...)
 void lvalue_loop() {
     while true {
+        if tok_is(".") && lc(0) == '.' { return; }       // .. is a range (for i in lo..hi), not a field
         if lv_kind == 3 && tok_is("[") {
             dyn_index();
         } else if lv_kind == 3 && tok_is(".") {
