@@ -242,6 +242,8 @@ void lg_find_color() {
 // the character for a brightness 0..1 (a long ramp: many steps of shade)
 char lg_pick(double v) {
     if v < 0.0 { v = 0.0; }
+    if v > 1.0 { v = 1.0; }
+    v = v * (1.7 - 0.7 * v);                                // lifts the middle: fuller, less thin
     int k = (int)(v * (double)(lg_n2 - 1) + 0.5);
     if k > lg_n2 - 1 { k = lg_n2 - 1; }
     return lg_ramp2[k];
@@ -251,7 +253,7 @@ char lg_pick(double v) {
 int lg_grey(double v) {
     if v < 0.0 { v = 0.0; }
     if v > 1.0 { v = 1.0; }
-    int g = (int)(30.0 + 225.0 * v);
+    int g = (int)(70.0 + 185.0 * v);
     return (g << 16) | (g << 8) | g;
 }
 
@@ -436,7 +438,7 @@ void lg_run(int frames, int speed) {
     if speed < 1 { speed = 7200; }
     double ts = (double)speed;
     lg_find_color();
-    char^ rp = " .'`^,:;Il!i><~+_-?][}{1)(|/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$";
+    char^ rp = " .:-+cvunxzXYUJCLQ0OZmwqpdbkhaoMW&8%B@$#";
     lg_n2 = 0;
     while rp[lg_n2] != 0 && lg_n2 < 90 {
         lg_ramp2[lg_n2] = rp[lg_n2];
@@ -509,7 +511,7 @@ void lg_run(int frames, int speed) {
     double nx0 = ey * c0z - ez * c0y;                     // north = east x c0
     double ny0 = ez * c0x - ex * c0z;
     double nz0 = ex * c0y - ey * c0x;
-    double rm = 0.30;                                     // the Moon (drawn bigger than real, 0.27, and nearer: not to scale)
+    double rm = 0.40;                                     // the Moon (drawn bigger than real, 0.27, and nearer: not to scale)
     double dm = 1.80;
     double mtilt = 0.0897;                                // its orbit leans 5.14 degrees
     int frame = 0;
@@ -600,10 +602,10 @@ void lg_run(int frames, int speed) {
                         if ts2 < 999.0 { lam = lam * 0.12; }
                     }
                     // the paint: the sea is mid grey with fine lines of latitude and longitude, the letter is white
-                    double albedo = 0.34;
+                    double albedo = 0.52;
                     double lat = lg_abs(lg_sin(p0x * lg_ax * 9.4248 + p0y * lg_ay * 9.4248 + p0z * lg_az * 9.4248));
                     double lon = lg_abs(lg_sin((lg_atan2(p0x * ex + p0y * ey + p0z * ez, p0x * c0x + p0y * c0y + p0z * c0z) + 3.1416) * 6.0));
-                    if lat < 0.07 || lon < 0.06 { albedo = 0.26; }
+                    if lat < 0.07 || lon < 0.06 { albedo = 0.40; }
                     albedo = albedo + (1.0 - albedo) * cov;
                     // the glow at the rim, a small bright spot of reflected light on the sea
                     double ndv = 0.0 - (nx * lg_fx + ny * lg_fy + nz * lg_fz);
@@ -624,7 +626,7 @@ void lg_run(int frames, int speed) {
                             refl = n2 * n2 * (1.0 - cov);
                         }
                     }
-                    double bright = 0.07 + 0.92 * lam * albedo + 0.18 * rim * (0.2 + lam) + 0.35 * refl;
+                    double bright = 0.11 + 0.90 * lam * albedo + 0.18 * rim * (0.2 + lam) + 0.35 * refl;
                     if bright > 1.0 { bright = 1.0; }
                     lg_ch[y * LW + x] = lg_pick(bright);
                     lg_col[y * LW + x] = lg_grey(bright);
@@ -639,6 +641,7 @@ void lg_run(int frames, int speed) {
                     double nz = (hz - mz) / rm;
                     double lam = nx * lx + ny * ly + nz * lz;
                     if lam < 0.0 { lam = 0.0; }
+                    double rim_m = 1.0 + (nx * lg_fx + ny * lg_fy + nz * lg_fz);       // 0 in the middle of the disc, 1 at its edge
                     // the shadow of the Earth (an eclipse of the Moon)
                     if lam > 0.0 {
                         double ts2 = lg_ball(hx, hy, hz, lx, ly, lz, 0.0, 0.0, 0.0, 1.0);
@@ -650,9 +653,10 @@ void lg_run(int frames, int speed) {
                     double mxl = nx * ca + nz * sa;
                     double mzl = 0.0 - nx * sa + nz * ca;
                     double patch = lg_sin(mxl * 4.0 + 1.0) * lg_sin(ny * 5.0 + 0.5) * lg_sin(mzl * 3.0 + 2.0);
-                    double albedo = 0.72;
-                    if patch > 0.18 { albedo = 0.42; }
-                    double bright = 0.07 + 0.90 * lam * albedo;
+                    double albedo = 0.95;
+                    if patch > 0.18 { albedo = 0.60; }
+                    double bright = 0.16 + 0.88 * lam * albedo;                // the dark side is not black: light of the Earth
+                    if rim_m > 0.55 { bright = bright + 0.18; }                  // a thin rim so that the whole disc can be seen
                     if bright > 1.0 { bright = 1.0; }
                     lg_ch[y * LW + x] = lg_pick(bright);
                     lg_col[y * LW + x] = lg_grey(bright);
@@ -694,29 +698,29 @@ void lg_run(int frames, int speed) {
         if dl > 0.0 { waxing = 1; }
         // the four lines under the picture
         lg_cbegin(0);
-        lg_ct("created by J2k-studio  (Ctrl-C or Enter to stop)");
+        lg_ct("by J2k-studio  (Ctrl-C/Enter: stop)");
         lg_cbegin(1);
-        lg_ct("film x");
+        lg_ct("x");
         lg_cnum(speed);
-        lg_ct(": Earth turns in ");
+        lg_ct("  Earth ");
         lg_cdur(day_s / ts);
-        lg_ct(", Moon in ");
+        lg_ct("  Moon ");
         lg_cdur(month_s / ts);
         lg_cbegin(2);
-        lg_ct("Earth time (UTC) ");
+        lg_ct("UTC ");
         lg_cclock();
-        lg_ct("   film = ");
+        lg_ct("  +");
         lg_cdur(real_s);
         lg_cbegin(3);
         lg_ct("Moon: ");
         lg_phase_name(lit, waxing);
         lg_ct(" ");
         lg_cnum((int)(lit * 100.0 + 0.5));
-        lg_ct("%  light: Sun ");
+        lg_ct("%  light Sun ");
         lg_cnum((int)(sun_delay / 60.0));
         lg_ct("m");
         lg_cnum((int)sun_delay % 60);
-        lg_ct("s, Moon ");
+        lg_ct("s Moon ");
         lg_cdec(moon_delay);
         lg_ct("s");
         lg_show();
