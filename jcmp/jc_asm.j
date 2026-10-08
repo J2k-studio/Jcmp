@@ -327,6 +327,44 @@ void as_h_cmp() {
 }
 
 // three-register forms: mul, udiv, sdiv, and, orr, eor, lsl, lsr, asr
+// lsl / lsr / asr: with three registers, or with a number: lsl x0, x1, #3
+void as_h_shift(int regbase, int kind) {
+    as_skip_spaces();
+    int rd = as_parse_reg();
+    as_expect_comma();
+    int rn = as_parse_reg();
+    as_expect_comma();
+    as_skip_spaces();
+    if as_cur() == '#' {
+        as_ci += 1;
+        int imm = as_parse_number();
+        if imm < 0 || imm > 63 { as_fail(); }
+        if kind == 0 {
+            as_put32(0xD3400000 | (((64 - imm) & 63) << 16) | ((63 - imm) << 10) | (rn << 5) | rd);
+        } else if kind == 1 {
+            as_put32(0xD340FC00 | (imm << 16) | (rn << 5) | rd);
+        } else {
+            as_put32(0x9340FC00 | (imm << 16) | (rn << 5) | rd);
+        }
+        return;
+    }
+    int rm = as_parse_reg();
+    as_put32(regbase | (rm << 16) | (rn << 5) | rd);
+}
+
+// msub / madd: four registers: xd = xa - xn * xm  (msub), xd = xa + xn * xm (madd)
+void as_h_rrrr(int base) {
+    as_skip_spaces();
+    int rd = as_parse_reg();
+    as_expect_comma();
+    int rn = as_parse_reg();
+    as_expect_comma();
+    int rm = as_parse_reg();
+    as_expect_comma();
+    int ra = as_parse_reg();
+    as_put32(base | (rm << 16) | (ra << 10) | (rn << 5) | rd);
+}
+
 void as_h_rrr(int base) {
     as_skip_spaces();
     int rd = as_parse_reg();
@@ -696,9 +734,12 @@ void as_instruction() {
     if as_mn_is("and") { as_h_rrr(0x8A000000); return; }
     if as_mn_is("orr") { as_h_rrr(0xAA000000); return; }
     if as_mn_is("eor") { as_h_rrr(0xCA000000); return; }
-    if as_mn_is("lsl") { as_h_rrr(0x9AC02000); return; }
-    if as_mn_is("lsr") { as_h_rrr(0x9AC02400); return; }
-    if as_mn_is("asr") { as_h_rrr(0x9AC02800); return; }
+    if as_mn_is("lsl") { as_h_shift(0x9AC02000, 0); return; }
+    if as_mn_is("lsr") { as_h_shift(0x9AC02400, 1); return; }
+    if as_mn_is("asr") { as_h_shift(0x9AC02800, 2); return; }
+    if as_mn_is("msub") { as_h_rrrr(0x9B008000); return; }
+    if as_mn_is("madd") { as_h_rrrr(0x9B000000); return; }
+    if as_mn_is("smulh") { as_h_rrr(0x9B407C00); return; }
     if as_mn_is("ldr") { as_h_mem(0xF940, 3); return; }
     if as_mn_is("str") { as_h_mem(0xF900, 3); return; }
     if as_mn_is("ldrb") { as_h_mem(0x3940, 0); return; }

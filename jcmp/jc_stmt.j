@@ -378,7 +378,18 @@ void parse_assign_core(char^ target) {
     if lv_kind == 1 { die_name("an array needs an index", target); }
     int tgt_ty = a_tid;
     if a_ptr != 0 { tgt_ty = 0; }
-    push_x0();                           // the target's address waits on the stack
+    // the target's address waits on the stack; but a plain variable has a fixed address that can be written again at the end
+    int tgt_off = 0 - 1;
+    int tgt_base = 29;
+    if a_kind == 0 && a_code < 16 {
+        int tn = tail_add_base();
+        if tn >= 0 {
+            tgt_off = tn;
+            tgt_base = tail_base;
+            out_len = tail_start;
+        }
+    }
+    if tgt_off < 0 { push_x0(); }
     int is_incr = 0;
     if tok_is("=") {
         next();
@@ -491,8 +502,16 @@ void parse_assign_core(char^ target) {
     }
     int rhs_ty = ex_ty;
     if for_step == 0 { expect(";"); }
-    emit_line("ldr x3, [sp, #0]");       // x3 = the target's address, x0 = the value
-    emit_line("add sp, sp, #16");
+    if tgt_off >= 0 {
+        emit_str("add x3, x");           // x3 = the target's address, x0 = the value
+        emit_int(tgt_base);
+        emit_str(", #");
+        emit_int(tgt_off);
+        emit_nl();
+    } else {
+        emit_line("ldr x3, [sp, #0]");       // x3 = the target's address, x0 = the value
+        emit_line("add sp, sp, #16");
+    }
     emit_line("mov x1, x0");
     if op[0] != 0 {
         load_from_x3(a_code);

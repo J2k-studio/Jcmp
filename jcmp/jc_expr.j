@@ -771,20 +771,72 @@ void store_scalar() {
 }
 
 // x0 = the value of the given width code at the address held in x0
+int tail_start;              // where the last line of out_buf starts (set by tail_add_base)
+int tail_base;               // 28 or 29 : the base register of that line
+
+// is the last line written "add x0, x29, #N" (or x28)? then N, else -1 (the line has to be the very last thing written: no label between)
+int tail_add_base() {
+    int e = out_len;
+    if e < 16 || out_buf[e - 1] != 10 { return 0 - 1; }
+    int st = e - 1;
+    while st > 0 && out_buf[st - 1] != 10 { st -= 1; }
+    char^ want = "add x0, x2";
+    int i = 0;
+    while want[i] != 0 {
+        if out_buf[st + i] != want[i] { return 0 - 1; }
+        i += 1;
+    }
+    int bch = out_buf[st + i];
+    if bch != '8' && bch != '9' { return 0 - 1; }
+    char^ rest = ", #";
+    int k = st + i + 1;
+    int j = 0;
+    while rest[j] != 0 {
+        if out_buf[k + j] != rest[j] { return 0 - 1; }
+        j += 1;
+    }
+    k = k + j;
+    if k >= e - 1 { return 0 - 1; }
+    int n = 0;
+    while k < e - 1 {
+        int c = out_buf[k];
+        if c < '0' || c > '9' { return 0 - 1; }
+        n = n * 10 + (c - '0');
+        k += 1;
+    }
+    tail_start = st;
+    tail_base = 20 + (bch - '0');
+    return n;
+}
+
+// "add x0, x29, #N" just before, then the load becomes one instruction: ldr x0, [x29, #N]
+bool load_direct(char^ op, int scale) {
+    int n = tail_add_base();
+    if n < 0 || n >= 4096 || n % scale != 0 { return false; }
+    out_len = tail_start;
+    emit_str(op);
+    emit_str(" x0, [x");
+    emit_int(tail_base);
+    emit_str(", #");
+    emit_int(n);
+    emit_str("]\n");
+    return true;
+}
+
 void load_through(int code) {
     if code == 6 { code = 4; }
     if code == 7 || code == 13 { code = 8; }
     if code == 11 { code = 2; }
     if code == 1 {
-        emit_line("ldrsb x0, [x0, #0]");
+        if !load_direct("ldrsb", 1) { emit_line("ldrsb x0, [x0, #0]"); }
     } else if code == 12 {
-        emit_line("ldrw x0, [x0, #0]");
+        if !load_direct("ldrw", 4) { emit_line("ldrw x0, [x0, #0]"); }
     } else if code == 4 {
-        emit_line("ldrsw x0, [x0, #0]");
+        if !load_direct("ldrsw", 4) { emit_line("ldrsw x0, [x0, #0]"); }
     } else if code == 8 {
-        emit_line("ldr x0, [x0, #0]");
+        if !load_direct("ldr", 8) { emit_line("ldr x0, [x0, #0]"); }
     } else {
-        emit_line("ldrb x0, [x0, #0]");
+        if !load_direct("ldrb", 1) { emit_line("ldrb x0, [x0, #0]"); }
     }
 }
 
@@ -3223,6 +3275,7 @@ int uns_op;                  // 1: the next arith() works on unsigned numbers
 
 // x1 = the divisor: 0 throws "division by zero" (catchable), in every build
 int div_nonzero;             // 1: the divisor is a literal other than 0: no check
+int div_lit;                 // the value of that literal (0 if the divisor is not a literal)
 void emit_divzero_check() {
     if div_nonzero == 1 { return; }
     int lok = new_label();
@@ -3234,16 +3287,91 @@ void emit_divzero_check() {
     note_call("__panic");
 }
 
+// x0 = x0 / d or x0 % d for a whole number d >= 1 known now (signed): without the slow sdiv instruction. A power of two is a shift;
+// any other number d is a multiplication by a "magic" number and a shift (Hacker's Delight, chapter 10): the high half of
+// x0 * M (smulh), a correction, a shift, and the sign bit added. x1..x4 are used.
+void emit_div_const(int d, bool is_mod) {
+    if d == 1 {
+        if is_mod { emit_line("mov x0, 0"); }
+        return;
+    }
+    if (d & (d - 1)) == 0 {
+        int k = 0;
+        while (1 << k) < d { k += 1; }
+        emit_line("asr x2, x0, #63");
+        ins_n("lsr x2, x2, #", 64 - k);
+        emit_line("add x2, x0, x2");
+        ins_n("asr x2, x2, #", k);              // x2 = the quotient (cut towards zero)
+        if is_mod {
+            ins_n("lsl x2, x2, #", k);
+            emit_line("sub x0, x0, x2");
+        } else {
+            emit_line("mov x0, x2");
+        }
+        return;
+    }
+    // the magic number: M (as a signed 64-bit number) and the shift s
+    u64 two63 = (u64)1 << 63;
+    u64 ad = (u64)d;
+    u64 anc = two63 - 1 - two63 % ad;
+    int p = 63;
+    u64 q1 = two63 / anc;
+    u64 r1 = two63 - q1 * anc;
+    u64 q2 = two63 / ad;
+    u64 r2 = two63 - q2 * ad;
+    u64 delta = 0;
+    bool again = true;
+    while again {
+        p += 1;
+        q1 = q1 * 2;
+        r1 = r1 * 2;
+        if r1 >= anc {
+            q1 = q1 + 1;
+            r1 = r1 - anc;
+        }
+        q2 = q2 * 2;
+        r2 = r2 * 2;
+        if r2 >= ad {
+            q2 = q2 + 1;
+            r2 = r2 - ad;
+        }
+        delta = ad - r2;
+        again = q1 < delta || (q1 == delta && r1 == 0);
+    }
+    int m = (int)(q2 + 1);                       // the bits of M, read as a signed number
+    int sh = p - 64;
+    ins_n("mov x4, ", m);
+    emit_line("smulh x2, x0, x4");
+    if m < 0 { emit_line("add x2, x2, x0"); }
+    if sh > 0 { ins_n("asr x2, x2, #", sh); }
+    emit_line("lsr x3, x2, #63");
+    emit_line("add x2, x2, x3");                 // x2 = the quotient (cut towards zero)
+    if is_mod {
+        ins_n("mov x3, ", d);
+        emit_line("msub x0, x2, x3, x0");
+    } else {
+        emit_line("mov x0, x2");
+    }
+}
+
 void arith(char^ op) {
     if str_eq(op, "+") { emit_line("add x0, x0, x1"); return; }
     if str_eq(op, "-") { emit_line("sub x0, x0, x1"); return; }
     if str_eq(op, "*") { emit_line("mul x0, x0, x1"); return; }
     if str_eq(op, "/") {
+        if div_lit >= 1 && uns_op == 0 && div_lit < 2147483648 {
+            emit_div_const(div_lit, false);
+            return;
+        }
         emit_divzero_check();
         if uns_op == 1 { emit_line("udiv x0, x0, x1"); } else { emit_line("sdiv x0, x0, x1"); }
         return;
     }
     if str_eq(op, "%") {
+        if div_lit >= 1 && uns_op == 0 && div_lit < 2147483648 {
+            emit_div_const(div_lit, true);
+            return;
+        }
         emit_divzero_check();
         if uns_op == 1 { emit_line("udiv x2, x0, x1"); } else { emit_line("sdiv x2, x0, x1"); }
         emit_line("mul x2, x2, x1");
@@ -3341,6 +3469,187 @@ void emit_unary_operator(int lt) {
     gen_call();
 }
 
+int stash_depth;             // how many left operands wait in registers x10, x11, ... now
+
+// the level of the binary operator that starts at offset o of the text ahead (1 * / %, 2 + -, 3 shifts, 4 &, 5 xor, 6 |, 7 < > <= >=,
+// 8 == !=, 9 &&, 10 ||); 99 if there is none (a character that ends an operand); its length goes to op_len
+int op_len;
+int op_level_at(int o) {
+    int c = lc(o);
+    int d = lc(o + 1);
+    op_len = 1;
+    if c == '*' || c == '/' || c == '%' { return 1; }
+    if c == '+' || c == '-' { return 2; }
+    if c == '<' {
+        if d == '<' { op_len = 2; return 3; }
+        if d == '=' { op_len = 2; }
+        return 7;
+    }
+    if c == '>' {
+        if d == '>' { op_len = 2; return 3; }
+        if d == '=' { op_len = 2; }
+        return 7;
+    }
+    if c == '&' {
+        if d == '&' { op_len = 2; return 9; }
+        return 4;
+    }
+    if c == '|' {
+        if d == '|' { op_len = 2; return 10; }
+        return 6;
+    }
+    if c == '=' && d == '=' { op_len = 2; return 8; }
+    if c == '!' && d == '=' { op_len = 2; return 8; }
+    if c == 'x' && d == 'o' && lc(o + 2) == 'r' && !is_letter(lc(o + 3)) { op_len = 3; return 5; }
+    if c == 's' && d == 'h' && (lc(o + 2) == 'l' || lc(o + 2) == 'r') && !is_letter(lc(o + 3)) { op_len = 3; return 3; }
+    return 99;
+}
+
+// is the right operand that comes next made of plain numbers and plain variables only (no call, no parentheses, no strings)?
+// Then nothing in it can change a variable or use a register of the stash, so the left operand may wait in a register.
+// lvl is the level of the parser of the right operand (see op_level_at: the operators of a lower level belong to the right operand).
+bool pure_right_ahead(int lvl) {
+    if tok_kind == T_NUM {
+        if tok_float == 1 { return false; }
+    } else if tok_kind == T_IDENT {
+        if !lookup_var(@tok_text) { return false; }
+        if v_kind != 0 || v_elem >= 16 || v_tid < 0 || v_ptr >= 16 { return false; }
+        if v_tid >= 98 { return false; }
+    } else {
+        return false;
+    }
+    int o = 0;
+    int bd = 0;
+    while o < 240 {
+        while is_space(lc(o)) { o += 1; }
+        int c = lc(o);
+        int d = lc(o + 1);
+        if c == 0 { return false; }
+        if c == ';' || c == ')' || c == ',' || c == '{' || c == '}' {
+            if bd == 0 { return true; }
+            return false;
+        }
+        if c == ']' {
+            if bd == 0 { return true; }
+            bd -= 1;
+            o += 1;
+        } else if c == '[' {
+            bd += 1;
+            o += 1;
+        } else if c == '.' {
+            if d == '.' && bd == 0 { return true; }                   // a range 0..n ends the operand
+            if !is_letter(d) { return false; }
+            o += 1;
+        } else if c == '^' {
+            o += 1;
+        } else if c == '/' && (d == '/' || d == '*') {
+            return false;
+        } else if is_letter(c) || is_digit(c) || c == '_' {
+            int nl0 = 99;
+            if bd == 0 { nl0 = op_level_at(o); }
+            if nl0 != 99 && !(is_letter(lc(o - 1)) || is_digit(lc(o - 1))) {
+                if nl0 >= lvl { return true; }
+                o += op_len;
+            } else {
+                while is_letter(lc(o)) || is_digit(lc(o)) || lc(o) == '_' { o += 1; }
+            }
+        } else {
+            int nl = op_level_at(o);
+            if nl == 99 {
+                if c == '-' || c == '!' || c == '~' { o += 1; continue; }
+                return false;                                            // ( " : @ ? ' or something else: do not guess
+            }
+            if bd == 0 && nl >= lvl { return true; }
+            o += op_len;
+            // a sign in front of the next operand
+            while is_space(lc(o)) { o += 1; }
+            if lc(o) == '-' || lc(o) == '!' || lc(o) == '~' { o += 1; }
+        }
+    }
+    return false;
+}
+
+// the left operand of a binary operator: kept in a register (x10, x11, ...) if the right operand is made of plain numbers and
+// variables only, else pushed on the stack. Returns the number of the register, or 0 for the stack. The left value must be a plain
+// number, a bool, an enum, a float or a pointer (lt is its type).
+int stash_left(int lt, int lvl) {
+    if lt >= 0 && lt != 80 && lt != 99 && lt < 98 && stash_depth < 5 && pure_right_ahead(lvl) {
+        int r = 10 + stash_depth;
+        stash_depth += 1;
+        emit_str("mov x");
+        emit_int(r);
+        emit_line(", x0");
+        return r;
+    }
+    push_x0();
+    return 0;
+}
+
+// x0 = the right operand, the left one is in the register st (or on the stack if st == 0): leaves x0 = left, x1 = right
+void take_operands_s(int st) {
+    if st >= 10 {
+        rv_valid = 0;
+        stash_depth -= 1;
+        // the right operand was one instruction that put its value in x0 (a number or a variable): put it in x1 straight
+        if !fuse_right_into_x1(st) {
+            emit_line("mov x1, x0");
+            emit_str("mov x0, x");
+            emit_int(st);
+            emit_nl();
+        }
+    } else {
+        take_operands();
+    }
+}
+
+// the last two lines are "mov xS, x0" and "mov x0, N" / "ldr x0, [x29, #N]": they become "mov x1, N" / "ldr x1, [x29, #N]"
+bool fuse_right_into_x1(int st) {
+    int e = out_len;
+    if e < 24 || out_buf[e - 1] != 10 { return false; }
+    int ls = e - 1;
+    while ls > 0 && out_buf[ls - 1] != 10 { ls -= 1; }
+    if ls < 2 { return false; }
+    int ps = ls - 1;
+    while ps > 0 && out_buf[ps - 1] != 10 { ps -= 1; }
+    // the line before: mov xS, x0
+    char^ want = "mov x";
+    int i = 0;
+    while want[i] != 0 {
+        if out_buf[ps + i] != want[i] { return false; }
+        i += 1;
+    }
+    int k = ps + i;
+    int rn = 0;
+    while out_buf[k] >= '0' && out_buf[k] <= '9' {
+        rn = rn * 10 + (out_buf[k] - '0');
+        k += 1;
+    }
+    if rn != st { return false; }
+    char^ tail = ", x0";
+    int j = 0;
+    while tail[j] != 0 {
+        if out_buf[k + j] != tail[j] { return false; }
+        j += 1;
+    }
+    if k + j != ls - 1 { return false; }
+    // the last line
+    bool is_mov = out_buf[ls] == 'm' && out_buf[ls + 1] == 'o' && out_buf[ls + 2] == 'v' && out_buf[ls + 3] == ' ' && out_buf[ls + 4] == 'x' && out_buf[ls + 5] == '0' && out_buf[ls + 6] == ',';
+    bool is_ldr = out_buf[ls] == 'l' && out_buf[ls + 1] == 'd' && out_buf[ls + 2] == 'r' && out_buf[ls + 3] == ' ' && out_buf[ls + 4] == 'x' && out_buf[ls + 5] == '0' && out_buf[ls + 6] == ',' && out_buf[ls + 8] == '[' && out_buf[ls + 9] == 'x' && out_buf[ls + 10] == '2';
+    if !is_mov && !is_ldr { return false; }
+    // do not take a "mov x0, x..." (a register copy): only numbers
+    if is_mov && out_buf[ls + 8] == 'x' { return false; }
+    // copy the last line with x1 instead of x0, over the line before
+    int n = e - ls;
+    int t = 0;
+    while t < n {
+        out_buf[ps + t] = out_buf[ls + t];
+        t += 1;
+    }
+    out_buf[ps + 5] = '1';
+    out_len = ps + n;
+    return true;
+}
+
 void parse_mul() {
     parse_unary();
     int mlw = ex_w;
@@ -3349,9 +3658,14 @@ void parse_mul() {
         char op[8];
         str_copy(@op, @tok_text, 8);
         next();
-        push_x0();
+        int st = stash_left(mlt, 1);
         int rhs_lit = 0;
-        if tok_kind == T_NUM && tok_float == 0 && tok_num != 0 { rhs_lit = 1; }
+        int rhs_val = 0;
+        if tok_kind == T_NUM && tok_float == 0 && tok_num != 0 {
+            rhs_lit = 1;
+            rhs_val = tok_num;
+            if tok_char == 1 { rhs_val = 0; }                  // a character literal: leave it to the general code
+        }
         parse_unary();
         if mlt >= 100 && mlt < 1000 {
             emit_operator_call(@op, mlt);
@@ -3372,7 +3686,7 @@ void parse_mul() {
         } else if is_float(mlt) || is_float(ex_ty) {
             if str_eq(@op, "%") { die("% does not work on floats"); }
             int mrt = ex_ty;
-            take_operands();
+            take_operands_s(st);
             mlt = fp_binop(@op, mlt, mrt);
             ex_ty = mlt;
             mlw = 8;
@@ -3383,10 +3697,12 @@ void parse_mul() {
             ex_ty = mlt_t;
             uns_op = 0;
             if is_unsigned(mlt_t) { uns_op = 1; }
-            take_operands();
+            take_operands_s(st);
             div_nonzero = rhs_lit;
+            div_lit = rhs_val;
             arith(@op);
             div_nonzero = 0;
+            div_lit = 0;
             mlw = res_w(mlw, ex_w);
             wrap_result(mlw);
         }
@@ -3401,7 +3717,7 @@ void parse_add() {
         char aop[8];
         str_copy(@aop, @tok_text, 8);
         next();
-        push_x0();
+        int st = stash_left(alt, 2);
         parse_mul();
         if alt >= 100 && alt < 1000 {
             emit_operator_call(@aop, alt);
@@ -3426,7 +3742,7 @@ void parse_add() {
             alw = 8;
         } else if is_float(alt) || is_float(ex_ty) {
             int art = ex_ty;
-            take_operands();
+            take_operands_s(st);
             alt = fp_binop(@aop, alt, art);
             ex_ty = alt;
             alw = 8;
@@ -3437,7 +3753,7 @@ void parse_add() {
             ex_ty = alt_t;
             uns_op = 0;
             if is_unsigned(alt_t) { uns_op = 1; }
-            take_operands();
+            take_operands_s(st);
             arith(@aop);
             alw = res_w(alw, ex_w);
             wrap_result(alw);
@@ -3453,14 +3769,14 @@ void parse_shift() {
         char sop[8];
         str_copy(@sop, @tok_text, 8);
         next();
-        push_x0();
+        int st = stash_left(slt, 3);
         parse_add();
         int slt_t = shift_type(slt, ex_ty);
         slt = slt_t;
         ex_ty = slt_t;
         uns_op = 0;
         if is_unsigned(slt_t) { uns_op = 1; }
-        take_operands();
+        take_operands_s(st);
         arith(@sop);
         slw = res_w(slw, ex_w);
         wrap_result(slw);
@@ -3473,14 +3789,14 @@ void parse_bitand() {
     int blt = ex_ty;
     while tok_is("&") {
         next();
-        push_x0();
+        int st = stash_left(blt, 4);
         parse_shift();
         int blt_t = bin_type(blt, ex_ty);
         blt = blt_t;
         ex_ty = blt_t;
         uns_op = 0;
         if is_unsigned(blt_t) { uns_op = 1; }
-        take_operands();
+        take_operands_s(st);
         emit_line("and x0, x0, x1");
         blw = res_w(blw, ex_w);
         wrap_result(blw);
@@ -3493,14 +3809,14 @@ void parse_bitxor() {
     int xlt = ex_ty;
     while tok_is("xor") {
         next();
-        push_x0();
+        int st = stash_left(xlt, 5);
         parse_bitand();
         int xlt_t = bin_type(xlt, ex_ty);
         xlt = xlt_t;
         ex_ty = xlt_t;
         uns_op = 0;
         if is_unsigned(xlt_t) { uns_op = 1; }
-        take_operands();
+        take_operands_s(st);
         emit_line("eor x0, x0, x1");
         xlw = res_w(xlw, ex_w);
         wrap_result(xlw);
@@ -3513,14 +3829,14 @@ void parse_bitor() {
     int olt = ex_ty;
     while tok_is("|") {
         next();
-        push_x0();
+        int st = stash_left(olt, 6);
         parse_bitxor();
         int olt_t = bin_type(olt, ex_ty);
         olt = olt_t;
         ex_ty = olt_t;
         uns_op = 0;
         if is_unsigned(olt_t) { uns_op = 1; }
-        take_operands();
+        take_operands_s(st);
         emit_line("orr x0, x0, x1");
         olw = res_w(olw, ex_w);
         wrap_result(olw);
@@ -3545,11 +3861,11 @@ void parse_relational() {
         int rel_lt = ex_ty;
         if !is_float(rel_lt) { need_num(ex_ty); }
         next();
-        push_x0();
+        int st = stash_left(rel_lt, 7);
         parse_bitor();
         int rel_rt = ex_ty;
         if !is_float(rel_lt) && !is_float(rel_rt) { need_num(ex_ty); }
-        take_operands();
+        take_operands_s(st);
         if is_float(rel_lt) || is_float(rel_rt) {
             if str_eq(@rel, "<") { fp_compare("lt", rel_lt, rel_rt); }
             if str_eq(@rel, ">") { fp_compare("gt", rel_lt, rel_rt); }
@@ -3595,7 +3911,7 @@ void parse_equality() {
         int eq_left = ex_ty;
         int eq_lw = ex_w;
         next();
-        push_x0();
+        int st = stash_left(eq_left, 8);
         parse_relational();
         int eq_right = ex_ty;
         if eq_left >= 100 && eq_left < 1000 {
@@ -3623,7 +3939,7 @@ void parse_equality() {
             rv_valid = 0;
         } else {
         if !is_float(eq_left) && !is_float(eq_right) { check_comparable(eq_left, eq_right); }
-        take_operands();
+        take_operands_s(st);
         if is_float(eq_left) || is_float(eq_right) {
             if str_eq(@eqop, "==") { fp_compare("eq", eq_left, eq_right); }
             if str_eq(@eqop, "!=") { fp_compare("ne", eq_left, eq_right); }

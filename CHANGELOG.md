@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.44
+* **Faster code (first step of the speed work):** the left operand of a binary operator no longer goes through the stack when the right operand is made of plain numbers and variables: it waits in a register (`x10`..`x14`), and a right operand that is one number or one variable is loaded straight into `x1`; a variable is read with one instruction (`ldr x0, [x29, #N]`, not an address and a load); assigning to a plain variable no longer pushes its address; `/` and `%` by a whole-number literal use a multiplication (`smulh`) and a shift instead of the slow `sdiv` (checked against `sdiv` on 164 000 values, edges of 64 bits included). New instructions in the assembler: `msub`, `madd`, `smulh`, and `lsl/lsr/asr` with a number.
+* Measured against `clang` on this phone (best of 3, ms): `fib(35)` 211 -> 136, a loop of 300 million `s = s + i % 7` 1554 -> 1105, a sieve of 5 million 276 -> 186, a 200 x 200 matrix product 130 -> 89 (`clang -O2`: 71, 232, 72, 28). The programs are in `tools/bench` (private).
+* The results are the same as before: a test with many forms of expressions (precedence, calls with side effects in operands, floats, chars, arrays) must give the same output as the old compiler.
+
 ## 0.9.43
 * **A call can go on after a value in parentheses:** `(a + b).dot(c)`, `(s + t).len`, `(u * 2.0).z`, `(a + b).length()`.
 * **`-v` on a struct** calls its `operator ... neg(self)`; `vec2/3/4` have it.
