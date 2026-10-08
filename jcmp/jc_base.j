@@ -201,6 +201,9 @@ char inc_dir[256];           // -I dir : where `import "name"` looks if the file
 int warn_count;
 int used_fprint;             // 1 if coutf was used: the float printing routine is emitted
 int used_uprint;             // 1 if an unsigned 64-bit number is printed: the routine is emitted
+int used_fntab;               // 1 if __fntab() is used: the table of function names is emitted
+int ft_count;                // functions in the table (pass 3)
+char ft_names[262144];       // their names, 64 bytes each
 int used_thread;             // 1 if a thread is started: the start routine is emitted
 int used_noret;              // 1 if a function can end without a return: the 'missing return' routine is added
 int used_divz;               // 1 if a division was emitted: the 'division by zero' routine is added

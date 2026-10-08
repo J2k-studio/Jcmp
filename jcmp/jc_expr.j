@@ -58,10 +58,10 @@ int ty_tid;                  // type of values: 0 number, 1 bool, 3+n enum numbe
 int ex_ty;                   // type of the last operand/result: 0 number, 1 bool, 2 the literal 0 or 1, 3+n enum n
 int ex_w;                    // width code of the last operand/result: 0 = a plain number, else 1 i8, 2 char, 3 bool, 4 i32, 8 int
 
-char sname[5120];            // 80 x 64
-int ssize[80];               // bytes, a multiple of 8
-int sfirst[80];              // its first field in the field tables
-int snf[80];                 // how many fields
+char sname[16384];           // 256 x 64
+int ssize[256];               // bytes, a multiple of 8
+int sfirst[256];              // its first field in the field tables
+int snf[256];                 // how many fields
 int scount;
 char fldname[524288];         // 1024 x 64
 int fldcode[8192];           // width code of the field (8 int, 16+n a struct ...)
@@ -102,8 +102,8 @@ char emname[524288];          // 512 members x 64
 int emval[8192];
 int emenum[8192];
 int emcount;
-int us_g[64];                // "using Struct" at file level
-int us_l[64];                // ... inside the current function
+int us_g[256];                // "using Struct" at file level
+int us_l[256];                // ... inside the current function
 int ue_g[64];                // "using enum" at file level
 int ue_l[64];                // ... inside the current function
 
@@ -750,7 +750,7 @@ void load_scalar() {
 
 // bytes taken by one value of a width code: 1 i8, 2 char, 3 bool, 4 i32, 8 int
 int size_of(int code) {
-    if code >= 100 { return 8; }         // 100 + c : a pointer to a pointer to c
+    if code >= 400 { return 8; }         // 400 + c : a pointer to a pointer to c
     if code >= 16 { return ssize[code - 16]; }
     if code == 8 || code == 9 || code == 7 || code == 13 { return 8; }
     if code == 6 || code == 4 || code == 12 { return 4; }
@@ -1411,6 +1411,11 @@ void gen_call() {
         if n != 5 { die("__thread_start takes five arguments"); }
         used_thread = 1;
         emit_line("bl j2k_thread_start");
+    } else if str_eq(@callee, "__fp") {
+        emit_line("mov x0, x29");                 // this function's frame: [x0] = the caller's frame, [x0 + 8] = the return address
+    } else if str_eq(@callee, "__fntab") {
+        used_fntab = 1;
+        emit_line("adr x0, j2k_fntab");           // pairs (function address, name) ended by a 0
     } else if str_eq(@callee, "argc") {
         emit_line("ldr x9, [x28, #0]");
         emit_line("ldr x0, [x9, #0]");
@@ -1453,7 +1458,7 @@ void gen_call() {
 
 // the type of what a pointer to `code` points at
 int pointee_tid(int code) {
-    if code >= 100 { return 0; }
+    if code >= 400 { return 0; }
     if code == 11 { return 93; }
     if code == 12 { return 94; }
     if code == 13 { return 95; }
@@ -1566,9 +1571,9 @@ void lvalue_loop() {
             emit_line("mul x0, x0, x1");
             pop_x1();
             emit_line("add x0, x0, x1");
-            if s_code >= 100 {
+            if s_code >= 400 {
                 // an element that is itself a pointer (T^^ p; p[i])
-                s_ptr = s_code - 100;
+                s_ptr = s_code - 400;
                 s_code = 8;
                 s_tid = 0;
             }
@@ -1588,9 +1593,9 @@ void lvalue_loop() {
             lv_code = lv_ptr;
             lv_tid = pointee_tid(lv_ptr);
             lv_ptr = 0;
-            if lv_code >= 100 {
+            if lv_code >= 400 {
                 // p^ is itself a pointer (T^^ p)
-                lv_ptr = lv_code - 100;
+                lv_ptr = lv_code - 400;
                 lv_code = 8;
                 lv_tid = 0;
             }
@@ -1938,19 +1943,19 @@ void gen_call_indirect(int tid) {
 // (see std/prelude.j, struct __Arr). The packed element type: code | ptr << 8 | (tid + 1024) << 17.
 
 int dyn_pack(int code, int ptr, int tid) {
-    return code + ptr * 256 + (tid + 1024) * 131072;
+    return code + ptr * 1024 + (tid + 1024) * 1048576;
 }
 
 int dyn_code(int info) {
-    return info % 256;
+    return info % 1024;
 }
 
 int dyn_ptr(int info) {
-    return (info / 256) % 512;
+    return (info / 1024) % 1024;
 }
 
 int dyn_tid(int info) {
-    return info / 131072 - 1024;
+    return info / 1048576 - 1024;
 }
 
 // A value of a struct that frees itself (it has a method free(self)) cannot be copied. It moves: a fresh value (the result of
@@ -2627,7 +2632,7 @@ void dyn_member() {
         emit_line("mov x3, x0");
         emit_line("ldr x1, [sp, #0]");
         emit_line("add sp, sp, #32");
-        if code >= 16 && code < 100 && eptr == 0 {
+        if code >= 16 && code < 400 && eptr == 0 {
             emit_line("mov x0, x1");
             ins_n("mov x2, ", ssize[code - 16]);
             emit_line("bl j2k_copy");
@@ -2647,7 +2652,7 @@ void dyn_member() {
         expect(")");
         load_through(8);
         rt_call("__Arr__pop");           // x0 = where the removed element still is
-        if code >= 16 && code < 100 && eptr == 0 {
+        if code >= 16 && code < 400 && eptr == 0 {
             lv_code = code;              // a struct: it is the object from here on
             lv_kind = 0;
             lv_ptr = 0;

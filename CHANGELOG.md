@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.13
+* **A panic prints where it happened:** after `panic: <what>` the running functions follow, innermost first (`  at inner`, `  at outer`, `  at main`; methods as `Type::name`).
+* **`using enum` works for data enums:** after `using enum Shape`, `switch` can use the short member names (`Circle(r):`).
+* The limit of structs in one program is 256 (was 80).
+* New in the assembler/compiler: `.quad`, `.asciz`, and the built-in `__fp()` / `__fntab()` (used by the trace).
+
 ## 0.9.12.1
 * **Methods and `.len` on any String / array expression:** `"  text ".trim().len`, `s.trim().upper()`, `Env::args().len`, `words().join("+")`, `"MiXed".upper()` (before, only on variables and on the result of a call).
 * A moved value that is used again by a method call (`b = a; a.len()`) gets the `-Wmoved` warning, like a plain read.

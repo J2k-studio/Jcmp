@@ -2,7 +2,7 @@
 // Build:  bin/jcmp jcmp/jcmp.jk -o jcmp1        (see bootstrap.sh)
 // Use:    jcmp1 input.jk -o program
 // the version of the compiler (also in the file VERSION; release.sh checks that they agree)
-#define JCMP_VERSION "0.9.12.1"
+#define JCMP_VERSION "0.9.13"
 
 #import "jc_base"
 #import "jc_asm"
@@ -16,6 +16,7 @@
 
 // the state that every pass starts again from
 void reset_state(char^ in_path) {
+    ft_count = 0;
     out_len = 0;
     gcount = 0;
     gl_bytes = 864;                      // slot 0: initial sp; 8..71: arguments 9..16 of a call; 72..863: exceptions

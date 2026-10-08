@@ -189,7 +189,7 @@ void parse_type() {
         ty_width = 8;
         if tok_is("^") {
             next();                  // T^^ : a pointer to a pointer to T
-            ty_ptr = 100 + ty_ptr;
+            ty_ptr = 400 + ty_ptr;
             if tok_is("^") { die("at most two levels of ^ are supported (T^^)"); }
         }
     }
@@ -1121,6 +1121,13 @@ void parse_using() {
     if tok_is("enum") {
         next();
         int en = find_enum(@tok_text);
+        int dden = dv_find_enum(@tok_text);
+        if dden >= 0 {
+            dv_set_using(dden, cur_in_func);        // a data enum: its members can be named without Name::
+            next();
+            accept(";");
+            return;
+        }
         if en < 0 { die_name("unknown enum", @tok_text); }
         if cur_in_func == 1 {
             ue_l[en] = 1;
@@ -1289,15 +1296,21 @@ void parse_switch_data(int sw_off, int sd, int sv_line, int sv_col, int sv_base,
         } else {
             int labels = 0;
             while true {
-                if tok_kind != T_IDENT || !dv_label_ok(d, @tok_text) {
-                    die_name("a case of this switch is written Enum::Member; the enum is", dv_name_of(d));
+                int gv = 0 - 1;
+                if tok_kind == T_IDENT && dv_using(d) && dv_variant(d, @tok_text) >= 0 && !dv_label_ok(d, @tok_text) {
+                    gv = dv_variant(d, @tok_text);               // after  using enum Name;  the member alone
+                    next();
+                } else {
+                    if tok_kind != T_IDENT || !dv_label_ok(d, @tok_text) {
+                        die_name("a case of this switch is written Enum::Member; the enum is", dv_name_of(d));
+                    }
+                    next();
+                    expect("::");
+                    if tok_kind != T_IDENT { die("a member name was expected"); }
+                    gv = dv_variant(d, @tok_text);
+                    if gv < 0 { die_name("not a member of the enum", @tok_text); }
+                    next();
                 }
-                next();
-                expect("::");
-                if tok_kind != T_IDENT { die("a member name was expected"); }
-                int gv = dv_variant(d, @tok_text);
-                if gv < 0 { die_name("not a member of the enum", @tok_text); }
-                next();
                 int vi = gv - dv_first_of(d);
                 covered[vi] = 1;
                 ins_mem("ldr", "x0", "x29", sw_off);
@@ -2147,9 +2160,14 @@ void parse_function() {
     int ue_i = 0;
     while ue_i < 64 {
         ue_l[ue_i] = 0;
+        ue_i += 1;
+    }
+    ue_i = 0;
+    while ue_i < 256 {
         us_l[ue_i] = 0;
         ue_i += 1;
     }
+    dv_clear_local();
     lcount = 0;
     frame_bytes = 16;
     loop_depth = 0;
@@ -2170,6 +2188,10 @@ void parse_function() {
     ret_label = new_label();
     emit_str(@d_fname);
     emit_str(":\n");
+    if pass_no == 3 && f_skip == 0 && ft_count < 4096 {
+        str_copy(@ft_names + ft_count * 64, @d_fname, 64);
+        ft_count += 1;
+    }
     emit_str("sub sp, sp, #");
     emit_patch_digits();
     emit_nl();
@@ -2482,7 +2504,7 @@ void parse_struct() {
     int sd = find_struct(@tok_text);
     if pass_no == 1 {
         if sd >= 0 { die_name("this struct already exists", @tok_text); }
-        if scount >= 80 { die("too many structs (80 at most, generic instances count)"); }
+        if scount >= 256 { die("too many structs (256 at most, generic instances count)"); }
         sd = scount;
         str_copy(@sname + sd * 64, @tok_text, 64);
         sfirst[sd] = fldcount;
@@ -2737,6 +2759,31 @@ void emit_start_stub() {
         gi_k += 1;
     }
     emit_line("b main");
+    if used_fntab == 1 {
+        // the names of the functions, for the trace that a panic prints
+        emit_line("j2k_fntab:");
+        int ft_i = 0;
+        while ft_i < ft_count {
+            emit_str(".quad ");
+            emit_line(@ft_names + ft_i * 64);
+            emit_str(".quad j2k_fs");
+            emit_int(ft_i);
+            emit_nl();
+            ft_i += 1;
+        }
+        emit_line(".quad 0");
+        emit_line(".quad 0");
+        ft_i = 0;
+        while ft_i < ft_count {
+            emit_str("j2k_fs");
+            emit_int(ft_i);
+            emit_line(":");
+            emit_str(".asciz \"");
+            emit_str(@ft_names + ft_i * 64);
+            emit_line("\"");
+            ft_i += 1;
+        }
+    }
     emit_str(".bss ");
     emit_int(gl_bytes);
     emit_nl();

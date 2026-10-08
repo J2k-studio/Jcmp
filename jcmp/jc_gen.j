@@ -84,6 +84,7 @@ void gen_reset() {
     lam_seq = 0;
     lam_warned = 0;
     dv_count = 0;
+    dv_clear_all();
     dvv_count = 0;
     dvp_count = 0;
     tpl_used = 0;
@@ -972,7 +973,7 @@ bool code_text(int code, int tid, char^ out) {
     if code == 11 { str_copy(out, "u8", 8); return true; }
     if code == 12 { str_copy(out, "u32", 8); return true; }
     if code == 13 { str_copy(out, "u64", 8); return true; }
-    if code >= 16 && code < 100 { str_copy(out, @sname + (code - 16) * 64, 64); return true; }
+    if code >= 16 && code < 400 { str_copy(out, @sname + (code - 16) * 64, 64); return true; }
     return false;
 }
 
@@ -980,8 +981,8 @@ bool code_text(int code, int tid, char^ out) {
 bool pointee_text(int p, char^ out) {
     out[0] = 0;
     if p == 10 { return false; }
-    if p >= 100 {
-        if !pointee_text(p - 100, out) { return false; }
+    if p >= 400 {
+        if !pointee_text(p - 400, out) { return false; }
         append_text(out, "^");
         return true;
     }
@@ -1849,6 +1850,58 @@ int dv_find_field(int s, char^ name) {
     while fk < sfirst[s] + snf[s] {
         if str_eq(@fldname + fk * 64, name) { return fk; }
         fk += 1;
+    }
+    return 0 - 1;
+}
+
+char dv_un[2048];            // 32 names of 64 written in  using enum Name;
+int dv_unl[32];              // 1: written inside a function
+int dv_un_count;
+void dv_set_using(int d, int local) {
+    if dv_un_count >= 32 { die("too many using enum lines for data enums"); }
+    str_copy(@dv_un + dv_un_count * 64, @dv_name + d * 64, 64);
+    // a generic enum is named without its types
+    int k = 0;
+    while dv_un[dv_un_count * 64 + k] != 0 {
+        if dv_un[dv_un_count * 64 + k] == '_' && dv_un[dv_un_count * 64 + k + 1] == '_' {
+            dv_un[dv_un_count * 64 + k] = 0;
+            break;
+        }
+        k += 1;
+    }
+    dv_unl[dv_un_count] = local;
+    dv_un_count += 1;
+}
+bool dv_using(int d) {
+    int i = 0;
+    while i < dv_un_count {
+        if dv_label_ok(d, @dv_un + i * 64) { return true; }
+        i += 1;
+    }
+    return false;
+}
+void dv_clear_local() {
+    int w = 0;
+    int i = 0;
+    while i < dv_un_count {
+        if dv_unl[i] == 0 {
+            str_copy(@dv_un + w * 64, @dv_un + i * 64, 64);
+            dv_unl[w] = 0;
+            w += 1;
+        }
+        i += 1;
+    }
+    dv_un_count = w;
+}
+void dv_clear_all() {
+    dv_un_count = 0;
+}
+// the data enum named like this (the name as written, or a generic enum's name without its types), or -1
+int dv_find_enum(char^ name) {
+    int i = 0;
+    while i < dv_count {
+        if dv_label_ok(i, name) { return i; }
+        i += 1;
     }
     return 0 - 1;
 }

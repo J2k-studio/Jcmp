@@ -641,9 +641,45 @@ void as_read_mnemonic() {
 }
 
 void as_instruction() {
-    if as_cur() == '.' {                    // ".bss N"
+    if as_cur() == '.' {                    // ".bss N"  ".quad label|number"  ".asciz "text""
         as_ci += 1;
         as_read_mnemonic();
+        if as_mn_is("quad") {
+            // 8 bytes, aligned to 8: a number, or the address of a label (where the program is loaded)
+            if as_pos % 8 != 0 { as_put32(0); }
+            as_skip_spaces();
+            int lo = 0;
+            if as_cur() >= '0' && as_cur() <= '9' {
+                lo = as_parse_number();
+            } else {
+                as_read_label_name();
+                if as_pass == 2 { lo = as_find_label() + 0x4000B0; }
+            }
+            as_put32(lo & 4294967295);
+            as_put32((lo >> 32) & 4294967295);
+            return;
+        }
+        if as_mn_is("asciz") {
+            // a text between double quotes (no escapes), a 0 byte after it, padded to a multiple of 4
+            as_skip_spaces();
+            if as_cur() != 34 { as_fail(); }
+            as_ci += 1;
+            int w = 0;
+            int nb = 0;
+            while as_ci < as_src_len && as_src[as_ci] != 34 {
+                w = w | (as_src[as_ci] << (nb * 8));
+                nb += 1;
+                if nb == 4 {
+                    as_put32(w);
+                    w = 0;
+                    nb = 0;
+                }
+                as_ci += 1;
+            }
+            as_ci += 1;
+            as_put32(w);                    // the rest of the text and the 0 byte (a new word if the text filled the last one)
+            return;
+        }
         if !as_mn_is("bss") { as_fail(); }
         as_skip_spaces();
         as_bss_size = as_parse_number();

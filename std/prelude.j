@@ -14,6 +14,35 @@ void __panic(char^ msg) {
     syscall(64, 2, "panic: ", 7);
     syscall(64, 2, msg, n);
     syscall(64, 2, "\n", 1);
+    // the functions that were running, innermost first (the frames are linked: [fp] = caller's fp, [fp + 8] = return address)
+    int^ fp = (int^)__fp();
+    int^ tab = (int^)__fntab();
+    int depth = 0;
+    while (int)fp > 4096 && depth < 24 {
+        int ret = fp[1];
+        int best = 0 - 1;
+        int k = 0;
+        while tab[k * 2] != 0 {
+            if tab[k * 2] < ret { best = k; }
+            k += 1;
+        }
+        if best < 0 { break; }
+        char^ name = (char^)tab[best * 2 + 1];
+        syscall(64, 2, "  at ", 5);
+        int i = 0;
+        while name[i] != 0 {
+            if name[i] == '_' && name[i + 1] == '_' {
+                syscall(64, 2, "::", 2);
+                i += 2;
+            } else {
+                syscall(64, 2, @name[i], 1);
+                i += 1;
+            }
+        }
+        syscall(64, 2, "\n", 1);
+        fp = (int^)fp[0];
+        depth += 1;
+    }
     syscall(94, 134);
 }
 
