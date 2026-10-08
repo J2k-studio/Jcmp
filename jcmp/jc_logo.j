@@ -36,6 +36,10 @@ int lg_len;
 char lg_cap[600];            // five lines of text under the picture, 100 characters each
 int lg_cl[5];
 int lg_cn;
+double lg_crx[14];           // craters of the Moon: place on the surface and size
+double lg_cry[14];
+double lg_crz[14];
+double lg_crr[14];
 double lg_sx[60];            // the stars: place, speed and phase of the twinkling
 double lg_sy[60];
 double lg_sf[60];
@@ -308,6 +312,27 @@ char lg_pick(double v) {
     return lg_ramp2[k];
 }
 
+// the same with a 4 x 4 dither (the pattern of Bayer): the cell at (x, y) takes the character above or below the exact shade, in a
+// fine pattern, so that slow changes of the light look smooth
+char lg_pick_at(double v, int x, int y) {
+    if v < 0.0 { v = 0.0; }
+    if v > 1.0 { v = 1.0; }
+    v = v * (1.7 - 0.7 * v);
+    double kf = v * (double)(lg_n2 - 1);
+    int k = (int)kf;
+    double fr = kf - (double)k;
+    int bi = (x % 4) * 4 + (y % 4);
+    int bm[16];
+    bm[0] = 0;  bm[1] = 8;  bm[2] = 2;  bm[3] = 10;
+    bm[4] = 12; bm[5] = 4;  bm[6] = 14; bm[7] = 6;
+    bm[8] = 3;  bm[9] = 11; bm[10] = 1; bm[11] = 9;
+    bm[12] = 15; bm[13] = 7; bm[14] = 13; bm[15] = 5;
+    double th = ((double)bm[bi] + 0.5) / 16.0;
+    if fr > th { k += 1; }
+    if k > lg_n2 - 1 { k = lg_n2 - 1; }
+    return lg_ramp2[k];
+}
+
 // grey, as a colour number
 int lg_grey(double v) {
     if v < 0.0 { v = 0.0; }
@@ -516,6 +541,21 @@ void lg_run(int frames, int speed) {
         lg_sp[i] = (double)((seed >> 8) % 1000) / 1000.0 * 6.283;
         i += 1;
     }
+    // the craters of the Moon: places on the surface from a fixed random sequence
+    i = 0;
+    while i < 14 {
+        seed = (seed * 1103515245 + 12345) & 2147483647;
+        double za = (double)((seed >> 8) % 2000) / 1000.0 - 1.0;
+        seed = (seed * 1103515245 + 12345) & 2147483647;
+        double fa = (double)((seed >> 8) % 6283) / 1000.0;
+        double rz = __fsqrt(1.0 - za * za);
+        lg_crx[i] = rz * lg_cos(fa);
+        lg_cry[i] = za;
+        lg_crz[i] = rz * lg_sin(fa);
+        seed = (seed * 1103515245 + 12345) & 2147483647;
+        lg_crr[i] = 0.10 + (double)((seed >> 8) % 1000) / 1000.0 * 0.16;
+        i += 1;
+    }
     lg_read_size();
     lg_w = 50;
     lg_h = 20;
@@ -644,115 +684,161 @@ void lg_run(int frames, int speed) {
         while y < LH {
             int x = 0;
             while x < LW {
-                double xs = ((double)x + 0.5 - cxs) / (unit * 2.0);
-                double ys = ((double)y + 0.5 - cys) / unit;
-                double ox = lg_rx * xs - lg_ux * ys - lg_fx * 6.0;
-                double oy = lg_ry * xs - lg_uy * ys - lg_fy * 6.0;
-                double oz = lg_rz * xs - lg_uz * ys - lg_fz * 6.0;
-                double te = lg_ball(ox, oy, oz, lg_fx, lg_fy, lg_fz, 0.0, 0.0, 0.0, 1.0);
-                double tm = lg_ball(ox, oy, oz, lg_fx, lg_fy, lg_fz, mx, my, mz, rm);
-                if te < 999.0 && te <= tm {
-                    // the Earth: a ball with the sea, the lands and the poles, turning on its axis
-                    double hx = ox + lg_fx * te;
-                    double hy = oy + lg_fy * te;
-                    double hz = oz + lg_fz * te;
-                    double nx = hx;
-                    double ny = hy;
-                    double nz = hz;
-                    double lam = nx * lx + ny * ly + nz * lz;
-                    if lam < 0.0 { lam = 0.0; }
-                    // the Moon may hide the Sun (an eclipse of the Sun)
-                    if lam > 0.0 {
-                        double ts2 = lg_ball(hx, hy, hz, lx, ly, lz, mx, my, mz, rm);
-                        if ts2 < 999.0 { lam = lam * 0.12; }
+                // four rays for each character (2 x 2), averaged: smooth edges and smooth shades
+                double sumb = 0.0;
+                int hits = 0;
+                int hit_moon = 0;
+                double dmin = 1000.0;
+                int sj = 0;
+                while sj < 2 {
+                    int si = 0;
+                    while si < 2 {
+                        double xs = ((double)x + ((double)si + 0.5) / 2.0 - cxs) / (unit * 2.0);
+                        double ys = ((double)y + ((double)sj + 0.5) / 2.0 - cys) / unit;
+                        double ox = lg_rx * xs - lg_ux * ys - lg_fx * 6.0;
+                        double oy = lg_ry * xs - lg_uy * ys - lg_fy * 6.0;
+                        double oz = lg_rz * xs - lg_uz * ys - lg_fz * 6.0;
+                        double te = lg_ball(ox, oy, oz, lg_fx, lg_fy, lg_fz, 0.0, 0.0, 0.0, 1.0);
+                        double tm = lg_ball(ox, oy, oz, lg_fx, lg_fy, lg_fz, mx, my, mz, rm);
+                        if te < 999.0 && te <= tm {
+                            // the Earth: a ball with the sea, the lands, clouds and the ice of the poles, turning on its axis
+                            double hx = ox + lg_fx * te;
+                            double hy = oy + lg_fy * te;
+                            double hz = oz + lg_fz * te;
+                            double lam = hx * lx + hy * ly + hz * lz;
+                            if lam < 0.0 { lam = 0.0; }
+                            lam = lam * (1.3 - 0.3 * lam);                       // the edge of the night is soft
+                            // the Moon may hide the Sun (an eclipse of the Sun)
+                            if lam > 0.0 {
+                                double ts2 = lg_ball(hx, hy, hz, lx, ly, lz, mx, my, mz, rm);
+                                if ts2 < 999.0 { lam = lam * 0.12; }
+                            }
+                            lg_ax = 0.0;
+                            lg_ay = lg_cos(tilt);
+                            lg_az = 0.0 - lg_sin(tilt);
+                            lg_rot(hx, hy, hz, 0.0 - espin);
+                            double p0x = lg_vx;
+                            double p0y = lg_vy;
+                            double p0z = lg_vz;
+                            double lat = p0x * lg_ax + p0y * lg_ay + p0z * lg_az;               // the sine of the latitude
+                            double land = lg_sin(p0x * 2.6 + 1.0) * lg_sin(p0y * 3.1 + 0.5) * lg_sin(p0z * 2.3 + 2.0)
+                                + 0.35 * lg_sin(p0x * 7.0 + 2.0) * lg_sin(p0z * 6.0 + p0y * 5.0);
+                            double albedo = 0.50;
+                            if land > 0.10 { albedo = 0.80; }
+                            if land > 0.10 && land < 0.18 { albedo = 0.65; }                      // the shore
+                            // the clouds drift a little faster than the ground
+                            double cl = lg_sin(p0x * 3.3 + 2.0 * lg_sin(p0y * 2.5 + 0.9 * t) + 1.0) * lg_sin(p0z * 2.9 + 1.5 * lg_sin(p0x * 3.1) + 0.5 * t);
+                            if cl > 0.30 { albedo = albedo + (1.0 - albedo) * lg_clamp((cl - 0.30) * 3.0, 0.0, 1.0); }
+                            if lat > 0.86 || lat < 0.0 - 0.86 { albedo = 0.97; }                // the ice of the poles
+                            double ndv = 0.0 - (hx * lg_fx + hy * lg_fy + hz * lg_fz);
+                            if ndv < 0.0 { ndv = 0.0; }
+                            double rim = 1.0 - ndv;
+                            rim = rim * rim * rim;
+                            // a bright spot of the Sun on the sea
+                            double hx2 = lx - lg_fx;
+                            double hy2 = ly - lg_fy;
+                            double hz2 = lz - lg_fz;
+                            double hl = __fsqrt(hx2 * hx2 + hy2 * hy2 + hz2 * hz2);
+                            double refl = 0.0;
+                            if hl > 0.0 && land <= 0.10 && cl <= 0.30 {
+                                double nh = (hx * hx2 + hy * hy2 + hz * hz2) / hl;
+                                if nh > 0.0 {
+                                    double n2 = nh * nh;
+                                    n2 = n2 * n2;
+                                    n2 = n2 * n2;
+                                    refl = n2 * n2;
+                                }
+                            }
+                            double bright = 0.07 + 0.90 * lam * albedo + 0.20 * rim * (0.15 + lam) + 0.30 * refl;
+                            if bright > 1.0 { bright = 1.0; }
+                            sumb = sumb + bright;
+                            hits += 1;
+                            if te < dmin { dmin = te; }
+                        } else if tm < 999.0 {
+                            // the Moon: craters and dark seas, the letter J on its surface, turning with it
+                            double hx = ox + lg_fx * tm;
+                            double hy = oy + lg_fy * tm;
+                            double hz = oz + lg_fz * tm;
+                            double nx = (hx - mx) / rm;
+                            double ny = (hy - my) / rm;
+                            double nz = (hz - mz) / rm;
+                            lg_ax = max_;
+                            lg_ay = may;
+                            lg_az = maz;
+                            lg_rot(nx, ny, nz, 0.0 - mspin);
+                            double p0x = lg_vx;
+                            double p0y = lg_vy;
+                            double p0z = lg_vz;
+                            // the letter is on two opposite faces of the Moon (a J on the front and one on the back, each the right way
+                            // round for someone who looks at it), so that one of them is always turned towards us
+                            double facing = p0x * c0x + p0y * c0y + p0z * c0z;
+                            double sgn = 1.0;
+                            if facing < 0.0 {
+                                sgn = 0.0 - 1.0;
+                                facing = 0.0 - facing;
+                            }
+                            double jx = sgn * (p0x * ex + p0y * ey + p0z * ez) * 0.95;
+                            double jy = 0.0 - (p0x * nx0 + p0y * ny0 + p0z * nz0) * 0.95 + 0.06;
+                            double cov = 0.0;
+                            double dcx = 0.0;
+                            double dcy = 0.0;
+                            if facing > 0.15 {
+                                cov = lg_j(jx, jy);
+                                double e = 0.03;
+                                dcx = sgn * (lg_j(jx + e, jy) - lg_j(jx - e, jy)) / (2.0 * e);
+                                dcy = (lg_j(jx, jy + e) - lg_j(jx, jy - e)) / (2.0 * e);
+                            }
+                            // the normal, bent at the edges of the letter so that it stands out of the surface
+                            double bump = 0.30;
+                            double qx = p0x - bump * (dcx * ex * 0.95 - dcy * nx0 * 0.95);
+                            double qy = p0y - bump * (dcx * ey * 0.95 - dcy * ny0 * 0.95);
+                            double qz = p0z - bump * (dcx * ez * 0.95 - dcy * nz0 * 0.95);
+                            double ql = __fsqrt(qx * qx + qy * qy + qz * qz);
+                            lg_rot(qx / ql, qy / ql, qz / ql, mspin);
+                            double lam = lg_vx * lx + lg_vy * ly + lg_vz * lz;
+                            if lam < 0.0 { lam = 0.0; }
+                            // the shadow of the Earth (an eclipse of the Moon)
+                            if lam > 0.0 {
+                                double ts2 = lg_ball(hx, hy, hz, lx, ly, lz, 0.0, 0.0, 0.0, 1.0);
+                                if ts2 < 999.0 { lam = lam * 0.10; }
+                            }
+                            // the grey of the Moon with a few dark seas and craters (a bright rim, a darker floor), the letter white
+                            double patch = lg_sin(p0x * 4.0 + 1.0) * lg_sin(p0y * 5.0 + 0.5) * lg_sin(p0z * 3.0 + 2.0);
+                            double albedo = 0.66;
+                            if patch > 0.18 { albedo = 0.44; }
+                            int ci = 0;
+                            while ci < 14 {
+                                double cdx = p0x - lg_crx[ci];
+                                double cdy = p0y - lg_cry[ci];
+                                double cdz = p0z - lg_crz[ci];
+                                double cd = __fsqrt(cdx * cdx + cdy * cdy + cdz * cdz);
+                                double crr = lg_crr[ci];
+                                if cd < crr { albedo = albedo * 0.72; }
+                                else if cd < crr * 1.3 { albedo = albedo * 1.22; }
+                                ci += 1;
+                            }
+                            if albedo > 1.0 { albedo = 1.0; }
+                            albedo = albedo + (1.0 - albedo) * cov;
+                            // what the Sun does not light is left black
+                            double bright = lam * albedo;
+                            // the letter J glows a little (like a logo), so that it can be read even in the dark part; the rest is left black
+                            if bright < 0.55 * cov { bright = 0.55 * cov; }
+                            if bright > 1.0 { bright = 1.0; }
+                            if bright > 0.04 { sumb = sumb + bright; }
+                            hits += 1;
+                            hit_moon = 1;
+                            if tm < dmin { dmin = tm; }
+                        }
+                        si += 1;
                     }
-                    // the place on the surface, before the Earth turned (turn about the axis: use the Earth's axis)
-                    lg_ax = 0.0;
-                    lg_ay = lg_cos(tilt);
-                    lg_az = 0.0 - lg_sin(tilt);
-                    lg_rot(hx, hy, hz, 0.0 - espin);
-                    double p0x = lg_vx;
-                    double p0y = lg_vy;
-                    double p0z = lg_vz;
-                    double lat = p0x * lg_ax + p0y * lg_ay + p0z * lg_az;               // the sine of the latitude
-                    double land = lg_sin(p0x * 2.6 + 1.0) * lg_sin(p0y * 3.1 + 0.5) * lg_sin(p0z * 2.3 + 2.0);
-                    double albedo = 0.52;
-                    if land > 0.12 { albedo = 0.92; }
-                    if lat > 0.86 || lat < 0.0 - 0.86 { albedo = 0.92; }                // the ice of the poles
-                    double ndv = 0.0 - (nx * lg_fx + ny * lg_fy + nz * lg_fz);
-                    if ndv < 0.0 { ndv = 0.0; }
-                    double rim = 1.0 - ndv;
-                    rim = rim * rim * rim;
-                    double bright = 0.08 + 0.92 * lam * albedo + 0.16 * rim * (0.2 + lam);
-                    if bright > 1.0 { bright = 1.0; }
-                    lg_ch[y * LW + x] = lg_pick(bright);
-                    lg_col[y * LW + x] = lg_grey(bright);
-                    lg_dep[y * LW + x] = te;
-                } else if tm < 999.0 {
-                    // the Moon: the letter J on its surface, turning with it
-                    double hx = ox + lg_fx * tm;
-                    double hy = oy + lg_fy * tm;
-                    double hz = oz + lg_fz * tm;
-                    double nx = (hx - mx) / rm;
-                    double ny = (hy - my) / rm;
-                    double nz = (hz - mz) / rm;
-                    lg_ax = max_;
-                    lg_ay = may;
-                    lg_az = maz;
-                    lg_rot(nx, ny, nz, 0.0 - mspin);
-                    double p0x = lg_vx;
-                    double p0y = lg_vy;
-                    double p0z = lg_vz;
-                    // the letter is on two opposite faces of the Moon (a J on the front and one on the back, each the right way
-                    // round for someone who looks at it), so that one of them is always turned towards us
-                    double facing = p0x * c0x + p0y * c0y + p0z * c0z;
-                    double sgn = 1.0;
-                    if facing < 0.0 {
-                        sgn = 0.0 - 1.0;
-                        facing = 0.0 - facing;
-                    }
-                    double jx = sgn * (p0x * ex + p0y * ey + p0z * ez) * 0.95;
-                    double jy = 0.0 - (p0x * nx0 + p0y * ny0 + p0z * nz0) * 0.95 + 0.06;
-                    double cov = 0.0;
-                    double dcx = 0.0;
-                    double dcy = 0.0;
-                    if facing > 0.15 {
-                        cov = lg_j(jx, jy);
-                        double e = 0.03;
-                        dcx = sgn * (lg_j(jx + e, jy) - lg_j(jx - e, jy)) / (2.0 * e);
-                        dcy = (lg_j(jx, jy + e) - lg_j(jx, jy - e)) / (2.0 * e);
-                    }
-                    // the normal, bent at the edges of the letter so that it stands out of the surface
-                    double bump = 0.30;
-                    double qx = p0x - bump * (dcx * ex * 0.95 - dcy * nx0 * 0.95);
-                    double qy = p0y - bump * (dcx * ey * 0.95 - dcy * ny0 * 0.95);
-                    double qz = p0z - bump * (dcx * ez * 0.95 - dcy * nz0 * 0.95);
-                    double ql = __fsqrt(qx * qx + qy * qy + qz * qz);
-                    lg_rot(qx / ql, qy / ql, qz / ql, mspin);
-                    double bx = lg_vx;
-                    double by = lg_vy;
-                    double bz = lg_vz;
-                    double lam = bx * lx + by * ly + bz * lz;
-                    if lam < 0.0 { lam = 0.0; }
-                    // the shadow of the Earth (an eclipse of the Moon)
-                    if lam > 0.0 {
-                        double ts2 = lg_ball(hx, hy, hz, lx, ly, lz, 0.0, 0.0, 0.0, 1.0);
-                        if ts2 < 999.0 { lam = lam * 0.10; }
-                    }
-                    // the grey of the Moon with a few dark seas, the letter white
-                    double patch = lg_sin(p0x * 4.0 + 1.0) * lg_sin(p0y * 5.0 + 0.5) * lg_sin(p0z * 3.0 + 2.0);
-                    double albedo = 0.62;
-                    if patch > 0.18 { albedo = 0.40; }
-                    albedo = albedo + (1.0 - albedo) * cov;
-                    // what the Sun does not light is left black
-                    double bright = lam * albedo;
-                    // the letter J glows a little (like a logo), so that it can be read even in the dark part; the rest is left black
-                    if bright < 0.55 * cov { bright = 0.55 * cov; }
-                    if bright > 1.0 { bright = 1.0; }
-                    if bright > 0.05 {
-                        lg_ch[y * LW + x] = lg_pick(bright);
-                        lg_col[y * LW + x] = lg_grey(bright);
-                        lg_dep[y * LW + x] = tm;
+                    sj += 1;
+                }
+                if hits > 0 {
+                    double v = sumb / 4.0;
+                    if v > 0.03 {
+                        lg_ch[y * LW + x] = lg_pick_at(v, x, y);
+                        lg_col[y * LW + x] = lg_grey(v);
+                        lg_dep[y * LW + x] = dmin;
                     }
                 }
                 x += 1;

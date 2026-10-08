@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9.41
+* **The mascot is smoother and more real:** four rays for every character (2 x 2, averaged) so that the edges of the Earth and the Moon and the steps of light are smooth; a **dither** (a fine 4 x 4 pattern of Bayer) chooses between the two nearest characters of the ramp, so a slow change of light looks like a smooth gradient; the edge between day and night is soft; the Earth has **lands with shores, clouds that drift faster than the ground**, ice at the poles and a bright spot of the Sun on the sea; the Moon has **craters** (a darker floor, a lighter rim) besides its dark seas.
+
 ## 0.9.40
 * **The mascot (`jcmp -space`) redone as asked:** the **Earth** in the middle (a ball with sea, lands, ice at the poles, turning on its axis), the **Moon** going round it and **the letter J on the Moon**: the J is raised from the Moon's surface and turns with the Moon about the Moon's own axis (a turn in 40 s of the film; there is a J on the front and one on the back so that one of them is always turned to us; the J glows a little, like a logo, even where the Sun does not light the Moon). The shading is the ramp ` .:-=+*#%@` by the angle between the surface and a **fixed Sun** (from the left and the front); what the Sun does not light is left black, so the Moon shows its phases.
 * **Slower:** the default is `1 s = 30 min` of real time (x1800; before x7200); the Earth turns in 48 s, the Moon goes through its phases in 23.6 minutes; `jcmp -space N` sets N. The Moon starts where the **real Moon is now** (its phase is computed from the clock of the computer: a new moon was on 2000-01-06 18:14 UTC, the month is 29.530588853 days) and the **real UTC clock and date** are shown, next to how much time has passed in the film.
