@@ -28,6 +28,7 @@ int stk_ls[16];
 char lvl_name[2048];         // path of the file at each level (16 x 128)
 char inc_names[65536];        // paths already imported (64 x 128)
 int inc_count;
+int lvl_inst[16];            // 1 = the level is the text of a generic instance: its end is an end of items, not a return to the file below
 int mt_pending;              // 1 after #multithread until the for loop it belongs to is parsed
 int cpu_loaded;              // 1 once `import cpu` has been read
 int std_loaded;              // 1 once `import std` has been read
@@ -249,7 +250,32 @@ void push_macro(char^ text) {
     cur_line_start = 0;
 }
 
+// the text of a generic instance becomes a new level; at its end next() gives T_EOF
+// and the caller pops it (pop_file)
+void push_text(char^ text, int n, char^ file, int line) {
+    if lx_depth >= 15 { die("generic instances nested too deeply"); }
+    stk_pos[lx_depth] = cur_pos;
+    stk_line[lx_depth] = cur_line;
+    stk_ls[lx_depth] = cur_line_start;
+    lx_depth += 1;
+    cur_base = lx_depth * 524288;
+    str_copy(@lvl_name + lx_depth * 128, file, 128);
+    int i = 0;
+    while i < n {
+        src_bufs[cur_base + i] = text[i];
+        i += 1;
+    }
+    src_bufs[cur_base + n] = 0;
+    cur_len = n;
+    cur_pos = 0;
+    cur_line = line;
+    cur_line_start = 0;
+    lvl_inst[lx_depth] = 1;
+    set_err_file(lx_depth);
+}
+
 void pop_file() {
+    lvl_inst[lx_depth] = 0;
     lx_depth -= 1;
     cur_base = lx_depth * 524288;
     cur_pos = stk_pos[lx_depth];
@@ -264,6 +290,9 @@ void pop_file() {
 
 void lex_init(char^ path) {
     def_count = 0;
+    gen_reset();
+    lx_depth = 0;
+    lvl_inst[0] = 0;
     std_loaded = 0;
     mt_pending = 0;
     cpu_loaded = 0;
@@ -426,6 +455,12 @@ void next() {
     while true {
         skip_blanks();
         if cur_pos < cur_len { break; }
+        if lvl_inst[lx_depth] == 1 {
+            tok_kind = T_EOF;
+            tok_text[0] = 0;
+            mark_pos();
+            return;
+        }
         if lx_depth == 0 {
             tok_kind = T_EOF;
             tok_text[0] = 0;
@@ -514,6 +549,7 @@ void next() {
             next();
             return;
         }
+        gen_use();
         // xor= shl= shr= are operators (the words themselves are operators too)
         if lc(0) == '=' && lc(1) != '=' {
             if str_eq(@tok_text, "xor") || str_eq(@tok_text, "shl") || str_eq(@tok_text, "shr") {

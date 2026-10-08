@@ -1476,6 +1476,8 @@ void parse_function() {
         fself[fcount] = 0;
         fnpar[fcount] = 0;
         fret[fcount] = f_rettid;
+        fcharret[fcount] = 0;
+        if ty_elem == 2 && ty_ptr == 0 && ty_dyn == 0 && ty_void == 0 { fcharret[fcount] = 1; }
         f_idx = fcount;
         fcount += 1;
     }
@@ -1804,7 +1806,7 @@ void parse_struct() {
     int sd = find_struct(@tok_text);
     if pass_no == 1 {
         if sd >= 0 { die_name("this struct already exists", @tok_text); }
-        if scount >= 64 { die("too many structs"); }
+        if scount >= 80 { die("too many structs (80 at most, generic instances count)"); }
         sd = scount;
         str_copy(@sname + sd * 64, @tok_text, 64);
         sfirst[sd] = fldcount;
@@ -1910,20 +1912,25 @@ void parse_top_item() {
     parse_global(@d_fname);
 }
 
-void parse_program() {
-    while tok_kind != T_EOF {
-        if tok_is("import") {
-            lex_import();
-        } else if tok_is("enum") {
-            parse_enum();
-        } else if tok_is("struct") {
-            parse_struct();
-        } else if tok_is("using") {
-            parse_using();
-        } else {
-            parse_top_item();
-        }
+// one top-level item (generic declarations and the instances an item needs are handled first)
+void parse_one_item() {
+    gen_item();
+    if tok_kind == T_EOF { return; }
+    if tok_is("import") {
+        lex_import();
+    } else if tok_is("enum") {
+        parse_enum();
+    } else if tok_is("struct") {
+        parse_struct();
+    } else if tok_is("using") {
+        parse_using();
+    } else {
+        parse_top_item();
     }
+}
+
+void parse_program() {
+    while tok_kind != T_EOF { parse_one_item(); }
 }
 
 // the entry point: sets x28 (the global area), keeps the initial sp (argc /

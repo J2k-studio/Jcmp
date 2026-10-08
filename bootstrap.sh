@@ -38,7 +38,7 @@ for jk in test/t*.jk; do
     $O/jcmp3 $jk $O/$n.new.jasm 2>/dev/null; ra=$?
     build/Jcmp $jk $O/$n.old.jasm 2>/dev/null; rb=$?
     case $n in t57_*|t64_*|t65_*) skip=$((skip+1)); continue;; esac   # i8 arithmetic: jcmp uses int width like C, the frozen asm compiler wraps
-    case $n in t13[1-9]_*|t14[0-9]_*|t15[0-9]_*|t16[0-9]_*|t17[0-9]_*) skip=$((skip+1)); continue;; esac   # rules only jcmp has (the asm compiler is a frozen seed)
+    case $n in t13[1-9]_*|t14[0-9]_*|t15[0-9]_*|t16[0-9]_*|t17[0-9]_*|t18[0-9]_*) skip=$((skip+1)); continue;; esac   # rules only jcmp has (the asm compiler is a frozen seed)
     if [ $ra -ne 0 ] && [ $rb -ne 0 ]; then skip=$((skip+1)); continue; fi
     if [ $ra -ne 0 ] || [ $rb -ne 0 ]; then echo "ACCEPT MISMATCH: $n (jcmp3 rc=$ra, Jcmp rc=$rb)"; diff=$((diff+1)); continue; fi
     $ASM $O/$n.new.jasm $O/$n.new 2>/dev/null; $ASM $O/$n.old.jasm $O/$n.old 2>/dev/null

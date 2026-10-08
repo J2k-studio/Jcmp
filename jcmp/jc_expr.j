@@ -36,10 +36,10 @@ int ty_tid;                  // type of values: 0 number, 1 bool, 3+n enum numbe
 int ex_ty;                   // type of the last operand/result: 0 number, 1 bool, 2 the literal 0 or 1, 3+n enum n
 int ex_w;                    // width code of the last operand/result: 0 = a plain number, else 1 i8, 2 char, 3 bool, 4 i32, 8 int
 
-char sname[4096];            // 64 x 64
-int ssize[64];               // bytes, a multiple of 8
-int sfirst[64];              // its first field in the field tables
-int snf[64];                 // how many fields
+char sname[5120];            // 80 x 64
+int ssize[80];               // bytes, a multiple of 8
+int sfirst[80];              // its first field in the field tables
+int snf[80];                 // how many fields
 int scount;
 char fldname[524288];         // 1024 x 64
 int fldcode[8192];           // width code of the field (8 int, 16+n a struct ...)
@@ -459,6 +459,7 @@ char fname[1048576];          // 2048 x 64
 int fnpar[16384];             // declared parameters (an array parameter counts once)
 int fvoid[16384];            // 1 if the function returns void
 int fowned[16384];           // 1 if the function returns memory it owned (return p; moves it out)
+int fcharret[16384];            // 1 if the function returns a char: cout prints the result as a character
 int fret[16384];              // type of the result
 int fptid[131072];            // type of each parameter (8 per function)
 int fself[16384];             // 1 if the function is a method with self (not static)
@@ -1144,6 +1145,7 @@ void gen_call() {
     call_method = 0;
     expect("(");
     int fi = find_func(@callee);
+    if fi < 0 && pass_no >= 2 && !(callee[0] == '_' && callee[1] == '_') && !str_eq(@callee, "syscall") && !str_eq(@callee, "argc") && !str_eq(@callee, "arg") { die_name("unknown function", @callee); }
     int res_ty = 0;
     int tmp_off = 0;
     if fi >= 0 { res_ty = fret[fi]; }
@@ -1242,6 +1244,7 @@ void gen_call() {
     }
     if free_owner >= 0 { emit_owner_null(free_owner); }       // Mem::free(p) on an owner: p is null afterwards
     ex_w = 8;
+    if fi >= 0 && fcharret[fi] == 1 { ex_w = 2; }
     ex_ty = res_ty;
     last_call_owning = 0;
     if str_eq(@callee, "Mem__alloc") { last_call_owning = 1; }
