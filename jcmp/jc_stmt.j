@@ -877,6 +877,7 @@ void parse_cout() {
         c_count += 1;
     }
     if c_count == 0 { die("<< expected after cout"); }
+    if !tok_is(";") { die("expected ';' or '<<' here (is a '<<' missing between two values?)"); }
     expect(";");
     if c_count == 1 && c_last != 9 && c_last != 2 {
         emit_line("mov x0, 10");
@@ -960,6 +961,7 @@ void parse_cin() {
         count += 1;
     }
     if count == 0 { die(">> expected after cin"); }
+    if !tok_is(";") { die("expected ';' or '>>' here (is a '>>' missing between two variables?)"); }
     expect(";");
 }
 
@@ -1808,6 +1810,7 @@ void parse_function() {
     int sv_fp = used_fprint;
     int sv_oob = used_oob;
     int sv_dz = used_divz;
+    int sv_nr = used_noret;
     int sv_try = used_try;
     int sv_up = used_uprint;
     int sv_thr = used_thread;
@@ -1987,6 +1990,11 @@ void parse_function() {
         emit_line("mov x8, 94");
         emit_line("svc 0");
     } else {
+        if fvoid[f_idx] == 0 {
+            // the body ended without a return: that is an error at run time (a normal return jumps over this)
+            emit_line("bl j2k_noret");
+            used_noret = 1;
+        }
         place_label(ret_label);
         emit_line("ldr x29, [sp, #0]");
         emit_line("ldr x30, [sp, #8]");
@@ -2013,6 +2021,7 @@ void parse_function() {
         used_fprint = sv_fp;
         used_oob = sv_oob;
         used_divz = sv_dz;
+        used_noret = sv_nr;
         used_try = sv_try;
         used_uprint = sv_up;
         used_thread = sv_thr;
@@ -2258,6 +2267,13 @@ void parse_program() {
 // the entry point: sets x28 (the global area), keeps the initial sp (argc /
 // argv live there), stores the global initial values, then runs main
 // division by zero: throw the text (the caller used bl; the exception routine does not return here)
+// a function ended without return (the value would be junk): throw
+void emit_noret_helper() {
+    emit_line("j2k_noret:");
+    place_text("a function ended without returning a value", 42);
+    emit_line("b j2k_throw");
+}
+
 void emit_divzero_helper() {
     emit_line("j2k_divzero:");
     place_text("division by zero", 16);

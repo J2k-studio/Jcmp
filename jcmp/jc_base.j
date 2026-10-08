@@ -202,6 +202,7 @@ int warn_count;
 int used_fprint;             // 1 if coutf was used: the float printing routine is emitted
 int used_uprint;             // 1 if an unsigned 64-bit number is printed: the routine is emitted
 int used_thread;             // 1 if a thread is started: the start routine is emitted
+int used_noret;              // 1 if a function can end without a return: the 'missing return' routine is added
 int used_divz;               // 1 if a division was emitted: the 'division by zero' routine is added
 int used_oob;                // 1 if a bounds check was emitted: the error routine is added
 int pass_no;                 // 1 = learn declarations, 2 = check and note calls, 3 = generate code

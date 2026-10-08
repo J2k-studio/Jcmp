@@ -1,8 +1,8 @@
-import std
+import <stdlib>
 using std;
 double p = 1.12;
 int max(){
-   cout << p"\n";
+   coutf << p;
 }
 int main() {
     char x;
