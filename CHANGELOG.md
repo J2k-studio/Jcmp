@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9.5
+* **Where the program goes:** `jcmp sub/test.jk -o sub/` (or `-o sub` when `sub` is a folder) writes `sub/test`; `jcmp test.jk sub/test` also names the program (a second name that ends in `.jasm` still means only the assembler text).
+
 ## 0.9.4
 * **`-o` is optional:** `jcmp test.jk` writes the program `test` (the name of the source without `.jk` / `.j`, in the current folder). `-o name` still chooses the name.
 
