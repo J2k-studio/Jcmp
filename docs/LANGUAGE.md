@@ -149,6 +149,8 @@ their length (see below). Structs are passed by value (copied); use `T^` to shar
 
 ## Arrays and strings
 
+A function can have any number of array parameters (`int dot(int a[], int b[])`), anywhere in the list. `str(x)` makes a String from a number, a char, a bool or a String: `str(42)`, `str(2.5)`, `str('x')`, `str(true)`.
+
 ```jk
 int sum(int a[]) {                  // an array parameter arrives with its length
     int s = 0;
@@ -317,6 +319,7 @@ the end, `return`, `break`, `continue`. Ownership moves (the old variable become
 `return` the variable, store it into a field, an array element, a global or a pointer element of a dynamic array,
 or write `move(p)` for an argument. Passing it to a function without `move` only lends it. A variable you
 free by hand (`free(p)`) becomes `null` too, so nothing is freed twice.
+`move(ps[i])` also takes an element of an array of structs that free themselves (`Person t = move(ps[1]);`): the slot becomes empty (zeros).
 Warnings: `-Wleak` (the result of `alloc` is thrown away), `-Wmoved` (a moved variable is used again).
 Limits: a `throw` that leaves a block does not free that block's memory, and memory kept by a pointer that is
 assigned after its declaration is not tracked (use a declaration, or free it yourself).

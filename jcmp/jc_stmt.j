@@ -1936,6 +1936,20 @@ void parse_local_decl_core() {
             }
             expect(";");
         }
+        if d_elem >= 16 && d_str == 0 && d_list == 0 && d_ptr == 0 && struct_has_free(d_elem - 16) {
+            // elements that free themselves start empty (zeros), so that free(self) and an assignment are always safe
+            int z_words = d_count * ssize[d_elem - 16] / 8;
+            int z_lab = new_label();
+            ins_n("add x2, x29, #", loff[lcount - 1]);
+            ins_n("mov x3, ", z_words);
+            emit_line("mov x1, 0");
+            place_label(z_lab);
+            emit_line("str x1, [x2, #0]");
+            emit_line("add x2, x2, #8");
+            emit_line("sub x3, x3, #1");
+            emit_line("cmp x3, 0");
+            jump_if("ne", z_lab);
+        }
         if d_elem >= 16 && d_str == 0 && struct_has_init(d_elem - 16) {
             emit_init_array(d_elem - 16, loff[lcount - 1], d_count);
         }
@@ -2453,8 +2467,11 @@ void parse_function() {
                 emit_param_store(nparams + 1, loff[lcount - 1]);
                 nparams += 2;
                 f_declared += 1;
-                farr[f_idx] = 1;
-                if !tok_is(")") { die("an array parameter must be the last one"); }
+                farr[f_idx] = farr[f_idx] | (1 << (f_declared - 1));
+                if tok_is(",") {
+                    next();
+                    continue;
+                }
                 break;
             }
             if p_dyn != 0 {

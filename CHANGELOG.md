@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.51
+* **`str(x)`** makes a `String` from a number, a character, a `bool` or another String: `str(42)`, `str(-7)`, `str(2.5)`, `str(1.5e20)` (`1.5e+20`), `str('x')`, `str(true)`, an unsigned `u64` up to 18446744073709551615. Floating point numbers print with up to 15 significant digits and no zeros at the end. Test `t262`.
+* **Any number of array parameters, in any place:** `int dot(int a[], int b[])`, `void scale(int a[], int k, int out[])` (before, one array parameter and it had to be the last). Methods too. Test `t263`.
+* **`move(ps[i])` on an element of an array** of a struct that frees itself: the element goes to a new owner and the array slot is emptied (`Person t = move(ps[1]);`). Test `t264`.
+* **Fixed:** a local array of structs that free themselves now starts as zeros, so `ps[0] = make(...)` no longer frees garbage.
+
 ## 0.9.50.1
 * **Docs:** the status tables of `README.md` and `README.th.md` (they still said that dynamic arrays, `cin` and threads were missing) and a section "The standard library at a glance" in `docs/LANGUAGE.md` now describe what the language and the libraries really have.
 

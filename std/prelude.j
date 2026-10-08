@@ -372,6 +372,152 @@ struct __Str {
         if k == 2 { return 1; }
         return __Str::textlen((char^)x);
     }
+    // the whole number v written at the end of r (u = 1: v is read as an unsigned number)
+    static void push_int(void^ r, int v, int u) {
+        char d[24];
+        int n = 0;
+        int neg = 0;
+        if u == 0 && v < 0 { neg = 1; }
+        u64 m = (u64)v;
+        if neg == 1 { m = (u64)0 - m; }
+        if m == 0 {
+            d[0] = '0';
+            n = 1;
+        }
+        while m > 0 {
+            d[n] = '0' + (int)(m % 10);
+            n += 1;
+            m = m / 10;
+        }
+        if neg == 1 { __Str::push(r, '-'); }
+        while n > 0 {
+            n -= 1;
+            __Str::push(r, d[n]);
+        }
+    }
+    // a new String with the whole number v (u = 1: v is read as an unsigned number)
+    static void^ from_int(int v, int u) {
+        void^ r = __Str::make(24);
+        __Str::push_int(r, v, u);
+        return r;
+    }
+    // a new String with one character
+    static void^ from_char(int c) {
+        void^ r = __Str::make(2);
+        __Str::push(r, c);
+        return r;
+    }
+    // the digits of n written with exactly `width` digits (leading zeros), without the trailing zeros: for the part after the point
+    static void frac_digits(void^ r, int n, int width) {
+        char d[24];
+        int k = width;
+        while k > 0 {
+            k -= 1;
+            d[k] = '0' + n % 10;
+            n = n / 10;
+        }
+        int last = width;
+        while last > 0 && d[last - 1] == '0' { last -= 1; }
+        int i = 0;
+        while i < last {
+            __Str::push(r, d[i]);
+            i += 1;
+        }
+    }
+    // a new String with a decimal number: up to 15 significant digits, no zeros at the end (0.1, 2.5, 100, 1.5e+20, nan, inf)
+    static void^ from_double(double x) {
+        void^ r = __Str::make(32);
+        if x != x {
+            __Str::append(r, "nan", 0);
+            return r;
+        }
+        if x == 0.0 {
+            __Str::push(r, '0');
+            return r;
+        }
+        if x < 0.0 {
+            __Str::push(r, '-');
+            x = 0.0 - x;
+        }
+        if x - x != 0.0 {
+            __Str::append(r, "inf", 0);
+            return r;
+        }
+        if x >= 1.0e15 || x < 1.0e-5 {
+            // the form  d.ddde+XX : bring the number into 1 .. 10
+            int e = 0;
+            while x >= 10.0 {
+                x = x / 10.0;
+                e += 1;
+            }
+            while x < 1.0 {
+                x = x * 10.0;
+                e -= 1;
+            }
+            int d0 = (int)x;
+            int f = (int)((x - (double)d0) * 1.0e14 + 0.5);
+            if f >= 100000000000000 {
+                f -= 100000000000000;
+                d0 += 1;
+            }
+            if d0 >= 10 {
+                d0 = 1;
+                e += 1;
+            }
+            __Str::push(r, '0' + d0);
+            if f > 0 {
+                __Str::push(r, '.');
+                __Str::frac_digits(r, f, 14);
+            }
+            __Str::push(r, 'e');
+            if e < 0 {
+                __Str::push(r, '-');
+                e = 0 - e;
+            } else {
+                __Str::push(r, '+');
+            }
+            if e < 10 { __Str::push(r, '0'); }
+            __Str::push_int(r, e, 0);
+            return r;
+        }
+        int ip = (int)x;
+        double frac = x - (double)ip;
+        // the number of digits after the point: 15 digits in all
+        int fd = 15;
+        int t = ip;
+        while t > 0 {
+            fd -= 1;
+            t = t / 10;
+        }
+        if ip == 0 {
+            double q = frac;
+            int zeros = 0;
+            while q < 0.1 && zeros < 6 {
+                q = q * 10.0;
+                zeros += 1;
+            }
+            fd = 15 + zeros;
+        }
+        if fd < 0 { fd = 0; }
+        int pw = 1;
+        int k = 0;
+        while k < fd {
+            pw = pw * 10;
+            k += 1;
+        }
+        int f = (int)(frac * (double)pw + 0.5);
+        if f >= pw {
+            f -= pw;
+            ip += 1;
+        }
+        __Str::push_int(r, ip, 0);
+
+        if f > 0 {
+            __Str::push(r, '.');
+            __Str::frac_digits(r, f, fd);
+        }
+        return r;
+    }
     // a new String holding a copy of the text
     static void^ from(char^ t) {
         int n = __Str::textlen(t);

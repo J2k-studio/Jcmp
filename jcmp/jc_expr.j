@@ -505,7 +505,7 @@ int fptid[131072];            // type of each parameter (8 per function)
 int fop[16384];               // 1 if the method was declared with the word `operator` (a + b calls a.add(b))
 int op_pending;              // the word `operator` was read in front of the method being declared
 int fself[16384];             // 1 if the function is a method with self (not static)
-int farr[16384];              // 1 if the last parameter is an array (T name[])
+int farr[16384];              // bit k: the declared parameter k is an array (T name[])
 int fcount;
 
 int find_func(char^ name) {
@@ -1061,7 +1061,7 @@ void gen_string() {
 int call_fi = -1;             // function of the call being parsed (-1 = unknown)
 int call_sig = -1;             // signature of the indirect call being parsed (-1 = none)
 int call_skip;               // leading parameters not written in the call (self)
-int arr_call_at = -1;           // index of the array argument of the call being parsed (-1 = none)
+int arr_call_mask = 0;          // bit k: the argument k of the call being parsed is an array
 
 // an argument for an array parameter: a string or an array name; pushes its
 // address and its length
@@ -1088,8 +1088,8 @@ void parse_array_arg() {
 
 int parse_args() {
     int n = 0;
-    int ai = arr_call_at;
-    arr_call_at = 0 - 1;
+    int amask = arr_call_mask;
+    arr_call_mask = 0;
     int pfi = call_fi;
     int pskip = call_skip;
     int psig = call_sig;
@@ -1102,7 +1102,7 @@ int parse_args() {
         return 0;
     }
     while true {
-        if argno == ai {
+        if (amask >> argno) % 2 == 1 {
             parse_array_arg();
             n += 2;
         } else {
@@ -1421,7 +1421,7 @@ void gen_call() {
     if str_eq(@callee, "__fsqrt") || str_eq(@callee, "__ffloor") || str_eq(@callee, "__fceil") || str_eq(@callee, "__ftrunc") { res_ty = 91; }
     int is_atomic = 0;
     if str_eq(@callee, "__cas") || str_eq(@callee, "__xchg") || str_eq(@callee, "__fetch_add") { is_atomic = 1; }
-    if fi >= 0 && farr[fi] == 1 { arr_call_at = fnpar[fi] - 1 - is_method; }
+    if fi >= 0 && farr[fi] != 0 { arr_call_mask = farr[fi] >> is_method; }
     last_call_struct = 0;
     alias_src = 0;
     if res_ty >= 100 {
@@ -2037,6 +2037,31 @@ void gen_identifier() {
         expect(")");
         int mi = 0 - 1;
         if rv_valid == 1 { mi = own_find(rv_off); }
+        if mi < 0 && ex_ty >= 100 && struct_has_free(ex_ty - 100) && rv_valid == 0 {
+            // move(ps[i]) : an element of a struct that frees itself: copied into a temporary owner, the element is emptied
+            int mv_s = ex_ty - 100;
+            int mv_sz = ssize[mv_s];
+            push_x0();
+            ty_tid = 0;
+            add_local("..moved", 0, 16 + mv_s, mv_sz, 0);
+            int mv_at = loff[lcount - 1];
+            ins_n("add x3, x29, #", mv_at);
+            ins_n("mov x2, ", mv_sz);
+            emit_line("bl j2k_copy");
+            emit_line("ldr x0, [sp, #0]");
+            emit_line("add sp, sp, #16");
+            emit_line("mov x1, 0");
+            int mv_k = 0;
+            while mv_k < mv_sz {
+                ins_mem("str", "x1", "x0", mv_k);
+                mv_k += 8;
+            }
+            struct_owner_at(mv_at, mv_s);
+            ins_n("add x0, x29, #", mv_at);
+            rv_valid = 1;
+            rv_off = mv_at;
+            return;
+        }
         if mi < 0 && pass_no >= 2 { die("move(...) needs a local variable that owns memory (made by alloc or arr)"); }
         if mi >= 0 {
             emit_owner_null(mi);
@@ -2058,6 +2083,44 @@ void gen_identifier() {
         ex_w = 8;
         ex_ty = 0;
         rv_valid = 0;
+        return;
+    }
+    if tok_is("(") && str_eq(@id_name, "str") && !lookup_var(@id_name) && find_func(@id_name) < 0 {
+        // str(x) : a new String with the number, the character, the bool or the String x
+        next();
+        parse_expr();
+        expect(")");
+        int sx_ty = ex_ty;
+        int sx_w = ex_w;
+        if sx_ty == 80 {
+            rt_call("__Str__clone");
+        } else if sx_w == 9 {
+            rt_call("__Str__from");                      // a text
+        } else if is_float(sx_ty) {
+            if sx_ty == 90 { f32_to_f64(0); }
+            rt_call("__Str__from_double");
+        } else if sx_ty == 1 {
+            // a bool: true or false
+            int lt = new_label();
+            int le = new_label();
+            emit_line("cmp x0, 0");
+            jump_if("eq", lt);
+            place_text("true", 4);
+            jump(le);
+            place_label(lt);
+            place_text("false", 5);
+            place_label(le);
+            rt_call("__Str__from");
+        } else if sx_w == 2 && !is_float(sx_ty) {
+            rt_call("__Str__from_char");
+        } else if sx_ty == 0 || sx_ty == 2 || sx_ty == 96 || is_unsigned(sx_ty) || (sx_ty >= 3 && sx_ty < 80) {
+            emit_line("mov x1, 0");
+            if sx_ty == 95 { emit_line("mov x1, 1"); }
+            rt_call("__Str__from_int");
+        } else {
+            die("str(x) works on numbers, characters, bools and Strings");
+        }
+        str_temp();
         return;
     }
     if tok_is("(") && str_eq(@id_name, "arr") && !lookup_var(@id_name) && find_func(@id_name) < 0 {
@@ -2123,7 +2186,7 @@ void gen_identifier() {
 // ex_ty = the type of its signature
 void gen_function_value(int fi, char^ name) {
     if pass_no < 2 { ex_ty = 97; ex_w = 8; emit_line("mov x0, 0"); return; }
-    if fself[fi] == 1 || farr[fi] == 1 { die_name("the address of a method or of a function with an array parameter cannot be taken", name); }
+    if fself[fi] == 1 || farr[fi] != 0 { die_name("the address of a method or of a function with an array parameter cannot be taken", name); }
     if fnpar[fi] > 8 { die_name("a function with more than 8 parameters cannot be used as a value", name); }
     int k = 0;
     while k < fnpar[fi] {
