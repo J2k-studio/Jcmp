@@ -71,6 +71,6 @@ install_one() {   # install_one NAME OLD-NAME : releases before 0.2.2 called the
 }
 install_one jcmp jcmp-linux-arm64
 [ "$WITH_ASM" = 1 ] && install_one j2k_asm j2k_asm-linux-arm64
-echo "installed: $BINDIR/jcmp  ($("$BINDIR/jcmp" -version))"
+echo "installed: $BINDIR/jcmp  ($("$BINDIR/jcmp" --version))"
 [ "$WITH_ASM" = 1 ] && echo "installed: $BINDIR/j2k_asm"
 case ":$PATH:" in *":$BINDIR:"*) ;; *) echo "add the folder to your PATH:  export PATH=\"$BINDIR:\$PATH\"" ;; esac
