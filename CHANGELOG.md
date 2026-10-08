@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.36
+* **The mascot is a globe with the letter J on it** (the J as the world), in **black, white and grey only** (no more orange): a ball shaded with the sun on one side and a grey night on the other, with fine lines of latitude and longitude, a white letter J raised from the surface (the shading bends at the edges of the letter so that it stands out), a glow at the rim, a spot of reflected light on the sea. The sun goes slowly round the globe so the light and the shadow move over the J; the globe rocks a little so that the letter seems to be on its surface. A thin ring leans round it like the axis of the Earth (23.44 degrees); its gas goes round with Kepler's law and the real mass of the Earth (GM = 398 600 km^3/s^2, 1.2415e-3 rad/s at the surface, 1500 times faster in the film), the globe throws its shadow on the ring and the ring on the globe, and the sun glints on it here and there in whitish grey. Without a 24-bit colour terminal it is plain characters.
+* Less clutter than 0.9.35: no belts, small moons or ringlets.
+
 ## 0.9.35
 * **Fixed (serious, my mistake in the release of 0.9.34):** the source of 0.9.34 on GitHub had a half-written change in `jcmp/jc_logo.j` and could not be compiled (the released binary `jcmp` was fine). This release has a source that builds (`./bootstrap.sh` passes) and the finished change: 
 * **The mascot, more detail:** the J hangs lower, so that the plane of the rings crosses its upper part and its tail shows below; finer shading with a long ramp of 68 characters; belts of clouds on the planet that turn with it; fine ringlets in the rings, the thin F ring and the Encke gap; three small moons that run beside the rings at their real distances (Prometheus, Pandora, Janus) with Kepler speeds; **shadows are grey** (the night side, the shadow of the rings and of the planet), and the sun **glints on the rings** here and there in whitish grey.

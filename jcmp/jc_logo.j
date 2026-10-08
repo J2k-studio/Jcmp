@@ -1,5 +1,5 @@
-// jc_logo.j -- the mascot: jcmp -space shows the J2K logo in ASCII style and in 3D (isometric): a solid J, lit from above and
-// shaded with characters, with bodies that go round it by Kepler's laws, twinkling stars, 24 frames a second. Small and of a fixed size (50 x 20 characters), in the middle of the terminal,
+// jc_logo.j -- the mascot: jcmp -space shows the J2K logo in ASCII style and in 3D: a globe with the letter J raised on it, shaded in
+// black, white and grey (the light goes slowly round it), a thin ring that turns by Kepler's law, twinkling stars, 24 frames a second. Small and of a fixed size (50 x 20 characters), in the middle of the terminal,
 // all in J2K with no library. Stops on Ctrl-C or Enter.
 
 #define LW 50
@@ -87,7 +87,7 @@ double lg_j(double x, double y) {
         double ey = lg_clamp(y, 0.12, 0.30);                                    // the end of the hook goes a little up
         d = lg_min(d, __fsqrt((x + 0.48) * (x + 0.48) + (y - ey) * (y - ey)));
     }
-    return lg_clamp(1.0 - (d - 0.085) / 0.05, 0.0, 1.0);
+    return lg_clamp(1.0 - (d - 0.15) / 0.07, 0.0, 1.0);
 }
 
 void lg_text(char^ s) {
@@ -285,7 +285,7 @@ void lg_show() {
     lg_num(top + LH + 2);
     lg_text(";");
     lg_num(left + LW / 2 - 21);
-    lg_text("Hreal Saturn speeds, time x");
+    lg_text("HEarth: real mass and tilt, time x");
     lg_num((int)lg_ts);
     // the time on Earth: the clock now (UTC), and how much time has passed on the planet in the film
     lg_buf[lg_len] = 27;
@@ -374,77 +374,23 @@ double lg_atan2(double z, double x) {
     return r;
 }
 
-// the distance from the point (x, y, z) (y up) to the solid J: a letter with a stroke 0.23 wide and 0.34 deep
-double lg_jsd(double xw, double y0, double zw) {
-    double x0 = xw * lg_cs + zw * lg_sn;                   // the planet turns: look at the letter turned back
-    double z0 = 0.0 - xw * lg_sn + zw * lg_cs;
-    double k = 0.80;                                       // the letter is drawn at 1 / 0.62 times its size
-    double x = x0 * k;
-    double y = y0 * k - 0.12;                             // the letter hangs down: the plane of the rings crosses its upper part, and its tail shows below
-    double z = z0 * k;
-    double yd = 0.0 - y;
-    double d = 9.0;
-    double bx = lg_clamp(x, 0.0 - 0.18, 0.46);
-    d = lg_min(d, __fsqrt((x - bx) * (x - bx) + (yd + 0.80) * (yd + 0.80)));
-    double sy = lg_clamp(yd, 0.0 - 0.80, 0.30);
-    d = lg_min(d, __fsqrt((x - 0.14) * (x - 0.14) + (yd - sy) * (yd - sy)));
-    double cx = x + 0.17;
-    double cy = yd - 0.30;
-    if cy >= 0.0 {
-        d = lg_min(d, lg_abs(__fsqrt(cx * cx + cy * cy) - 0.31));
-    } else if cx < 0.0 {
-        double ey = lg_clamp(yd, 0.12, 0.30);
-        d = lg_min(d, __fsqrt((x + 0.48) * (x + 0.48) + (yd - ey) * (yd - ey)));
-    }
-    double a = d - 0.125;                                  // across the stroke
-    double b = lg_abs(z) - 0.17;                           // through the depth
-    double oa = a;
-    double ob = b;
-    if oa < 0.0 { oa = 0.0; }
-    if ob < 0.0 { ob = 0.0; }
-    double inside = a;
-    if b > inside { inside = b; }
-    if inside > 0.0 { inside = 0.0; }
-    return (inside + __fsqrt(oa * oa + ob * ob)) / k;
-}
-
-// the distance to the nearest body (a small ball); which = its number
-int lg_which;
-double lg_balls(double x, double y, double z) {
-    double best = 9.0;
-    int i = 0;
-    while i < 4 {
-        double dx = x - lg_bx[i];
-        double dy = y - lg_by[i];
-        double dz = z - lg_bz[i];
-        double d = __fsqrt(dx * dx + dy * dy + dz * dz) - 0.115;
-        if d < best {
-            best = d;
-            lg_which = i;
-        }
-        i += 1;
-    }
-    return best;
-}
-
-double lg_scene(double x, double y, double z) {
-    return lg_jsd(x, y, z);
-}
-
-// the rings of the planet: how bright the gas is at radius r (0 = no ring there). Like Saturn: a faint inner ring, a bright
-// broad ring, a dark gap, and an outer ring
+// the rings of the globe (an imaginary ring with real Kepler speeds): how bright the gas is at radius r (units of the globe's radius)
 double lg_ring(double r) {
-    double km = r / 0.85 * 60268.0;                         // the planet is 60268 km in radius and 0.85 units here
-    if km > 139700.0 && km < 140700.0 { return 0.55; }      // the thin F ring
-    if km < 74658.0 || km > 136775.0 { return 0.0; }       // the C ring starts, the A ring ends
-    if km > 133300.0 && km < 133900.0 { return 0.0; }      // the Encke gap in the A ring
-    if km < 92000.0 { return 0.30; }                        // C ring
-    if km < 117580.0 { return 0.78; }                       // B ring
-    if km < 122170.0 { return 0.0; }                        // the Cassini division
-    return 0.52;                                            // A ring
+    if r < 1.30 || r > 1.55 { return 0.0; }
+    if r < 1.38 { return 0.55; }
+    if r < 1.43 { return 0.0; }                              // a gap
+    return 0.40;
 }
 
-// the logo: frames = 0 runs until Ctrl-C or Enter; speed = how many times faster than real time the planet and rings go
+// grey to a colour number
+int lg_grey(double v) {
+    if v < 0.0 { v = 0.0; }
+    if v > 1.0 { v = 1.0; }
+    int g = (int)(30.0 + 225.0 * v);
+    return (g << 16) | (g << 8) | g;
+}
+
+// the logo: frames = 0 runs until Ctrl-C or Enter; speed = how many times faster than real time the ring and the light go
 void lg_run(int frames, int speed) {
     if speed < 1 { speed = 1500; }
     lg_ts = (double)speed;
@@ -455,17 +401,6 @@ void lg_run(int frames, int speed) {
         lg_ramp2[lg_n2] = rp[lg_n2];
         lg_n2 += 1;
     }
-    lg_ramp[0] = ' ';
-    lg_ramp[1] = '.';
-    lg_ramp[2] = ':';
-    lg_ramp[3] = '-';
-    lg_ramp[4] = '=';
-    lg_ramp[5] = '+';
-    lg_ramp[6] = '*';
-    lg_ramp[7] = '#';
-    lg_ramp[8] = '%';
-    lg_ramp[9] = '@';
-    lg_ramp[10] = 0;
     int seed = 4242;
     int i = 0;
     while i < 60 {
@@ -479,7 +414,7 @@ void lg_run(int frames, int speed) {
         lg_sp[i] = (double)((seed >> 8) % 1000) / 1000.0 * 6.283;
         i += 1;
     }
-    lg_read_size();                                       // first the size of the terminal, then the picture in its middle
+    lg_read_size();
     char clear[8];
     clear[0] = 27;
     clear[1] = '[';
@@ -489,58 +424,51 @@ void lg_run(int frames, int speed) {
     write_out(@clear);
     double cxs = (double)LW / 2.0;
     double cys = (double)LH / 2.0;
-    double unit = (double)LH * 0.29;                      // rows for one unit of the scene (a character is twice as high as wide)
-    // the light: from above, a little from the left and the front (y is up)
-    double lx = 0.0 - 0.42;
-    double ly = 0.80;
-    double lz = 0.0 - 0.43;
-    double ln = __fsqrt(lx * lx + ly * ly + lz * lz);
-    lx = lx / ln;
-    ly = ly / ln;
-    lz = lz / ln;
+    double unit = (double)LH * 0.42;                      // rows for the radius of the globe (a character is twice as high as wide)
+    // the view: from a little above, looking at the middle of the globe (all rays parallel)
+    double pitch = 0.42;
+    double sinp = lg_sin(pitch);
+    double cosp = lg_cos(pitch);
+    lg_fx = 0.0;
+    lg_fy = 0.0 - sinp;
+    lg_fz = cosp;
+    lg_rx = 1.0;
+    lg_ry = 0.0;
+    lg_rz = 0.0;
+    lg_ux = 0.0;                                          // up on the picture = forward x right
+    lg_uy = cosp;
+    lg_uz = sinp;
+    // the ring leans like the axis of the Earth, 23.44 degrees: N is the normal of its plane, e1 and e2 lie in it
+    double nsx = 0.3978;
+    double nsy = 0.9175;
+    double e1x = 0.9175;
+    double e1y = 0.0 - 0.3978;
+    // Earth: GM = 398600 km3/s2, radius 6371 km: omega = sqrt(GM / R3) = 1.2415e-3 rad/s at the surface; the film is faster by lg_ts
+    double om0 = 0.0012415 * lg_ts;
     int frame = 0;
     int t0 = lg_now();
     while frames == 0 || frame < frames {
         double t = (double)frame / 24.0;
         lg_t = t;
-        double pulse = 0.9 + 0.1 * lg_sin(t * 2.0);
-        // the view turns a little to and fro: that is what makes it look solid
-        // the view does not move: all the motion is the planet's and the rings' own. The planet turns once in 10.56 hours
-        // (real time), lg_ts times faster here; its axis leans 26.73 degrees.
-        double yaw = 0.7853981633974483;
-        double sinp = 0.5773502691896258;                       // looking down at the isometric angle
-        double cosp = 0.816496580927726;
-        lg_fx = lg_sin(yaw) * cosp;
-        lg_fy = 0.0 - sinp;
-        lg_fz = lg_cos(yaw) * cosp;
-        lg_rx = lg_cos(yaw);
-        lg_ry = 0.0;
-        lg_rz = 0.0 - lg_sin(yaw);
-        double spin = 0.0001653 * lg_ts * t;
-        lg_cs = lg_cos(spin);
-        lg_sn = lg_sin(spin);
-        lg_ux = lg_fy * lg_rz - lg_fz * lg_ry;            // up = forward x right
-        lg_uy = lg_fz * lg_rx - lg_fx * lg_rz;
-        lg_uz = lg_fx * lg_ry - lg_fy * lg_rx;
-        // the axis leans: turn the picture plane by 26.73 degrees
-        double cr = 0.8933;
-        double sr2 = 0.4497;
-        double nrx = lg_rx * cr + lg_ux * sr2;
-        double nry = lg_ry * cr + lg_uy * sr2;
-        double nrz = lg_rz * cr + lg_uz * sr2;
-        double nux = 0.0 - lg_rx * sr2 + lg_ux * cr;
-        double nuy = 0.0 - lg_ry * sr2 + lg_uy * cr;
-        double nuz = 0.0 - lg_rz * sr2 + lg_uz * cr;
-        lg_rx = nrx;
-        lg_ry = nry;
-        lg_rz = nrz;
-        lg_ux = nux;
-        lg_uy = nuy;
-        lg_uz = nuz;
+        // the sun goes slowly round the globe, from the left side to the right and back: the shadow moves over the J
+        double sa = 0.0 - 0.55 + 0.95 * lg_sin(t * 0.35);
+        double lx = lg_sin(sa) * 0.9;
+        double ly = 0.45;
+        double lz = 0.0 - lg_cos(sa) * 0.9;               // towards the viewer
+        double ll = __fsqrt(lx * lx + ly * ly + lz * lz);
+        lx = lx / ll;
+        ly = ly / ll;
+        lz = lz / ll;
+        // a little rocking of the globe, so that the J seems to be on its surface
+        double lib = 0.22 * lg_sin(t * 0.5);
+        double libp = 0.08 * lg_sin(t * 0.37 + 1.0);
+        double cl = lg_cos(lib);
+        double sl = lg_sin(lib);
         // the stars first
         i = 0;
         while i < LN {
             lg_ch[i] = ' ';
+            lg_col[i] = 0;
             lg_dep[i] = 1000.0;
             i += 1;
         }
@@ -552,176 +480,150 @@ void lg_run(int frames, int speed) {
             if tw > 0.65 { c = '+'; }
             if tw > 0.9 { c = '*'; }
             lg_ch[(int)lg_sy[i] * LW + (int)lg_sx[i]] = c;
-            lg_col[(int)lg_sy[i] * LW + (int)lg_sx[i]] = lg_scale(14739711, 0.45 + 0.55 * tw);        // pale blue-white
+            lg_col[(int)lg_sy[i] * LW + (int)lg_sx[i]] = lg_grey(0.35 + 0.55 * tw);
             i += 1;
         }
-        // every character: a ray goes into the scene (the picture is isometric: all rays are parallel)
         int y = 0;
         while y < LH {
             int x = 0;
             while x < LW {
                 double xs = ((double)x + 0.5 - cxs) / (unit * 2.0);
                 double ys = ((double)y + 0.5 - cys) / unit;
-                double ox = lg_rx * xs - lg_ux * ys - lg_fx * 4.0;
-                double oy = lg_ry * xs - lg_uy * ys - lg_fy * 4.0;
-                double oz = lg_rz * xs - lg_uz * ys - lg_fz * 4.0;
-                // the planet (the letter): march along the ray
-                double tt = 0.0;
-                int step = 0;
-                int hit = 0;
-                while step < 48 && tt < 8.0 {
-                    double d = lg_jsd(ox + lg_fx * tt, oy + lg_fy * tt, oz + lg_fz * tt);
-                    if d < 0.006 {
-                        hit = 1;
-                        break;
-                    }
-                    tt = tt + d * 0.9;
-                    step += 1;
-                }
-                // the rings: the ray meets the flat plane y = 0 at one place
+                double ox = lg_rx * xs - lg_ux * ys - lg_fx * 6.0;
+                double oy = lg_ry * xs - lg_uy * ys - lg_fy * 6.0;
+                double oz = lg_rz * xs - lg_uz * ys - lg_fz * 6.0;
+                // the globe: a ball of radius 1 at the middle
+                double bq = ox * lg_fx + oy * lg_fy + oz * lg_fz;
+                double cq = ox * ox + oy * oy + oz * oz - 1.0;
+                double disc = bq * bq - cq;
+                double tg = 1000.0;
+                if disc > 0.0 { tg = 0.0 - bq - __fsqrt(disc); }
+                // the ring: where the ray meets its plane
                 double tp = 1000.0;
                 double rr = 0.0;
                 double ra = 0.0;
                 double band = 0.0;
                 double qx = 0.0;
+                double qy = 0.0;
                 double qz = 0.0;
-                if lg_abs(lg_fy) > 0.0001 {
-                    tp = 0.0 - oy / lg_fy;
+                double den = lg_fx * nsx + lg_fy * nsy;
+                if lg_abs(den) > 0.0001 {
+                    tp = 0.0 - (ox * nsx + oy * nsy) / den;
                     qx = ox + lg_fx * tp;
+                    qy = oy + lg_fy * tp;
                     qz = oz + lg_fz * tp;
-                    rr = __fsqrt(qx * qx + qz * qz);
+                    double u1 = qx * e1x + qy * e1y;
+                    double u2 = qz;
+                    rr = __fsqrt(u1 * u1 + u2 * u2);
                     band = lg_ring(rr);
-                    ra = lg_atan2(qz, qx);
+                    ra = lg_atan2(u2, u1);
                 }
-                if band > 0.0 && (hit == 0 || tp < tt) {
-                    // a ring: its gas goes round (Kepler: the inner part is faster), here and there in clumps
-                    int sub = (int)(rr * 28.0);
-                    double sr = ((double)sub + 0.5) / 28.0;
-                    // Kepler with Saturn's real mass: omega = sqrt(GM / r^3) = 4.1626e-4 rad/s at one planet radius, / rho^1.5;
-                    // the film runs lg_ts times faster than real time
-                    double rho = sr / 0.85;
-                    double omega = 0.00041626 * lg_ts / (rho * __fsqrt(rho));
-                    double clump = 0.5 + 0.5 * lg_sin(5.0 * (ra - omega * t) + 7.0 * (double)sub);
-                    double kmv = rr / 0.85 * 60268.0;
-                    double ringlet = 0.84 + 0.16 * lg_sin(kmv / 420.0);       // fine rings, side by side
-                    double v = band * (0.55 + 0.45 * clump) * ringlet;
-                    // the shadow of the planet: a ray from here towards the light meets the letter?
-                    double sd = 0.12;
+                if band > 0.0 && tp < tg {
+                    // a thin ring: its gas goes round (Kepler: faster inside), in clumps
+                    int sub = (int)(rr * 40.0);
+                    double sr = ((double)sub + 0.5) / 40.0;
+                    double omega = om0 / (sr * __fsqrt(sr));
+                    double clump = 0.5 + 0.5 * lg_sin(4.0 * (ra - omega * t) + 5.0 * (double)sub);
+                    double v = band * (0.50 + 0.50 * clump);
+                    // the shadow of the globe on the ring
                     int shadow = 0;
-                    int ss = 0;
-                    while ss < 24 && sd < 3.5 {
-                        double dd = lg_jsd(qx + lx * sd, ly * sd, qz + lz * sd);
-                        if dd < 0.01 {
-                            shadow = 1;
-                            break;
-                        }
-                        sd = sd + dd * 0.9 + 0.01;
-                        ss += 1;
-                    }
-                    int tint = 14267522;                                   // the B ring: warm sand
-                    if band < 0.4 { tint = 9863790; }                      // the C ring: darker, greyer
-                    if band > 0.4 && band < 0.7 { tint = 12624508; }       // the A ring
-                    if shadow == 1 { v = v * 0.16; }
-                    lg_ch[y * LW + x] = lg_pick(v * pulse * 1.15);
-                    lg_col[y * LW + x] = lg_scale(tint, 0.35 + 0.9 * v * pulse);
-                    // the sun glints on the rings here and there: where the gas faces the light and is in a clump
-                    double sun_az = lg_atan2(lz, lx);
-                    double gl = lg_cos(ra - sun_az);
-                    if gl > 0.0 && shadow == 0 {
+                    double sb = qx * lx + qy * ly + qz * lz;
+                    double sc = qx * qx + qy * qy + qz * qz - 1.0;
+                    if sb < 0.0 && sb * sb - sc > 0.0 { shadow = 1; }
+                    if shadow == 1 { v = v * 0.15; }
+                    // the sun glints on the ring here and there (whitish grey)
+                    double gl = (0.0 - sb) / __fsqrt(qx * qx + qy * qy + qz * qz);
+                    double gg = 0.0;
+                    if shadow == 0 && gl > 0.0 {
                         double g2 = gl * gl * gl * gl * gl * gl;
-                        double gg = g2 * g2 * (0.4 + 0.6 * clump * clump);
-                        lg_col[y * LW + x] = lg_mix(lg_col[y * LW + x], 14803420, gg * 0.9);
-                        lg_ch[y * LW + x] = lg_pick(v * pulse * 1.15 + gg * 0.35);
+                        gg = g2 * g2 * (0.3 + 0.7 * clump * clump);
                     }
-                    if shadow == 1 { lg_col[y * LW + x] = lg_mix(lg_col[y * LW + x], 3947584, 0.7); }     // the shadow is bluish dark
+                    double val = v + gg * 0.5;
+                    lg_ch[y * LW + x] = lg_pick(val);
+                    lg_col[y * LW + x] = lg_grey(0.25 + 0.75 * val);
                     lg_dep[y * LW + x] = tp;
-                } else if hit == 1 {
-                    double hx = ox + lg_fx * tt;
-                    double hy = oy + lg_fy * tt;
-                    double hz = oz + lg_fz * tt;
-                    // the direction the surface faces: the slope of the distance
-                    double e = 0.015;
-                    double nx = lg_jsd(hx + e, hy, hz) - lg_jsd(hx - e, hy, hz);
-                    double ny = lg_jsd(hx, hy + e, hz) - lg_jsd(hx, hy - e, hz);
-                    double nz = lg_jsd(hx, hy, hz + e) - lg_jsd(hx, hy, hz - e);
-                    double nl = __fsqrt(nx * nx + ny * ny + nz * nz);
-                    if nl > 0.0 {
-                        nx = nx / nl;
-                        ny = ny / nl;
-                        nz = nz / nl;
+                } else if tg < 999.0 {
+                    double hx = ox + lg_fx * tg;
+                    double hy = oy + lg_fy * tg;
+                    double hz = oz + lg_fz * tg;
+                    // the globe is rocked: its own coordinates
+                    double gx = hx * cl + hz * sl;
+                    double gz = 0.0 - hx * sl + hz * cl;
+                    double gy = hy + libp * gz;
+                    // the letter J on the front of the globe: seen from the viewer, raised from the surface
+                    double sxv = gx * lg_rx + gy * lg_ry + gz * lg_rz;               // to the right
+                    double syv = gx * lg_ux + gy * lg_uy + gz * lg_uz;               // up
+                    double facing = 0.0 - (hx * lg_fx + hy * lg_fy + hz * lg_fz);     // 1 in the middle, 0 at the edge
+                    double jx = sxv * 0.95;
+                    double jy = (0.0 - syv) * 0.95 + 0.06;
+                    double cov = 0.0;
+                    double dcx = 0.0;
+                    double dcy = 0.0;
+                    if facing > 0.15 {
+                        cov = lg_j(jx, jy);
+                        double e = 0.03;
+                        dcx = (lg_j(jx + e, jy) - lg_j(jx - e, jy)) / (2.0 * e);
+                        dcy = (lg_j(jx, jy + e) - lg_j(jx, jy - e)) / (2.0 * e);
                     }
+                    // the normal: the ball's, bent at the edges of the letter so that it stands out
+                    double nx = hx;
+                    double ny = hy;
+                    double nz = hz;
+                    double bump = 0.30;
+                    nx = nx - bump * dcx * lg_rx * 0.95 + bump * dcy * lg_ux * 0.95;
+                    ny = ny - bump * dcx * lg_ry * 0.95 + bump * dcy * lg_uy * 0.95;
+                    nz = nz - bump * dcx * lg_rz * 0.95 + bump * dcy * lg_uz * 0.95;
+                    double nl = __fsqrt(nx * nx + ny * ny + nz * nz);
+                    nx = nx / nl;
+                    ny = ny / nl;
+                    nz = nz / nl;
                     double lam = nx * lx + ny * ly + nz * lz;
                     if lam < 0.0 { lam = 0.0; }
-                    // the shadow of the rings: below the plane of the rings, a ray towards the light crosses them
-                    if hy < 0.0 {
-                        double tq = 0.0 - hy / ly;
-                        double cx2 = hx + lx * tq;
-                        double cz2 = hz + lz * tq;
-                        if lg_ring(__fsqrt(cx2 * cx2 + cz2 * cz2)) > 0.0 { lam = lam * 0.22; }
+                    // the shadow of the ring on the globe
+                    double dl = lx * nsx + ly * nsy;
+                    if lg_abs(dl) > 0.0001 {
+                        double ts2 = 0.0 - (hx * nsx + hy * nsy) / dl;
+                        if ts2 > 0.0 {
+                            double kx = hx + lx * ts2;
+                            double ky = hy + ly * ts2;
+                            double kz = hz + lz * ts2;
+                            double w1 = kx * e1x + ky * e1y;
+                            double rad2 = __fsqrt(w1 * w1 + kz * kz);
+                            if lg_ring(rad2) > 0.0 { lam = lam * 0.30; }
+                        }
                     }
-                    // like a globe: a day side, a night side with a soft edge between, a glow at the rim where the atmosphere
-                    // is seen edge on, and a small bright spot of reflected light
-                    double ndv = 0.0 - (nx * lg_fx + ny * lg_fy + nz * lg_fz);
-                    if ndv < 0.0 { ndv = 0.0; }
-                    double rim = 1.0 - ndv;
+                    // the paint: the sea is mid grey with fine lines of latitude and longitude, the letter is white
+                    double albedo = 0.34;
+                    double lat = lg_abs(lg_sin(gy * 9.4248));
+                    double lon = lg_abs(lg_sin((lg_atan2(gz, gx) + 3.1416) * 6.0));
+                    if lat < 0.07 || lon < 0.06 { albedo = 0.26; }
+                    albedo = albedo + (1.0 - albedo) * cov;
+                    // the glow at the rim, a small bright spot of reflected light on the sea
+                    double rim = 1.0 - lg_abs(facing);
                     rim = rim * rim * rim;
-                    double refl = 0.0;
                     double hx2 = lx - lg_fx;
                     double hy2 = ly - lg_fy;
                     double hz2 = lz - lg_fz;
                     double hl = __fsqrt(hx2 * hx2 + hy2 * hy2 + hz2 * hz2);
+                    double refl = 0.0;
                     if hl > 0.0 {
                         double nh = (nx * hx2 + ny * hy2 + nz * hz2) / hl;
-                        if nh > 0.0 { refl = nh * nh * nh * nh * nh * nh * nh * nh * nh * nh; }
+                        if nh > 0.0 {
+                            double n2 = nh * nh;
+                            n2 = n2 * n2;
+                            n2 = n2 * n2;
+                            refl = n2 * n2 * (1.0 - cov);
+                        }
                     }
-                    double day = lam;
-                    if day > 1.0 { day = 1.0; }
-                    // the belts of the clouds: stripes round the planet, a little wavy, that turn with it
-                    double bx = hx * lg_cs + hz * lg_sn;
-                    double bz = 0.0 - hx * lg_sn + hz * lg_cs;
-                    double belt = 0.5 + 0.5 * lg_sin(hy * 14.0 + 0.8 * lg_sin(bx * 6.0 + bz * 4.0) + 1.0);
-                    double bright = (0.08 + 0.80 * day) * (0.84 + 0.22 * belt) + 0.25 * rim * (0.30 + day) + 0.30 * refl;
+                    double bright = 0.05 + 0.92 * lam * albedo + 0.22 * rim * (0.2 + lam) + 0.35 * refl;
                     if bright > 1.0 { bright = 1.0; }
-                    lg_ch[y * LW + x] = lg_pick(bright * pulse);
-                    int c = lg_mix(2368554, 16245412, day);                // from a dark night blue to warm gold
-                    c = lg_mix(c, 13476196, belt * 0.45 * day);            // the belts are a little browner
-                    c = lg_mix(c, 12632304, rim * 0.5);                    // a pale grey glow at the edge
-                    c = lg_mix(c, 16777215, refl * 0.8);
-                    lg_col[y * LW + x] = lg_scale(c, 0.6 + 0.4 * pulse);
-                    lg_dep[y * LW + x] = tt;
+                    lg_ch[y * LW + x] = lg_pick(bright);
+                    lg_col[y * LW + x] = lg_grey(bright);
+                    lg_dep[y * LW + x] = tg;
                 }
                 x += 1;
             }
             y += 1;
-        }
-        // the small moons that run beside the rings (their real distances): Prometheus 139 350 km, Pandora 141 700 km,
-        // Janus 151 472 km; Kepler's law with Saturn's mass, like the rings. A moon hides behind the planet or a ring.
-        int mo = 0;
-        while mo < 3 {
-            double mkm = 139350.0;
-            double mph = 0.4;
-            char mch = 'o';
-            if mo == 1 { mkm = 141700.0; mph = 2.6; }
-            if mo == 2 { mkm = 151472.0; mph = 4.5; mch = '*'; }
-            double mr = mkm / 60268.0 * 0.85;
-            double mrho = mkm / 60268.0;
-            double mom = 0.00041626 * lg_ts / (mrho * __fsqrt(mrho));
-            double ma = mph + mom * t;
-            double mx = mr * lg_cos(ma);
-            double mz = mr * lg_sin(ma);
-            double sxr = mx * lg_rx + mz * lg_rz;
-            double syr = mx * lg_ux + mz * lg_uz;
-            int mdx = (int)(cxs + sxr * unit * 2.0);
-            int mdy = (int)(cys - syr * unit);
-            if mdx >= 0 && mdx < LW && mdy >= 0 && mdy < LH {
-                double md = mx * lg_fx + mz * lg_fz;
-                if md < lg_dep[mdy * LW + mdx] + 0.02 {
-                    lg_ch[mdy * LW + mdx] = mch;
-                    lg_col[mdy * LW + mdx] = 15132390;
-                    lg_dep[mdy * LW + mdx] = md;
-                }
-            }
-            mo += 1;
         }
         lg_show();
         if frames == 0 && lg_key() { frame = 0 - 1; break; }
