@@ -1,5 +1,7 @@
 # Changelog
 
+## 0.9.30
+* **The mascot (`jcmp -space`) in 3D (isometric):** a solid J (an extruded letter) seen from above at the isometric angle, lit from above so that its top faces, front and sides get different characters (`.:-=+*#%@`), with four small balls that go round it on dotted ellipses by Kepler's laws (the J is at a focus; a ball is faster near the J; period ~ radius^1.5). The view turns a little to and fro, which makes the picture look solid; the J and the balls hide the orbit dots behind them. Every character is one ray into the scene (ray marching with distance functions), written in J2K inside the compiler.
 ## 0.9.29
 * **The mascot (`jcmp -space`) like Saturn:** the J is the planet and four thin rings (with a gap, like Saturn's) lean 45 degrees round it, a little slanted. The ring stays where it is; its gas goes round, the inner rings faster, as clumps of brighter characters. A cleaner, slimmer J with a hook that curls up. Under the picture: `created by J2k-studio`, and how to stop.
 

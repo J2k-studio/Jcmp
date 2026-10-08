@@ -1,14 +1,24 @@
-// jc_logo.j -- the mascot: jcmp -space shows the J2K logo in ASCII style: a J drawn with shaded characters, a ring that
-// leans 45 degrees and turns round it, twinkling stars, 24 frames a second. Small and of a fixed size (48 x 18 characters), in the middle of the terminal,
+// jc_logo.j -- the mascot: jcmp -space shows the J2K logo in ASCII style and in 3D (isometric): a solid J, lit from above and
+// shaded with characters, with bodies that go round it by Kepler's laws, twinkling stars, 24 frames a second. Small and of a fixed size (48 x 18 characters), in the middle of the terminal,
 // all in J2K with no library. Stops on Ctrl-C or Enter.
 
 #define LW 48
 #define LH 18
 #define LN 864
 char lg_ch[LN];            // 48 x 18 characters of the picture
-double lg_jm[LN];          // the letter J: how much of each cell it covers (0..1), made once
-double lg_jb[LN];          // the same, blurred: the soft halo
-double lg_jt[LN];
+double lg_dep[LN];         // how far from the eye what is drawn in each cell is (to hide the dots of the orbits behind the J)
+double lg_bx[4];           // the bodies that go round: their places
+double lg_by[4];
+double lg_bz[4];
+double lg_fx;              // the view: forward, right and up (the up and down of the picture)
+double lg_fy;
+double lg_fz;
+double lg_rx;
+double lg_ry;
+double lg_rz;
+double lg_ux;
+double lg_uy;
+double lg_uz;
 char lg_buf[8192];           // the text of one frame
 int lg_len;
 double lg_sx[60];            // the stars: place, speed and phase of the twinkling
@@ -233,6 +243,61 @@ void lg_sleep_ns(int ns) {
     syscall(101, @ts, 0);
 }
 
+// the distance from the point (x, y, z) (y up) to the solid J: a letter with a stroke 0.23 wide and 0.34 deep
+double lg_jsd(double x0, double y0, double z0) {
+    double k = 0.80;                                       // the letter is drawn at 1 / 0.62 times its size
+    double x = x0 * k;
+    double y = y0 * k + 0.095;                            // the middle of the letter is at height 0, like the orbits
+    double z = z0 * k;
+    double yd = 0.0 - y;
+    double d = 9.0;
+    double bx = lg_clamp(x, 0.0 - 0.18, 0.46);
+    d = lg_min(d, __fsqrt((x - bx) * (x - bx) + (yd + 0.80) * (yd + 0.80)));
+    double sy = lg_clamp(yd, 0.0 - 0.80, 0.30);
+    d = lg_min(d, __fsqrt((x - 0.14) * (x - 0.14) + (yd - sy) * (yd - sy)));
+    double cx = x + 0.17;
+    double cy = yd - 0.30;
+    if cy >= 0.0 {
+        d = lg_min(d, lg_abs(__fsqrt(cx * cx + cy * cy) - 0.31));
+    } else if cx < 0.0 {
+        double ey = lg_clamp(yd, 0.12, 0.30);
+        d = lg_min(d, __fsqrt((x + 0.48) * (x + 0.48) + (yd - ey) * (yd - ey)));
+    }
+    double a = d - 0.125;                                  // across the stroke
+    double b = lg_abs(z) - 0.17;                           // through the depth
+    double oa = a;
+    double ob = b;
+    if oa < 0.0 { oa = 0.0; }
+    if ob < 0.0 { ob = 0.0; }
+    double inside = a;
+    if b > inside { inside = b; }
+    if inside > 0.0 { inside = 0.0; }
+    return (inside + __fsqrt(oa * oa + ob * ob)) / k;
+}
+
+// the distance to the nearest body (a small ball); which = its number
+int lg_which;
+double lg_balls(double x, double y, double z) {
+    double best = 9.0;
+    int i = 0;
+    while i < 4 {
+        double dx = x - lg_bx[i];
+        double dy = y - lg_by[i];
+        double dz = z - lg_bz[i];
+        double d = __fsqrt(dx * dx + dy * dy + dz * dz) - 0.115;
+        if d < best {
+            best = d;
+            lg_which = i;
+        }
+        i += 1;
+    }
+    return best;
+}
+
+double lg_scene(double x, double y, double z) {
+    return lg_min(lg_jsd(x, y, z), lg_balls(x, y, z));
+}
+
 // the logo: frames = 0 runs until Ctrl-C or Enter
 void lg_run(int frames) {
     lg_ramp[0] = ' ';
@@ -259,72 +324,6 @@ void lg_run(int frames) {
         lg_sp[i] = (double)((seed >> 8) % 1000) / 1000.0 * 6.283;
         i += 1;
     }
-    double pi = 3.141592653589793;
-    double cxs = (double)LW / 2.0;
-    double cys = (double)LH / 2.0;
-    double unit = (double)LH * 0.36;                    // rows for one unit of the picture; a character is twice as high as wide
-    // the letter J once: each cell is looked at in 3 x 3 places
-    int y = 0;
-    while y < LH {
-        int x = 0;
-        while x < LW {
-            double sum = 0.0;
-            int sj = 0;
-            while sj < 3 {
-                int si = 0;
-                while si < 3 {
-                    double fx = ((double)x + ((double)si + 0.5) / 3.0 - cxs) / (unit * 2.0);
-                    double fy = ((double)y + ((double)sj + 0.5) / 3.0 - cys) / unit;
-                    sum = sum + lg_j(fx, fy);
-                    si += 1;
-                }
-                sj += 1;
-            }
-            lg_jm[y * LW + x] = sum / 9.0;
-            x += 1;
-        }
-        y += 1;
-    }
-    // the halo: a blur of J (3 cells across, 1 up and down, twice)
-    i = 0;
-    while i < LN {
-        lg_jb[i] = lg_jm[i];
-        i += 1;
-    }
-    int rounds = 0;
-    while rounds < 3 {
-        y = 0;
-        while y < LH {
-            int x = 0;
-            while x < LW {
-                double sum = 0.0;
-                int cnt = 0;
-                int dy = 0 - 1;
-                while dy < 2 {
-                    int dx = 0 - 2;
-                    while dx < 3 {
-                        int xx = x + dx;
-                        int yy = y + dy;
-                        if xx >= 0 && xx < LW && yy >= 0 && yy < LH {
-                            sum = sum + lg_jb[yy * LW + xx];
-                            cnt += 1;
-                        }
-                        dx += 1;
-                    }
-                    dy += 1;
-                }
-                lg_jt[y * LW + x] = sum / (double)cnt;
-                x += 1;
-            }
-            y += 1;
-        }
-        i = 0;
-        while i < LN {
-            lg_jb[i] = lg_jt[i];
-            i += 1;
-        }
-        rounds += 1;
-    }
     lg_read_size();                                       // first the size of the terminal, then the picture in its middle
     char clear[8];
     clear[0] = 27;
@@ -333,86 +332,162 @@ void lg_run(int frames) {
     clear[3] = 'J';
     clear[4] = 0;
     write_out(@clear);
-    double c45 = 0.7071067811865476;
-    double cz = lg_cos(0.0 - 22.0 * pi / 180.0);
-    double sz = lg_sin(0.0 - 22.0 * pi / 180.0);
+    double pi = 3.141592653589793;
+    double cxs = (double)LW / 2.0;
+    double cys = (double)LH / 2.0;
+    double unit = (double)LH * 0.34;                      // rows for one unit of the scene (a character is twice as high as wide)
+    double sinp = 0.5773502691896258;                     // the isometric view looks down at 35.26 degrees
+    double cosp = 0.816496580927726;
+    // the light: from above, a little from the left and the front (y is up)
+    double lx = 0.0 - 0.42;
+    double ly = 0.80;
+    double lz = 0.0 - 0.43;
+    double ln = __fsqrt(lx * lx + ly * ly + lz * lz);
+    lx = lx / ln;
+    ly = ly / ln;
+    lz = lz / ln;
     int frame = 0;
     int t0 = lg_now();
     while frames == 0 || frame < frames {
         double t = (double)frame / 24.0;
-        double pulse = 0.85 + 0.15 * lg_sin(t * 2.0);
-        // the halo and the stars
+        double pulse = 0.9 + 0.1 * lg_sin(t * 2.0);
+        // the view turns a little to and fro: that is what makes it look solid
+        double yaw = 0.7853981633974483 + 0.38 * lg_sin(t * 0.55);
+        lg_fx = lg_sin(yaw) * cosp;
+        lg_fy = 0.0 - sinp;
+        lg_fz = lg_cos(yaw) * cosp;
+        lg_rx = lg_cos(yaw);
+        lg_ry = 0.0;
+        lg_rz = 0.0 - lg_sin(yaw);
+        lg_ux = lg_fy * lg_rz - lg_fz * lg_ry;            // up = forward x right
+        lg_uy = lg_fz * lg_rx - lg_fx * lg_rz;
+        lg_uz = lg_fx * lg_ry - lg_fy * lg_rx;
+        // the bodies: Kepler's laws, the J at a focus of every ellipse, in a flat plane through the middle of the letter
+        int ob = 0;
+        while ob < 4 {
+            double rad = 1.45 + 0.22 * (double)ob;
+            double ecc = 0.10;
+            if ob == 1 { ecc = 0.20; }
+            if ob == 2 { ecc = 0.12; }
+            if ob == 3 { ecc = 0.24; }
+            double period = 3.2 * rad * __fsqrt(rad);
+            double m = 2.0 * pi * t / period + 1.7 * (double)ob;
+            double ea = m;
+            int it = 0;
+            while it < 6 {
+                ea = ea - (ea - ecc * lg_sin(ea) - m) / (1.0 - ecc * lg_cos(ea));
+                it += 1;
+            }
+            lg_bx[ob] = rad * (lg_cos(ea) - ecc);
+            lg_by[ob] = 0.0;
+            lg_bz[ob] = rad * __fsqrt(1.0 - ecc * ecc) * lg_sin(ea);
+            ob += 1;
+        }
+        // the stars first
         i = 0;
         while i < LN {
-            double h = lg_jb[i] * 1.5 * pulse;
-            if h > 0.16 {
-                lg_ch[i] = lg_pick(h * 0.7);
-            } else {
-                lg_ch[i] = ' ';
-            }
+            lg_ch[i] = ' ';
+            lg_dep[i] = 1000.0;
             i += 1;
         }
         i = 0;
         while i < 60 {
-            int sx = (int)lg_sx[i];
-            int sy = (int)lg_sy[i];
-            if lg_ch[sy * LW + sx] == ' ' {
-                double tw = 0.5 + 0.5 * lg_sin(t * lg_sf[i] + lg_sp[i]);
-                char c = ' ';
-                if tw > 0.35 { c = '.'; }
-                if tw > 0.65 { c = '+'; }
-                if tw > 0.9 { c = '*'; }
-                lg_ch[sy * LW + sx] = c;
-            }
+            double tw = 0.5 + 0.5 * lg_sin(t * lg_sf[i] + lg_sp[i]);
+            char c = ' ';
+            if tw > 0.35 { c = '.'; }
+            if tw > 0.65 { c = '+'; }
+            if tw > 0.9 { c = '*'; }
+            lg_ch[(int)lg_sy[i] * LW + (int)lg_sx[i]] = c;
             i += 1;
         }
-        // the ring, like Saturn's: a flat ring that leans 45 degrees and is slanted a little, with a gap in it;
-        // it does not turn as a whole, but its gas does: the inner rings go round faster
-        int pass = 0;
-        while pass < 2 {
-            if pass == 1 {
-                // the letter, in front of the back of the ring
-                i = 0;
-                while i < LN {
-                    double m = lg_jm[i];
-                    if m > 0.18 {
-                        lg_ch[i] = lg_pick(0.55 + 0.45 * m * pulse);
+        // every character: a ray goes into the scene (the picture is isometric: all rays are parallel)
+        int y = 0;
+        while y < LH {
+            int x = 0;
+            while x < LW {
+                double xs = ((double)x + 0.5 - cxs) / (unit * 2.0);
+                double ys = ((double)y + 0.5 - cys) / unit;
+                double ox = lg_rx * xs - lg_ux * ys - lg_fx * 4.0;
+                double oy = lg_ry * xs - lg_uy * ys - lg_fy * 4.0;
+                double oz = lg_rz * xs - lg_uz * ys - lg_fz * 4.0;
+                double tt = 0.0;
+                int step = 0;
+                int hit = 0;
+                while step < 48 && tt < 8.0 {
+                    double d = lg_scene(ox + lg_fx * tt, oy + lg_fy * tt, oz + lg_fz * tt);
+                    if d < 0.006 {
+                        hit = 1;
+                        break;
                     }
-                    i += 1;
+                    tt = tt + d * 0.9;
+                    step += 1;
                 }
-            }
-            int rg = 0;
-            while rg < 4 {
-                double rad = 1.16;
-                double w = 1.3;
-                if rg == 1 { rad = 1.30; w = 1.1; }
-                if rg == 2 { rad = 1.56; w = 0.85; }
-                if rg == 3 { rad = 1.70; w = 0.7; }
-                i = 0;
-                while i < 720 {
-                    double a = (double)i * 2.0 * pi / 720.0;
-                    double px = rad * lg_cos(a);
-                    double pz = rad * lg_sin(a);
-                    double ly = 0.0 - pz * c45;                       // lean 45 degrees towards us
-                    double lz = pz * c45;
-                    double qx = px * cz - ly * sz;                    // slanted a little
-                    double qy = px * sz + ly * cz;
-                    double qz = lz;
-                    int behind = 0;
-                    if qz > 0.0 { behind = 1; }
-                    if (pass == 0 && behind == 1) || (pass == 1 && behind == 0) {
-                        int dx = (int)(cxs + qx * unit * 2.0);
-                        int dy = (int)(cys + qy * unit);
-                        double depth = 0.5 - 0.5 * qz / rad;
-                        double c = lg_sin(5.0 * (a - w * t));         // clumps of gas that go round
-                        double clump = 0.5 + 0.5 * c;
-                        lg_dot(dx, dy, 0.10 + 0.22 * depth + 0.40 * clump * clump * clump);
+                if hit == 1 {
+                    double hx = ox + lg_fx * tt;
+                    double hy = oy + lg_fy * tt;
+                    double hz = oz + lg_fz * tt;
+                    int is_ball = 0;
+                    double bd = lg_balls(hx, hy, hz);
+                    if bd < 0.012 { is_ball = 1; }
+                    // the direction the surface faces: the slope of the distance
+                    double e = 0.015;
+                    double nx = 0.0;
+                    double ny = 0.0;
+                    double nz = 0.0;
+                    if is_ball == 1 {
+                        nx = hx - lg_bx[lg_which];
+                        ny = hy - lg_by[lg_which];
+                        nz = hz - lg_bz[lg_which];
+                    } else {
+                        nx = lg_jsd(hx + e, hy, hz) - lg_jsd(hx - e, hy, hz);
+                        ny = lg_jsd(hx, hy + e, hz) - lg_jsd(hx, hy - e, hz);
+                        nz = lg_jsd(hx, hy, hz + e) - lg_jsd(hx, hy, hz - e);
                     }
-                    i += 1;
+                    double nl = __fsqrt(nx * nx + ny * ny + nz * nz);
+                    if nl > 0.0 {
+                        nx = nx / nl;
+                        ny = ny / nl;
+                        nz = nz / nl;
+                    }
+                    double lam = nx * lx + ny * ly + nz * lz;
+                    if lam < 0.0 { lam = 0.0; }
+                    double v = 0.20 + 0.80 * lam;
+                    if is_ball == 1 { v = 0.50 + 0.50 * lam; }
+                    lg_ch[y * LW + x] = lg_pick(v * pulse);
+                    lg_dep[y * LW + x] = hx * lg_fx + hy * lg_fy + hz * lg_fz;
                 }
-                rg += 1;
+                x += 1;
             }
-            pass += 1;
+            y += 1;
+        }
+        // the orbits, as dots (hidden where the J or a body is in front of them)
+        ob = 0;
+        while ob < 4 {
+            double rad = 1.45 + 0.22 * (double)ob;
+            double ecc = 0.10;
+            if ob == 1 { ecc = 0.20; }
+            if ob == 2 { ecc = 0.12; }
+            if ob == 3 { ecc = 0.24; }
+            double semi_b = rad * __fsqrt(1.0 - ecc * ecc);
+            int n = 0;
+            while n < 240 {
+                double ea = (double)n * 2.0 * pi / 240.0;
+                double wx = rad * (lg_cos(ea) - ecc);
+                double wy = 0.0;
+                double wz = semi_b * lg_sin(ea);
+                double sx = wx * lg_rx + wy * lg_ry + wz * lg_rz;
+                double sy = wx * lg_ux + wy * lg_uy + wz * lg_uz;
+                int dx = (int)(cxs + sx * unit * 2.0);
+                int dy = (int)(cys - sy * unit);
+                if dx >= 0 && dx < LW && dy >= 0 && dy < LH {
+                    double depth = wx * lg_fx + wy * lg_fy + wz * lg_fz;
+                    if depth < lg_dep[dy * LW + dx] + 0.01 {
+                        lg_dot(dx, dy, 0.16 + 0.18 * (0.5 - 0.5 * depth / rad));
+                    }
+                }
+                n += 1;
+            }
+            ob += 1;
         }
         lg_show();
         if frames == 0 && lg_key() { frame = 0 - 1; break; }
