@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.24
+* **gfx library:** `#import <gfx>` once, then `using gfx::canvas;` (loads `math::vector` too). `Canvas::make(w, h)`, `clear`, `put`, `get`, `text`, `plot(vec3, char)` (perspective, nearest wins), `line`, `ball(centre, radius, ramp)` (shaded ball), `frame`, `show`, `clear_screen`, `free`. Fields `view` and `wide` set the perspective and the character shape.
+* **Examples:** `examples/solar.jk` is shorter with the Canvas; new `examples/blackhole.jk`: every character follows a ray of light bent by gravity (the disk around the hole shows up bent over the top).
+
 ## 0.9.23
 * **Example `examples/solar.jk`:** an animated ASCII solar system (sun, five planets, orbits, shading, perspective, z-buffer) written with `vec3`, `mat3` and operators. Run: `jcmp examples/solar.jk -o solar && ./solar` (needs a terminal of 100 x 37).
 

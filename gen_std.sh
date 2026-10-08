@@ -23,6 +23,7 @@ text += gen("push_std", files, "push_std(): `import std` -- the standard library
 text += gen("push_cpu", ["cpu"], "push_cpu(): `import cpu` -- threads and locks.")
 text += gen("push_vector", ["vector"], "push_vector(): `import <vector>` -- Vec2, Vec3, Vec4.")
 text += gen("push_matrix", ["matrix"], "push_matrix(): `import <matrix>` -- Mat3, Mat4.")
+text += gen("push_canvas", ["canvas"], "push_canvas(): `using gfx::canvas` -- Canvas.")
 text += gen("push_prelude", ["prelude"], "push_prelude(): read in front of every program (Mem and the dynamic array routines).")
 open("jcmp/jc_std.j", "w").write("\n".join(text))
 PY

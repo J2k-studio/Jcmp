@@ -1,63 +1,15 @@
-// An ASCII solar system: 3D positions -> a tilt matrix -> perspective -> characters in a grid.
-//   solar [frames]        (default 240 frames, about 15 seconds; run in a terminal at least 100 x 37)
+// An ASCII solar system with the gfx library.   solar [frames]
 #import <stdlib>
 #import <math>
+#import <gfx>
 using stdlib
 using math::matrix;
-
-char grid[3700];            // 100 x 37 characters
-double zbuf[3700];          // the distance of what is drawn in each place (the nearest wins)
-
-void plot(vec3 p, char c) {
-    double persp = 60.0 / (60.0 + p.z);
-    int sx = (int)(50.0 + p.x * persp * 2.0);       // x2: a character is about twice as high as wide
-    int sy = (int)(18.0 + p.y * persp);
-    if sx < 0 || sx >= 100 || sy < 0 || sy >= 37 { return; }
-    int at = sy * 100 + sx;
-    if p.z < zbuf[at] {
-        zbuf[at] = p.z;
-        grid[at] = c;
-    }
-}
-
-// a ball of radius r (in rows), shaded from a light on the upper left: brighter = later in ramp
-void ball(vec3 p, double r, String ramp) {
-    int n = ramp.len;
-    double dy = 0.0 - r;
-    while dy <= r {
-        double dx = 0.0 - r * 2.0;
-        while dx <= r * 2.0 {
-            double nx = dx / (r * 2.0);
-            double ny = dy / r;
-            double d2 = nx * nx + ny * ny;
-            if d2 <= 1.0 {
-                double nz = Math::sqrt(1.0 - d2);
-                vec3 normal = {nx, ny, nz};
-                vec3 light = {-0.5, -0.5, 0.7};
-                double lit = Math::max(normal.dot(light), 0.0);
-                int k = (int)(lit * (double)(n - 1));
-                if k > n - 1 { k = n - 1; }
-                vec3 q = {p.x + dx / 2.0, p.y + dy, p.z - nz};
-                plot(q, ramp[k]);
-            }
-            dx += 0.5;
-        }
-        dy += 0.5;
-    }
-}
+using gfx::canvas;
 
 void main() {
     int frames = 240;
     String[] args = Env::args();
-    if args.len > 1 {
-        switch Num::parse_int(args[1]) {
-            Result::Ok(v): frames = v;
-            Result::Err(e): {
-                cout << "usage: solar [frames]\n";
-                return;
-            }
-        }
-    }
+    if args.len > 1 { frames = Num::parse_int(args[1]).unwrap(); }
     double dist[5];
     double speed[5];
     double size[5];
@@ -67,36 +19,27 @@ void main() {
     dist[2] = 25.0; speed[2] = 1.0; size[2] = 1.8; sym[2] = 'E';
     dist[3] = 33.0; speed[3] = 0.53; size[3] = 1.3; sym[3] = 'M';
     dist[4] = 45.0; speed[4] = 0.084; size[4] = 3.5; sym[4] = 'J';
-    mat3 tilt = mat3::rotate_x(1.1);                 // look at the system from above, at an angle
+    Canvas c = Canvas::make(100, 37);
+    mat3 tilt = mat3::rotate_x(1.1);
     vec3 sun = {0.0, 0.0, 0.0};
     for frame in 0..frames {
         double t = (double)frame * 0.05;
-        for i in 0..3700 {
-            grid[i] = ' ';
-            zbuf[i] = 1.0e9;
-        }
+        c.clear();
         for i in 0..5 {
             for a in 0..90 {
                 double ang = (double)a * Math::tau() / 90.0;
                 vec3 o = {Math::cos(ang) * dist[i], 0.0, Math::sin(ang) * dist[i]};
-                plot(tilt.mul_vec(o), '.');
+                c.plot(tilt.mul_vec(o), '.');
             }
             double ang = t * speed[i] + (double)i;
             vec3 p = {Math::cos(ang) * dist[i], 0.0, Math::sin(ang) * dist[i]};
             vec3 q = tilt.mul_vec(p);
-            ball(q, size[i], ".:-=+*#%@");
+            c.ball(q, size[i], ".:-=+*#%@");
             vec3 label = {q.x, q.y, q.z - 5.0};
-            plot(label, sym[i]);
+            c.plot(label, sym[i]);
         }
-        ball(sun, 4.0, "+*#%@@@@@");
-        String out = "";
-        out.push((char)27);
-        out.append("[H");                            // back to the top left
-        for y in 0..37 {
-            for x in 0..100 { out.push(grid[y * 100 + x]); }
-            out.push((char)10);
-        }
-        cout << out;
+        c.ball(sun, 4.0, "+*#%@@@@@");
+        c.show();
         Time::sleep_ms(60);
     }
 }
