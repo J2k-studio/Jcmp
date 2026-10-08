@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9.16
+* **`Proc`:** `Proc::run(cmd, args)` runs a program and returns its exit code; `Proc::output(cmd, args)` returns what it printed. The program is looked for in `PATH` unless its name has a `/`; 127 means it could not be started.
+
 ## 0.9.15
 * **UTF-8 text:** `s.count()` (characters), `s.chars()` (a `String[]`, one character each), `s.char_at(i)`; `upper()` / `lower()` handle Latin-1, Latin Extended-A, Greek and Cyrillic. `len` still counts bytes.
 

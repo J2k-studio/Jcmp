@@ -267,3 +267,88 @@ struct Num {
         return Result<double, Error>::Ok(v);
     }
 }
+
+// running other programs. The program is looked for in the folders of PATH unless its name has a /.
+//   int code = Proc::run("ls", args)?;            (the output goes where the program's own goes)
+//   String text = Proc::output("echo", args)?;    (the output is returned as text)
+struct Proc {
+    // starts a child (stdout to wfd when wfd >= 0); returns its id, or a negative error number
+    static int launch(String cmd, String[] args, int wfd) {
+        int na = args.len;
+        int^ argv = (int^)Mem::alloc(8 * (na + 2));
+        argv[0] = (int)cmd.c();
+        for i in 0..na { argv[i + 1] = (int)args[i].c(); }
+        argv[na + 1] = 0;
+        int ne = 0;
+        while arg(argc() + 1 + ne) != null { ne += 1; }
+        int^ envp = (int^)Mem::alloc(8 * (ne + 1));
+        for i in 0..ne { envp[i] = (int)arg(argc() + 1 + i); }
+        envp[ne] = 0;
+        int pid = syscall(220, 17, 0, 0, 0, 0);
+        if pid == 0 {
+            if wfd >= 0 { syscall(24, wfd, 1, 0); }
+            bool slash = false;
+            for i in 0..cmd.len { if cmd[i] == '/' { slash = true; } }
+            if slash {
+                syscall(221, cmd.c(), argv, envp);
+            } else {
+                String path = "";
+                switch Env::get("PATH") {
+                    Option::Some(p): path.append(p.c());
+                    Option::None: path.append("/usr/bin:/bin");
+                }
+                int start = 0;
+                for i in 0..path.len + 1 {
+                    if i == path.len || path[i] == ':' {
+                        String full = path.slice(start, i) + "/" + cmd;
+                        syscall(221, full.c(), argv, envp);
+                        start = i + 1;
+                    }
+                }
+            }
+            syscall(93, 127);
+        }
+        Mem::free(argv);
+        Mem::free(envp);
+        return pid;
+    }
+    // waits for the child; its exit code (128 + the signal if it was killed)
+    static int finish(int pid) {
+        int status = 0;
+        syscall(260, pid, @status, 0, 0);
+        int sig = status & 127;
+        if sig != 0 { return 128 + sig; }
+        return (status >> 8) & 255;
+    }
+    // runs a program and waits for it; its exit code (127 if it could not be started)
+    static Result<int, Error> run(String cmd, String[] args) {
+        int pid = Proc::launch(cmd, args, -1);
+        if pid < 0 { return Result<int, Error>::Err(Error::make(ErrorKind::Other, "cannot start " + cmd)); }
+        return Result<int, Error>::Ok(Proc::finish(pid));
+    }
+    // runs a program, waits for it and returns what it wrote to its output
+    static Result<String, Error> output(String cmd, String[] args) {
+        int fds[1];
+        int rc = syscall(59, @fds, 0);
+        if rc < 0 { return Result<String, Error>::Err(Error::make(ErrorKind::Io, "cannot make a pipe")); }
+        int rfd = fds[0] & 4294967295;
+        int wfd = fds[0] >> 32;
+        int pid = Proc::launch(cmd, args, wfd);
+        syscall(57, wfd);
+        if pid < 0 {
+            syscall(57, rfd);
+            return Result<String, Error>::Err(Error::make(ErrorKind::Other, "cannot start " + cmd));
+        }
+        String text = "";
+        char buf[4096];
+        int n = syscall(63, rfd, @buf, 4095);
+        while n > 0 {
+            buf[n] = 0;
+            text.append((char^)@buf);
+            n = syscall(63, rfd, @buf, 4095);
+        }
+        syscall(57, rfd);
+        Proc::finish(pid);
+        return Result<String, Error>::Ok(text);
+    }
+}
