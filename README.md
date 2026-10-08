@@ -47,47 +47,72 @@ Release history: [CHANGELOG.md](CHANGELOG.md).
 ## Install
 
 You need a Linux **ARM64** machine (a phone with Termux works) and `curl` or `wget`
-(Termux: `pkg install curl wget`). The compiler is a single file, published as a
+(Termux: `pkg install curl wget`). The compiler is one file, published as a
 [release](https://github.com/J2k-studio/Jcmp/releases).
 
-**One line** (downloads the latest release, checks its SHA-256, installs `jcmp` into `$PREFIX/bin` on
-Termux or `~/.local/bin` elsewhere):
+### 1. `install.sh` (recommended)
+
+It downloads the latest release, checks its SHA-256 and puts `jcmp` in a folder.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/J2k-studio/Jcmp/main/install.sh | sh
-# or
+# or, with wget:
 wget -qO- https://raw.githubusercontent.com/J2k-studio/Jcmp/main/install.sh | sh
 ```
 
-**By hand** (to see exactly what you get):
+The default folder is `$PREFIX/bin` on Termux and `~/.local/bin` elsewhere. To choose the folder, for example a
+`bin` folder next to your project (`../bin`):
 
 ```bash
+curl -fsSL https://raw.githubusercontent.com/J2k-studio/Jcmp/main/install.sh | sh -s -- --dir ../bin
+wget -qO- https://raw.githubusercontent.com/J2k-studio/Jcmp/main/install.sh | sh -s -- --dir ../bin
+```
+
+| Option | Meaning |
+|--------|---------|
+| `--dir DIR`        | install into `DIR` (created if needed) |
+| `--version 0.1.0`  | a specific release instead of the latest |
+| `--with-assembler` | also install `j2k_asm`, the stand-alone assembler |
+
+Run it again to update. To uninstall, delete the file.
+
+### 2. By hand, into `../bin`
+
+The same thing step by step (the folder `../bin` is only an example; use any folder):
+
+```bash
+mkdir -p ../bin && cd ../bin
+# with curl
 curl -fLO https://github.com/J2k-studio/Jcmp/releases/latest/download/jcmp-linux-arm64
 curl -fLO https://github.com/J2k-studio/Jcmp/releases/latest/download/SHA256SUMS
-sha256sum -c --ignore-missing SHA256SUMS          # must say: jcmp-linux-arm64: OK
-chmod +x jcmp-linux-arm64
-mv jcmp-linux-arm64 ~/.local/bin/jcmp              # any folder on your PATH
-# wget works the same:  wget https://github.com/J2k-studio/Jcmp/releases/latest/download/jcmp-linux-arm64
+# or with wget
+wget https://github.com/J2k-studio/Jcmp/releases/latest/download/jcmp-linux-arm64
+wget https://github.com/J2k-studio/Jcmp/releases/latest/download/SHA256SUMS
+
+sha256sum -c --ignore-missing SHA256SUMS      # must print:  jcmp-linux-arm64: OK
+mv jcmp-linux-arm64 jcmp && chmod +x jcmp && rm SHA256SUMS
 ```
 
-A specific version: replace `latest/download` with `download/v0.1.0`
-(`JCMP_VERSION=0.1.0` for `install.sh`). The bundle `jcmp-<version>-linux-arm64.tar.gz` holds
-the compiler, the assembler, the examples and the docs:
+A specific version: replace `latest/download` with `download/v0.1.0`. The bundle
+`jcmp-<version>-linux-arm64.tar.gz` of the same release holds the compiler, the assembler, the examples and the docs.
+
+### Use it
+
+Put the folder on your `PATH` (once per shell, or add the line to `~/.bashrc`), then check:
 
 ```bash
-curl -fLO https://github.com/J2k-studio/Jcmp/releases/latest/download/jcmp-0.1.0-linux-arm64.tar.gz
-tar -xzf jcmp-0.1.0-linux-arm64.tar.gz
-```
+export PATH="$PWD:$PATH"            # inside the folder; or the full path of your folder
+jcmp --version                      # jcmp 0.1.0 (J2K compiler, Linux ARM64)
 
-Check it works:
-
-```bash
-jcmp --version                       # jcmp 0.1.0 (J2K compiler, Linux ARM64)
 printf 'void main() { cout << "hi\\n"; }\n' > hi.jk
-jcmp hi.jk -o hi && ./hi
+jcmp hi.jk -o hi && ./hi            # hi
 ```
 
-**From the source repository** (to read or rebuild the compiler; it contains a ready `bin/jcmp`):
+Without `PATH` you can call it by its path: `../bin/jcmp hi.jk -o hi`.
+
+### From the source repository
+
+To read the compiler or rebuild it (the repository contains a ready `bin/jcmp`):
 
 ```bash
 git clone https://github.com/J2k-studio/Jcmp.git

@@ -1,24 +1,47 @@
 #!/bin/sh
-# install.sh -- download the latest Jcmp release, check it and install it.
+# install.sh -- download the Jcmp compiler from the latest GitHub release, check it and put it in a folder.
+#
 #   curl -fsSL https://raw.githubusercontent.com/J2k-studio/Jcmp/main/install.sh | sh
-#   (or:  wget -qO- https://raw.githubusercontent.com/J2k-studio/Jcmp/main/install.sh | sh)
-# Environment: JCMP_VERSION=0.1.0 to pick a version (default: the latest), JCMP_BASE=URL to download from
-# another place, PREFIX=/dir to choose where
-# bin/jcmp goes (default: $PREFIX on Termux, else ~/.local).
+#   wget -qO- https://raw.githubusercontent.com/J2k-studio/Jcmp/main/install.sh | sh
+#
+# Options (after `sh -s --` when the script comes through a pipe):
+#   --dir DIR          the folder for the program (default: $PREFIX/bin on Termux, else ~/.local/bin).
+#                      Example: ... | sh -s -- --dir ../bin
+#   --version X.Y.Z    a specific release (default: the latest)
+#   --with-assembler   also install j2k_asm, the stand-alone assembler
+# Environment: JCMP_VERSION (same as --version), JCMP_BASE=URL to download from another place (a mirror,
+# or file:///folder for a local copy).
 set -eu
 REPO="J2k-studio/Jcmp"
+BINDIR=""
+VERSION="${JCMP_VERSION:-}"
+WITH_ASM=0
+usage() { sed -n '2,13p' "$0" 2>/dev/null | sed 's/^# \{0,1\}//' || true; }
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --dir) [ $# -ge 2 ] || { echo "install: --dir needs a folder"; exit 1; }; BINDIR="$2"; shift 2 ;;
+        --version) [ $# -ge 2 ] || { echo "install: --version needs a number"; exit 1; }; VERSION="$2"; shift 2 ;;
+        --with-assembler) WITH_ASM=1; shift ;;
+        -h|--help) usage; exit 0 ;;
+        *) echo "install: unknown option '$1' (try --help)"; exit 1 ;;
+    esac
+done
 case "$(uname -m)" in
     aarch64|arm64) ;;
     *) echo "install: Jcmp makes programs for Linux ARM64 only (this machine is $(uname -m))"; exit 1 ;;
 esac
 if [ -n "${JCMP_BASE:-}" ]; then
-    BASE="$JCMP_BASE"                     # a mirror or a local folder (file:///...), also used for testing
-elif [ -n "${JCMP_VERSION:-}" ]; then
-    BASE="https://github.com/$REPO/releases/download/v$JCMP_VERSION"
+    BASE="$JCMP_BASE"
+elif [ -n "$VERSION" ]; then
+    BASE="https://github.com/$REPO/releases/download/v$VERSION"
 else
     BASE="https://github.com/$REPO/releases/latest/download"
 fi
-DEST="${PREFIX:-$HOME/.local}"
+if [ -z "$BINDIR" ]; then
+    if [ -n "${PREFIX:-}" ]; then BINDIR="$PREFIX/bin"; else BINDIR="$HOME/.local/bin"; fi
+fi
+mkdir -p "$BINDIR"
+BINDIR="$(cd "$BINDIR" && pwd)"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 fetch() {   # fetch URL FILE
@@ -27,13 +50,17 @@ fetch() {   # fetch URL FILE
     else echo "install: curl or wget is needed"; exit 1; fi
 }
 echo "downloading from $BASE ..."
-fetch "$BASE/jcmp-linux-arm64" "$TMP/jcmp-linux-arm64"
 fetch "$BASE/SHA256SUMS" "$TMP/SHA256SUMS"
-WANT="$(grep ' jcmp-linux-arm64$' "$TMP/SHA256SUMS" | cut -d' ' -f1)"
-HAVE="$(sha256sum "$TMP/jcmp-linux-arm64" | cut -d' ' -f1)"
-[ -n "$WANT" ] && [ "$WANT" = "$HAVE" ] || { echo "install: the checksum does not match, nothing installed"; exit 1; }
-mkdir -p "$DEST/bin"
-cp "$TMP/jcmp-linux-arm64" "$DEST/bin/jcmp"
-chmod +x "$DEST/bin/jcmp"
-echo "installed: $DEST/bin/jcmp  ($("$DEST/bin/jcmp" --version))"
-case ":$PATH:" in *":$DEST/bin:"*) ;; *) echo "add $DEST/bin to your PATH:  export PATH=\"$DEST/bin:\$PATH\"" ;; esac
+install_one() {   # install_one RELEASE-FILE NAME-IN-BINDIR
+    fetch "$BASE/$1" "$TMP/$1"
+    WANT="$(grep " $1\$" "$TMP/SHA256SUMS" | cut -d' ' -f1)"
+    HAVE="$(sha256sum "$TMP/$1" | cut -d' ' -f1)"
+    [ -n "$WANT" ] && [ "$WANT" = "$HAVE" ] || { echo "install: the checksum of $1 does not match, nothing installed"; exit 1; }
+    cp "$TMP/$1" "$BINDIR/$2"
+    chmod +x "$BINDIR/$2"
+}
+install_one jcmp-linux-arm64 jcmp
+[ "$WITH_ASM" = 1 ] && install_one j2k_asm-linux-arm64 j2k_asm
+echo "installed: $BINDIR/jcmp  ($("$BINDIR/jcmp" --version))"
+[ "$WITH_ASM" = 1 ] && echo "installed: $BINDIR/j2k_asm"
+case ":$PATH:" in *":$BINDIR:"*) ;; *) echo "add the folder to your PATH:  export PATH=\"$BINDIR:\$PATH\"" ;; esac
