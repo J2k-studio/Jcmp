@@ -2,7 +2,7 @@
 // Build:  bin/jcmp jcmp/jcmp.jk -o jcmp1        (see bootstrap.sh)
 // Use:    jcmp1 input.jk -o program
 // the version of the compiler (also in the file VERSION; release.sh checks that they agree)
-#define JCMP_VERSION "0.9.10"
+#define JCMP_VERSION "0.9.11"
 
 #import "jc_base"
 #import "jc_asm"
@@ -174,11 +174,8 @@ void main() {
         int ol = str_len(out_elf);
         bool is_dir = ol > 0 && out_elf[ol - 1] == '/';
         if !is_dir {
-            int dfd = syscall(56, -100, out_elf, 16384, 0);        // O_DIRECTORY
-            if dfd >= 0 {
-                syscall(57, dfd);
-                is_dir = true;
-            }
+            int st[18];
+            if syscall(79, -100, out_elf, @st, 0) == 0 && (st[2] & 4294967295 & 61440) == 16384 { is_dir = true; }
         }
         if is_dir {
             if bn == 0 {

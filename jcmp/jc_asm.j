@@ -14,10 +14,10 @@ char as_code[8388608];          // machine code, 4 bytes per instruction
 int as_pos;                     // bytes of code emitted so far (also the address)
 int as_pass;                    // 1: collect labels, 2: encode
 
-char as_lnames[786432];         // label table: 32768 names x 24 bytes
+char as_lnames[2097152];        // label table: 32768 names x 64 bytes
 int as_laddr[32768];
 int as_label_count;
-char as_nbuf[24];               // the label name just read (zero padded)
+char as_nbuf[64];               // the label name just read (zero padded)
 
 int as_bss_size;
 int as_last_is_sp;              // parse_reg_or_sp: was it "sp"?
@@ -224,10 +224,11 @@ void as_addsub_imm(int value, int rd, int rn, int opi, int opo, int opr) {
 
 void as_read_label_name() {
     int n = 0;
-    while n < 24 { as_nbuf[n] = 0; n += 1; }
+    while n < 64 { as_nbuf[n] = 0; n += 1; }
     n = 0;
     while as_ci < as_src_len && as_is_name_char(as_src[as_ci]) {
-        if n < 23 { as_nbuf[n] = as_src[as_ci]; }
+        if n >= 63 { as_fail(); }                 // names are at most 63 characters (a longer one used to be cut short silently)
+        as_nbuf[n] = as_src[as_ci];
         n += 1;
         as_ci += 1;
     }
@@ -235,8 +236,9 @@ void as_read_label_name() {
 
 bool as_name_matches(int slot) {
     int i = 0;
-    while i < 24 {
-        if as_lnames[slot * 24 + i] != as_nbuf[i] { return false; }
+    while i < 64 {
+        if as_lnames[slot * 64 + i] != as_nbuf[i] { return false; }
+        if as_nbuf[i] == 0 { return true; }
         i += 1;
     }
     return true;
@@ -245,8 +247,8 @@ bool as_name_matches(int slot) {
 void as_add_label() {
     if as_label_count >= 32768 { as_fail(); }
     int i = 0;
-    while i < 24 {
-        as_lnames[as_label_count * 24 + i] = as_nbuf[i];
+    while i < 64 {
+        as_lnames[as_label_count * 64 + i] = as_nbuf[i];
         i += 1;
     }
     as_laddr[as_label_count] = as_pos;

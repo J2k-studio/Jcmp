@@ -50,7 +50,9 @@ int decl_ls;
 int rv_valid;                // the last operand read was exactly a plain local variable ...
 int rv_off;                  // ... at this frame offset
 int last_call_struct;        // the last call made a struct value (a fresh temporary)
-int own_src_off;             // struct_source: the frame offset of the local variable a value moves out of
+int own_src_off;             // struct_source: the frame offset of the local variable (or temporary) a value moves out of
+int cond_depth;              // > 0 while the right side of && or || is compiled (it may not run)
+int last_call_struct_off;    // the frame offset of the temporary that the last call's struct result is in
 int last_call_owning;        // the last call made returns memory its receiver owns
 int ty_tid;                  // type of values: 0 number, 1 bool, 3+n enum number n
 int ex_ty;                   // type of the last operand/result: 0 number, 1 bool, 2 the literal 0 or 1, 3+n enum n
@@ -1148,7 +1150,7 @@ int own_find(int off) {
 // records out again (own_unlink).
 void own_add(int off, int kind, int aux) {
     if own_count >= 256 { die("too many owning variables in one function"); }
-    if kind != 2 { str_flush(stmt_t0, 1); }       // Strings made by this statement go first: the records must be in order
+    if kind != 2 && kind != 6 { str_flush(stmt_t0, 1); }       // Strings made by this statement go first: the records must be in order
     own_off[own_count] = off;
     own_kind[own_count] = kind;
     own_aux[own_count] = aux;
@@ -1164,7 +1166,7 @@ void own_add(int off, int kind, int aux) {
         str_copy(@fn, "Mem__free", 128);
     } else if kind == 3 {
         str_copy(@fn, "__Str__free_all", 128);
-    } else if kind == 4 {
+    } else if kind == 4 || kind == 6 {
         str_copy(@fn, @sname + aux * 64, 64);
         append_text(@fn, "__free");
         mode = 1;
@@ -1206,7 +1208,7 @@ void emit_owner_free(int i) {
         emit_nl();
         return;
     }
-    if own_kind[i] == 4 {
+    if own_kind[i] == 4 || own_kind[i] == 6 {
         // a struct variable with a free(self) method: the compiler calls it
         char sf[128];
         str_copy(@sf, @sname + own_aux[i] * 64, 64);
@@ -1420,7 +1422,15 @@ void gen_call() {
     if fi >= 0 && fowned[fi] == 1 { last_call_owning = 1; }
     rv_valid = 0;
     if fi >= 0 && fretdyn[fi] != 0 { ex_dyn = fretdyn[fi]; }
-    if res_ty >= 100 { last_call_struct = 1; }
+    if res_ty >= 100 {
+        last_call_struct = 1;
+        last_call_struct_off = tmp_off;
+        if struct_has_free(res_ty - 100) && cur_fidx >= 0 {
+            // the result frees itself: the temporary is an owner until the end of the statement unless it is moved on
+            if cond_depth > 0 { die("a value that frees itself cannot be made on the right of && or || (put it in a variable first)"); }
+            own_add(tmp_off, 6, res_ty - 100);
+        }
+    }
     if fi >= 0 && fretstr[fi] == 1 {
         last_call_owning = 0;            // a String that is returned is a temporary that the compiler frees
         str_temp();
@@ -1688,6 +1698,40 @@ void gen_scope() {
     }
     str_copy(@id_name, @sc_full, 256);
     gen_call();
+    call_postfix();
+}
+
+// after a call: f(...)(...) , f().field , f().method() , f()[i] , and a String result with a method (f().trim())
+void call_postfix() {
+    while ex_ty < 0 && tok_is("(") {
+        gen_call_indirect(ex_ty);            // f(...)(...) : call the pointer that f returned
+    }
+    if ex_ty >= 100 && (tok_is(".") || tok_is("[")) {
+        // f().field : the returned struct (a temporary) is the object
+        lv_done = 0;
+        lv_self = 0;
+        lv_fresh = 0;
+        lv_code = 16 + ex_ty - 100;
+        lv_kind = 0;
+        lv_ptr = 0;
+        lv_tid = ex_ty;
+        lvalue_loop();
+        finish_rvalue();
+    } else if ex_ty == 80 && tok_is(".") && rv_valid == 1 {
+        // f().trim() : the String that f returned is a temporary kept in a frame slot: it is the String variable
+        lv_done = 0;
+        lv_self = 0;
+        lv_fresh = 0;
+        ins_n("add x0, x29, #", rv_off);
+        lv_code = 8;
+        lv_kind = 3;
+        lv_ptr = 0;
+        lv_tid = 99;
+        lv_dyn = dyn_pack(2, 0, 70);
+        lv_nd = 1;
+        lvalue_loop();
+        finish_rvalue();
+    }
 }
 
 // an identifier in an expression: a variable, an element, a deref or a call
@@ -1745,21 +1789,7 @@ void gen_identifier() {
     if tok_is("(") && !(lookup_var(@id_name) && v_tid < 0 && v_kind != 2) {
         resolve_callee();
         gen_call();
-        while ex_ty < 0 && tok_is("(") {
-            gen_call_indirect(ex_ty);        // f(...)(...) : call the pointer that f returned
-        }
-        if ex_ty >= 100 && (tok_is(".") || tok_is("[")) {
-            // f().field : the returned struct (a temporary) is the object
-            lv_done = 0;
-            lv_self = 0;
-            lv_fresh = 0;
-            lv_code = 16 + ex_ty - 100;
-            lv_kind = 0;
-            lv_ptr = 0;
-            lv_tid = ex_ty;
-            lvalue_loop();
-            finish_rvalue();
-        }
+        call_postfix();
         return;
     }
     if tok_is("::") {
@@ -1878,7 +1908,10 @@ int dyn_tid(int info) {
 // a call, a constructor) is taken over, a plain local variable is emptied (zeroed) after its bytes were copied, anything
 // else is an error. Returns 1 for a fresh value, 2 for a local variable (its frame offset in own_src_off), else dies.
 int struct_source(int sidx) {
-    if last_call_struct == 1 { return 1; }
+    if last_call_struct == 1 && last_call_struct_off != 0 {
+        own_src_off = last_call_struct_off;
+        return 2;
+    }
     if rv_valid == 1 {
         int oi = own_find(rv_off);
         if oi >= 0 && own_kind[oi] == 4 {
@@ -1915,7 +1948,6 @@ bool is_strarr_dyn(int info) {
     return info != 0 && dyn_code(info) == 8 && dyn_ptr(info) == 0 && dyn_tid(info) == 71;
 }
 
-int cond_depth;              // > 0 while the right side of && or || is compiled (it may not run)
 
 // x0 = a new String: remember it as a temporary owner
 void str_temp() {
@@ -1971,15 +2003,15 @@ void str_flush(int t0, int keep) {
     int any = 0;
     int first_tmp = 0 - 1;
     while i < own_count {
-        if own_kind[i] == 2 && own_moved[i] == 0 { any = 1; }
-        if own_kind[i] == 2 && first_tmp < 0 { first_tmp = i; }
+        if (own_kind[i] == 2 || own_kind[i] == 6) && own_moved[i] == 0 { any = 1; }
+        if (own_kind[i] == 2 || own_kind[i] == 6) && first_tmp < 0 { first_tmp = i; }
         i += 1;
     }
     if any == 1 {
         if keep == 1 { push_x0(); }
         i = own_count - 1;
         while i >= t0 {
-            if own_kind[i] == 2 && own_moved[i] == 0 { emit_owner_free(i); }
+            if (own_kind[i] == 2 || own_kind[i] == 6) && own_moved[i] == 0 { emit_owner_free(i); }
             i -= 1;
         }
         if keep == 1 {
@@ -1991,7 +2023,7 @@ void str_flush(int t0, int keep) {
     int w = t0;
     i = t0;
     while i < own_count {
-        if own_kind[i] != 2 {
+        if own_kind[i] != 2 && own_kind[i] != 6 {
             own_off[w] = own_off[i];
             own_kind[w] = own_kind[i];
             own_aux[w] = own_aux[i];
@@ -2504,6 +2536,20 @@ void dyn_member() {
     ex_ty = 0;
     if is_str_dyn(info) && str_member(@dm) { return; }
     if is_strarr_dyn(info) && strarr_member(@dm) { return; }
+    if str_eq(@dm, "clone") && !is_str_dyn(info) {
+        // a copy of an array (a String[] copies its Strings): a new array that the receiver owns
+        expect("(");
+        expect(")");
+        load_through(8);
+        if is_strarr_dyn(info) { rt_call("__Str__aclone"); } else { rt_call("__Arr__clone"); }
+        ex_w = 8;
+        ex_ty = 99;
+        ex_dyn = info;
+        last_call_owning = 1;
+        rv_valid = 0;
+        lv_done = 1;
+        return;
+    }
     if !is_str_dyn(info) && !is_strarr_dyn(info) && num_member(@dm, code, eptr, etid) { return; }
     if str_eq(@dm, "len") || str_eq(@dm, "cap") {
         load_through(8);
@@ -2763,6 +2809,13 @@ void parse_unary() {
     }
 }
 
+// the current token is a struct / enum name followed by :: (Name::call(...), not a type in a cast)?
+bool scope_follows() {
+    int k = 0;
+    while lc(k) == 32 || lc(k) == 9 { k += 1; }
+    return lc(k) == ':' && lc(k + 1) == ':';
+}
+
 void parse_unary_core() {
     rv_valid = 0;
     last_call_owning = 0;
@@ -2825,7 +2878,7 @@ void parse_unary_core() {
     }
     if tok_is("(") {
         next();
-        if at_type() {
+        if at_type() && !scope_follows() {
             parse_type();
             if ty_void == 1 && ty_ptr == 0 { die("a value cannot be cast to void"); }
             expect(")");
@@ -2849,6 +2902,7 @@ void parse_unary_core() {
             ty_ptr = cast_ptr;
             if ty_ptr != 0 {
                 ex_w = 8;
+                if ty_ptr == 2 { ex_w = 9; }          // (char^)p is a text
             } else {
                 if ty_width == 1 { emit_line("sxtb x0, x0"); }
                 if ty_width == 2 || ty_width == 11 { emit_line("uxtb x0, x0"); }

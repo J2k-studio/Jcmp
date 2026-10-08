@@ -391,6 +391,30 @@ switch s {
 * It can be generic: `enum class Maybe<T> { Some(T value), Nothing; ... }` and `Maybe<int>::Some(5)`.
 * A member of a data enum cannot be given a number (`= 5`); a plain `enum class` is as before.
 
+## Files, folders, environment, time and random numbers
+
+These are in the standard library. Names are Strings (a text written in the program works). Things that can fail for outside reasons give a
+`Result<T, Error>` (use `switch`, `?` or `.unwrap()`).
+
+```jk
+Result<String, Error> t = Fs::read_text("notes.txt");          // the whole file
+Result<String[], Error> lines = Fs::read_lines("notes.txt");   // without the line ends (CR LF too)
+Fs::write_text("out.txt", "hello\n");   Fs::append_text("out.txt", "more");    // Ok(bytes written)
+Fs::exists(path)   Fs::size(path)   Fs::remove(path)   Fs::rename(from, to)
+
+Dir::exists(path)  Dir::make(path)  Dir::make_all("a/b/c")  Dir::remove(path)    // remove: an empty folder
+Dir::list(".")                       // Result<String[], Error>: the names, sorted
+Dir::current()                       // Result<String, Error>
+
+Env::get("HOME")                     // Option<String>
+Env::args()                          // String[]: the arguments, the first is the program
+
+Time::now_ms()   Time::mono_ns()   Time::sleep_ms(100)       // mono_ns only goes forward: for measuring
+Random::seed(42)  Random::next()  Random::range(1, 7)  Random::unit()   // 0 <= unit() < 1
+```
+
+An `Error` from these has a `kind` (`NotFound`, `Denied`, `Invalid`, `Io`, ...) and a `message` that says what was being done and the system error number.
+
 ## Option, Result and ?
 
 A value that may be missing is an `Option<T>` (`Some(value)` or `None`). An operation that may fail is a `Result<T, E>` (`Ok(value)` or

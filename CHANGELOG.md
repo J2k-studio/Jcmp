@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.11
+* **Fixed (serious):** names of functions longer than 23 characters were cut short by the assembler, so two functions whose names start the same way (for example `Result__String___Error__Ok` and `...__free`) could be taken for one. Names up to 63 characters are exact now (a longer one is an error).
+* **Standard library:** `Fs` (read_text, read_lines, write_text, append_text, exists, size, remove, rename), `Dir` (exists, make, make_all, remove, list, current), `Env` (get, args), `Time` (now_ms, mono_ns, sleep_ms), `Random` (seed, next, range, unit).
+* The value a call returns is looked at directly: `Env::get("HOME").is_some()`, `f().trim()`. A value that frees itself and is not used is freed at the end of the statement.
+* `(Name::call() + 1)` in parentheses is not mistaken for a cast; `(char^)p` is a text.
+
 ## 0.9.10
 * **Bugs are panics:** dividing by zero, a null/freed array or String, a position out of range, `pop` of an empty list, `unwrap` of `None`/`Err`, a function that ends without `return`, no memory: `panic: <what>` and exit code 134; `try`/`catch` cannot catch them. New: `panic("text")`, `assert(condition, "text")` (std), `Map.try_get(k)` (an `Option`).
 

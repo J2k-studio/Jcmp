@@ -282,6 +282,15 @@ struct __Arr {
             root = child;
         }
     }
+    // a copy of an array of numbers / pointers
+    static void^ clone(void^ hv) {
+        if (int)hv == 0 { __panic("the dynamic array is null"); }
+        int^ h = (int^)hv;
+        int^ r = (int^)__Arr::make(h[3], h[0]);
+        Mem::copy((void^)r[2], (void^)h[2], h[0] * h[3]);
+        r[0] = h[0];
+        return (void^)r;
+    }
     // give the elements and the header back (null is ignored)
     static void free(void^ hv) {
         int^ h = (int^)hv;
@@ -700,6 +709,24 @@ struct __Str {
     }
 
     // ---- String[] : an array whose elements are String headers owned by the array
+    // a deep copy of a String[] (every String is copied)
+    static void^ aclone(void^ hv) {
+        __Str::aprep(hv);
+        int^ h = (int^)hv;
+        void^ rv = __Arr::make(8, h[0]);
+        int^ el = (int^)h[2];
+        int i = 0;
+        while i < h[0] {
+            if el[i] == 0 {
+                int^ slot = (int^)__Arr::slot(rv);
+                slot[0] = 0;
+            } else {
+                __Str::apush(rv, __Str::clone((void^)el[i]));
+            }
+            i += 1;
+        }
+        return rv;
+    }
     static void aprep(void^ hv) {
         if (int)hv == 0 { __panic("the array is null"); }
     }

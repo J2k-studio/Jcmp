@@ -36,6 +36,7 @@ char dvp_field[262144];      // 4096 x 64: the field of the struct that holds ea
 char dvp_pname[262144];      // 4096 x 64: the name the parameter was given
 int dvv_count;
 int dvp_count;
+int dvp_isarr[4096];         // 1: the member is an array (T[])
 int dvp_owns[4096];          // 1: that member holds something that frees itself
 char de_buf[262144];
 int de_len;
@@ -1551,6 +1552,10 @@ int gen_data_enum(char^ b, int s, int n, int line) {
                 de_str(@dvp_field + px * 64);
                 de_str(";\n");
                 dvp_owns[px] = de_type_owns(b, ps, nb);
+                dvp_isarr[px] = 0;
+                int te = nb;
+                while te > ps && is_space(b[te - 1]) { te -= 1; }
+                if te - ps >= 2 && b[te - 1] == ']' && b[te - 2] == '[' { dvp_isarr[px] = 1; }
                 k += 1;
             }
         }
@@ -1578,6 +1583,7 @@ int gen_data_enum(char^ b, int s, int n, int line) {
             de_str(@dvp_field + px2 * 64);
             de_str(" = ");
             de_str(@dvp_pname + px2 * 64);
+            if dvp_isarr[px2] == 1 { de_str(".clone()"); }       // the enum owns its own copy of an array
             de_put(';');
             pk += 1;
         }
@@ -1765,6 +1771,14 @@ void gen_try_op() {
         if fldoff[fdst] != 0 { ins_n("add x3, x3, #", fldoff[fdst]); }
         ins_n("mov x2, ", (fsize + 7) / 8 * 8);
         emit_line("bl j2k_copy");
+        // the error moved out of the value: it is empty there (the value is freed with everything else)
+        ins_mem("ldr", "x0", "x29", slot);
+        emit_line("mov x1, 0");
+        int zq = 0;
+        while zq < (fsize + 7) / 8 * 8 {
+            ins_mem("str", "x1", "x0", fldoff[fsrc] + zq);
+            zq += 8;
+        }
     }
     leave_tries(try_depth);
     own_free_from(0, 0);
@@ -1780,6 +1794,9 @@ void gen_try_op() {
     last_call_owning = 0;
     if flddyn[fok] != 0 {
         emit_line("ldr x0, [x0, #0]");
+        emit_line("mov x1, 0");                  // the content moves out: the value does not own it any more
+        ins_mem("ldr", "x2", "x29", slot);
+        ins_mem("str", "x1", "x2", fldoff[fok]);
         ex_w = 8;
         if is_str_dyn(flddyn[fok]) {
             ex_ty = 80;
@@ -1792,6 +1809,29 @@ void gen_try_op() {
     } else if fldcode[fok] >= 16 && fldptr[fok] == 0 {
         ex_w = 8;
         ex_ty = 100 + fldcode[fok] - 16;
+        if struct_has_free(fldcode[fok] - 16) {
+            // an owning content moves into a temporary of its own
+            int csz = ssize[fldcode[fok] - 16];
+            ty_tid = 0;
+            add_local("..moved", 0, fldcode[fok], csz, 0);
+            int tmp_at = loff[lcount - 1];
+            ins_n("add x3, x29, #", tmp_at);
+            ins_n("mov x2, ", csz);
+            emit_line("bl j2k_copy");
+            ins_mem("ldr", "x0", "x29", slot);
+            emit_line("mov x1, 0");
+            int zc = 0;
+            while zc < csz {
+                ins_mem("str", "x1", "x0", fldoff[fok] + zc);
+                zc += 8;
+            }
+            ins_n("add x0, x29, #", tmp_at);
+            if cond_depth > 0 { die("a value that frees itself cannot be made on the right of && or ||"); }
+            own_add(tmp_at, 6, fldcode[fok] - 16);
+            last_call_struct_off = tmp_at;
+        } else {
+            last_call_struct_off = 0;
+        }
         last_call_struct = 1;
     } else {
         load_through(fldcode[fok]);
