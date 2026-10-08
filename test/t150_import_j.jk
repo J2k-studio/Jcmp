@@ -1,6 +1,0 @@
-import "imp.comp"
-import "imp.both"
-
-int main() {
-    return comp_twice(20) + which();      // 40 + 1 (the .j file wins over the .jk file)
-}

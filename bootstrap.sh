@@ -1,5 +1,5 @@
 # bootstrap.sh -- the three-stage bootstrap of the J2K compiler written in J2K
-# and a comparison with the assembly compiler on the tests.
+# (and, when the assembly seed is present, a comparison with it on the test programs).
 #
 #   stage 0  bin/jcmp (the committed binary)  compiles jcmp/jcmp.jk  -> jcmp1
 #   stage 1  jcmp1                            compiles jcmp/jcmp.jk  -> jcmp2

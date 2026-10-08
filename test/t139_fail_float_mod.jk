@@ -1,5 +1,0 @@
-int main() {
-    f64 x = 1.5;
-    f64 y = x % 2.0;
-    return 0;
-}

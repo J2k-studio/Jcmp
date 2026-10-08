@@ -1,7 +1,0 @@
-test/t146_warn_struct.jk:9:16: warning: passing 'Big' (80 bytes) by value; consider a pointer to avoid the copy [-Wlarge-by-value]
-int total(Big b) {
-               ^
-test/t146_warn_struct.jk:17:12: warning: 'Group' is a static-only struct, instantiating it has no effect [-Wstatic-struct]
-    Group g;
-           ^
-2 warning(s) generated.

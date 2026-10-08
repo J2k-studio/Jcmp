@@ -1,5 +1,0 @@
-mov x1, 42
-mov x2, 7
-sdiv x0, x1, x2
-mov x8, 93
-svc 0

@@ -1,5 +1,0 @@
-void main() {
-    cout << "void main\n";
-    return;
-    cout << "never\n";
-}

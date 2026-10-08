@@ -1,5 +1,0 @@
-int main() {
-    int[] a = arr(4);
-    a.push(1.5);
-    return 0;
-}

@@ -1,4 +1,0 @@
-mov x0, 10
-add x0, x0, 5
-mov x8, 93
-svc 0

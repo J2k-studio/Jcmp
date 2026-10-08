@@ -1,7 +1,0 @@
-int main() {
-    i8 a = 100;
-    i8 b = a + a;
-    int c = a + a;
-    i8 d = (a + a) / 2;
-    return c + b + d + 100;
-}

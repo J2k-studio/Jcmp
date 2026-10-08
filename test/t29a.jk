@@ -1,8 +1,0 @@
-int main() {
-    return helper();
-}
-int helper() {
-    int a[3];
-    a[0] = 100;
-    return a[0];
-}

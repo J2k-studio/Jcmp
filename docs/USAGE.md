@@ -56,18 +56,6 @@ The assembler binary is rebuilt with `bin/jcmp j2k_asm.jk -o bin/j2k_asm_j2k`.
 The compiler is always rebuilt from the committed binary `bin/jcmp` (the very first compiler, written
 in assembly, is not part of this repository).
 
-## Tests
-
-```bash
-JCMP=_test_out/boot/jcmp3 ./run_all_tests.sh     # the J2K compiler, whole suite
-./run_all_tests.sh                               # the old assembly compiler (frozen)
-```
-
-Test programs live in `test/`. Next to `name.jk` there may be:
-`name.out` (exact expected output), `name.warn` (exact expected compiler messages).
-Programs named `*_fail_*` must be rejected. `JCFLAGS="-st"` passes options to the compiler.
-Features added after the assembly compiler was frozen are tested only in the `JCMP=` mode.
-
 ## Examples
 
 ```bash

@@ -1,7 +1,0 @@
-int main() {
-    f64 price = 2.5;
-    char letter = 'J';                 // a character literal after a float literal
-    coutf << price * 4.0 << "\n";
-    cout << letter << "\n";
-    return letter - 'A';               // 9
-}

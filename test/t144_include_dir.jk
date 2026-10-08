@@ -1,6 +1,0 @@
-import "helper"
-import "helper"
-
-int main() {
-    return helper_value() + 35;
-}

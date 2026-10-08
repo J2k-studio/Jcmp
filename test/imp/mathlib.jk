@@ -1,3 +1,0 @@
-import "helpers"
-
-int twice(int x) { return add(x, x); }

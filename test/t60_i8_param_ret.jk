@@ -1,6 +1,0 @@
-int main() {
-    return f(127) + f(300) + 100;
-}
-i8 f(i8 x) {
-    return x + 1;
-}

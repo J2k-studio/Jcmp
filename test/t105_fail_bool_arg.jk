@@ -1,6 +1,0 @@
-void g(bool b) { }
-int main() {
-    int n = 3;
-    g(n);
-    return 0;
-}

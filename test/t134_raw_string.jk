@@ -1,8 +1,0 @@
-int main() {
-    char p[] = r"C:\dir\new";
-    char q[] = "a\tb";
-    int n = 0;
-    while p[n] != 0 { n += 1; }          // 10 characters, no escapes
-    cout << p << "\n";
-    return n + q[1] - 8;                 // 10 + 9 - 8 = 11
-}

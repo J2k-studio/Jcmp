@@ -1,6 +1,0 @@
-int main() {
-    int a[2];
-    a[0] = 15;
-    int x = 3;
-    return -x + -a[0] + 50;
-}

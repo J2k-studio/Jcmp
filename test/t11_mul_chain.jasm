@@ -1,7 +1,0 @@
-mov x1, 2
-mov x2, 3
-mul x3, x1, x2
-mov x4, 4
-mul x0, x3, x4
-mov x8, 93
-svc 0

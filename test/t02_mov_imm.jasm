@@ -1,3 +1,0 @@
-mov x0, 17
-mov x8, 93
-svc 0

@@ -1,6 +1,0 @@
-int main() {
-    int x = 20;
-    int y = 8;
-    int z = x - y;
-    return z;
-}

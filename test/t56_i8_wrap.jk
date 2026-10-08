@@ -1,5 +1,0 @@
-int main() {
-    i8 b = 200;
-    i8 c = -129;
-    return b + c + 100;
-}

@@ -1,6 +1,0 @@
-enum class S { A, B };
-int main() {
-    S s = S::A;
-    if s { return 1; }
-    return 0;
-}

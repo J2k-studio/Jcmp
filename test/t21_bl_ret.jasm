@@ -1,6 +1,0 @@
-bl helper
-mov x8, 93
-svc 0
-helper:
-mov x0, 33
-ret

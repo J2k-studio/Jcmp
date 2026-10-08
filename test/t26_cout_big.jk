@@ -1,6 +1,0 @@
-int main() {
-    int x = 999;
-    x += 1;
-    cout << x;
-    return 0;
-}

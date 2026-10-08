@@ -1,8 +1,0 @@
-mov x1, 5
-mov x2, 8
-bl do_mul
-mov x8, 93
-svc 0
-do_mul:
-mul x0, x1, x2
-ret

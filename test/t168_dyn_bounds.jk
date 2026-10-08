@@ -1,9 +1,0 @@
-int main() {
-    int[] a = arr(4);
-    a.push(1);
-    a.push(2);
-    a.push(3);
-    cout << a[2] << "\n";
-    cout << a[3] << "\n";        // length is 3: out of range with -d
-    return 0;
-}

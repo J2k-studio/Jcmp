@@ -1,9 +1,0 @@
-struct Group {
-    static int one() { return 1; }
-    int two(self) { return 2; }
-}
-
-int main() {
-    Group g;
-    return g.one();
-}

@@ -40,7 +40,6 @@ Hello from J2K!
 | Not done yet                                | threads/`Mutex`, optimisation |
 | Target                                      | Linux **ARM64** only |
 
-The test suite passes (more than 160 programs with the J2K compiler).
 Release history: [CHANGELOG.md](CHANGELOG.md).
 
 ---
@@ -194,7 +193,6 @@ an enum is not a number, `int` and `float` do not mix without a cast), **no hidd
 Jcmp/
 ├── README.md, README.th.md, LICENSE, VERSION, CHANGELOG.md
 ├── install.sh            download + check + install the latest release
-├── release.sh            builds the release files into dist/ (for the maintainer)
 ├── bin/                  the compiler and assembler binaries (built by themselves)
 │   ├── jcmp              the compiler (J2K -> ARM64 ELF)
 │   └── j2k_asm_j2k       the stand-alone assembler (.jasm -> ELF)
@@ -205,14 +203,12 @@ Jcmp/
 │   └── jc_std.j            generated from std/ by gen_std.sh
 ├── std/                  the standard library (J2K): sys, mem, str, math, fs
 ├── examples/             small programs
-├── test/                 the test programs (+ expected output in .out / .warn files)
 ├── docs/                 language specification and guides
 │   ├── syntax-design.md    the language specification (decisions are recorded here)
-│   └── LANGUAGE.md  USAGE.md
+│   └── TUTORIAL.md  TUTORIAL.th.md  LANGUAGE.md  USAGE.md
 ├── j2k_asm.jk            command-line wrapper of the assembler
 ├── bootstrap.sh          rebuild the compiler with itself and compare
 ├── bootstrap-from-binary.sh   the short version of the same check
-├── run_all_tests.sh      the test suite
 └── gen_std.sh            std/*.j -> jcmp/jc_std.j
 ```
 

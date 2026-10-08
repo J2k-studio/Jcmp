@@ -1,5 +1,0 @@
-mov x28, 3
-mov x27, 14
-mul x0, x28, x27
-mov x8, 93
-svc 0

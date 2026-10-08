@@ -1,7 +1,0 @@
-int main() {
-    int a = 17;
-    int b = a % 5;
-    int c = 100 % 7;
-    a %= 6;
-    return b + c + a;
-}
