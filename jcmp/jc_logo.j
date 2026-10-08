@@ -19,6 +19,8 @@ double lg_rz;
 double lg_ux;
 double lg_uy;
 double lg_uz;
+double lg_cs;              // the planet turns about its axis: cos and sin of the angle now
+double lg_sn;
 char lg_buf[8192];           // the text of one frame
 int lg_len;
 double lg_sx[60];            // the stars: place, speed and phase of the twinkling
@@ -156,7 +158,7 @@ void lg_read_size() {
 // the picture as text, in the middle of the terminal (every line is put in place with a cursor move)
 void lg_show() {
     int left = (lg_cols - LW) / 2 + 1;
-    int top = (lg_rows - LH - 2) / 2 + 1;
+    int top = (lg_rows - LH - 3) / 2 + 1;
     if left < 1 { left = 1; }
     if top < 1 { top = 1; }
     lg_len = 0;
@@ -192,6 +194,13 @@ void lg_show() {
     lg_text(";");
     lg_num(left + LW / 2 - 12);
     lg_text("H(Ctrl-C or Enter to stop)");
+    lg_buf[lg_len] = 27;
+    lg_len += 1;
+    lg_text("[");
+    lg_num(top + LH + 2);
+    lg_text(";");
+    lg_num(left + LW / 2 - 21);
+    lg_text("Hreal Saturn speeds, time x4000");
     syscall(64, 1, @lg_buf, lg_len);
 }
 
@@ -265,7 +274,9 @@ double lg_atan2(double z, double x) {
 }
 
 // the distance from the point (x, y, z) (y up) to the solid J: a letter with a stroke 0.23 wide and 0.34 deep
-double lg_jsd(double x0, double y0, double z0) {
+double lg_jsd(double xw, double y0, double zw) {
+    double x0 = xw * lg_cs + zw * lg_sn;                   // the planet turns: look at the letter turned back
+    double z0 = 0.0 - xw * lg_sn + zw * lg_cs;
     double k = 0.80;                                       // the letter is drawn at 1 / 0.62 times its size
     double x = x0 * k;
     double y = y0 * k + 0.095;                            // the middle of the letter is at height 0, like the orbits
@@ -322,12 +333,12 @@ double lg_scene(double x, double y, double z) {
 // the rings of the planet: how bright the gas is at radius r (0 = no ring there). Like Saturn: a faint inner ring, a bright
 // broad ring, a dark gap, and an outer ring
 double lg_ring(double r) {
-    if r < 1.05 || r > 1.78 { return 0.0; }
-    if r < 1.26 { return 0.30; }
-    if r < 1.42 { return 0.78; }
-    if r < 1.49 { return 0.0; }
-    if r < 1.70 { return 0.52; }
-    return 0.22;
+    double km = r / 0.85 * 60268.0;                         // the planet is 60268 km in radius and 0.85 units here
+    if km < 74658.0 || km > 136775.0 { return 0.0; }       // the C ring starts, the A ring ends
+    if km < 92000.0 { return 0.30; }                        // C ring
+    if km < 117580.0 { return 0.78; }                       // B ring
+    if km < 122170.0 { return 0.0; }                        // the Cassini division
+    return 0.52;                                            // A ring
 }
 
 // the logo: frames = 0 runs until Ctrl-C or Enter
@@ -366,7 +377,7 @@ void lg_run(int frames) {
     write_out(@clear);
     double cxs = (double)LW / 2.0;
     double cys = (double)LH / 2.0;
-    double unit = (double)LH * 0.38;                      // rows for one unit of the scene (a character is twice as high as wide)
+    double unit = (double)LH * 0.33;                      // rows for one unit of the scene (a character is twice as high as wide)
     // the light: from above, a little from the left and the front (y is up)
     double lx = 0.0 - 0.42;
     double ly = 0.80;
@@ -381,20 +392,38 @@ void lg_run(int frames) {
         double t = (double)frame / 24.0;
         double pulse = 0.9 + 0.1 * lg_sin(t * 2.0);
         // the view turns a little to and fro: that is what makes it look solid
-        // (two slow swings that do not repeat together, and the angle of looking down breathes a little)
-        double yaw = 0.7853981633974483 + 0.40 * lg_sin(t * 0.43) + 0.17 * lg_sin(t * 1.07 + 1.3);
-        double pitch = 0.6154797 + 0.07 * lg_sin(t * 0.71 + 0.5);
-        double sinp = lg_sin(pitch);
-        double cosp = lg_cos(pitch);
+        // the view does not move: all the motion is the planet's and the rings' own. The planet turns once in 10.56 hours
+        // (real time), 4000 times faster here; its axis leans 26.73 degrees.
+        double yaw = 0.7853981633974483;
+        double sinp = 0.5773502691896258;                       // looking down at the isometric angle
+        double cosp = 0.816496580927726;
         lg_fx = lg_sin(yaw) * cosp;
         lg_fy = 0.0 - sinp;
         lg_fz = lg_cos(yaw) * cosp;
         lg_rx = lg_cos(yaw);
         lg_ry = 0.0;
         lg_rz = 0.0 - lg_sin(yaw);
+        double spin = 0.66100 * t;
+        lg_cs = lg_cos(spin);
+        lg_sn = lg_sin(spin);
         lg_ux = lg_fy * lg_rz - lg_fz * lg_ry;            // up = forward x right
         lg_uy = lg_fz * lg_rx - lg_fx * lg_rz;
         lg_uz = lg_fx * lg_ry - lg_fy * lg_rx;
+        // the axis leans: turn the picture plane by 26.73 degrees
+        double cr = 0.8933;
+        double sr2 = 0.4497;
+        double nrx = lg_rx * cr + lg_ux * sr2;
+        double nry = lg_ry * cr + lg_uy * sr2;
+        double nrz = lg_rz * cr + lg_uz * sr2;
+        double nux = 0.0 - lg_rx * sr2 + lg_ux * cr;
+        double nuy = 0.0 - lg_ry * sr2 + lg_uy * cr;
+        double nuz = 0.0 - lg_rz * sr2 + lg_uz * cr;
+        lg_rx = nrx;
+        lg_ry = nry;
+        lg_rz = nrz;
+        lg_ux = nux;
+        lg_uy = nuy;
+        lg_uz = nuz;
         // the stars first
         i = 0;
         while i < LN {
@@ -454,7 +483,10 @@ void lg_run(int frames) {
                     // a ring: its gas goes round (Kepler: the inner part is faster), here and there in clumps
                     int sub = (int)(rr * 28.0);
                     double sr = ((double)sub + 0.5) / 28.0;
-                    double omega = 2.2 / (sr * __fsqrt(sr));
+                    // Kepler with Saturn's real mass: omega = sqrt(GM / r^3) = 4.1626e-4 rad/s at one planet radius, / rho^1.5;
+                    // the film runs 4000 times faster than real time
+                    double rho = sr / 0.85;
+                    double omega = 1.66504 / (rho * __fsqrt(rho));
                     double clump = 0.5 + 0.5 * lg_sin(5.0 * (ra - omega * t) + 7.0 * (double)sub);
                     double v = band * (0.55 + 0.45 * clump);
                     // the shadow of the planet: a ray from here towards the light meets the letter?
