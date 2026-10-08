@@ -1,6 +1,9 @@
-// An ASCII black hole: for every character a ray of light is followed from the eye; its path is bent by gravity.
-// The glowing disk around the hole shows up twice (the light from behind it is bent over the top).
-//   blackhole [frames]        (default 200 frames; a terminal of at least 100 x 37)
+// An ASCII black hole: for every character a ray of light is followed backwards from the eye; its path is
+// bent by gravity. The disk of hot gas around the hole shows up twice (the light of its far side is bent
+// over the top), one side is brighter because the gas comes towards us there, and the stars are bent too.
+//   blackhole          runs until you press Ctrl-C
+//   blackhole 300      stops after 300 frames
+// The terminal should be at least 100 x 37.
 #import <stdlib>
 #import <math>
 #import <gfx>
@@ -8,104 +11,138 @@ using stdlib
 using math::matrix;
 using gfx::canvas;
 
-// the brightness (0..1) of the disk at radius r, angle a, at time t: hotter inside, with turning arms
+// the brightness (0..1) of the disk at radius r, angle a (around the hole), at time t
 double disk_light(double r, double a, double t) {
-    double inner = 2.6;
+    double inner = 2.6;                                       // the innermost stable orbit (the hole's radius is 1)
     double outer = 9.0;
     if r < inner || r > outer { return 0.0; }
-    double edge = (outer - r) / (outer - inner);              // 1 inside, 0 outside
-    double arms = 0.65 + 0.35 * Math::sin(3.0 * a - 2.0 * t + r * 0.9);
-    return Math::min(1.0, Math::powi(edge, 2) * 1.3 * arms + 0.08);
+    double heat = Math::pow(inner / r, 0.75);                // the gas is hotter inside (T ~ r^-3/4)
+    double fade = (outer - r) / (outer - inner);
+    double omega = 1.4 / (r * Math::sqrt(r));                 // inner gas goes round faster (Kepler)
+    double arms = 0.62 + 0.38 * Math::sin(3.0 * (a - omega * t) + r * 0.8);
+    return heat * Math::sqrt(fade) * arms;
 }
 
-// a star in the direction (x, y, z) now and then: the same direction always gives the same answer
-char star_at(double x, double y, double z) {
-    int i = (int)((x + 2.0) * 61.0);
-    int j = (int)((y + 2.0) * 61.0);
-    int k = (int)((z + 2.0) * 61.0);
-    int h = (i * 73856093 xor j * 19349663 xor k * 83492791) & 65535;
-    if h % 211 == 0 { return '*'; }
-    if h % 97 == 0 { return '.'; }
-    return ' ';
+// one ray: from the eye (ex, ey, ez) in the direction (dx, dy, dz).
+// Gives the brightness 0..1 of the disk it meets, or 2 / 3 if it ends at a faint / bright star, or 0 for dark space.
+double trace(double ex, double ey, double ez, double dx, double dy, double dz, double t) {
+    double px = ex;
+    double py = ey;
+    double pz = ez;
+    double vx = dx;
+    double vy = dy;
+    double vz = dz;
+    // the pull on light depends on the square of its angular momentum
+    double hx = py * vz - pz * vy;
+    double hy = pz * vx - px * vz;
+    double hz = px * vy - py * vx;
+    double h2 = hx * hx + hy * hy + hz * hz;
+    double best = 0.0;
+    for steps in 0..420 {
+        double r2 = px * px + py * py + pz * pz;
+        double r = Math::sqrt(r2);
+        if r < 1.0 { return best; }                           // into the hole
+        if r > 45.0 && (px * vx + py * vy + pz * vz) > 0.0 {
+            if best > 0.0 { return best; }
+            // away for ever: a star in that direction, or nothing
+            int i = (int)((vx + 2.0) * 70.0);
+            int j = (int)((vy + 2.0) * 70.0);
+            int k = (int)((vz + 2.0) * 70.0);
+            int h = (i * 73856093 xor j * 19349663 xor k * 83492791) & 65535;
+            if h % 701 == 0 { return 3.0; }
+            if h % 223 == 0 { return 2.0; }
+            return 0.0;
+        }
+        double step = 0.05 * r + 0.04;
+        double acc = 0.0 - 1.5 * h2 / (r2 * r2 * r);          // the bending of light
+        vx += acc * px * step;
+        vy += acc * py * step;
+        vz += acc * pz * step;
+        double nx = px + vx * step;
+        double ny = py + vy * step;
+        double nz = pz + vz * step;
+        if (py > 0.0 && ny <= 0.0) || (py < 0.0 && ny >= 0.0) {
+            // through the plane of the disk
+            double rd = Math::sqrt(nx * nx + nz * nz);
+            double l = disk_light(rd, Math::atan2(nz, nx), t);
+            if l > 0.0 {
+                // the gas moves round the hole: where it comes towards us the light is boosted, where it goes away it is dimmed
+                double speed = 0.55 / Math::sqrt(rd);
+                double tx = 0.0 - nz / rd * speed;
+                double tz = nx / rd * speed;
+                double toward = 0.0 - (tx * vx + tz * vz) / Math::sqrt(vx * vx + vy * vy + vz * vz);
+                double boost = Math::clamp(1.0 + 1.6 * toward, 0.25, 2.2);
+                double red = Math::sqrt(Math::max(0.0, 1.0 - 1.0 / rd));       // light that climbs out of the hole loses energy
+                l = l * boost * red * 1.25;
+                if l > 1.0 { l = 1.0; }
+                if l > best { best = l; }
+            }
+        }
+        px = nx;
+        py = ny;
+        pz = nz;
+    }
+    return best;
 }
 
 void main() {
-    int frames = 200;
+    int frames = 0;                                           // 0: until Ctrl-C
     String[] args = Env::args();
-    if args.len > 1 { frames = Num::parse_int(args[1]).unwrap(); }
+    if args.len > 1 {
+        switch Num::parse_int(args[1]) {
+            Result::Ok(v): frames = v;
+            Result::Err(e): {
+                cout << "usage: blackhole [frames]\n";
+                return;
+            }
+        }
+    }
     String ramp = " .:-=+*#%@";
-    Canvas c = Canvas::make(100, 37);
     int W = 100;
     int H = 37;
-    // the eye: above the plane of the disk, looking at the hole
-    mat3 look = mat3::rotate_x(0.30);
-    vec3 eye0 = {0.0, 0.0, -17.0};
-    vec3 eye = look.mul_vec(eye0);
+    Canvas c = Canvas::make(W, H);
     c.clear_screen();
-    for frame in 0..frames {
-        double t = (double)frame * 0.08;
+    int frame = 0;
+    while frames == 0 || frame < frames {
+        double t = (double)frame * 0.06;
+        // the eye: above the plane of the disk, looking at the hole; it moves up and down slowly
+        mat3 look = mat3::rotate_x(0.30 + 0.12 * Math::sin(t * 0.35));
+        vec3 eye0 = {0.0, 0.0, -17.0};
+        vec3 eye = look.mul_vec(eye0);
         for cy in 0..H {
             for cx in 0..W {
-                // the direction of the ray for this character
-                double u = ((double)cx - (double)W / 2.0 + 0.5) / ((double)H * 2.0) * 1.5;
-                double v = ((double)cy - (double)H / 2.0 + 0.5) / (double)H * 1.5;
-                vec3 d0 = {u, v, 1.0};
-                vec3 d = look.mul_vec(d0.normalize());
-                // follow the ray in small steps; plain numbers because this is the hot loop
-                double px = eye.x;
-                double py = eye.y;
-                double pz = eye.z;
-                double vx = d.x;
-                double vy = d.y;
-                double vz = d.z;
-                // h2: the square of the angular momentum (the pull on light depends on it)
-                double hx = py * vz - pz * vy;
-                double hy = pz * vx - px * vz;
-                double hz = px * vy - py * vx;
-                double h2 = hx * hx + hy * hy + hz * hz;
-                double light = 0.0;
-                char ch = ' ';
-                bool done = false;
-                int steps = 0;
-                while !done && steps < 400 {
-                    double r2 = px * px + py * py + pz * pz;
-                    double r = Math::sqrt(r2);
-                    if r < 1.0 {
-                        done = true;                                   // inside the horizon: black
-                        ch = ' ';
-                    } else if r > 40.0 && (px * vx + py * vy + pz * vz) > 0.0 {
-                        done = true;                                   // away for ever: a star, or dark space
-                        ch = star_at(vx, vy, vz);
+                // two rays for each character, one above the other, and their average
+                double sum = 0.0;
+                int star = 0;
+                for sub in 0..2 {
+                    double u = ((double)cx - (double)W / 2.0 + 0.5) / ((double)H * 2.0) * 1.5;
+                    double v = ((double)cy - (double)H / 2.0 + 0.25 + (double)sub * 0.5) / (double)H * 1.5;
+                    vec3 d0 = {u, v, 1.0};
+                    vec3 d = look.mul_vec(d0.normalize());
+                    double got = trace(eye.x, eye.y, eye.z, d.x, d.y, d.z, t);
+                    if got >= 2.0 {
+                        star = (int)got;
                     } else {
-                        double step = 0.04 * r + 0.03;
-                        double acc = 0.0 - 1.5 * h2 / (r2 * r2 * r);   // the bending of light (in units of the hole's radius)
-                        vx += acc * px * step;
-                        vy += acc * py * step;
-                        vz += acc * pz * step;
-                        double ny = py + vy * step;
-                        double nx = px + vx * step;
-                        double nz = pz + vz * step;
-                        if (py > 0.0 && ny <= 0.0) || (py < 0.0 && ny >= 0.0) {
-                            // the ray goes through the plane of the disk
-                            double rd = Math::sqrt(nx * nx + nz * nz);
-                            double l = disk_light(rd, Math::atan2(nz, nx), t);
-                            if l > light { light = l; }
-                        }
-                        px = nx;
-                        py = ny;
-                        pz = nz;
+                        sum += got;
                     }
-                    steps += 1;
                 }
-                if light > 0.0 {
-                    int k = (int)(light * 9.0);
+                double light = sum / 2.0;
+                char ch = ' ';
+                if light > 0.06 {
+                    int k = (int)(light * 9.99);
                     if k > 9 { k = 9; }
+                    if k < 1 { k = 1; }
                     ch = ramp[k];
+                } else if star == 3 {
+                    ch = '*';
+                } else if star == 2 {
+                    ch = '.';
                 }
                 c.put(cx, cy, ch);
             }
         }
         c.show();
-        Time::sleep_ms(30);
+        Time::sleep_ms(20);
+        frame += 1;
     }
 }

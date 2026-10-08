@@ -1,4 +1,6 @@
-// An ASCII solar system with the gfx library.   solar [frames]
+// An ASCII solar system: planets on ellipses (Kepler's law), lit by the sun, with moons, a ring, a belt and stars.
+//   solar            runs until you press Ctrl-C
+//   solar 300        stops after 300 frames
 #import <stdlib>
 #import <math>
 #import <gfx>
@@ -6,40 +8,124 @@ using stdlib
 using math::matrix;
 using gfx::canvas;
 
+// where a planet is on its ellipse: semi-major axis a, eccentricity e, period p, at time t
+// (Kepler's equation  E - e sin E = M  solved by Newton's method; the sun is at one focus)
+vec3 kepler(double a, double e, double p, double t, double phase) {
+    double m = Math::tau() * t / p + phase;
+    double big_e = m;
+    for i in 0..6 {
+        big_e = big_e - (big_e - e * Math::sin(big_e) - m) / (1.0 - e * Math::cos(big_e));
+    }
+    vec3 pos = {a * (Math::cos(big_e) - e), 0.0, a * Math::sqrt(1.0 - e * e) * Math::sin(big_e)};
+    return pos;
+}
+
 void main() {
-    int frames = 240;
+    int frames = 0;                                   // 0: until Ctrl-C
     String[] args = Env::args();
-    if args.len > 1 { frames = Num::parse_int(args[1]).unwrap(); }
-    double dist[5];
-    double speed[5];
-    double size[5];
-    char sym[5];
-    dist[0] = 12.0; speed[0] = 4.1; size[0] = 1.0; sym[0] = 'm';
-    dist[1] = 18.0; speed[1] = 1.6; size[1] = 1.5; sym[1] = 'V';
-    dist[2] = 25.0; speed[2] = 1.0; size[2] = 1.8; sym[2] = 'E';
-    dist[3] = 33.0; speed[3] = 0.53; size[3] = 1.3; sym[3] = 'M';
-    dist[4] = 45.0; speed[4] = 0.084; size[4] = 3.5; sym[4] = 'J';
+    if args.len > 1 {
+        switch Num::parse_int(args[1]) {
+            Result::Ok(v): frames = v;
+            Result::Err(e): {
+                cout << "usage: solar [frames]\n";
+                return;
+            }
+        }
+    }
+    // the planets: Mercury Venus Earth Mars Jupiter Saturn
+    double axis[6];
+    double ecc[6];
+    double size[6];
+    char sym[6];
+    axis[0] = 4.5;  ecc[0] = 0.21; size[0] = 0.7; sym[0] = 'm';
+    axis[1] = 7.0;  ecc[1] = 0.01; size[1] = 1.0; sym[1] = 'V';
+    axis[2] = 9.5;  ecc[2] = 0.02; size[2] = 1.1; sym[2] = 'E';
+    axis[3] = 12.5; ecc[3] = 0.09; size[3] = 0.8; sym[3] = 'M';
+    axis[4] = 16.5; ecc[4] = 0.05; size[4] = 2.0; sym[4] = 'J';
+    axis[5] = 20.0; ecc[5] = 0.06; size[5] = 1.6; sym[5] = 'S';
+    // stars in fixed places on the screen
+    int star_x[70];
+    int star_y[70];
+    int seed = 12345;
+    for i in 0..70 {
+        seed = (seed * 1103515245 + 12345) & 2147483647;
+        star_x[i] = (seed >> 8) % 100;
+        seed = (seed * 1103515245 + 12345) & 2147483647;
+        star_y[i] = (seed >> 8) % 37;
+    }
+    // the asteroid belt: between Mars and Jupiter
+    double belt_r[160];
+    double belt_a[160];
+    for i in 0..160 {
+        seed = (seed * 1103515245 + 12345) & 2147483647;
+        belt_r[i] = 14.0 + (double)((seed >> 8) % 1000) / 1000.0 * 1.4;
+        seed = (seed * 1103515245 + 12345) & 2147483647;
+        belt_a[i] = (double)((seed >> 8) % 6283) / 1000.0;
+    }
     Canvas c = Canvas::make(100, 37);
-    mat3 tilt = mat3::rotate_x(1.1);
     vec3 sun = {0.0, 0.0, 0.0};
-    for frame in 0..frames {
+    vec3 to_viewer = {0.0, 0.0, -1.0};                // the sun shines at us evenly
+    int frame = 0;
+    c.clear_screen();
+    while frames == 0 || frame < frames {
         double t = (double)frame * 0.05;
+        mat3 tilt = mat3::rotate_x(1.05 + 0.18 * Math::sin(t * 0.25));       // the view nods slowly
         c.clear();
-        for i in 0..5 {
-            for a in 0..90 {
-                double ang = (double)a * Math::tau() / 90.0;
-                vec3 o = {Math::cos(ang) * dist[i], 0.0, Math::sin(ang) * dist[i]};
+        for i in 0..70 {
+            char s = '.';
+            if (frame / 8 + i) % 5 == 0 { s = '*'; }                          // they twinkle
+            c.put(star_x[i], star_y[i], s);
+        }
+        for i in 0..160 {
+            double a = belt_a[i] + t * 0.9 / (belt_r[i] * Math::sqrt(belt_r[i])) * 8.0;
+            vec3 b = {belt_r[i] * Math::cos(a), 0.0, belt_r[i] * Math::sin(a)};
+            c.plot(tilt.mul_vec(b), '.');
+        }
+        for i in 0..6 {
+            double period = 0.27 * axis[i] * Math::sqrt(axis[i]);
+            for k in 0..90 {                                                  // the orbit: dots along the ellipse
+                double ang = (double)k * Math::tau() / 90.0;
+                vec3 o = {axis[i] * (Math::cos(ang) - ecc[i]), 0.0, axis[i] * Math::sqrt(1.0 - ecc[i] * ecc[i]) * Math::sin(ang)};
                 c.plot(tilt.mul_vec(o), '.');
             }
-            double ang = t * speed[i] + (double)i;
-            vec3 p = {Math::cos(ang) * dist[i], 0.0, Math::sin(ang) * dist[i]};
-            vec3 q = tilt.mul_vec(p);
-            c.ball(q, size[i], ".:-=+*#%@");
-            vec3 label = {q.x, q.y, q.z - 5.0};
+            vec3 pos = kepler(axis[i], ecc[i], period, t, (double)i * 1.3);
+            vec3 q = tilt.mul_vec(pos);
+            vec3 to_sun = sun - q;
+            c.ball_lit(q, size[i], ".:-=+*#%@", to_sun);
+            vec3 label = {q.x, q.y - size[i] - 1.0, q.z - 6.0};
             c.plot(label, sym[i]);
+            if i == 2 {                                                       // the Moon
+                double ma = t * 3.2;
+                vec3 mp = {pos.x + 2.4 * Math::cos(ma), 0.0, pos.z + 2.4 * Math::sin(ma)};
+                vec3 mq = tilt.mul_vec(mp);
+                c.ball_lit(mq, 0.45, ".:-=+*#%@", sun - mq);
+            }
+            if i == 4 {                                                       // two moons of Jupiter
+                for j in 0..2 {
+                    double ma = t * (2.0 + (double)j * 1.3) + (double)j * 2.0;
+                    double rr = 3.6 + (double)j * 1.5;
+                    vec3 mp = {pos.x + rr * Math::cos(ma), 0.0, pos.z + rr * Math::sin(ma)};
+                    vec3 mq = tilt.mul_vec(mp);
+                    c.ball_lit(mq, 0.4, ".:-=+*#%@", sun - mq);
+                }
+            }
+            if i == 5 {                                                       // the ring of Saturn (slightly tilted)
+                mat3 ring_tilt = mat3::rotate_z(0.45);
+                for k in 0..120 {
+                    double ang = (double)k * Math::tau() / 120.0;
+                    for rr in 0..3 {
+                        double rad = 2.6 + (double)rr * 0.7;
+                        vec3 rp = {rad * Math::cos(ang), 0.0, rad * Math::sin(ang)};
+                        vec3 w = ring_tilt.mul_vec(rp);
+                        vec3 rq = tilt.mul_vec(pos + w);
+                        c.plot(rq, '-');
+                    }
+                }
+            }
         }
-        c.ball(sun, 4.0, "+*#%@@@@@");
+        c.ball_lit(sun, 3.2, "+*#%@@@@@", to_viewer);
         c.show();
-        Time::sleep_ms(60);
+        Time::sleep_ms(55);
+        frame += 1;
     }
 }

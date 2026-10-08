@@ -70,7 +70,14 @@ struct Canvas {
     }
     // a ball of radius r (in rows), lit from the upper left: the brighter, the later in ramp
     void ball(self, vec3 p, double r, String ramp) {
+        vec3 to_light = {-0.5, -0.5, -0.7};
+        self.ball_lit(p, r, ramp, to_light);
+    }
+    // the same, lit from a given direction (towards the light, in the same space as the points; z grows away
+    // from the viewer). The side that is turned away from the light still gets the faintest character.
+    void ball_lit(self, vec3 p, double r, String ramp, vec3 to_light) {
         int n = ramp.len;
+        vec3 l = to_light.normalize();
         double dy = 0.0 - r;
         while dy <= r {
             double dx = 0.0 - r * self.wide;
@@ -79,10 +86,10 @@ struct Canvas {
                 double ny = dy / r;
                 double d2 = nx * nx + ny * ny;
                 if d2 <= 1.0 {
-                    double nz = Math::sqrt(1.0 - d2);
-                    vec3 normal = {nx, ny, nz};
-                    vec3 light = {-0.5, -0.5, 0.7};
-                    double lit = Math::max(normal.dot(light), 0.0);
+                    double nz = Math::sqrt(1.0 - d2);                  // towards the viewer
+                    double lit = nx * l.x + ny * l.y - nz * l.z;
+                    if lit < 0.0 { lit = 0.0; }
+                    lit = 0.10 + 0.90 * lit;
                     int k = (int)(lit * (double)(n - 1));
                     if k > n - 1 { k = n - 1; }
                     vec3 q = {p.x + dx / self.wide, p.y + dy, p.z - nz};

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.25
+* **Examples run until Ctrl-C** when no number of frames is given (`solar`, `blackhole`; `solar 300` stops after 300 frames). Before, they stopped by themselves after a fixed number of frames.
+* **Solar system:** every orbit fits the screen; planets move on ellipses by Kepler's law and are lit by the sun (the side away from the sun is dark); moons, the ring of Saturn, an asteroid belt, twinkling stars.
+* **Black hole:** the disk is hotter inside (T ~ r^-3/4), turns faster inside, the side that comes towards us is brighter (Doppler boost) and light that climbs out of the hole loses energy; two rays per character smooth the edges; the view nods slowly.
+* **gfx:** `Canvas.ball_lit(centre, radius, ramp, to_light)` lights a ball from a given direction; the shadow side still shows the faintest character.
+
 ## 0.9.24
 * **gfx library:** `#import <gfx>` once, then `using gfx::canvas;` (loads `math::vector` too). `Canvas::make(w, h)`, `clear`, `put`, `get`, `text`, `plot(vec3, char)` (perspective, nearest wins), `line`, `ball(centre, radius, ramp)` (shaded ball), `frame`, `show`, `clear_screen`, `free`. Fields `view` and `wide` set the perspective and the character shape.
 * **Examples:** `examples/solar.jk` is shorter with the Canvas; new `examples/blackhole.jk`: every character follows a ray of light bent by gravity (the disk around the hole shows up bent over the top).
