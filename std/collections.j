@@ -30,6 +30,12 @@ struct Map<K, V> {
         if i < 0 { throw "key not found"; }
         return self.vals[i];
     }
+    // the value of key k as an Option: Some(value) or None
+    Option<V> try_get(self, K k) {
+        int i = self.find(k);
+        if i < 0 { return Option<V>::None; }
+        return Option<V>::Some(self.vals[i]);
+    }
     void put(self, K k, V v) {
         if self.st == null { self.rehash(8); }
         if (self.used + 1) * 4 > self.st.len * 3 { self.rehash(self.st.len * 2); }

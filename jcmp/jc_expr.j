@@ -2957,6 +2957,7 @@ void emit_divzero_check() {
     emit_line("bl j2k_divzero");
     place_label(lok);
     used_divz = 1;
+    note_call("__panic");
 }
 
 void arith(char^ op) {

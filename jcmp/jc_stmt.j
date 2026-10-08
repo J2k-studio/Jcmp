@@ -2338,6 +2338,7 @@ void parse_function() {
             // the body ended without a return: that is an error at run time (a normal return jumps over this)
             emit_line("bl j2k_noret");
             used_noret = 1;
+            note_call("__panic");
         }
         place_label(ret_label);
         emit_line("ldr x29, [sp, #0]");
@@ -2617,13 +2618,13 @@ void parse_program() {
 void emit_noret_helper() {
     emit_line("j2k_noret:");
     place_text("a function ended without returning a value", 42);
-    emit_line("b j2k_throw");
+    emit_line("b __panic");
 }
 
 void emit_divzero_helper() {
     emit_line("j2k_divzero:");
     place_text("division by zero", 16);
-    emit_line("b j2k_throw");
+    emit_line("b __panic");
 }
 
 // SIGSEGV (a null pointer, or a stack that ran out): say so and stop (the handler runs on its own stack)

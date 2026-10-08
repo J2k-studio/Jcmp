@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9.10
+* **Bugs are panics:** dividing by zero, a null/freed array or String, a position out of range, `pop` of an empty list, `unwrap` of `None`/`Err`, a function that ends without `return`, no memory: `panic: <what>` and exit code 134; `try`/`catch` cannot catch them. New: `panic("text")`, `assert(condition, "text")` (std), `Map.try_get(k)` (an `Option`).
+
 ## 0.9.9
 * **`defer`:** `defer statement;` / `defer { ... }` runs when the block is left (end, `return`, `break`, `continue`, or a `throw` passing through), last defer first, with the variables as they are then.
 

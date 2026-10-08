@@ -1,5 +1,13 @@
 // Sys: the operating system calls, one function each (Linux ARM64)
 struct Sys {
+    // a bug in the program: print  panic: message  and stop (exit code 134); try/catch cannot catch it
+    static void panic(char^ msg) {
+        __panic(msg);
+    }
+    // stop with the message if ok is false
+    static void assert(bool ok, char^ msg) {
+        if !ok { __panic(msg); }
+    }
     static void exit(int code) {
         syscall(94, code);                 // exit_group: the whole program, all threads
     }

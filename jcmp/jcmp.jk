@@ -2,7 +2,7 @@
 // Build:  bin/jcmp jcmp/jcmp.jk -o jcmp1        (see bootstrap.sh)
 // Use:    jcmp1 input.jk -o program
 // the version of the compiler (also in the file VERSION; release.sh checks that they agree)
-#define JCMP_VERSION "0.9.9"
+#define JCMP_VERSION "0.9.10"
 
 #import "jc_base"
 #import "jc_asm"
@@ -214,14 +214,8 @@ void main() {
     if used_fprint == 1 { emit_fprint_helper(); }
     if used_oob == 1 { emit_oob_helper(); }
     if used_uprint == 1 { emit_uprint_helper(); }
-    if used_divz == 1 {
-        emit_divzero_helper();
-        used_try = 1;
-    }
-    if used_noret == 1 {
-        emit_noret_helper();
-        used_try = 1;
-    }
+    if used_divz == 1 { emit_divzero_helper(); }
+    if used_noret == 1 { emit_noret_helper(); }
     emit_segv_handler();
     if used_try == 1 { emit_exc_helper(); }
     if used_thread == 1 { emit_thread_helper(); }

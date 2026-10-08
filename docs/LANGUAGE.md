@@ -518,6 +518,11 @@ Only text can be thrown (version 0.1 of the design). A `throw` that no `try` cat
 `uncaught exception: <text>` to stderr and the program exits with code 1. `return`, `break`
 and `continue` may leave a `try` block. Up to 24 `try` blocks can be open at once.
 
+**Bugs are not exceptions.** Dividing by zero, using a null or freed array/String, a position out of range (`insert`, `remove`, `slice`), `pop` of an empty
+list, `unwrap` of a `None`/`Err`, a function that ends without `return`, running out of memory: the program prints `panic: <what>` and stops with exit
+code 134. `try`/`catch` cannot catch it (the program is wrong, not the data). `panic("text")` and `assert(condition, "text")` (std) do the same.
+Failures that data can cause (`to_int` of bad text, input that is not a number, `Map.get` of a missing key) still throw; `Map.try_get(k)` gives an `Option`.
+
 When a `throw` leaves functions, what they owned is freed on the way (arrays, Strings, `alloc` blocks, Strings made inside a statement, and structs
 with `free(self)`), innermost first. Nothing leaks.
 

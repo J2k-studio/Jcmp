@@ -7,6 +7,16 @@ int std_mem_lock;                 // 0 free, 1 taken (threads share the heap)
 int std_alloc_n;                  // blocks given out / given back (the -d build reports the difference at the end)
 int std_free_n;
 
+// a bug in the program (a null array, a position out of range, ...): say so and stop; try/catch cannot catch it
+void __panic(char^ msg) {
+    int n = 0;
+    while msg[n] != 0 { n += 1; }
+    syscall(64, 2, "panic: ", 7);
+    syscall(64, 2, msg, n);
+    syscall(64, 2, "\n", 1);
+    syscall(94, 134);
+}
+
 struct Mem {
     static void lock_heap() {
         while __cas(@std_mem_lock, 0, 1) != 0 {
@@ -111,18 +121,18 @@ struct Mem {
 // variable sees the same array; only the data block moves when it grows.
 struct __Arr {
     static void nullerr() {
-        throw "the dynamic array is null";
+        __panic("the dynamic array is null");
     }
     static void^ make(int esize, int cap) {
         int^ h = (int^)Mem::alloc(32);
-        if (int)h == 0 { throw "out of memory"; }
+        if (int)h == 0 { __panic("out of memory"); }
         int c = cap;
         if c < 4 { c = 4; }
         h[0] = 0;
         h[1] = c;
         h[2] = (int)Mem::alloc(c * esize);
         h[3] = esize;
-        if h[2] == 0 { throw "out of memory"; }
+        if h[2] == 0 { __panic("out of memory"); }
         return (void^)h;
     }
     // room for at least `need` elements
@@ -131,7 +141,7 @@ struct __Arr {
         int c = h[1] * 2;
         if c < need { c = need; }
         int nd = (int)Mem::alloc(c * h[3]);
-        if nd == 0 { throw "out of memory"; }
+        if nd == 0 { __panic("out of memory"); }
         Mem::copy((void^)nd, (void^)h[2], h[0] * h[3]);
         Mem::free((void^)h[2]);
         h[2] = nd;
@@ -140,7 +150,7 @@ struct __Arr {
     // append one element: returns the address of its (new) place
     static void^ slot(void^ hv) {
         int^ h = (int^)hv;
-        if (int)h == 0 { throw "the dynamic array is null"; }
+        if (int)h == 0 { __panic("the dynamic array is null"); }
         __Arr::grow(h, h[0] + 1);
         int at = h[2] + h[0] * h[3];
         h[0] += 1;
@@ -149,15 +159,15 @@ struct __Arr {
     // remove the last element: returns the address where it still is
     static void^ pop(void^ hv) {
         int^ h = (int^)hv;
-        if (int)h == 0 { throw "the dynamic array is null"; }
-        if h[0] == 0 { throw "pop from an empty array"; }
+        if (int)h == 0 { __panic("the dynamic array is null"); }
+        if h[0] == 0 { __panic("pop from an empty array"); }
         h[0] -= 1;
         return (void^)(h[2] + h[0] * h[3]);
     }
     static void resize(void^ hv, int n) {
         int^ h = (int^)hv;
-        if (int)h == 0 { throw "the dynamic array is null"; }
-        if n < 0 { throw "negative array size"; }
+        if (int)h == 0 { __panic("the dynamic array is null"); }
+        if n < 0 { __panic("negative array size"); }
         __Arr::grow(h, n);
         if n > h[0] { Mem::set((void^)(h[2] + h[0] * h[3]), 0, (n - h[0]) * h[3]); }
         h[0] = n;
@@ -206,9 +216,9 @@ struct __Arr {
         return dx[0] < dy[0];
     }
     static void insert(void^ hv, int i, int bits) {
-        if (int)hv == 0 { throw "the dynamic array is null"; }
+        if (int)hv == 0 { __panic("the dynamic array is null"); }
         int^ h = (int^)hv;
-        if i < 0 || i > h[0] { throw "insert position out of range"; }
+        if i < 0 || i > h[0] { __panic("insert position out of range"); }
         __Arr::grow(h, h[0] + 1);
         int k = h[0];
         while k > i {
@@ -219,9 +229,9 @@ struct __Arr {
         h[0] += 1;
     }
     static void remove(void^ hv, int i) {
-        if (int)hv == 0 { throw "the dynamic array is null"; }
+        if (int)hv == 0 { __panic("the dynamic array is null"); }
         int^ h = (int^)hv;
-        if i < 0 || i >= h[0] { throw "remove position out of range"; }
+        if i < 0 || i >= h[0] { __panic("remove position out of range"); }
         int k = i;
         while k + 1 < h[0] {
             __Arr::put(h, k, __Arr::get(h, k + 1, 1));
@@ -231,7 +241,7 @@ struct __Arr {
     }
     // the place of the first element equal to bits, or -1
     static int index(void^ hv, int bits, int kind) {
-        if (int)hv == 0 { throw "the dynamic array is null"; }
+        if (int)hv == 0 { __panic("the dynamic array is null"); }
         int^ h = (int^)hv;
         int i = 0;
         while i < h[0] {
@@ -242,7 +252,7 @@ struct __Arr {
         return 0 - 1;
     }
     static void sort(void^ hv, int kind) {
-        if (int)hv == 0 { throw "the dynamic array is null"; }
+        if (int)hv == 0 { __panic("the dynamic array is null"); }
         int^ h = (int^)hv;
         int n = h[0];
         int start = n / 2 - 1;
@@ -298,7 +308,7 @@ struct __Str {
         return n;
     }
     static void check(void^ hv) {
-        if (int)hv == 0 { throw "the String is null"; }
+        if (int)hv == 0 { __panic("the String is null"); }
     }
     // the characters of an operand
     static char^ ptr(void^ x, int k, int slot) {
@@ -380,7 +390,7 @@ struct __Str {
     static int pop(void^ a) {
         __Str::check(a);
         int^ h = (int^)a;
-        if h[0] == 0 { throw "pop from an empty String"; }
+        if h[0] == 0 { __panic("pop from an empty String"); }
         h[0] -= 1;
         char^ d = (char^)h[2];
         int c = d[h[0]];
@@ -426,7 +436,7 @@ struct __Str {
     // a new String: the characters a .. b - 1
     static void^ slice(void^ s, int a, int b) {
         int n = __Str::len(s, 1);
-        if a < 0 || b > n || a > b { throw "String slice out of range"; }
+        if a < 0 || b > n || a > b { __panic("String slice out of range"); }
         int^ h = (int^)__Str::make(b - a);
         char^ d = (char^)h[2];
         char^ ps = __Str::ptr(s, 1, 0);
@@ -457,7 +467,7 @@ struct __Str {
     static void aresize(void^ hv, int n) {
         __Str::aprep(hv);
         int^ h = (int^)hv;
-        if n < 0 { throw "negative array size"; }
+        if n < 0 { __panic("negative array size"); }
         int^ el = (int^)h[2];
         int i = n;
         while i < h[0] {
@@ -547,7 +557,7 @@ struct __Str {
     // a new String: every a in s replaced by b
     static void^ replace(void^ s, void^ a, int ka, void^ b, int kb) {
         int na = __Str::len(a, ka);
-        if na == 0 { throw "replace: the text to look for is empty"; }
+        if na == 0 { __panic("replace: the text to look for is empty"); }
         void^ r = __Str::make(__Str::len(s, 1));
         int ns = __Str::len(s, 1);
         char^ ps = __Str::ptr(s, 1, 0);
@@ -653,7 +663,7 @@ struct __Str {
     // a String[] with the pieces of s between the separators (an empty separator throws)
     static void^ split(void^ s, void^ sep, int ksep) {
         int nsep = __Str::len(sep, ksep);
-        if nsep == 0 { throw "split: the separator is empty"; }
+        if nsep == 0 { __panic("split: the separator is empty"); }
         void^ r = __Arr::make(8, 4);
         int ns = __Str::len(s, 1);
         char^ ps = __Str::ptr(s, 1, 0);
@@ -691,7 +701,7 @@ struct __Str {
 
     // ---- String[] : an array whose elements are String headers owned by the array
     static void aprep(void^ hv) {
-        if (int)hv == 0 { throw "the array is null"; }
+        if (int)hv == 0 { __panic("the array is null"); }
     }
     // the elements and the array are given back
     static void free_all(void^ hv) {
@@ -732,7 +742,7 @@ struct __Str {
     static void ainsert(void^ hv, int i, void^ s) {
         __Str::aprep(hv);
         int^ h = (int^)hv;
-        if i < 0 || i > h[0] { throw "insert position out of range"; }
+        if i < 0 || i > h[0] { __panic("insert position out of range"); }
         __Arr::grow(h, h[0] + 1);
         int^ el = (int^)h[2];
         int k = h[0];
@@ -747,7 +757,7 @@ struct __Str {
     static void aremove(void^ hv, int i) {
         __Str::aprep(hv);
         int^ h = (int^)hv;
-        if i < 0 || i >= h[0] { throw "remove position out of range"; }
+        if i < 0 || i >= h[0] { __panic("remove position out of range"); }
         int^ el = (int^)h[2];
         __Arr::free((void^)el[i]);
         int k = i;
@@ -1024,7 +1034,7 @@ struct __Mt {
         if parts > n { parts = n; }
         int size = 1048576;
         int^ blk = (int^)Mem::alloc(parts * 64);          // per part: [0] frame [1] from [2] to [3] thread id [4] stack
-        if (int)blk == 0 { throw "out of memory"; }
+        if (int)blk == 0 { __panic("out of memory"); }
         for p in 0..parts {
             blk[p * 8] = fp;
             blk[p * 8 + 1] = lo + n * p / parts;

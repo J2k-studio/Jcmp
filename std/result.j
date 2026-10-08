@@ -27,9 +27,9 @@ enum class Option<T> { Some(T value), None;
     T unwrap(self) {
         switch self^ {
             Option::Some(v): return v;
-            Option::None: throw "unwrap of a None";
+            Option::None: __panic("unwrap of a None");
         }
-        throw "unwrap of a None";
+        __panic("unwrap of a None");
     }
     // the value, or fallback
     T or(self, T fallback) {
@@ -48,9 +48,9 @@ enum class Result<T, E> { Ok(T value), Err(E error);
     T unwrap(self) {
         switch self^ {
             Result::Ok(v): return v;
-            Result::Err(e): throw "unwrap of an Err";
+            Result::Err(e): __panic("unwrap of an Err");
         }
-        throw "unwrap of an Err";
+        __panic("unwrap of an Err");
     }
     // the value, or fallback
     T or(self, T fallback) {
