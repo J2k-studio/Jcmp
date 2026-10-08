@@ -100,6 +100,12 @@ void parse_type() {
         // String: a dynamic array of char marked with the type id 70 (see is_str_dyn)
         next();
         ty_dyn = dyn_pack(2, 0, 70);
+        if tok_is("[") {
+            // String[] : an array of Strings (the array owns them)
+            next();
+            expect("]");
+            ty_dyn = dyn_pack(8, 0, 71);
+        }
         ty_tid = 99;
         ty_elem = 8;
         ty_width = 8;
@@ -318,6 +324,7 @@ void parse_assign_core(char^ target) {
         if tok_is("{") {
             parse_brace(a_code - 16, 0);
         } else {
+            if struct_has_free(a_code - 16) { die_name("a struct with a free method cannot be copied; use a pointer", @sname + (a_code - 16) * 64); }
             parse_expr();
             check_assign(a_tid);
             emit_line("ldr x3, [sp, #0]");
@@ -541,6 +548,109 @@ void parse_while() {
 }
 
 // for TYPE name = e; cond; step { ... }      for name in a..b { ... }
+// for x in list { ... } : the list (x0 = a dynamic array, a String or the address of a fixed array) is
+// already evaluated; x is a copy of each element in turn (a String element is only borrowed)
+void parse_for_each(char^ f_name, int lstart, int lbody, int lstep, int lend, int for_mark) {
+    int is_dyn = 0 - 1;                  // 1 dynamic array / String, 0 fixed array
+    int code = 8;
+    int eptr = 0;
+    int etid = 0;
+    int info = 0;
+    int count = 0;
+    if (ex_ty == 99 || ex_ty == 80) && ex_dyn != 0 {
+        is_dyn = 1;
+        info = ex_dyn;
+        code = dyn_code(info);
+        eptr = dyn_ptr(info);
+        etid = dyn_tid(info);
+        if is_str_dyn(info) { etid = 0; }
+    } else if ex_arr_cnt >= 0 {
+        is_dyn = 0;
+        count = ex_arr_cnt;
+        code = ex_arr_code;
+    } else if pass_no >= 2 {
+        die("for x in ... needs an array, a dynamic array, a String or a range a..b");
+    }
+    if code >= 16 && eptr == 0 && pass_no >= 2 { die("for x in ... does not work on an array of structs (use an index)"); }
+    int elem_str = 0;
+    if is_strarr_dyn(info) { elem_str = 1; }
+    int seq_new = 0;
+    if is_dyn == 1 && last_call_owning == 1 { seq_new = 1; }     // a list made by a call: freed after the loop
+    int own_before = own_count;
+    ty_tid = 0;
+    add_local("..seq", 0, 8, 8, 0);
+    int seq_off = loff[lcount - 1];
+    ins_mem("str", "x0", "x29", seq_off);
+    if seq_new == 1 {
+        own_add(seq_off, 1);
+        if elem_str == 1 { own_kind[own_count - 1] = 3; }
+    }
+    add_local("..idx", 0, 8, 8, 0);
+    int idx_off = loff[lcount - 1];
+    emit_line("mov x0, 0");
+    ins_mem("str", "x0", "x29", idx_off);
+    if is_dyn == 1 {
+        ins_mem("ldr", "x0", "x29", seq_off);
+        dyn_null_check();
+    }
+    // the loop variable
+    ty_tid = etid;
+    if eptr != 0 { ty_tid = 0; }
+    int v_code = code;
+    if elem_str == 1 {
+        ty_tid = 99;
+        ty_dyn = dyn_pack(2, 0, 70);
+        add_local(f_name, 3, 8, 8, 0);
+    } else {
+        add_local(f_name, 0, v_code, 8, eptr);
+    }
+    int var_off = loff[lcount - 1];
+    place_label(lstart);
+    ins_mem("ldr", "x0", "x29", idx_off);
+    if is_dyn == 1 {
+        ins_mem("ldr", "x1", "x29", seq_off);
+        emit_line("ldr x1, [x1, #0]");
+    } else {
+        ins_n("mov x1, ", count);
+    }
+    emit_line("cmp x0, x1");
+    jump_if("ge", lend);
+    jump(lbody);
+    place_label(lstep);
+    ins_mem("ldr", "x0", "x29", idx_off);
+    emit_line("add x0, x0, #1");
+    ins_mem("str", "x0", "x29", idx_off);
+    jump(lstart);
+    place_label(lbody);
+    // x0 = the address of the element, then its value
+    ins_mem("ldr", "x0", "x29", idx_off);
+    if is_dyn == 1 {
+        ins_mem("ldr", "x1", "x29", seq_off);
+        emit_line("ldr x2, [x1, #16]");
+        ins_n("mov x3, ", size_of(code));
+        emit_line("mul x0, x0, x3");
+        emit_line("add x0, x0, x2");
+    } else {
+        ins_mem("ldr", "x1", "x29", seq_off);
+        ins_n("mov x3, ", size_of(code));
+        emit_line("mul x0, x0, x3");
+        emit_line("add x0, x0, x1");
+    }
+    load_through(code);
+    ins_mem("str", "x0", "x29", var_off);
+    brk_stack[loop_depth] = lend;
+    cont_stack[loop_depth] = lstep;
+    loop_try[loop_depth] = try_depth;
+    loop_own[loop_depth] = own_count;
+    loop_depth += 1;
+    parse_block();
+    loop_depth -= 1;
+    jump(lstep);
+    place_label(lend);
+    if seq_new == 1 { own_free_from(own_before, 1); }
+    lcount = for_mark;
+}
+
 void parse_for() {
     int for_mark = lcount;
     int lstart = new_label();
@@ -568,7 +678,17 @@ void parse_for() {
         str_copy(@f_name, @tok_text, 256);
         next();
         expect("in");
-        parse_expr();
+        ex_arr_cnt = 0 - 1;
+        ex_dyn = 0;
+        last_call_owning = 0;
+        int sv_cout = in_cout;
+        in_cout = 1;                     // a whole array is allowed here
+        parse_bitor();
+        in_cout = sv_cout;
+        if !tok_is(".") {
+            parse_for_each(@f_name, lstart, lbody, lstep, lend, for_mark);
+            return;
+        }
         ty_tid = 0;
         add_local(@f_name, 0, 8, 8, 0);
         int f_off = loff[lcount - 1];
@@ -1183,6 +1303,22 @@ void parse_switch() {
 }
 
 // does struct s have an init(self) method?
+// does struct s have a method free(self)? Then a local variable of it is freed by the compiler at the end of its block
+bool struct_has_free(int s) {
+    char nm[128];
+    str_copy(@nm, @sname + s * 64, 64);
+    append_text(@nm, "__free");
+    return find_func(@nm) >= 0;
+}
+
+// the struct variable just declared (the last local) is an owner of kind 4
+void struct_owner(int s) {
+    if own_ok == 1 && struct_has_free(s) {
+        own_add(loff[lcount - 1], 4);
+        own_aux[own_count - 1] = s;
+    }
+}
+
 bool struct_has_init(int s) {
     char hn[64];
     str_copy(@hn, @sname + s * 64, 64);
@@ -1385,7 +1521,10 @@ void parse_local_decl() {
         ty_dyn = d_dyn;
         add_local(@d_name, 3, 8, 8, 0);
         ins_mem("str", "x0", "x29", loff[lcount - 1]);
-        if dd_start == 1 { own_add(loff[lcount - 1], 1); }
+        if dd_start == 1 {
+            own_add(loff[lcount - 1], 1);
+            if is_strarr_dyn(d_dyn) { own_kind[own_count - 1] = 3; }
+        }
         return;
     }
     if d_width >= 16 && d_ptr == 0 {
@@ -1401,7 +1540,9 @@ void parse_local_decl() {
                 push_x0();
                 parse_brace(d_sidx, 0);
                 emit_line("add sp, sp, #16");
+                struct_owner(d_sidx);
             } else {
+                if struct_has_free(d_sidx) { die_name("this struct frees itself (it has a free method) and cannot be copied; use a pointer", @sname + d_sidx * 64); }
                 parse_expr();
                 check_assign(d_tid);
                 ty_tid = d_tid;
@@ -1416,10 +1557,20 @@ void parse_local_decl() {
         expect(";");
         ty_tid = d_tid;
         add_local(@d_name, 0, d_width, ssize[d_sidx], 0);
+        if struct_has_free(d_sidx) {
+            // it will be freed at the end of the block: start from zeros so that free(self) is always safe
+            int zk = 0;
+            emit_line("mov x1, 0");
+            while zk < ssize[d_sidx] {
+                ins_mem("str", "x1", "x29", loff[lcount - 1] + zk);
+                zk += 8;
+            }
+        }
         if struct_has_init(d_sidx) {
             ins_n("add x0, x29, #", loff[lcount - 1]);
             emit_init_call(d_sidx);
         }
+        struct_owner(d_sidx);
         return;
     }
     if tok_is("=") {
@@ -1636,6 +1787,7 @@ void parse_function() {
         fret[fcount] = f_rettid;
         fcharret[fcount] = 0;
         fretstr[fcount] = 0;
+        fretdyn[fcount] = ty_dyn;
         if is_str_dyn(ty_dyn) { fretstr[fcount] = 1; }
         if ty_elem == 2 && ty_ptr == 0 && ty_dyn == 0 && ty_void == 0 { fcharret[fcount] = 1; }
         if ty_ptr == 2 && ty_dyn == 0 && ty_void == 0 { fcharret[fcount] = 2; }
@@ -1763,6 +1915,7 @@ void parse_function() {
             ty_tid = p_tid;
             if p_tid >= 100 && ty_ptr == 0 {
                 // a struct by value: the caller passes its address, we copy it
+                if struct_has_free(p_tid - 100) { die_name("a struct with a free method cannot be passed by value; use a pointer", @sname + (p_tid - 100) * 64); }
                 ty_tid = 0;
                 add_local("..src", 0, 8, 8, 0);
                 int p_srcoff = loff[lcount - 1];

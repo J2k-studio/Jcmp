@@ -22,13 +22,17 @@ int ty_dyn;                  // 0, or the packed element type of a dynamic array
 int arr_esize;               // element size for the arr(n) being parsed (0 = not known)
 // ---- ownership of memory (alloc / arr): a local variable declared from them frees it at the end of its block
 int own_off[256];            // frame offset of each owner (innermost last)
-int own_kind[256];           // 0 = Mem::alloc block, 1 = dynamic array
+int own_kind[256];           // 0 = Mem::alloc block, 1 = dynamic array / String, 2 = temporary String, 4 = a struct with a free(self) method
+int own_aux[256];            // kind 4: the struct
 int own_blk[256];            // the block it belongs to
 int own_moved[256];          // 1 after the ownership went elsewhere (for the "used after move" warning)
 int own_count;
 int cur_blk;                 // id of the block being parsed
 int blk_serial;
 int own_ok = 1;              // 0 where a declaration may not run (a case body without braces)
+int ex_dyn;                  // the packed element type of the dynamic array the last expression was (0 = none)
+int ex_arr_cnt = -1;         // set when the last expression was a whole fixed array: its element count ...
+int ex_arr_code;             // ... and its element width code
 int rv_valid;                // the last operand read was exactly a plain local variable ...
 int rv_off;                  // ... at this frame offset
 int last_call_owning;        // the last call made returns memory its receiver owns
@@ -459,6 +463,7 @@ char fname[1048576];          // 2048 x 64
 int fnpar[16384];             // declared parameters (an array parameter counts once)
 int fvoid[16384];            // 1 if the function returns void
 int fpstr[131072];             // 1 for a parameter of type String (8 per function)
+int fretdyn[16384];             // the packed element type if the function returns a dynamic array
 int fretstr[16384];             // 1 if the function returns a String
 int fowned[16384];           // 1 if the function returns memory it owned (return p; moves it out)
 int fcharret[16384];            // 1 if the function returns a char: cout prints the result as a character
@@ -1090,14 +1095,26 @@ void own_add(int off, int kind) {
     if own_count >= 256 { die("too many owning variables in one function"); }
     own_off[own_count] = off;
     own_kind[own_count] = kind;
+    own_aux[own_count] = 0;
     own_blk[own_count] = cur_blk;
     own_moved[own_count] = 0;
     own_count += 1;
 }
 
 void emit_owner_free(int i) {
+    if own_kind[i] == 4 {
+        // a struct variable with a free(self) method: the compiler calls it
+        char sf[128];
+        str_copy(@sf, @sname + own_aux[i] * 64, 64);
+        append_text(@sf, "__free");
+        ins_n("add x0, x29, #", own_off[i]);
+        rt_call(@sf);
+        return;
+    }
     ins_mem("ldr", "x0", "x29", own_off[i]);
-    if own_kind[i] >= 1 {
+    if own_kind[i] == 3 {
+        rt_call("__Str__free_all");
+    } else if own_kind[i] >= 1 {
         rt_call("__Arr__free");
     } else {
         rt_call("Mem__free");
@@ -1282,6 +1299,7 @@ void gen_call() {
     if str_eq(@callee, "Mem__alloc") { last_call_owning = 1; }
     if fi >= 0 && fowned[fi] == 1 { last_call_owning = 1; }
     rv_valid = 0;
+    if fi >= 0 && fretdyn[fi] != 0 { ex_dyn = fretdyn[fi]; }
     if fi >= 0 && fretstr[fi] == 1 {
         last_call_owning = 0;            // a String that is returned is a temporary that the compiler frees
         str_temp();
@@ -1325,7 +1343,7 @@ bool lv_len_next() {
     if lc(0) != 'l' || lc(1) != 'e' || lc(2) != 'n' { return false; }
     if is_alnum(lc(3)) { return false; }
     if lv_kind == 1 { return true; }
-    return lv_fresh == 1 && lv_kind == 0 && lv_ptr != 0 && lv_code < 16;
+    return lv_fresh == 1 && lv_kind == 0 && lv_ptr != 0 && lv_ptr < 16 && lv_code < 16;
 }
 
 // the variable id_name was found (v_*): x0 = its address, then follow
@@ -1561,6 +1579,21 @@ void gen_identifier() {
         rv_valid = 0;
         return;
     }
+    if tok_is("(") && str_eq(@id_name, "__hash") && !lookup_var(@id_name) {
+        // __hash(x) : a number for a key of a Map / Set (a whole number, a pointer, a float or a String)
+        next();
+        parse_expr();
+        expect(")");
+        if ex_ty == 80 {
+            rt_call("__Str__hash");
+        } else {
+            rt_call("__Str__hashint");
+        }
+        ex_w = 8;
+        ex_ty = 0;
+        rv_valid = 0;
+        return;
+    }
     if tok_is("(") && str_eq(@id_name, "arr") && !lookup_var(@id_name) && find_func(@id_name) < 0 {
         // arr(n) : a new dynamic array with room for n elements
         next();
@@ -1721,6 +1754,11 @@ bool is_str_dyn(int info) {
     return info != 0 && dyn_code(info) == 2 && dyn_tid(info) == 70;
 }
 
+// String[]: a dynamic array whose elements are Strings (8 bytes each); the array owns them
+bool is_strarr_dyn(int info) {
+    return info != 0 && dyn_code(info) == 8 && dyn_ptr(info) == 0 && dyn_tid(info) == 71;
+}
+
 int cond_depth;              // > 0 while the right side of && or || is compiled (it may not run)
 
 // x0 = a new String: remember it as a temporary owner
@@ -1797,6 +1835,7 @@ void str_flush(int t0, int keep) {
         if own_kind[i] != 2 {
             own_off[w] = own_off[i];
             own_kind[w] = own_kind[i];
+            own_aux[w] = own_aux[i];
             own_blk[w] = own_blk[i];
             own_moved[w] = own_moved[i];
             w += 1;
@@ -1911,6 +1950,215 @@ bool str_member(char^ dm) {
     return false;
 }
 
+// the members of a String[] (x0 = the address of the variable); true if dm was one of them
+bool strarr_member(char^ dm) {
+    if str_eq(dm, "push") {
+        expect("(");
+        load_through(8);
+        push_x0();
+        parse_expr();
+        expect(")");
+        str_adopt();                     // the array gets its own copy (or takes a temporary over)
+        emit_line("mov x1, x0");
+        emit_line("ldr x0, [sp, #0]");
+        emit_line("add sp, sp, #16");
+        rt_call("__Str__apush");
+        ex_ty = 0;
+        lv_done = 1;
+        return true;
+    }
+    if str_eq(dm, "pop") {
+        expect("(");
+        expect(")");
+        load_through(8);
+        rt_call("__Str__apop");
+        str_temp();                      // the String that came out is a temporary
+        lv_done = 1;
+        return true;
+    }
+    if str_eq(dm, "insert") {
+        expect("(");
+        load_through(8);
+        push_x0();
+        parse_expr();
+        push_x0();
+        expect(",");
+        parse_expr();
+        expect(")");
+        str_adopt();
+        emit_line("mov x2, x0");
+        emit_line("ldr x1, [sp, #0]");
+        emit_line("ldr x0, [sp, #16]");
+        emit_line("add sp, sp, #32");
+        rt_call("__Str__ainsert");
+        ex_ty = 0;
+        lv_done = 1;
+        return true;
+    }
+    if str_eq(dm, "remove") {
+        expect("(");
+        load_through(8);
+        push_x0();
+        parse_expr();
+        expect(")");
+        emit_line("mov x1, x0");
+        emit_line("ldr x0, [sp, #0]");
+        emit_line("add sp, sp, #16");
+        rt_call("__Str__aremove");
+        ex_ty = 0;
+        lv_done = 1;
+        return true;
+    }
+    if str_eq(dm, "clear") || str_eq(dm, "sort") {
+        expect("(");
+        expect(")");
+        load_through(8);
+        if str_eq(dm, "clear") { rt_call("__Str__clear_all"); } else { rt_call("__Str__asort"); }
+        ex_ty = 0;
+        lv_done = 1;
+        return true;
+    }
+    if str_eq(dm, "contains") || str_eq(dm, "index_of") {
+        bool want_bool = str_eq(dm, "contains");
+        expect("(");
+        load_through(8);
+        push_x0();
+        parse_expr();
+        expect(")");
+        int kx = str_kind();
+        emit_line("mov x1, x0");
+        emit_line("ldr x0, [sp, #0]");
+        emit_line("add sp, sp, #16");
+        ins_n("mov x2, ", kx);
+        rt_call("__Str__aindex");
+        ex_w = 8;
+        ex_ty = 0;
+        if want_bool {
+            emit_line("mov x1, 0");
+            compare("ge");
+            ex_ty = 1;
+        }
+        lv_done = 1;
+        return true;
+    }
+    if str_eq(dm, "free") {
+        expect("(");
+        expect(")");
+        push_x0();                       // the variable's address
+        load_through(8);
+        rt_call("__Str__free_all");
+        emit_line("ldr x3, [sp, #0]");
+        emit_line("add sp, sp, #16");
+        emit_line("mov x1, 0");
+        store_through(8);
+        ex_ty = 0;
+        lv_done = 1;
+        return true;
+    }
+    if str_eq(dm, "resize") {
+        expect("(");
+        load_through(8);
+        push_x0();
+        parse_expr();
+        expect(")");
+        emit_line("mov x1, x0");
+        emit_line("ldr x0, [sp, #0]");
+        emit_line("add sp, sp, #16");
+        rt_call("__Str__aresize");        // new places are null Strings
+        ex_ty = 0;
+        lv_done = 1;
+        return true;
+    }
+    return false;
+}
+
+// how the array routines compare elements of this type: 0 signed, 1 unsigned (also pointers), 2 float, 3 double
+int arr_kind(int code, int eptr) {
+    if eptr != 0 { return 1; }
+    if code == 6 { return 2; }
+    if code == 7 { return 3; }
+    if code == 2 || code == 3 || code == 11 || code == 12 || code == 13 { return 1; }
+    return 0;
+}
+
+// insert remove sort contains index_of on an array of numbers / pointers (x0 = the address of the variable)
+bool num_member(char^ dm, int code, int eptr, int etid) {
+    if code >= 16 && eptr == 0 {
+        if str_eq(dm, "insert") || str_eq(dm, "remove") || str_eq(dm, "sort") || str_eq(dm, "contains") || str_eq(dm, "index_of") {
+            die_name("this method works on arrays of numbers, pointers and Strings", dm);
+        }
+        return false;
+    }
+    int kind = arr_kind(code, eptr);
+    if str_eq(dm, "sort") {
+        expect("(");
+        expect(")");
+        load_through(8);
+        ins_n("mov x1, ", kind);
+        rt_call("__Arr__sort");
+        ex_ty = 0;
+        lv_done = 1;
+        return true;
+    }
+    if str_eq(dm, "remove") {
+        expect("(");
+        load_through(8);
+        push_x0();
+        parse_expr();
+        expect(")");
+        emit_line("mov x1, x0");
+        emit_line("ldr x0, [sp, #0]");
+        emit_line("add sp, sp, #16");
+        rt_call("__Arr__remove");
+        ex_ty = 0;
+        lv_done = 1;
+        return true;
+    }
+    if str_eq(dm, "insert") {
+        expect("(");
+        load_through(8);
+        push_x0();
+        parse_expr();
+        push_x0();
+        expect(",");
+        parse_expr();
+        if eptr == 0 { check_assign(etid); }
+        expect(")");
+        emit_line("mov x2, x0");
+        emit_line("ldr x1, [sp, #0]");
+        emit_line("ldr x0, [sp, #16]");
+        emit_line("add sp, sp, #32");
+        rt_call("__Arr__insert");
+        ex_ty = 0;
+        lv_done = 1;
+        return true;
+    }
+    if str_eq(dm, "contains") || str_eq(dm, "index_of") {
+        bool want_bool = str_eq(dm, "contains");
+        expect("(");
+        load_through(8);
+        push_x0();
+        parse_expr();
+        if eptr == 0 { check_assign(etid); }
+        expect(")");
+        emit_line("mov x1, x0");
+        emit_line("ldr x0, [sp, #0]");
+        emit_line("add sp, sp, #16");
+        ins_n("mov x2, ", kind);
+        rt_call("__Arr__index");
+        ex_w = 8;
+        ex_ty = 0;
+        if want_bool {
+            emit_line("mov x1, 0");
+            compare("ge");
+            ex_ty = 1;
+        }
+        lv_done = 1;
+        return true;
+    }
+    return false;
+}
+
 // x[i] on a dynamic array: x0 = the address of the variable
 void dyn_index() {
     int info = lv_dyn;
@@ -1946,6 +2194,14 @@ void dyn_index() {
     lv_kind = 0;
     lv_dyn = 0;
     lv_fresh = 0;
+    if is_strarr_dyn(info) {
+        // an element of a String[] is a String variable
+        lv_code = 8;
+        lv_ptr = 0;
+        lv_tid = 99;
+        lv_kind = 3;
+        lv_dyn = dyn_pack(2, 0, 70);
+    }
 }
 
 // x.len  x.cap  x.push(v)  x.pop()  x.resize(n)  x.clear()  x.free()  on a dynamic array
@@ -1964,6 +2220,8 @@ void dyn_member() {
     ex_w = 8;
     ex_ty = 0;
     if is_str_dyn(info) && str_member(@dm) { return; }
+    if is_strarr_dyn(info) && strarr_member(@dm) { return; }
+    if !is_str_dyn(info) && !is_strarr_dyn(info) && num_member(@dm, code, eptr, etid) { return; }
     if str_eq(@dm, "len") || str_eq(@dm, "cap") {
         load_through(8);
         dyn_null_check();
@@ -2087,11 +2345,16 @@ void finish_rvalue() {
         load_through(8);                 // a dynamic array as a value: its header address
         ex_w = 8;
         ex_ty = 99;
+        ex_dyn = lv_dyn;
         if is_str_dyn(lv_dyn) { ex_ty = 80; }
         return;
     }
     if lv_kind == 1 {
         if in_cout == 0 && pass_no >= 2 { die("an array needs an index (or @)"); }
+        if lv_nd == 1 {
+            ex_arr_cnt = lv_cnt;
+            ex_arr_code = lv_code;
+        }
         ex_ty = 0;                   // cout << name : the text of a char array
         ex_w = 8;
         if lv_code == 2 { ex_w = 9; }

@@ -236,6 +236,45 @@ Pair<int, double> p = {1, 2.5};
 * A generic must be written before the first place that uses it. Errors inside an instance point at the line of the generic.
 * Instances are ordinary functions and structs (`largest<int>` is called `largest__int`), so the limit of 80 structs counts them.
 
+## Lists, maps and sets
+
+A list is a dynamic array: `T[]` (numbers, pointers) or `String[]` (the array owns its Strings and copies what you push).
+
+```jk
+int[] xs = arr(4);
+xs.push(5); xs.push(-2); xs.push(9);
+xs.sort();                    // ascending: -2 5 9
+xs.insert(1, 7);              // place, value
+xs.remove(0);
+cout << xs.index_of(9) << xs.contains(4) << "\n";   // place or -1, true/false
+
+String[] names = arr(2);
+names.push("carol"); names.push("alice");
+names.sort();
+names[0] = "zoe";             // the array keeps its own copy
+```
+
+`for x in list { ... }` goes through the elements (also a String: its characters, a fixed array, and a list returned by a call, which is freed
+after the loop). `x` is a copy of the element (a String element is only borrowed). `for i in a..b` still counts numbers.
+
+`Map<K,V>` and `Set<T>` are hash tables in the standard library (`import std`). Keys can be whole numbers, chars, floats, pointers or Strings.
+
+```jk
+Map<String, int> ages;
+ages.put("ann", 31);
+ages.put("bob", 25);
+cout << ages.get("bob") << ages.has("zed") << ages.len << "\n";   // get throws "key not found"
+ages.remove("ann");
+for k in ages.keys_list() { cout << k << "=" << ages.get(k) << "\n"; }   // values_list() too
+
+Set<int> seen;
+if seen.add(3) { cout << "new\n"; }     // add says whether it was new
+```
+
+* A variable of a struct that has a method `free(self)` is freed by the compiler at the end of its block (also on `return`, `break`, `continue`): that is
+  how `Map` and `Set` clean up. Such a struct starts zeroed, and cannot be copied, passed or returned by value (use a pointer).
+* `keys_list()`, `values_list()` and `items_list()` return a new list (the caller owns it).
+
 ## Heap memory that frees itself
 
 ```jk

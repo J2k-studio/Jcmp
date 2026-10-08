@@ -26,11 +26,12 @@ jcmp hello.jk -o hello      # คอมไพล์
 11. อาร์เรย์ที่โตได้และหน่วยความจำ
 12. สตริง (String)
 13. Generics (ชนิดแบบพารามิเตอร์)
-14. จัดการ error ด้วย try และ catch
-15. ทศนิยมและไลบรารี Math
-16. ไฟล์
-17. โปรแกรมหลายไฟล์
-18. โปรเจกต์เล็ก: นับคำ
+14. ลิสต์ แมป และเซต
+15. จัดการ error ด้วย try และ catch
+16. ทศนิยมและไลบรารี Math
+17. ไฟล์
+18. โปรแกรมหลายไฟล์
+19. โปรเจกต์เล็ก: นับคำ
 
 ## บทที่ 1. สวัสดีชาวโลก
 
@@ -492,7 +493,50 @@ void main() {
 
 generic ต้องเขียนไว้ก่อนจุดแรกที่ใช้มัน
 
-## บทที่ 14. จัดการ error ด้วย try และ catch
+## บทที่ 14. ลิสต์ แมป และเซต
+
+ลิสต์คืออาร์เรย์ที่โตได้ มีเครื่องมือเพิ่ม: `sort`, `insert`, `remove`, `contains`, `index_of` และ `for x in list` วนทุกสมาชิก
+`Map<K,V>` เก็บค่าตามคีย์ ส่วน `Set<T>` เก็บแต่ละค่าครั้งเดียว ทั้งสองปล่อยหน่วยความจำเองตอนจบบล็อก
+
+```jk
+import std
+using std
+
+void main() {
+    int[] scores = arr(4);
+    scores.push(72); scores.push(95); scores.push(60);
+    scores.sort();
+    for s in scores { cout << s << " "; }
+    cout << "\n";
+
+    Map<String, int> ages;
+    ages.put("ann", 31);
+    ages.put("bob", 25);
+    ages.put("ann", 32);
+    cout << ages.get("ann") << " " << ages.len << "\n";
+    for name in ages.keys_list() {
+        cout << name << " is " << ages.get(name) << "\n";
+    }
+
+    Set<int> seen;
+    for i in 0..20 { seen.add(i % 5); }
+    cout << seen.len << " different, has 3: " << seen.has(3) << "\n";
+}
+```
+
+ผลลัพธ์:
+
+```
+60 72 95 
+32 2
+ann is 32
+bob is 25
+5 different, has 3: 1
+```
+
+`ages.get("zed")` จะ throw `key not found` ถามก่อนด้วย `ages.has("zed")` ส่วน `keys_list()` สร้างลิสต์ใหม่ที่ลูป `for` ปล่อยให้เอง
+
+## บทที่ 15. จัดการ error ด้วย try และ catch
 
 `throw "ข้อความ"` หยุดงานที่ทำอยู่และกระโดดไปที่ `catch` ที่ใกล้ที่สุด ถ้าไม่มี `catch` โปรแกรมจะหยุดและพิมพ์ `uncaught exception: ข้อความ`
 
@@ -522,7 +566,7 @@ void main() {
 error: cannot divide by zero
 ```
 
-## บทที่ 15. ทศนิยมและไลบรารี Math
+## บทที่ 16. ทศนิยมและไลบรารี Math
 
 `import std` นำไลบรารีมาตรฐานเข้ามา และ `using std` ทำให้เขียน `sqrt(x)` แทน `Math::sqrt(x)` ได้ (ทุกโปรแกรมที่พิมพ์ข้อความต้องมีสองบรรทัดนี้ บทเรียนเติมให้ที่บนสุด) ถ้าสองโมดูลมีฟังก์ชันชื่อเดียวกัน (`write` อยู่ทั้งใน `Sys` และ `File`) ให้เขียนชื่อโมดูล: `File::write(...)` การแปลงชนิดต้องเขียนเอง: `(int)x`, `(double)n`
 
@@ -553,7 +597,7 @@ hypotenuse = 5.000000
 
 ไลบรารีมี `Sys` (คำสั่งระบบ), `Mem` (หน่วยความจำ), `Str` (ข้อความ), `Math` และ `File`
 
-## บทที่ 16. ไฟล์
+## บทที่ 17. ไฟล์
 
 `File::open(path, mode)` คืนเลขตัวหนึ่ง (ติดลบถ้าล้มเหลว) แล้วใช้ `read`, `write`, `read_line`, `close` กับเลขนั้น
 
@@ -581,7 +625,7 @@ void main() {
 J2K can write files
 ```
 
-## บทที่ 17. โปรแกรมหลายไฟล์
+## บทที่ 18. โปรแกรมหลายไฟล์
 
 ไฟล์ `.jk` คือโปรแกรม (มี `main`) ไฟล์ `.j` คือส่วนประกอบที่ไฟล์อื่น `import` ไปใช้ ห้ามมี `main`
 `import "mathx"` หาไฟล์ `mathx.j` ที่อยู่ข้างไฟล์ ส่วน `import "tools.mathx"` หา `tools/mathx.j`
@@ -616,7 +660,7 @@ void main() {
 
 คอมไพล์เฉพาะไฟล์หลัก: `jcmp multi.jk -o multi` ไฟล์ที่ import จะถูกอ่านให้เอง (ครั้งเดียว)
 
-## บทที่ 18. โปรเจกต์เล็ก: นับคำ
+## บทที่ 19. โปรเจกต์เล็ก: นับคำ
 
 รวมทุกอย่างเข้าด้วยกัน: อ่านคำไปเรื่อยๆ จนข้อมูลหมด (อ่านเกินจะ throw `end of input`) แล้วรายงานจำนวนคำและคำที่ยาวที่สุด
 

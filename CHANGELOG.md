@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.0
+* **Collections:** `Map<K,V>` (`put get has remove len keys_list values_list`), `Set<T>` (`add has remove len items_list`) in the standard library; keys can be numbers, chars, pointers or Strings. `get` throws `key not found`.
+* **`String[]`**: an array of Strings (it owns them). **List methods** on every dynamic array: `insert`, `remove`, `sort`, `contains`, `index_of`.
+* **`for x in list { }`** over a dynamic array, a `String[]`, a String (its characters), a fixed array or a list returned by a call.
+* **A struct with a method `free(self)` is freed by the compiler** at the end of the block of a local variable (also on `return`, `break`, `continue`). It starts zeroed and cannot be copied, passed or returned by value.
+* Warnings are yellow (they were orange).
+
 ## 0.5.0
 * **Names of the decimal types:** `float` (32 bit) and `double` (64 bit), as in C. `f32` and `f64` still work, with a warning `[-Wdeprecated]`.
 * **`cout`, `coutf`, `cin`, `cinf` need `import std` and `using std`.** A program without them gets the warning `[-Wstd]` (a later version makes it an error). Update your programs: put `import std` and `using std` at the top.
@@ -17,7 +24,7 @@
 * **Division by zero throws** `"division by zero"` (catchable with `try`/`catch`) instead of silently giving 0. A literal divisor other than 0 costs nothing.
 * **A crash tells why:** a null pointer or a stack overflow prints `runtime error: segmentation fault (null pointer or stack overflow)` and exits with 139.
 * **New warning `-Wuninit`:** a variable declared without a value is read before anything was written to it.
-* **Messages are easier to read:** errors in red, warnings in orange (only when the output is a terminal; `-color` / `-nocolor` choose), and the source line has its line number: ` 12 | code` with a `^` under the place.
+* **Messages are easier to read:** errors in red, warnings in yellow (only when the output is a terminal; `-color` / `-nocolor` choose), and the source line has its line number: ` 12 | code` with a `^` under the place.
 
 ## 0.3.1
 * **Fixed:** calling a function that does not exist (for example `alloc` without `import std` / `using std::mem`) ended with a message from the assembler; it is now `error: unknown function 'name'` at the call.

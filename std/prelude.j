@@ -162,6 +162,116 @@ struct __Arr {
         if n > h[0] { Mem::set((void^)(h[2] + h[0] * h[3]), 0, (n - h[0]) * h[3]); }
         h[0] = n;
     }
+    // ---- numbers in an array: kind 0 signed, 1 unsigned (also pointers), 2 float, 3 double
+    // the bits of element i as a whole number (sign or zero extended; the IEEE bits for a float)
+    static int get(int^ h, int i, int kind) {
+        char^ d = (char^)(h[2] + i * h[3]);
+        int es = h[3];
+        int v = 0;
+        int k = es - 1;
+        while k >= 0 {
+            v = v * 256 + d[k];
+            k -= 1;
+        }
+        if kind == 0 && es < 8 {
+            int sh = 64 - es * 8;
+            v = (v shl sh) shr sh;
+        }
+        return v;
+    }
+    static void put(int^ h, int i, int bits) {
+        char^ d = (char^)(h[2] + i * h[3]);
+        int k = 0;
+        while k < h[3] {
+            d[k] = bits & 255;
+            bits = bits shr 8;
+            k += 1;
+        }
+    }
+    // a before b ?
+    static bool less(int a, int b, int kind) {
+        if kind == 0 { return a < b; }
+        if kind == 1 { return (a xor -9223372036854775807 - 1) < (b xor -9223372036854775807 - 1); }
+        if kind == 2 {
+            int x = a;
+            int y = b;
+            float^ fx = (float^)@x;
+            float^ fy = (float^)@y;
+            return fx[0] < fy[0];
+        }
+        int x2 = a;
+        int y2 = b;
+        double^ dx = (double^)@x2;
+        double^ dy = (double^)@y2;
+        return dx[0] < dy[0];
+    }
+    static void insert(void^ hv, int i, int bits) {
+        if (int)hv == 0 { throw "the dynamic array is null"; }
+        int^ h = (int^)hv;
+        if i < 0 || i > h[0] { throw "insert position out of range"; }
+        __Arr::grow(h, h[0] + 1);
+        int k = h[0];
+        while k > i {
+            __Arr::put(h, k, __Arr::get(h, k - 1, 1));
+            k -= 1;
+        }
+        __Arr::put(h, i, bits);
+        h[0] += 1;
+    }
+    static void remove(void^ hv, int i) {
+        if (int)hv == 0 { throw "the dynamic array is null"; }
+        int^ h = (int^)hv;
+        if i < 0 || i >= h[0] { throw "remove position out of range"; }
+        int k = i;
+        while k + 1 < h[0] {
+            __Arr::put(h, k, __Arr::get(h, k + 1, 1));
+            k += 1;
+        }
+        h[0] -= 1;
+    }
+    // the place of the first element equal to bits, or -1
+    static int index(void^ hv, int bits, int kind) {
+        if (int)hv == 0 { throw "the dynamic array is null"; }
+        int^ h = (int^)hv;
+        int i = 0;
+        while i < h[0] {
+            int e = __Arr::get(h, i, kind);
+            if !__Arr::less(e, bits, kind) && !__Arr::less(bits, e, kind) { return i; }
+            i += 1;
+        }
+        return 0 - 1;
+    }
+    static void sort(void^ hv, int kind) {
+        if (int)hv == 0 { throw "the dynamic array is null"; }
+        int^ h = (int^)hv;
+        int n = h[0];
+        int start = n / 2 - 1;
+        while start >= 0 {
+            __Arr::sift(h, start, n, kind);
+            start -= 1;
+        }
+        int end = n - 1;
+        while end > 0 {
+            int t = __Arr::get(h, 0, kind);
+            __Arr::put(h, 0, __Arr::get(h, end, kind));
+            __Arr::put(h, end, t);
+            __Arr::sift(h, 0, end, kind);
+            end -= 1;
+        }
+    }
+    static void sift(int^ h, int root, int n, int kind) {
+        while true {
+            int child = root * 2 + 1;
+            if child >= n { return; }
+            if child + 1 < n && __Arr::less(__Arr::get(h, child, kind), __Arr::get(h, child + 1, kind), kind) { child += 1; }
+            int a = __Arr::get(h, root, kind);
+            int b = __Arr::get(h, child, kind);
+            if !__Arr::less(a, b, kind) { return; }
+            __Arr::put(h, root, b);
+            __Arr::put(h, child, a);
+            root = child;
+        }
+    }
     // give the elements and the header back (null is ignored)
     static void free(void^ hv) {
         int^ h = (int^)hv;
@@ -327,6 +437,164 @@ struct __Str {
     }
     static char^ c(void^ s) {
         return __Str::ptr(s, 1, 0);
+    }
+    // hash of a whole number / of a String (FNV-1a over the bytes)
+    static int hashint(int x) {
+        int h = x * -7046029254386353131;
+        return h xor (h shr 29);
+    }
+    static int hash(void^ s) {
+        char^ p = __Str::ptr(s, 1, 0);
+        int h = -3750763034362895579;
+        int i = 0;
+        while p[i] != 0 {
+            h = (h xor p[i]) * 1099511628211;
+            i += 1;
+        }
+        return h xor (h shr 29);
+    }
+    // String[]: n places (new ones are null, cut ones are freed)
+    static void aresize(void^ hv, int n) {
+        __Str::aprep(hv);
+        int^ h = (int^)hv;
+        if n < 0 { throw "negative array size"; }
+        int^ el = (int^)h[2];
+        int i = n;
+        while i < h[0] {
+            __Arr::free((void^)el[i]);
+            i += 1;
+        }
+        __Arr::grow(h, n);
+        el = (int^)h[2];
+        i = h[0];
+        while i < n {
+            el[i] = 0;
+            i += 1;
+        }
+        h[0] = n;
+    }
+    // -1, 0, 1: a before, equal to, after b (bytes)
+    static int cmp(void^ a, void^ b) {
+        char^ pa = __Str::ptr(a, 1, 0);
+        char^ pb = __Str::ptr(b, 1, 1);
+        int i = 0;
+        while pa[i] != 0 && pa[i] == pb[i] { i += 1; }
+        if pa[i] == pb[i] { return 0; }
+        if pa[i] < pb[i] { return 0 - 1; }
+        return 1;
+    }
+
+    // ---- String[] : an array whose elements are String headers owned by the array
+    static void aprep(void^ hv) {
+        if (int)hv == 0 { throw "the array is null"; }
+    }
+    // the elements and the array are given back
+    static void free_all(void^ hv) {
+        int^ h = (int^)hv;
+        if (int)h == 0 { return; }
+        int^ el = (int^)h[2];
+        int i = 0;
+        while i < h[0] {
+            __Arr::free((void^)el[i]);
+            i += 1;
+        }
+        __Arr::free(hv);
+    }
+    static void clear_all(void^ hv) {
+        __Str::aprep(hv);
+        int^ h = (int^)hv;
+        int^ el = (int^)h[2];
+        int i = 0;
+        while i < h[0] {
+            __Arr::free((void^)el[i]);
+            i += 1;
+        }
+        h[0] = 0;
+    }
+    // append s (the array takes it over)
+    static void apush(void^ hv, void^ s) {
+        __Str::aprep(hv);
+        int^ slot = (int^)__Arr::slot(hv);
+        slot[0] = (int)s;
+    }
+    // remove the last one and give it to the caller
+    static void^ apop(void^ hv) {
+        __Str::aprep(hv);
+        int^ slot = (int^)__Arr::pop(hv);
+        return (void^)slot[0];
+    }
+    // put s (taken over) at place i
+    static void ainsert(void^ hv, int i, void^ s) {
+        __Str::aprep(hv);
+        int^ h = (int^)hv;
+        if i < 0 || i > h[0] { throw "insert position out of range"; }
+        __Arr::grow(h, h[0] + 1);
+        int^ el = (int^)h[2];
+        int k = h[0];
+        while k > i {
+            el[k] = el[k - 1];
+            k -= 1;
+        }
+        el[i] = (int)s;
+        h[0] += 1;
+    }
+    // remove the one at place i (it is freed)
+    static void aremove(void^ hv, int i) {
+        __Str::aprep(hv);
+        int^ h = (int^)hv;
+        if i < 0 || i >= h[0] { throw "remove position out of range"; }
+        int^ el = (int^)h[2];
+        __Arr::free((void^)el[i]);
+        int k = i;
+        while k + 1 < h[0] {
+            el[k] = el[k + 1];
+            k += 1;
+        }
+        h[0] -= 1;
+    }
+    // the place of the first element equal to the operand, or -1
+    static int aindex(void^ hv, void^ x, int kx) {
+        __Str::aprep(hv);
+        int^ h = (int^)hv;
+        int^ el = (int^)h[2];
+        int i = 0;
+        while i < h[0] {
+            if __Str::eq((void^)el[i], 1, x, kx) == 1 { return i; }
+            i += 1;
+        }
+        return 0 - 1;
+    }
+    // sort ascending (heap sort, no extra memory)
+    static void asort(void^ hv) {
+        __Str::aprep(hv);
+        int^ h = (int^)hv;
+        int^ el = (int^)h[2];
+        int n = h[0];
+        int start = n / 2 - 1;
+        while start >= 0 {
+            __Str::asift(el, start, n);
+            start -= 1;
+        }
+        int end = n - 1;
+        while end > 0 {
+            int t = el[0];
+            el[0] = el[end];
+            el[end] = t;
+            __Str::asift(el, 0, end);
+            end -= 1;
+        }
+    }
+    static void asift(int^ el, int root, int n) {
+        while true {
+            int child = root * 2 + 1;
+            if child >= n { return; }
+            if child + 1 < n && __Str::cmp((void^)el[child], (void^)el[child + 1]) < 0 { child += 1; }
+            if __Str::cmp((void^)el[root], (void^)el[child]) >= 0 { return; }
+            int t = el[root];
+            el[root] = el[child];
+            el[child] = t;
+            root = child;
+        }
     }
 }
 

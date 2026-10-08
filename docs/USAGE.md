@@ -21,7 +21,7 @@ jcmp input.jk output.jasm              (older form: write assembler text only)
 |--------|---------|
 | `-o file`          | write the ARM64 executable |
 | `--emit-asm file`  | also (or only) write the assembler text, to read what the compiler generated |
-| `-color` / `-nocolor` | coloured messages (errors red, warnings orange); the default is on when the messages go to a terminal |
+| `-color` / `-nocolor` | coloured messages (errors red, warnings yellow); the default is on when the messages go to a terminal |
 | `-st`              | strict: every warning becomes an error |
 | `-I dir`           | where `import "name"` also looks (after the folder of the importing file) |
 | `-version`, `-help` | print the version / a short list of the options (one or two dashes: `--version`; also `-v`, `-h`) |

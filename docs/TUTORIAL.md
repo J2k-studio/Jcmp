@@ -26,11 +26,12 @@ For the complete list of features see [LANGUAGE.md](LANGUAGE.md); for the comman
 11. Growing arrays and memory
 12. Strings
 13. Generics
-14. Errors with try and catch
-15. Decimals and the Math library
-16. Files
-17. A program in several files
-18. A small project: counting words
+14. Lists, maps and sets
+15. Errors with try and catch
+16. Decimals and the Math library
+17. Files
+18. A program in several files
+19. A small project: counting words
 
 ## Lesson 1. Hello, world
 
@@ -495,7 +496,50 @@ Output:
 
 A generic must be written before the first place that uses it.
 
-## Lesson 14. Errors with try and catch
+## Lesson 14. Lists, maps and sets
+
+A list is a dynamic array with more tools: `sort`, `insert`, `remove`, `contains`, `index_of`. `for x in list` visits every element.
+`Map<K,V>` stores values by key and `Set<T>` stores each value once. They free themselves at the end of the block.
+
+```jk
+import std
+using std
+
+void main() {
+    int[] scores = arr(4);
+    scores.push(72); scores.push(95); scores.push(60);
+    scores.sort();
+    for s in scores { cout << s << " "; }
+    cout << "\n";
+
+    Map<String, int> ages;
+    ages.put("ann", 31);
+    ages.put("bob", 25);
+    ages.put("ann", 32);
+    cout << ages.get("ann") << " " << ages.len << "\n";
+    for name in ages.keys_list() {
+        cout << name << " is " << ages.get(name) << "\n";
+    }
+
+    Set<int> seen;
+    for i in 0..20 { seen.add(i % 5); }
+    cout << seen.len << " different, has 3: " << seen.has(3) << "\n";
+}
+```
+
+Output:
+
+```
+60 72 95 
+32 2
+ann is 32
+bob is 25
+5 different, has 3: 1
+```
+
+`ages.get("zed")` would throw `key not found`; ask with `ages.has("zed")` first. `keys_list()` makes a new list that the `for` loop frees for you.
+
+## Lesson 15. Errors with try and catch
 
 `throw "text"` stops what you are doing and jumps to the nearest `catch`. Without a `catch` the program stops and prints `uncaught exception: text`.
 
@@ -525,7 +569,7 @@ Output:
 error: cannot divide by zero
 ```
 
-## Lesson 15. Decimals and the Math library
+## Lesson 16. Decimals and the Math library
 
 `import std` brings the standard library and `using std` lets you write `sqrt(x)` instead of `Math::sqrt(x)` (every program that prints needs both lines; the tutorial adds them at the top). If two modules have the same function name (`write` is in `Sys` and `File`), write the module: `File::write(...)`. Casts are explicit: `(int)x`, `(double)n`.
 
@@ -556,7 +600,7 @@ hypotenuse = 5.000000
 
 The library has `Sys` (system calls), `Mem` (memory), `Str` (text), `Math` and `File`.
 
-## Lesson 16. Files
+## Lesson 17. Files
 
 `File::open(path, mode)` gives a number (negative if it failed). `read`, `write`, `read_line` and `close` use it.
 
@@ -584,7 +628,7 @@ Output:
 J2K can write files
 ```
 
-## Lesson 17. A program in several files
+## Lesson 18. A program in several files
 
 A file that ends in `.jk` is a program (it has `main`). A file that ends in `.j` is a component that other files `import`; it must not have `main`.
 `import "mathx"` finds `mathx.j` next to the file; `import "tools.mathx"` finds `tools/mathx.j`.
@@ -619,7 +663,7 @@ Output:
 
 Compile only the main file: `jcmp multi.jk -o multi`; the imported file is read automatically (once).
 
-## Lesson 18. A small project: counting words
+## Lesson 19. A small project: counting words
 
 Putting it together: read words until the input ends (reading past the end throws `end of input`) and report how many there were and the longest.
 
