@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9.42
+* **The mascot is real ASCII art:** the shading uses a rich ramp of 66 different characters, letters and signs, from light to dense (`.'`^",:;Il!i><~+_-?][}{1)(|/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$`), not only a few dots; and the **edges** of the Earth and the Moon are drawn with characters that follow the line, chosen by which quarters of the cell the shape covers: the right limb of a ball is `)`, the left `(`, the top `"`, the bottom `_`, the diagonals `/` and `\`.
+
 ## 0.9.41
 * **The mascot is smoother and more real:** four rays for every character (2 x 2, averaged) so that the edges of the Earth and the Moon and the steps of light are smooth; a **dither** (a fine 4 x 4 pattern of Bayer) chooses between the two nearest characters of the ramp, so a slow change of light looks like a smooth gradient; the edge between day and night is soft; the Earth has **lands with shores, clouds that drift faster than the ground**, ice at the poles and a bright spot of the Sun on the sea; the Moon has **craters** (a darker floor, a lighter rim) besides its dark seas.
 

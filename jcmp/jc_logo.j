@@ -333,6 +333,23 @@ char lg_pick_at(double v, int x, int y) {
     return lg_ramp2[k];
 }
 
+// the character for the edge of a shape that covers some of the four quarters of a cell (1 = top left, 2 = top right, 4 = bottom left,
+// 8 = bottom right): the character looks like the line that cuts the cell
+char lg_edge_char(int m) {
+    if m == 1 { return '\''; }
+    if m == 2 { return '`'; }
+    if m == 4 { return ','; }
+    if m == 8 { return '.'; }
+    if m == 3 { return '_'; }                       // the top half is covered: the line is at the bottom
+    if m == 12 { return '"'; }                      // the bottom half is covered: the line is at the top
+    if m == 5 { return ')'; }                       // the left half is covered: the right limb of a ball
+    if m == 10 { return '('; }                      // the right half: the left limb
+    if m == 7 || m == 14 { return '/'; }
+    if m == 11 || m == 13 { return '\\'; }
+    if m == 9 { return ';'; }
+    return ':';
+}
+
 // grey, as a colour number
 int lg_grey(double v) {
     if v < 0.0 { v = 0.0; }
@@ -522,7 +539,7 @@ void lg_run(int frames, int speed) {
     if speed < 1 { speed = 1800; }
     double ts = (double)speed;
     lg_find_color();
-    char^ rp = " .:-=+*#%@";
+    char^ rp = " .'`^\",:;Il!i><~+_-?][}{1)(|/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$";
     lg_n2 = 0;
     while rp[lg_n2] != 0 && lg_n2 < 90 {
         lg_ramp2[lg_n2] = rp[lg_n2];
@@ -686,8 +703,8 @@ void lg_run(int frames, int speed) {
             while x < LW {
                 // four rays for each character (2 x 2), averaged: smooth edges and smooth shades
                 double sumb = 0.0;
-                int hits = 0;
-                int hit_moon = 0;
+                int mask = 0;                                          // which of the four rays found something that shows (1 2 / 4 8)
+                int lit_n = 0;
                 double dmin = 1000.0;
                 int sj = 0;
                 while sj < 2 {
@@ -752,7 +769,8 @@ void lg_run(int frames, int speed) {
                             double bright = 0.07 + 0.90 * lam * albedo + 0.20 * rim * (0.15 + lam) + 0.30 * refl;
                             if bright > 1.0 { bright = 1.0; }
                             sumb = sumb + bright;
-                            hits += 1;
+                            mask = mask | (1 << (sj * 2 + si));
+                            lit_n += 1;
                             if te < dmin { dmin = te; }
                         } else if tm < 999.0 {
                             // the Moon: craters and dark seas, the letter J on its surface, turning with it
@@ -824,22 +842,29 @@ void lg_run(int frames, int speed) {
                             // the letter J glows a little (like a logo), so that it can be read even in the dark part; the rest is left black
                             if bright < 0.55 * cov { bright = 0.55 * cov; }
                             if bright > 1.0 { bright = 1.0; }
-                            if bright > 0.04 { sumb = sumb + bright; }
-                            hits += 1;
-                            hit_moon = 1;
-                            if tm < dmin { dmin = tm; }
+                            if bright > 0.04 {
+                                sumb = sumb + bright;
+                                mask = mask | (1 << (sj * 2 + si));
+                                lit_n += 1;
+                                if tm < dmin { dmin = tm; }
+                            }
                         }
                         si += 1;
                     }
                     sj += 1;
                 }
-                if hits > 0 {
+                if mask == 15 {
+                    // the cell is full: a character of the ramp by the shade
                     double v = sumb / 4.0;
-                    if v > 0.03 {
-                        lg_ch[y * LW + x] = lg_pick_at(v, x, y);
-                        lg_col[y * LW + x] = lg_grey(v);
-                        lg_dep[y * LW + x] = dmin;
-                    }
+                    lg_ch[y * LW + x] = lg_pick_at(v, x, y);
+                    lg_col[y * LW + x] = lg_grey(v);
+                    lg_dep[y * LW + x] = dmin;
+                } else if mask != 0 {
+                    // the edge of a shape: a character that follows the line (the right limb of a ball is ')', the top of a ball '"', ...)
+                    double v = sumb / (double)lit_n;
+                    lg_ch[y * LW + x] = lg_edge_char(mask);
+                    lg_col[y * LW + x] = lg_grey(0.30 + 0.70 * v);
+                    lg_dep[y * LW + x] = dmin;
                 }
                 x += 1;
             }
