@@ -72,7 +72,7 @@ wget -qO- https://raw.githubusercontent.com/J2k-studio/Jcmp/main/install.sh | sh
 | Option | Meaning |
 |--------|---------|
 | `--dir DIR`        | install into `DIR` (created if needed) |
-| `--version 0.2.0`  | a specific release instead of the latest |
+| `--version 0.2.1`  | a specific release instead of the latest |
 | `--with-assembler` | also install `j2k_asm`, the stand-alone assembler |
 
 Run it again to update. To uninstall, delete the file.
@@ -94,7 +94,7 @@ sha256sum -c --ignore-missing SHA256SUMS      # must print:  jcmp-linux-arm64: O
 mv jcmp-linux-arm64 jcmp && chmod +x jcmp && rm SHA256SUMS
 ```
 
-A specific version: replace `latest/download` with `download/v0.2.0` (also a good idea right after a new release, when the `latest` links can lag behind for a minute). The bundle
+A specific version: replace `latest/download` with `download/v0.2.1` (also a good idea right after a new release, when the `latest` links can lag behind for a minute). The bundle
 `jcmp-<version>-linux-arm64.tar.gz` of the same release holds the compiler, the assembler, the examples and the docs.
 
 ### Use it
@@ -103,7 +103,7 @@ Put the folder on your `PATH` (once per shell, or add the line to `~/.bashrc`), 
 
 ```bash
 export PATH="$PWD:$PATH"            # inside the folder; or the full path of your folder
-jcmp --version                      # jcmp 0.2.0 (J2K compiler, Linux ARM64)
+jcmp --version                      # jcmp 0.2.1 (J2K compiler, Linux ARM64)
 
 printf 'void main() { cout << "hi\\n"; }\n' > hi.jk
 jcmp hi.jk -o hi && ./hi            # hi
@@ -125,6 +125,7 @@ bin/jcmp examples/fib.jk -o fib && ./fib
 If the repository or its releases are private, `curl`/`wget` need a token
 (`curl -fL -H "Authorization: Bearer $TOKEN" ...`) or use `gh release download`.
 
+New to J2K? Start with the tutorial: [docs/TUTORIAL.md](docs/TUTORIAL.md).
 More: [docs/USAGE.md](docs/USAGE.md) (command line, building, testing) and
 [docs/LANGUAGE.md](docs/LANGUAGE.md) (a tour of the language).
 

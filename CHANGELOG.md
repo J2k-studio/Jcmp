@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.1
+* Fixed: a character literal (`'J'`) that came after a decimal literal (`2.5`) was taken for a decimal number.
+* New: a step-by-step tutorial, `docs/TUTORIAL.md` (and `docs/TUTORIAL.th.md` in Thai); every program in it is compiled and run.
+
 ## 0.2.0
 * **Dynamic arrays**: `T[] x = arr(n)` with `len cap push pop resize clear free`, indexing (bounds-checked with `-d`), struct and pointer elements.
 * **Memory that frees itself**: a local variable declared from `alloc(...)` / `arr(...)` is freed at the end of its block (also on `return`, `break`, `continue`); `move(p)`, warnings `-Wleak` and `-Wmoved`, and a leak report in `-d` builds.

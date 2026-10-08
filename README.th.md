@@ -20,7 +20,7 @@ wget -qO- https://raw.githubusercontent.com/J2k-studio/Jcmp/main/install.sh | sh
 curl -fsSL https://raw.githubusercontent.com/J2k-studio/Jcmp/main/install.sh | sh -s -- --dir ../bin
 wget -qO- https://raw.githubusercontent.com/J2k-studio/Jcmp/main/install.sh | sh -s -- --dir ../bin
 ```
-ตัวเลือก: `--dir โฟลเดอร์`, `--version 0.2.0` (เลือกรุ่น), `--with-assembler` (ติดตั้ง `j2k_asm` ด้วย)
+ตัวเลือก: `--dir โฟลเดอร์`, `--version 0.2.1` (เลือกรุ่น), `--with-assembler` (ติดตั้ง `j2k_asm` ด้วย)
 โฟลเดอร์เริ่มต้นคือ `$PREFIX/bin` (Termux) หรือ `~/.local/bin` รันซ้ำเพื่ออัปเดต ลบไฟล์เพื่อถอนการติดตั้ง
 
 **วิธีที่ 2 — ทำเองทีละขั้นลง `../bin`:**
@@ -55,6 +55,7 @@ jcmp hi.jk -o hi && ./hi
 * รองรับเฉพาะ Linux **ARM64**
 
 ## เอกสาร
+* บทเรียนทีละขั้น: [docs/TUTORIAL.th.md](docs/TUTORIAL.th.md) (ภาษาอังกฤษ: [docs/TUTORIAL.md](docs/TUTORIAL.md))
 * วิธีใช้และการ build/ทดสอบ: [docs/USAGE.md](docs/USAGE.md)
 * ทัวร์ภาษา: [docs/LANGUAGE.md](docs/LANGUAGE.md) (ภาษาอังกฤษ)
 * สเปกภาษา (ภาษาไทย): [docs/syntax-design.md](docs/syntax-design.md)

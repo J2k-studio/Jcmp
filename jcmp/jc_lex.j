@@ -595,6 +595,7 @@ void next() {
         adv();
         tok_kind = T_NUM;
         tok_char = 1;
+        tok_float = 0;
         int cch = lc(0);
         adv();
         if cch == 92 { cch = read_escape(); }

@@ -282,6 +282,7 @@ if [ -n "${JCMP:-}" ]; then
     run_test t170_owner                 103
     run_test t171_warn_owner            1
     run_test t173_cin                   111
+    run_test t174_char_after_float      9
     JCFLAGS="-d" run_test t172_leak_report            3
     run_fail t165_fail_fnptr_type
     run_fail t166_fail_fnptr_args
