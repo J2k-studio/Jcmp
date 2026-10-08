@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.0
+* **Dynamic arrays**: `T[] x = arr(n)` with `len cap push pop resize clear free`, indexing (bounds-checked with `-d`), struct and pointer elements.
+* **Memory that frees itself**: a local variable declared from `alloc(...)` / `arr(...)` is freed at the end of its block (also on `return`, `break`, `continue`); `move(p)`, warnings `-Wleak` and `-Wmoved`, and a leak report in `-d` builds.
+* **Input**: `cin >> a >> b;` and `cinf >> x;` (the type of the variable decides what is read; bad input throws text).
+* **Function pointers** (`int(int, int)^ op = add;`), unsigned types (`u8 u32 u64`), `sizeof`, `try`/`catch`/`throw`, `T^^`, 16 parameters, structs returned by methods.
+* Smaller programs: functions that `main` cannot reach (most of `std`) are left out.
+* `install.sh` options `--dir`, `--version`, `--with-assembler`.
+
+
 ## 0.1.0 — first release
 * The compiler is written in J2K and compiles itself (self-hosting).
 * One command from source to an ARM64 Linux executable (the assembler is built in).

@@ -85,7 +85,9 @@ run_test () {
     fi
     chmod +x "$elf"
 
-    timeout 20 "./$elf" > "_test_out/${name}.stdout"
+    input=/dev/null
+    [ -f "${TESTDIR}/${name}.in" ] && input="${TESTDIR}/${name}.in"      # optional keyboard input for cin
+    timeout 20 "./$elf" < "$input" > "_test_out/${name}.stdout" 2>/dev/null
     actual=$?
 
     # optional stdout check: test/<name>.out holds the exact expected output
@@ -279,6 +281,7 @@ if [ -n "${JCMP:-}" ]; then
     run_fail t169_fail_dyn_type
     run_test t170_owner                 103
     run_test t171_warn_owner            1
+    run_test t173_cin                   111
     JCFLAGS="-d" run_test t172_leak_report            3
     run_fail t165_fail_fnptr_type
     run_fail t166_fail_fnptr_args

@@ -884,9 +884,10 @@ void parse_index_chain() {
 
 // the text of a string literal goes into the global area (stored at
 // startup); the expression is its address
-void gen_string() {
+// the text (len characters) goes into the global block; x0 = its address
+void place_text(char^ text, int len) {
     int off = (gl_bytes + 7) / 8 * 8;
-    int size = (tok_str_len + 8) / 8 * 8;
+    int size = (len + 8) / 8 * 8;
     gl_bytes = off + size;
     int k = 0;
     while k < size {
@@ -894,9 +895,7 @@ void gen_string() {
         int b = 7;
         while b >= 0 {
             chunk = chunk * 256;
-            if k + b <= tok_str_len {
-                if k + b < tok_str_len { chunk = chunk + tok_str[k + b]; }
-            }
+            if k + b < len { chunk = chunk + text[k + b]; }
             b -= 1;
         }
         if chunk != 0 { add_ginit(off + k, chunk); }
@@ -904,6 +903,10 @@ void gen_string() {
     }
     emit_line("mov x0, x28");
     ins_n("add x0, x0, #", off);
+}
+
+void gen_string() {
+    place_text(@tok_str, tok_str_len);
     next();
 }
 

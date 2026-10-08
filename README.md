@@ -36,7 +36,8 @@ Hello from J2K!
 | Debug build (`-d`)                          | array bounds checks |
 | Errors                                      | `try` / `catch` / `throw` with text |
 | Memory                                      | `alloc`/`free`, dynamic arrays, automatic freeing of owned memory at the end of a block |
-| Not done yet                                | `cin`, threads/`Mutex`, optimisation |
+| Input                                       | `cin` / `cinf` (type decides what is read; bad input throws) |
+| Not done yet                                | threads/`Mutex`, optimisation |
 | Target                                      | Linux **ARM64** only |
 
 The test suite passes (more than 160 programs with the J2K compiler).
@@ -71,7 +72,7 @@ wget -qO- https://raw.githubusercontent.com/J2k-studio/Jcmp/main/install.sh | sh
 | Option | Meaning |
 |--------|---------|
 | `--dir DIR`        | install into `DIR` (created if needed) |
-| `--version 0.1.0`  | a specific release instead of the latest |
+| `--version 0.2.0`  | a specific release instead of the latest |
 | `--with-assembler` | also install `j2k_asm`, the stand-alone assembler |
 
 Run it again to update. To uninstall, delete the file.
@@ -93,7 +94,7 @@ sha256sum -c --ignore-missing SHA256SUMS      # must print:  jcmp-linux-arm64: O
 mv jcmp-linux-arm64 jcmp && chmod +x jcmp && rm SHA256SUMS
 ```
 
-A specific version: replace `latest/download` with `download/v0.1.0`. The bundle
+A specific version: replace `latest/download` with `download/v0.2.0`. The bundle
 `jcmp-<version>-linux-arm64.tar.gz` of the same release holds the compiler, the assembler, the examples and the docs.
 
 ### Use it
@@ -102,7 +103,7 @@ Put the folder on your `PATH` (once per shell, or add the line to `~/.bashrc`), 
 
 ```bash
 export PATH="$PWD:$PATH"            # inside the folder; or the full path of your folder
-jcmp --version                      # jcmp 0.1.0 (J2K compiler, Linux ARM64)
+jcmp --version                      # jcmp 0.2.0 (J2K compiler, Linux ARM64)
 
 printf 'void main() { cout << "hi\\n"; }\n' > hi.jk
 jcmp hi.jk -o hi && ./hi            # hi

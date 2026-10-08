@@ -550,6 +550,76 @@ void parse_cout() {
     }
 }
 
+// cin >> a >> b;   cinf >> x;   what each variable is read as follows from its type;
+// bad or missing input throws "invalid input" / "end of input" / "number out of range"
+void read_into_object(int is_f) {
+    used_try = 1;
+    if lv_kind == 1 {
+        if lv_code != 2 || lv_nd != 1 || is_f == 1 { die("cin can read into a char array (a word) but not into other arrays"); }
+        push_x0();                       // the array's address
+        place_text(@lv_base, str_len(@lv_base));
+        emit_line("mov x2, x0");
+        emit_line("ldr x0, [sp, #0]");
+        emit_line("add sp, sp, #16");
+        ins_n("mov x1, ", lv_cnt);
+        rt_call("__In__word");
+        return;
+    }
+    if lv_kind != 0 || lv_ptr != 0 || lv_code >= 16 || lv_tid == 1 || (lv_tid >= 3 && lv_tid < 90) {
+        die("cin cannot read into this variable (use a number, a char, a float with cinf, or a char array)");
+    }
+    int code = lv_code;
+    bool is_float_code = code == 6 || code == 7;
+    if is_float_code && is_f == 0 { die("use cinf to read a float"); }
+    if !is_float_code && is_f == 1 { die("cinf reads floats (f32, f64) only"); }
+    push_x0();                           // the object's address
+    if is_float_code {
+        rt_call("__In__fnum");
+        if code == 6 { lit_to_f32(0); }
+    } else if code == 2 {
+        rt_call("__In__ch");
+    } else {
+        int lo = 1;                      // lo > hi: no limits (a 64-bit number)
+        int hi = 0;
+        int uns = 0;
+        if code == 1 { lo = 0 - 128; hi = 127; }
+        if code == 4 { lo = 0 - 2147483648; hi = 2147483647; }
+        if code == 11 { lo = 0; hi = 255; uns = 1; }
+        if code == 12 { lo = 0; hi = 4294967295; uns = 1; }
+        if code == 13 { uns = 1; }
+        ins_n("mov x0, ", lo);
+        ins_n("mov x1, ", hi);
+        ins_n("mov x2, ", uns);
+        rt_call("__In__num");
+    }
+    emit_line("ldr x3, [sp, #0]");
+    emit_line("add sp, sp, #16");
+    emit_line("mov x1, x0");
+    store_through(code);
+}
+
+void parse_cin() {
+    int is_f = 0;
+    if tok_is("cinf") { is_f = 1; }
+    next();                              // "cin" or "cinf"
+    int count = 0;
+    while tok_is(">>") {
+        next();
+        if tok_kind != T_IDENT { die("a variable was expected after >>"); }
+        char ci_name[256];
+        str_copy(@ci_name, @tok_text, 256);
+        str_copy(@id_name, @tok_text, 256);
+        next();
+        if !lookup_var(@ci_name) { die_name("unknown name", @ci_name); }
+        parse_lvalue();
+        if lv_done == 1 { die("cin needs a variable to read into"); }
+        read_into_object(is_f);
+        count += 1;
+    }
+    if count == 0 { die(">> expected after cin"); }
+    expect(";");
+}
+
 int dim_nd;                  // dimensions found by parse_dims
 int dim_s1;
 int dim_s2;
@@ -1129,6 +1199,10 @@ void parse_statement() {
     }
     if tok_is("using") {
         parse_using();
+        return;
+    }
+    if tok_is("cin") || tok_is("cinf") {
+        parse_cin();
         return;
     }
     if tok_is("cout") || tok_is("coutf") {

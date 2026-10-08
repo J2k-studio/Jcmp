@@ -341,6 +341,32 @@ void main() {
 `sizeof(Type)` or `sizeof(variable / element / field)` is a constant known at compile time
 (in bytes, an `int`). Struct sizes include padding. Handy with the heap: `alloc(sizeof(Node))`.
 
+## Input: cin and cinf
+
+```jk
+void main() {
+    int age;
+    char name[16];
+    f64 height;
+    cin >> name >> age;               // words are separated by spaces or new lines
+    cinf >> height;
+    cout << name << " " << age << "\n";
+    coutf << height << "\n";
+}
+```
+
+What is read follows the type of the variable: a whole number for `int`, `i8`, `i32`, `u8`, `u32`, `u64` (checked
+against the range of the type), one character for `char`, a word for a `char` array (a longer word is cut and a
+warning goes to stderr), a decimal number for `f32`/`f64` with `cinf`. Anything else is a compile error.
+Bad input throws text you can catch: `invalid input`, `number out of range`, `end of input`.
+
+```jk
+void main() {
+    int n;
+    try { cin >> n; } catch (e) { cout << "not a number: " << e << "\n"; }
+}
+```
+
 ## Modules
 
 ```jk
@@ -386,7 +412,7 @@ Current warnings: `-Wswitch`, `-Wlarge-by-value` (a struct over 64 bytes passed 
 
 ## Planned, not built yet
 
-`cin`/`cinf`, threads/`Mutex`.
+threads/`Mutex`.
 
 ## Debug build
 
