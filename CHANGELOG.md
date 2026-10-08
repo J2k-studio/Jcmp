@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.39
+* **Finer picture where the terminal is big enough:** the mascot is 50 x 20 characters in a small terminal, **60 x 24** from 62 columns and 28 rows, and **76 x 30** from 78 columns and 34 rows. The globe and the Moon are the same size compared with the picture, but every character is smaller, so there is more detail.
+* **The Moon is made of digits** (`1 7 3 5 2 9 6 0 8 @`), the Earth of letters, so that they can be told at a glance, and the word `MOON` stands under the Moon. **What the Sun does not light is left black**: a crescent or a half moon shows only the lit part (no earthshine and no rim on the dark side).
+
 ## 0.9.38
 * **The Earth is fuller and the Moon easy to see:** the shading uses a ramp of letters only (`. : - + c v u n x z X Y U J C L Q 0 O Z m w q p d b k h a o M W & 8 % B @ $ #`, no thin punctuation) and a curve that lifts the middle tones; the sea and its lines are brighter, the grey of the characters starts higher, there is more light on the night side. The Moon is bigger (radius 0.40 of the Earth's, a little more than real 0.27, still not to scale), brighter, its dark side shows the light of the Earth, and its edge is lined so that the whole disc can be seen even as a crescent.
 * The lines under the picture are shorter (`x7200  Earth 11.9 s  Moon 5.4 min`, `UTC 14:29:23  +27.7 min`).

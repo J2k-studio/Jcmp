@@ -3,11 +3,16 @@
 // phases (full, half, crescent). The times are real: the turn of the Earth (23.93 hours), the month (27.32 days), the light
 // of the Sun (8 min 19 s) and of the Moon (1.28 s); the film runs N times faster than real time.
 // 50 x 20 characters, 24 frames a second, all in J2K with no library. Stops on Ctrl-C or Enter.
-#define LW 50
-#define LH 20
-#define LN 1000
+// the picture has the size of the terminal allows: 50 x 20 (small), 60 x 24 or 76 x 30 (finer: every character is smaller
+// compared with the globe, so there is more detail)
+#define LW lg_w
+#define LH lg_h
+#define LN 2400
+#define LCELLS (lg_w * lg_h)
 
-char lg_ch[LN];              // 50 x 20 characters of the picture
+int lg_w;
+int lg_h;
+char lg_ch[LN];              // characters of the picture
 int lg_col[LN];              // the colour of each character (0xRRGGBB, grey), used if the terminal has 24-bit colour
 double lg_dep[LN];           // how far from the eye what is drawn in each cell is
 int lg_color_on;             // 1: use the colours
@@ -35,8 +40,10 @@ double lg_sx[60];            // the stars: place, speed and phase of the twinkli
 double lg_sy[60];
 double lg_sf[60];
 double lg_sp[60];
-char lg_ramp2[96];           // a long ramp of characters from empty to dense: many steps of shade
+char lg_ramp2[96];
+char lg_ramp_m[16];          // the Moon is made of digits: 1 7 3 5 2 9 6 0 8 @           // a long ramp of characters from empty to dense: many steps of shade
 int lg_n2;
+int lg_nm;
 int lg_cols;                 // the size of the terminal, read once
 int lg_rows;
 
@@ -439,6 +446,13 @@ void lg_run(int frames, int speed) {
     double ts = (double)speed;
     lg_find_color();
     char^ rp = " .:-+cvunxzXYUJCLQ0OZmwqpdbkhaoMW&8%B@$#";
+    char^ mp = " 173529608@";
+    int mi = 0;
+    while mp[mi] != 0 && mi < 14 {
+        lg_ramp_m[mi] = mp[mi];
+        mi += 1;
+    }
+    lg_nm = mi;
     lg_n2 = 0;
     while rp[lg_n2] != 0 && lg_n2 < 90 {
         lg_ramp2[lg_n2] = rp[lg_n2];
@@ -458,6 +472,16 @@ void lg_run(int frames, int speed) {
         i += 1;
     }
     lg_read_size();
+    lg_w = 50;
+    lg_h = 20;
+    if lg_cols >= 62 && lg_rows >= 28 {
+        lg_w = 60;
+        lg_h = 24;
+    }
+    if lg_cols >= 78 && lg_rows >= 34 {
+        lg_w = 76;
+        lg_h = 30;
+    }
     char clear[8];
     clear[0] = 27;
     clear[1] = '[';
@@ -534,7 +558,7 @@ void lg_run(int frames, int speed) {
         double spin = 0.0 - 0.15 - tau * real_s / day_s;       // west to east: the face we see goes from left to right
         // the stars first
         i = 0;
-        while i < LN {
+        while i < LCELLS {
             lg_ch[i] = ' ';
             lg_col[i] = 0;
             lg_dep[i] = 1000.0;
@@ -655,12 +679,19 @@ void lg_run(int frames, int speed) {
                     double patch = lg_sin(mxl * 4.0 + 1.0) * lg_sin(ny * 5.0 + 0.5) * lg_sin(mzl * 3.0 + 2.0);
                     double albedo = 0.95;
                     if patch > 0.18 { albedo = 0.60; }
-                    double bright = 0.16 + 0.88 * lam * albedo;                // the dark side is not black: light of the Earth
-                    if rim_m > 0.55 { bright = bright + 0.18; }                  // a thin rim so that the whole disc can be seen
+                    // the part that the Sun does not light is left black (a crescent or a half moon is only what is lit)
+                    double bright = lam * albedo;
+                    if lam > 0.0 && rim_m > 0.6 { bright = bright + 0.10; }
                     if bright > 1.0 { bright = 1.0; }
-                    lg_ch[y * LW + x] = lg_pick(bright);
-                    lg_col[y * LW + x] = lg_grey(bright);
-                    lg_dep[y * LW + x] = tm;
+                    if bright > 0.04 {
+                        // digits for the Moon, letters for the Earth: so it can be told at a glance
+                        double mv = bright * (1.7 - 0.7 * bright);
+                        int mk = (int)(mv * (double)(lg_nm - 1) + 0.5);
+                        if mk < 1 { mk = 1; }
+                        lg_ch[y * LW + x] = lg_ramp_m[mk];
+                        lg_col[y * LW + x] = lg_grey(0.35 + 0.65 * bright);
+                        lg_dep[y * LW + x] = tm;
+                    }
                 }
                 x += 1;
             }
@@ -684,6 +715,23 @@ void lg_run(int frames, int speed) {
                 }
             }
             n += 1;
+        }
+        // the word MOON under the Moon (a name for it)
+        double mqx = mx * lg_rx + my * lg_ry + mz * lg_rz;
+        double mqy = mx * lg_ux + my * lg_uy + mz * lg_uz;
+        int lcx = (int)(cxs + mqx * unit * 2.0);
+        int lcy = (int)(cys - mqy * unit + rm * unit + 1.6);
+        char^ word = "MOON";
+        int wi = 0;
+        while wi < 4 {
+            int wx = lcx - 2 + wi;
+            if wx >= 0 && wx < LW && lcy >= 0 && lcy < LH {
+                if lg_ch[lcy * LW + wx] == ' ' || lg_ch[lcy * LW + wx] == '.' {
+                    lg_ch[lcy * LW + wx] = word[wi];
+                    lg_col[lcy * LW + wx] = lg_grey(0.75);
+                }
+            }
+            wi += 1;
         }
         // how much of the Moon is lit as we see it from the Earth, and whether it grows
         double mex = mx;

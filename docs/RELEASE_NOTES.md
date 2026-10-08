@@ -1,6 +1,8 @@
-# J2K / Jcmp 0.9.38
+# J2K / Jcmp 0.9.39
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
+
+**0.9.39:** the mascot: finer in a big terminal (60 x 24, 76 x 30), the Moon of digits with its name, the unlit part left black.
 
 **0.9.38:** the mascot: a fuller Earth (letters-only ramp, brighter) and a bigger, clearer Moon; shorter captions.
 
@@ -114,11 +116,11 @@ end of the block, `cin` / `cin`, function pointers, unsigned types, `sizeof`, `t
 (unused library functions are left out). Full list: CHANGELOG.md.
 
 **Install:** `curl -fsSL https://raw.githubusercontent.com/J2k-studio/Jcmp/main/install.sh | sh`
-(options: `--dir ../bin`, `--version 0.9.38`, `--with-assembler`), or download `jcmp` below, check it
+(options: `--dir ../bin`, `--version 0.9.39`, `--with-assembler`), or download `jcmp` below, check it
 against `SHA256SUMS` and `chmod +x` it. See the README.
 
 **Use:** `jcmp hello.jk && ./hello`
 
 Files: `jcmp` (the compiler), `j2k_asm` (stand-alone assembler),
-`jcmp-0.9.38-linux-arm64.tar.gz` (both + README + LICENSE + examples + docs), `SHA256SUMS`.
+`jcmp-0.9.39-linux-arm64.tar.gz` (both + README + LICENSE + examples + docs), `SHA256SUMS`.
 Linux ARM64 only. See LICENSE for the terms of use.
