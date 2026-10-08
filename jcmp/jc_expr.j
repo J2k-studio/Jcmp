@@ -3129,6 +3129,7 @@ void parse_unary_core() {
         }
         parse_expr();
         expect(")");
+        if tok_is(".") { call_postfix(); }               // (a + b).dot(c) : go on with the value in the parentheses
         return;
     }
     if tok_is("-") {
@@ -3141,6 +3142,10 @@ void parse_unary_core() {
             return;
         }
         parse_unary();
+        if ex_ty >= 100 && ex_ty < 1000 {
+            emit_unary_operator(ex_ty);                  // -v : v.neg(), if the struct has  operator ... neg(self)
+            return;
+        }
         if is_float(ex_ty) {
             if ex_ty == 90 {
                 emit_line("fmov s0, w0");
@@ -3308,6 +3313,34 @@ void emit_operator_call(char^ op, int lt) {
     }
 }
 
+// -v where v is a struct: the call  v.neg()  of a method declared with the word `operator`; x0 = the address of v
+void emit_unary_operator(int lt) {
+    char fn[256];
+    str_copy(@fn, @sname + (lt - 100) * 64, 64);
+    append_text(@fn, "__neg");
+    int fi = find_func(@fn);
+    if fi < 0 || fop[fi] == 0 {
+        if pass_no >= 2 {
+            char m[300];
+            str_copy(@m, "'", 300);
+            append_text(@m, @sname + (lt - 100) * 64);
+            append_text(@m, "' has no operator neg (declare:  operator ");
+            append_text(@m, @sname + (lt - 100) * 64);
+            append_text(@m, " neg(self) { ... })");
+            die(@m);
+        }
+        ex_ty = lt;
+        return;
+    }
+    if fnpar[fi] != 1 { die("an operator neg takes only self"); }
+    push_x0();
+    str_copy(@id_name, @fn, 256);
+    call_pre = 1;
+    call_method = 1;
+    call_bare = 1;
+    gen_call();
+}
+
 void parse_mul() {
     parse_unary();
     int mlw = ex_w;
@@ -3324,8 +3357,18 @@ void parse_mul() {
             emit_operator_call(@op, mlt);
             mlt = ex_ty;
             mlw = 8;
+        } else if ex_ty >= 100 && ex_ty < 1000 && str_eq(@op, "*") && mlt < 100 {
+            // 2.0 * v : the same as v * 2.0 (the product of a number and a vector does not depend on the order): v.mul(2.0)
+            int st_ty = ex_ty;                            // the struct
+            emit_line("ldr x1, [sp, #0]");               // the number: x1 = the left value, x0 = the struct
+            emit_line("str x0, [sp, #0]");               // [sp] = the struct (self)
+            emit_line("mov x0, x1");                     // x0 = the number: the right operand of v.mul(number)
+            ex_ty = mlt;
+            emit_operator_call(@op, st_ty);
+            mlt = ex_ty;
+            mlw = 8;
         } else if ex_ty >= 100 && ex_ty < 1000 && pass_no >= 2 {
-            die("a number on the left of * or / and a struct on the right: write the struct first (v * 2.0)");
+            die("a number on the left of / and a struct on the right: write the struct first (v / 2.0)");
         } else if is_float(mlt) || is_float(ex_ty) {
             if str_eq(@op, "%") { die("% does not work on floats"); }
             int mrt = ex_ty;

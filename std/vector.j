@@ -19,7 +19,7 @@ struct vec2 {
     vec2 divv(self, vec2 o) { return vec2::make(self.x / o.x, self.y / o.y); }
     operator vec2 mul(self, double k) { return vec2::make(self.x * k, self.y * k); }
     operator vec2 div(self, double k) { return vec2::make(self.x / k, self.y / k); }
-    vec2 neg(self) { return vec2::make(0.0 - self.x, 0.0 - self.y); }
+    operator vec2 neg(self) { return vec2::make(0.0 - self.x, 0.0 - self.y); }
     double dot(self, vec2 o) { return self.x * o.x + self.y * o.y; }
     double length_sq(self) { return self.x * self.x + self.y * self.y; }
     double length(self) { return Math::sqrt(self.length_sq()); }
@@ -60,7 +60,7 @@ struct vec3 {
     vec3 divv(self, vec3 o) { return vec3::make(self.x / o.x, self.y / o.y, self.z / o.z); }
     operator vec3 mul(self, double k) { return vec3::make(self.x * k, self.y * k, self.z * k); }
     operator vec3 div(self, double k) { return vec3::make(self.x / k, self.y / k, self.z / k); }
-    vec3 neg(self) { return vec3::make(0.0 - self.x, 0.0 - self.y, 0.0 - self.z); }
+    operator vec3 neg(self) { return vec3::make(0.0 - self.x, 0.0 - self.y, 0.0 - self.z); }
     double dot(self, vec3 o) { return self.x * o.x + self.y * o.y + self.z * o.z; }
     double length_sq(self) { return self.x * self.x + self.y * self.y + self.z * self.z; }
     double length(self) { return Math::sqrt(self.length_sq()); }
@@ -101,7 +101,7 @@ struct vec4 {
     vec4 divv(self, vec4 o) { return vec4::make(self.x / o.x, self.y / o.y, self.z / o.z, self.w / o.w); }
     operator vec4 mul(self, double k) { return vec4::make(self.x * k, self.y * k, self.z * k, self.w * k); }
     operator vec4 div(self, double k) { return vec4::make(self.x / k, self.y / k, self.z / k, self.w / k); }
-    vec4 neg(self) { return vec4::make(0.0 - self.x, 0.0 - self.y, 0.0 - self.z, 0.0 - self.w); }
+    operator vec4 neg(self) { return vec4::make(0.0 - self.x, 0.0 - self.y, 0.0 - self.z, 0.0 - self.w); }
     double dot(self, vec4 o) { return self.x * o.x + self.y * o.y + self.z * o.z + self.w * o.w; }
     double length_sq(self) { return self.x * self.x + self.y * self.y + self.z * self.z + self.w * self.w; }
     double length(self) { return Math::sqrt(self.length_sq()); }

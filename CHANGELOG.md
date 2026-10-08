@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.43
+* **A call can go on after a value in parentheses:** `(a + b).dot(c)`, `(s + t).len`, `(u * 2.0).z`, `(a + b).length()`.
+* **`-v` on a struct** calls its `operator ... neg(self)`; `vec2/3/4` have it.
+* **`2.0 * v`** is the same as `v.mul(2.0)` (a number on the left of `*` and a struct on the right); a number on the left of `/` is still an error that says so.
+* Docs: a section on operator methods and the math libraries in `docs/LANGUAGE.md`.
+
 ## 0.9.42
 * **The mascot is real ASCII art:** the shading uses a rich ramp of 66 different characters, letters and signs, from light to dense (`.'`^",:;Il!i><~+_-?][}{1)(|/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$`), not only a few dots; and the **edges** of the Earth and the Moon are drawn with characters that follow the line, chosen by which quarters of the cell the shape covers: the right limb of a ball is `)`, the left `(`, the top `"`, the bottom `_`, the diagonals `/` and `\`.
 

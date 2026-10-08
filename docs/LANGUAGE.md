@@ -712,3 +712,28 @@ runtime error: index out of bounds, array size is 5
 ```
 
 and the exit code is 134. Pointer indexing (`p[i]`) cannot be checked: a pointer does not know its size.
+
+## Operator methods and the math libraries
+
+A struct can say which of its methods an operator calls: write the word `operator` in front of the method. The names are fixed:
+`+` calls `add`, `-` calls `sub`, `*` calls `mul`, `/` calls `div`, `==` and `!=` call `eq`, a minus in front (`-v`) calls `neg`.
+`a += b` (and `-= *= /=`) means `a = a.add(b)`. A method without the word `operator` is never called by an operator.
+
+```jk
+struct Money {
+    int cents;
+    operator Money add(self, Money o) { Money r = {self.cents + o.cents}; return r; }
+    operator Money mul(self, int k)   { Money r = {self.cents * k}; return r; }
+    operator bool eq(self, Money o)   { return self.cents == o.cents; }
+}
+Money a = {250};
+Money b = a + a * 3;             // a.add(a.mul(3))
+Money c = 2 * a;                 // a number on the left of * is the same as a.mul(2)
+cout << (a + b).cents << "\n";   // a call can go on after a value in parentheses
+```
+
+The math libraries are chosen with one import: `#import <math>` and then `using math::vector;` (`vec2 vec3 vec4`) or `using math::matrix;`
+(`mat3 mat4`, with vector) or `using math;` (both). A vector can be written `vec p = {1.0, 2.0, 3.0};` (the number of values says
+`vec3`) and its parts can be picked with letters: `p.xy`, `p.zyx`, `c.rgb` (several letters: a new vector, read only; one letter:
+the part itself, which can be assigned). The graphics library: `#import <gfx>` and `using gfx::canvas;` (characters, with a depth
+buffer) or `using gfx::screen;` (colour dots). The standard library has `Term::cols()`, `Term::rows()` and `Term::key_pressed()`.

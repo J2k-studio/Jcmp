@@ -1972,7 +1972,7 @@ void push_vector() {
     put("    vec2 divv(self, vec2 o) { return vec2::make(self.x / o.x, self.y / o.y); }");
     put("    operator vec2 mul(self, double k) { return vec2::make(self.x * k, self.y * k); }");
     put("    operator vec2 div(self, double k) { return vec2::make(self.x / k, self.y / k); }");
-    put("    vec2 neg(self) { return vec2::make(0.0 - self.x, 0.0 - self.y); }");
+    put("    operator vec2 neg(self) { return vec2::make(0.0 - self.x, 0.0 - self.y); }");
     put("    double dot(self, vec2 o) { return self.x * o.x + self.y * o.y; }");
     put("    double length_sq(self) { return self.x * self.x + self.y * self.y; }");
     put("    double length(self) { return Math::sqrt(self.length_sq()); }");
@@ -2013,7 +2013,7 @@ void push_vector() {
     put("    vec3 divv(self, vec3 o) { return vec3::make(self.x / o.x, self.y / o.y, self.z / o.z); }");
     put("    operator vec3 mul(self, double k) { return vec3::make(self.x * k, self.y * k, self.z * k); }");
     put("    operator vec3 div(self, double k) { return vec3::make(self.x / k, self.y / k, self.z / k); }");
-    put("    vec3 neg(self) { return vec3::make(0.0 - self.x, 0.0 - self.y, 0.0 - self.z); }");
+    put("    operator vec3 neg(self) { return vec3::make(0.0 - self.x, 0.0 - self.y, 0.0 - self.z); }");
     put("    double dot(self, vec3 o) { return self.x * o.x + self.y * o.y + self.z * o.z; }");
     put("    double length_sq(self) { return self.x * self.x + self.y * self.y + self.z * self.z; }");
     put("    double length(self) { return Math::sqrt(self.length_sq()); }");
@@ -2054,7 +2054,7 @@ void push_vector() {
     put("    vec4 divv(self, vec4 o) { return vec4::make(self.x / o.x, self.y / o.y, self.z / o.z, self.w / o.w); }");
     put("    operator vec4 mul(self, double k) { return vec4::make(self.x * k, self.y * k, self.z * k, self.w * k); }");
     put("    operator vec4 div(self, double k) { return vec4::make(self.x / k, self.y / k, self.z / k, self.w / k); }");
-    put("    vec4 neg(self) { return vec4::make(0.0 - self.x, 0.0 - self.y, 0.0 - self.z, 0.0 - self.w); }");
+    put("    operator vec4 neg(self) { return vec4::make(0.0 - self.x, 0.0 - self.y, 0.0 - self.z, 0.0 - self.w); }");
     put("    double dot(self, vec4 o) { return self.x * o.x + self.y * o.y + self.z * o.z + self.w * o.w; }");
     put("    double length_sq(self) { return self.x * self.x + self.y * self.y + self.z * self.z + self.w * self.w; }");
     put("    double length(self) { return Math::sqrt(self.length_sq()); }");
