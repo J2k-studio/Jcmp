@@ -33,7 +33,8 @@ int mt_pending;              // 1 after #multithread until the for loop it belon
 int cpu_loaded;              // 1 once `import cpu` has been read
 int lvl_lib[16];             // 1 for a level that is a built-in library (its warnings are not shown)
 int vector_loaded;           // 1 once `import <vector>` has been read
-int matrix_loaded;           // 1 once `import <matrix>` has been read
+int matrix_loaded;
+int math_loaded;             // 1 once `#import <math>` has been read (using math::vector loads the parts)           // 1 once `import <matrix>` has been read
 int std_loaded;              // 1 once `import std` has been read
 
 // ---------------------------------------------------------------- #define
@@ -335,6 +336,7 @@ void lex_init(char^ path) {
     std_loaded = 0;
     vector_loaded = 0;
     matrix_loaded = 0;
+    math_loaded = 0;
     mt_pending = 0;
     cpu_loaded = 0;
     lx_depth = 0;
@@ -502,6 +504,43 @@ void import_file(char^ path) {
     next();
 }
 
+// using math::vector / matrix / (nothing: all): the current token is `math`, nothing after it is read yet.
+// The text of the parts is pushed so that it is read before whatever follows the using.
+void using_math() {
+    if math_loaded == 0 { die("using math needs  #import <math>  first"); }
+    skip_blanks();
+    int want = 3;                                    // 1 vector, 2 matrix, 3 both
+    if lc(0) == ':' && lc(1) == ':' {
+        adv();
+        adv();
+        skip_blanks();
+        char part[32];
+        int n = 0;
+        while is_letter(lc(0)) && n < 30 {
+            part[n] = lc(0);
+            n += 1;
+            adv();
+        }
+        part[n] = 0;
+        if str_eq(@part, "vector") { want = 1; }
+        else if str_eq(@part, "matrix") { want = 2; }
+        else { die_name("unknown part of math (vector or matrix)", @part); }
+    }
+    skip_blanks();
+    if lc(0) == ';' { adv(); }
+    // the last one pushed is read first: vector comes before matrix
+    if (want == 2 || want == 3) && matrix_loaded == 0 {
+        matrix_loaded = 1;
+        push_matrix();
+        want = 3;
+    }
+    if (want == 1 || want == 3) && vector_loaded == 0 {
+        vector_loaded = 1;
+        push_vector();
+    }
+    next();
+}
+
 // the library `name` (with / for the dots) is loaded: the built-in ones (stdlib, cpu), else a file found by find_library
 void import_library(char^ name, char^ rel) {
     if str_eq(name, "stdlib") || str_eq(name, "std") {
@@ -516,20 +555,12 @@ void import_library(char^ name, char^ rel) {
         next();
         return;
     }
-    if str_eq(name, "vector") || str_eq(name, "matrix") {
-        // the math libraries need stdlib (Math); matrix needs vector
+    if str_eq(name, "math") {
+        // the math library: its parts (vector, matrix) are chosen with  using math::vector;
+        math_loaded = 1;
         if std_loaded == 0 {
             std_loaded = 1;
             push_std();
-        }
-        // the last one pushed is read first: vector must come before matrix
-        if str_eq(name, "matrix") && matrix_loaded == 0 {
-            matrix_loaded = 1;
-            push_matrix();
-        }
-        if vector_loaded == 0 {
-            vector_loaded = 1;
-            push_vector();
         }
         next();
         return;

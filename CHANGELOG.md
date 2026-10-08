@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9.19
+* **One import for the math library:** `#import <math>` once, then `using math::vector;`, `using math::matrix;` or `using math;` choose the parts (only those are compiled in). This replaces `#import <vector>` / `#import <matrix>` of 0.9.18.
+
 ## 0.9.18
 * **Math libraries:** `#import <vector>` gives `Vec2`, `Vec3`, `Vec4` (make, zero, splat, add, sub, mul, div, neg, dot, cross, length, distance, normalize, lerp, min, max, abs, reflect, eq); `#import <matrix>` gives `Mat3`, `Mat4` (identity, scale, rotate_x/y/z, mul, mul_vec, transpose, and for `Mat4` translate, point, direction, project, perspective, look_at). Operators (`a + b`, `pos += vel * dt`) and swizzle come later (docs/syntax-design.md section 55).
 * Warnings inside the built-in libraries are no longer shown to the user.

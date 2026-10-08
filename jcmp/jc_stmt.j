@@ -1118,6 +1118,11 @@ void parse_enum() {
 void parse_using() {
     using_line = err_line;
     next();                              // "using"
+    if tok_is("math") {
+        if cur_in_func == 1 { die("using math must be written outside functions"); }
+        using_math();
+        return;
+    }
     if tok_is("enum") {
         next();
         int en = find_enum(@tok_text);
