@@ -23,7 +23,17 @@ wget -qO- https://raw.githubusercontent.com/J2k-studio/Jcmp/main/install.sh | sh
 ตัวเลือก: `--dir โฟลเดอร์`, `--version 0.2.2` (เลือกรุ่น), `--with-assembler` (ติดตั้ง `j2k_asm` ด้วย)
 โฟลเดอร์เริ่มต้นคือ `$PREFIX/bin` (Termux) หรือ `~/.local/bin` รันซ้ำเพื่ออัปเดต ลบไฟล์เพื่อถอนการติดตั้ง
 
-**วิธีที่ 2 — ทำเองทีละขั้นลง `../bin`:**
+**วิธีที่ 2 — คำสั่งเดียวด้วย `tar` (ไฟล์ที่ได้รันได้ทันที):** ไฟล์ธรรมดาที่โหลดจาก release จะ **ไม่มีสิทธิ์รัน** (GitHub ไม่เก็บสิทธิ์ของไฟล์)
+แต่ `jcmp.tar.gz` เก็บสิทธิ์ไว้ ข้างในมีแค่โปรแกรม `jcmp`:
+
+```bash
+mkdir -p ../bin
+curl -fL https://github.com/J2k-studio/Jcmp/releases/latest/download/jcmp.tar.gz | tar xz -C ../bin
+wget -qO- https://github.com/J2k-studio/Jcmp/releases/latest/download/jcmp.tar.gz | tar xz -C ../bin
+../bin/jcmp -version
+```
+
+**วิธีที่ 3 — ทำเองทีละขั้นด้วยไฟล์ธรรมดาลง `../bin` (ต้อง `chmod +x`):**
 
 ```bash
 mkdir -p ../bin && cd ../bin

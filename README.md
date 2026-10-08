@@ -77,9 +77,22 @@ wget -qO- https://raw.githubusercontent.com/J2k-studio/Jcmp/main/install.sh | sh
 
 Run it again to update. To uninstall, delete the file.
 
-### 2. By hand, into `../bin`
+### 2. One command with `tar` (keeps the executable bit)
 
-The same thing step by step (the folder `../bin` is only an example; use any folder):
+A plain file downloaded from a release is **not executable** (GitHub does not keep the permission bit; that is why a
+plain download needs `chmod +x`). The file `jcmp.tar.gz` of every release holds only the program `jcmp`, already executable:
+
+```bash
+mkdir -p ../bin
+curl -fL https://github.com/J2k-studio/Jcmp/releases/latest/download/jcmp.tar.gz | tar xz -C ../bin
+# or with wget
+wget -qO- https://github.com/J2k-studio/Jcmp/releases/latest/download/jcmp.tar.gz | tar xz -C ../bin
+../bin/jcmp -version
+```
+
+### 3. By hand, into `../bin`
+
+The same thing step by step with the plain file (the folder `../bin` is only an example; use any folder):
 
 ```bash
 mkdir -p ../bin && cd ../bin
