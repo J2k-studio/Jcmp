@@ -1,5 +1,7 @@
 # Changelog
 
+## 0.9.28
+* **The mascot:** `jcmp -space` shows the J2K logo in ASCII style until you press Ctrl-C or Enter: a J drawn with shaded characters (`.:-=+*#%@`) and a soft halo, a ring that leans 45 degrees and turns round it (in front of and behind the letter), twinkling stars, 24 frames a second. It reads the size of the terminal first and shows a small picture (48 x 18 characters) in the middle. It is written in J2K inside the compiler without any library (`jcmp/jc_logo.j`). `-spcae` and `-speac` do the same; it is not listed in `-help`. Plain characters: it works in any terminal (at least 50 x 20).
 ## 0.9.27
 * **Example `examples/logo.jk`:** the J2K logo: a glowing J, a ring tilted 45 degrees that turns around it (with two beads running on it), twinkling stars, 24 frames a second (paced by the clock). Small and of a fixed size (64 x 40 dots, about 25 KB of memory).
 * `Screen.add(x, y, r, g, b)` adds light to a dot.

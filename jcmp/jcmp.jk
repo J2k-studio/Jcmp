@@ -2,7 +2,7 @@
 // Build:  bin/jcmp jcmp/jcmp.jk -o jcmp1        (see bootstrap.sh)
 // Use:    jcmp1 input.jk -o program
 // the version of the compiler (also in the file VERSION; release.sh checks that they agree)
-#define JCMP_VERSION "0.9.27"
+#define JCMP_VERSION "0.9.28"
 
 #import "jc_base"
 #import "jc_asm"
@@ -11,6 +11,7 @@
 #import "jc_expr"
 #import "jc_stmt"
 #import "jc_gen"
+#import "jc_logo"
 
 // ------------------------------------------------ the program (main lives here, not in a .j part)
 
@@ -106,6 +107,9 @@ void main() {
             use_color = 1;
         } else if is_opt(a, "nocolor") {
             use_color = 0;
+        } else if str_eq(a, "-space") || str_eq(a, "-spcae") || str_eq(a, "-speac") {
+            lg_run(0);                   // the mascot (not in -help)
+            syscall(93, 0);
         } else if str_eq(a, "-d") {
             opt_debug = 1;
         } else if str_eq(a, "-st") {

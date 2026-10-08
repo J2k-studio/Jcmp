@@ -1,4 +1,4 @@
-// The J2K logo: a glowing J with a ring tilted 45 degrees that turns around it, twinkling stars, 24 frames a second.
+// The J2K logo in colour dots (the ASCII-character one, the mascot, is shown by  jcmp -space): a glowing J with a ring tilted 45 degrees that turns around it, twinkling stars, 24 frames a second.
 // It is small and of a fixed size (64 x 40 dots = 64 columns x 20 rows of text), so it needs a terminal of 64 x 22.
 //   logo             runs until you press Ctrl-C (or Enter)
 //   logo 120         stops after 120 frames
