@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9.53
+* **The mascot's Moon follows its phase:** at a full Moon there is no letter; as the Moon wanes or waxes the J fades in on the surface, and from a half Moon down to a thin crescent the Moon itself becomes the letter J (drawn flat, facing us, glowing).
+
 ## 0.9.52
 * **`examples/solar.jk` is in colour now** and no longer dull: every ball is lit by the sun and has its own surface (continents, clouds and ice caps on the Earth, bands and the red spot on Jupiter, the rusty Mars, the grey Mercury and Moon, the cream clouds of Venus), the rings of Saturn go behind and in front of the ball, a sun with a limb and a corona, faint orbits, an asteroid belt, twinkling coloured stars, glow and vignette. It uses `Screen` (like the black hole) and takes the size of the terminal. Test `t242`.
 * **The mascot (`jcmp -space`)** has an air glow round the lit edge of the Earth and the lights of the cities on its night side.

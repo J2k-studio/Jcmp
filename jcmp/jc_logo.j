@@ -672,6 +672,11 @@ void lg_run(int frames, int speed) {
         double mx = dm * lg_cos(lam_m);
         double mz = dm * lg_sin(lam_m);
         double my = dm * lg_sin(lam_m) * mtilt;
+        // how much of the Moon the Sun lights (0 new .. 1 full): a full Moon shows no letter, a half or a thin crescent turns into the letter J
+        double elong = theta0 + tau * real_s / synodic;
+        double kfull = 0.5 * (1.0 - lg_cos(elong));
+        double j_surf = 1.0 - lg_clamp((kfull - 0.55) / 0.30, 0.0, 1.0);        // the J on the surface: gone at a full Moon
+        double j_bill = lg_clamp((0.65 - kfull) / 0.20, 0.0, 1.0);              // the Moon itself becomes the J (it faces us)
         double espin = 0.0 - tau * real_s / solar_day;    // the Earth turns west to east: the face we see goes from left to right
         double mspin = 0.0 - tau * t / moon_spin_s;       // the Moon the same way, about its own axis
         // the stars first
@@ -812,6 +817,19 @@ void lg_run(int frames, int speed) {
                                 dcx = sgn * (lg_j(jx + e, jy) - lg_j(jx - e, jy)) / (2.0 * e);
                                 dcy = (lg_j(jx, jy + e) - lg_j(jx, jy - e)) / (2.0 * e);
                             }
+                            if j_bill > 0.0 {
+                                // the letter drawn flat on the disk, facing us
+                                double ux = (hx - mx) * lg_rx + (hy - my) * lg_ry + (hz - mz) * lg_rz;
+                                double uy = (hx - mx) * lg_ux + (hy - my) * lg_uy + (hz - mz) * lg_uz;
+                                double covs = lg_j(ux / rm * 0.95, 0.0 - uy / rm * 0.95 + 0.06);
+                                cov = cov * j_surf * (1.0 - j_bill) + covs * j_bill;
+                                dcx = dcx * j_surf * (1.0 - j_bill);
+                                dcy = dcy * j_surf * (1.0 - j_bill);
+                            } else {
+                                cov = cov * j_surf;
+                                dcx = dcx * j_surf;
+                                dcy = dcy * j_surf;
+                            }
                             // the normal, bent at the edges of the letter so that it stands out of the surface
                             double bump = 0.30;
                             double qx = p0x - bump * (dcx * ex * 0.95 - dcy * nx0 * 0.95);
@@ -844,9 +862,9 @@ void lg_run(int frames, int speed) {
                             if albedo > 1.0 { albedo = 1.0; }
                             albedo = albedo + (1.0 - albedo) * cov;
                             // what the Sun does not light is left black
-                            double bright = lam * albedo;
+                            double bright = lam * albedo * (1.0 - j_bill);
                             // the letter J glows a little (like a logo), so that it can be read even in the dark part; the rest is left black
-                            if bright < 0.55 * cov { bright = 0.55 * cov; }
+                            if bright < 0.80 * cov * (0.6 + 0.4 * j_bill) { bright = 0.80 * cov * (0.6 + 0.4 * j_bill); }
                             if bright > 1.0 { bright = 1.0; }
                             if bright > 0.04 {
                                 sumb = sumb + bright;
