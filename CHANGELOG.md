@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.8.0
+* **`#import`** (with the `#`, like `#define`): `#import <stdlib>`, `#import "file"`. A plain `import` still works with a warning `[-Wimport]`; a later version makes the `#` required.
+* **`cout` and `cin` handle every type**, decimals included. `coutf` and `cinf` still work with a warning `[-Wdeprecated]`.
+* **A function that must return a value but has no `return` at all is an error** (`make it void, or return something`). A path that reaches the end without `return` still throws at run time (0.7.1).
+* New warnings: `-Wunused` (a local variable that is declared and never used).
+* Removed the check "cout cannot print a float" (floats print with `cout` now).
+
 ## 0.7.1
 * **A function that ends without `return`** (and returns a value) now throws `a function ended without returning a value` instead of giving a junk number. A normal `return` costs nothing extra. `main` without `return` still gives 0, as in C.
 * A missing `<<` in `cout` (or `>>` in `cin`) is explained: `expected ';' or '<<' here (is a '<<' missing between two values?)`.

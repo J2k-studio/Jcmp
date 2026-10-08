@@ -1,5 +1,5 @@
 // heap.jk -- std: Mem (alloc/free), Str, pointers
-import <stdlib>
+#import <stdlib>
 using stdlib
 using stdlib::mem
 using stdlib::str

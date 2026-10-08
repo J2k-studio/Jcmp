@@ -1,14 +1,20 @@
 import <stdlib>
-using std;
-double p = 1.12;
+using stdlib;
+double o = 1.12;
 int max(){
-   coutf << p;
+   coutf << o;
 }
 int main() {
+    moi();
+    max();
     char x;
     cout << "panel\n";
     cin >> x;
     float p = 0.01;
     cout << "Hello from J2K!\n";
     return x;
+}
+
+int moi(){
+   cout<<"test";
 }

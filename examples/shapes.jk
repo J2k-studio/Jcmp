@@ -1,4 +1,4 @@
-import <stdlib>
+#import <stdlib>
 using stdlib
 
 // shapes.jk -- structs, methods, enums, switch, floats
@@ -25,8 +25,8 @@ void main() {
     shapes[2] = {Kind::Triangle, 4.0};
     double total = 0.0;
     for i in 0..3 {
-        coutf << "area " << shapes[i].area() << "\n";
+        cout << "area " << shapes[i].area() << "\n";
         total += shapes[i].area();
     }
-    coutf << "total " << total << "\n";
+    cout << "total " << total << "\n";
 }

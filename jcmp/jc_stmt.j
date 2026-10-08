@@ -45,6 +45,11 @@ int cp_src[8];               // struct parameters to copy in the prologue
 int cp_dst[8];
 int cp_size[8];
 int cp_count;
+int fn_returns;              // 1 once the function has a return with a value or a throw
+int fn_line;
+int fn_col;
+int fn_base;
+int fn_ls;
 int cur_ret_str;             // 1 if the function returns a String
 int cur_ret_isptr;           // 1 if the function returns a pointer or a dynamic array
 int cur_ret_tid;
@@ -83,6 +88,14 @@ void old_float_name() {
     if old_float_warned == 1 { return; }
     old_float_warned = 1;
     warn("'f32' and 'f64' are now called 'float' and 'double'", "deprecated");
+}
+
+// coutf and cinf were the first names for printing / reading floats: cout and cin do it now (one warning per program)
+int io_float_warned;
+void io_float_name() {
+    if io_float_warned == 1 { return; }
+    io_float_warned = 1;
+    warn("coutf and cinf are not needed: cout and cin print and read floats too", "deprecated");
 }
 
 // cout, coutf, cin and cinf need `import std` and `using std`: for now a warning, later an error
@@ -488,6 +501,7 @@ void parse_block() {
         parse_statement();
     }
     expect("}");
+    warn_unused(scope_mark);
     own_free_from(own_mark, 1);          // the memory that this block owns is given back here
     own_ok = saved_ok;
     cur_blk = saved_blk;
@@ -842,7 +856,10 @@ void parse_cout() {
     int c_count = 0;
     int c_last = 0;
     int c_float = 0;
-    if tok_is("coutf") { c_float = 1; }
+    if tok_is("coutf") {
+        c_float = 1;
+        io_float_name();
+    }
     next();                              // "cout" or "coutf"
     while tok_is("<<") {
         next();
@@ -856,7 +873,6 @@ void parse_cout() {
             emit_line("bl j2k_print_str");
             c_last = 9;
         } else if is_float(ex_ty) {
-            if c_float == 0 { die("cout prints numbers and text; use coutf for floats"); }
             if ex_ty == 90 { f32_to_f64(0); }
             emit_line("bl j2k_print_f64");
             used_fprint = 1;
@@ -890,14 +906,13 @@ void parse_cout() {
 void read_into_object(int is_f) {
     used_try = 1;
     if lv_kind == 3 && is_str_dyn(lv_dyn) {
-        if is_f == 1 { die("cinf reads floats; use cin for a String"); }
         load_through(8);                 // the String (cin reads one word into it)
         dyn_null_check();
         rt_call("__In__str");
         return;
     }
     if lv_kind == 1 {
-        if lv_code != 2 || lv_nd != 1 || is_f == 1 { die("cin can read into a char array (a word) but not into other arrays"); }
+        if lv_code != 2 || lv_nd != 1 { die("cin can read into a char array (a word) but not into other arrays"); }
         push_x0();                       // the array's address
         place_text(@lv_base, str_len(@lv_base));
         emit_line("mov x2, x0");
@@ -908,12 +923,10 @@ void read_into_object(int is_f) {
         return;
     }
     if lv_kind != 0 || lv_ptr != 0 || lv_code >= 16 || lv_tid == 1 || (lv_tid >= 3 && lv_tid < 90) {
-        die("cin cannot read into this variable (use a number, a char, a float with cinf, or a char array)");
+        die("cin cannot read into this variable (use a number, a char, a float, a String or a char array)");
     }
     int code = lv_code;
     bool is_float_code = code == 6 || code == 7;
-    if is_float_code && is_f == 0 { die("use cinf to read a float"); }
-    if !is_float_code && is_f == 1 { die("cinf reads floats (float, double) only"); }
     push_x0();                           // the object's address
     if is_float_code {
         rt_call("__In__fnum");
@@ -943,7 +956,10 @@ void read_into_object(int is_f) {
 void parse_cin() {
     check_io_std();
     int is_f = 0;
-    if tok_is("cinf") { is_f = 1; }
+    if tok_is("cinf") {
+        is_f = 1;
+        io_float_name();
+    }
     next();                              // "cin" or "cinf"
     int count = 0;
     while tok_is(">>") {
@@ -1413,6 +1429,7 @@ void parse_try() {
 // throw "text";   (the nearest catch gets the text; nothing to catch = the program stops)
 void parse_throw() {
     used_try = 1;
+    fn_returns = 1;
     next();                              // "throw"
     parse_expr();
     if ex_w != 9 && pass_no >= 2 { die("throw needs text (a string or a char array)"); }
@@ -1432,7 +1449,40 @@ void warn_static_only(int s) {
     }
 }
 
+// the variables from index `from` up that were declared and never used
+void warn_unused(int from) {
+    int i = from;
+    while i < lcount {
+        if lwarn[i] == 1 && lused[i] == 0 {
+            int sl = err_line;
+            int sc = err_col;
+            int sb = err_base;
+            int ss = err_ls;
+            err_line = lw_line[i];
+            err_col = lw_col[i];
+            err_base = lw_base[i];
+            err_ls = lw_ls[i];
+            char um[200];
+            str_copy(@um, "'", 200);
+            append_text(@um, @lname + i * 64);
+            append_text(@um, "' is declared but never used");
+            warn(@um, "unused");
+            err_line = sl;
+            err_col = sc;
+            err_base = sb;
+            err_ls = ss;
+        }
+        i += 1;
+    }
+}
+
 void parse_local_decl() {
+    track_unused = 1;
+    parse_local_decl_core();
+    track_unused = 0;
+}
+
+void parse_local_decl_core() {
     char first_word[256];
     str_copy(@first_word, @tok_text, 256);
     parse_type();
@@ -1451,6 +1501,10 @@ void parse_local_decl() {
     if tok_kind != T_IDENT { die("a variable name was expected"); }
     char d_name[256];
     str_copy(@d_name, @tok_text, 256);
+    decl_line = err_line;                // where a warning about the unused variable will point
+    decl_col = err_col;
+    decl_base = err_base;
+    decl_ls = err_ls;
     check_local_name(@d_name);
     next();
     if tok_is("[") {
@@ -1590,6 +1644,7 @@ void parse_local_decl() {
         ty_tid = d_tid;
         add_local(@d_name, 0, d_width, 8, d_ptr);
         lookup_var(@d_name);
+        lused[lcount - 1] = 0;           // the declaration itself is not a use
         store_scalar();
         if d_own == 1 { own_add(v_off, 0); }
         return;
@@ -1676,6 +1731,7 @@ void parse_statement_inner() {
             next();
             if cur_is_main == 1 { emit_line("mov x0, 0"); }
         } else {
+            fn_returns = 1;
             parse_expr();
             if cur_ret_str == 1 && pass_no >= 2 {
                 // a String result: an owner or a temporary moves out, anything else is copied
@@ -1975,7 +2031,23 @@ void parse_function() {
         emit_line("bl j2k_copy");
         cp_i += 1;
     }
+    fn_returns = 0;
+    fn_line = err_line;
+    fn_col = err_col;
+    fn_base = err_base;
+    fn_ls = err_ls;
     parse_block();
+    if fvoid[f_idx] == 0 && cur_is_main == 0 && fn_returns == 0 {
+        err_line = fn_line;
+        err_col = fn_col;
+        err_base = fn_base;
+        err_ls = fn_ls;
+        char rm[200];
+        str_copy(@rm, "function '", 200);
+        append_text(@rm, @d_fname);
+        append_text(@rm, "' must return a value but has no return statement (make it void, or return something)");
+        if pass_no >= 2 { die(@rm); }
+    }
     patch_b = 0;
     cur_in_func = 0;
     if cur_is_main == 1 {

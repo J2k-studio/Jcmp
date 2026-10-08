@@ -33,6 +33,17 @@ int own_ok = 1;              // 0 where a declaration may not run (a case body w
 int ex_dyn;                  // the packed element type of the dynamic array the last expression was (0 = none)
 int ex_arr_cnt = -1;         // set when the last expression was a whole fixed array: its element count ...
 int ex_arr_code;             // ... and its element width code
+int lused[8192];             // 1 once the name was looked up after its declaration
+int lwarn[8192];             // 1: warn if it is never used (a scalar or array made by a declaration statement)
+int lw_line[8192];           // where it was declared
+int lw_col[8192];
+int lw_base[8192];
+int lw_ls[8192];
+int track_unused;            // 1 while a declaration statement is parsed
+int decl_line;               // the position of the name being declared
+int decl_col;
+int decl_base;
+int decl_ls;
 int rv_valid;                // the last operand read was exactly a plain local variable ...
 int rv_off;                  // ... at this frame offset
 int last_call_owning;        // the last call made returns memory its receiver owns
@@ -526,6 +537,7 @@ int find_global(char^ name) {
 bool lookup_var(char^ name) {
     int li = find_local(name);
     if li >= 0 {
+        lused[li] = 1;
         v_local = 1;
         if mt_outer > 0 && li < mt_outer { v_local = 2; }
         v_kind = lkind[li];
@@ -583,6 +595,15 @@ void add_local(char^ name, int kind, int elem, int bytes, int ptr) {
     ldyn[lcount] = ty_dyn;
     lblk[lcount] = cur_blk;
     luninit[lcount] = 0;
+    lused[lcount] = 0;
+    lwarn[lcount] = 0;
+    if track_unused == 1 && (kind == 0 || kind == 1) && elem < 16 && name[0] != '.' {
+        lwarn[lcount] = 1;
+        lw_line[lcount] = decl_line;
+        lw_col[lcount] = decl_col;
+        lw_base[lcount] = decl_base;
+        lw_ls[lcount] = decl_ls;
+    }
     lnd[lcount] = 1;
     lst1[lcount] = 0;
     lst2[lcount] = 0;

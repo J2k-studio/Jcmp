@@ -1,5 +1,5 @@
 // wc: count lines, words and bytes of the file named by the first argument.
-import <stdlib>
+#import <stdlib>
 using stdlib
 using stdlib::fs
 

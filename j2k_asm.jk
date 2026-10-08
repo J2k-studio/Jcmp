@@ -4,7 +4,7 @@
 // The assembler itself is the library jcmp/jc_asm.jk (also used inside jcmp).
 //
 // Build:  jcmp j2k_asm.jk j2k_asm.jasm && j2k_asm_v1 j2k_asm.jasm j2k_asm_j2k
-import "jcmp.jc_asm"
+#import "jcmp.jc_asm"
 
 void main() {
     if argc() < 3 {

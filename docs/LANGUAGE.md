@@ -10,7 +10,7 @@ Files: `.jk` is a program (it has `main`); `.j` is a component that other files 
 ## Program shape
 
 ```jk
-import <stdlib>
+#import <stdlib>
 using stdlib
 
 void main() {
@@ -18,7 +18,7 @@ void main() {
 }
 ```
 
-`cout`, `coutf`, `cin` and `cinf` come with the standard library: a program that uses them starts with `import <stdlib>` and `using stdlib`
+`cout` and `cin` come with the standard library: a program that uses them starts with `#import <stdlib>` and `using stdlib`
 (the snippets below leave these two lines out). Without them the compiler warns `[-Wstd]` for now; a later version makes it an error.
 `using stdlib` makes the names of all the std modules usable without the prefix; if two modules have the same name (`write` is in `Sys` and
 `File`) the compiler reports it and you write `File::write(...)`. `float` is the 32-bit and `double` the 64-bit decimal type (they were
@@ -169,7 +169,7 @@ void main() {
 Strings are `char` arrays ending in 0. Escapes: `\n \t \r \0 \\ \" \'`.
 `cout` prints a char array as text, a `char` as a character, and anything else as a number.
 `cout << x;` with a single number prints a newline after it; in a chain
-(`cout << a << b;`) you write `"\n"` yourself. Floats are printed with `coutf`.
+(`cout << a << b;`) you write `"\n"` yourself. Floats are printed with `cout` too (6 decimals).
 
 ## Dynamic arrays
 
@@ -257,7 +257,7 @@ names[0] = "zoe";             // the array keeps its own copy
 `for x in list { ... }` goes through the elements (also a String: its characters, a fixed array, and a list returned by a call, which is freed
 after the loop). `x` is a copy of the element (a String element is only borrowed). `for i in a..b` still counts numbers.
 
-`Map<K,V>` and `Set<T>` are hash tables in the standard library (`import <stdlib>`). Keys can be whole numbers, chars, floats, pointers or Strings.
+`Map<K,V>` and `Set<T>` are hash tables in the standard library (`#import <stdlib>`). Keys can be whole numbers, chars, floats, pointers or Strings.
 
 ```jk
 Map<String, int> ages;
@@ -278,7 +278,7 @@ if seen.add(3) { cout << "new\n"; }     // add says whether it was new
 ## Heap memory that frees itself
 
 ```jk
-import <stdlib>
+#import <stdlib>
 using stdlib
 
 struct Node { int value; Node^ next; }
@@ -384,11 +384,11 @@ void main() {
     float half = 0.5;
     double area = 3.14159 * r * r;
     int whole = (int)area;               // casts are explicit
-    coutf << area << " " << whole << " " << half << "\n";
+    cout << area << " " << whole << " " << half << "\n";
 }
 ```
 
-`coutf` prints floats with 6 decimals. Literals such as `3.14`, `1e-3` adapt to `float`/`double`.
+`cout` prints floats with 6 decimals. Literals such as `3.14`, `1e-3` adapt to `float`/`double`.
 Comparisons treat NaN correctly. `%` does not work on floats.
 
 ## Errors: try / catch / throw
@@ -427,7 +427,7 @@ void main() {
 `sizeof(Type)` or `sizeof(variable / element / field)` is a constant known at compile time
 (in bytes, an `int`). Struct sizes include padding. Handy with the heap: `alloc(sizeof(Node))`.
 
-## Input: cin and cinf
+## Input: cin
 
 ```jk
 void main() {
@@ -435,15 +435,15 @@ void main() {
     char name[16];
     double height;
     cin >> name >> age;               // words are separated by spaces or new lines
-    cinf >> height;
+    cin >> height;
     cout << name << " " << age << "\n";
-    coutf << height << "\n";
+    cout << height << "\n";
 }
 ```
 
 What is read follows the type of the variable: a whole number for `int`, `i8`, `i32`, `u8`, `u32`, `u64` (checked
 against the range of the type), one character for `char`, a word for a `char` array (a longer word is cut and a
-warning goes to stderr), a decimal number for `float`/`double` with `cinf`. Anything else is a compile error.
+warning goes to stderr), a decimal number for `float`/`double`. Anything else is a compile error.
 Bad input throws text you can catch: `invalid input`, `number out of range`, `end of input`.
 
 ```jk
@@ -456,7 +456,7 @@ void main() {
 ## Threads and locks
 
 ```jk
-import <cpu>
+#import <cpu>
 using cpu::thread
 using cpu::mutex
 
@@ -511,16 +511,16 @@ Not allowed inside the body: `break`, `return`, and another `#multithread`.
 ## Modules
 
 ```jk
-import "mylib"            // your own file: mylib.j (or mylib.jk) next to this file, then the -I folder; "dir.mylib" = dir/mylib.j
-import <stdlib>           // a library: the standard library (built in)
-import <cpu>              // a library: threads and locks (built in)
-import <greet>            // a library found by name (see below)
+#import "mylib"            // your own file: mylib.j (or mylib.jk) next to this file, then the -I folder; "dir.mylib" = dir/mylib.j
+#import <stdlib>           // a library: the standard library (built in)
+#import <cpu>              // a library: threads and locks (built in)
+#import <greet>            // a library found by name (see below)
 using stdlib::str         // call only the Str functions without the prefix (using stdlib: all modules)
 ```
 
-`import <name>` looks for `name.j` (or `name.jk`, or `name/name.j`) in these places, in this order: the `-I` folder, the folders of the
+`#import <name>` looks for `name.j` (or `name.jk`, or `name/name.j`) in these places, in this order: the `-I` folder, the folders of the
 environment variable `J2K_PATH` (separated by `:`), `~/.j2k/lib`, and the `lib` folder next to the compiler. `<a.b>` means `a/b`.
-The library used to be called `std`; `import std` and `using std` still work with a warning. A bare `import stdlib` (without `< >`) also warns.
+The library used to be called `std`; `import std` and `using std` still work with a warning. Write `#import` (with the `#`): a plain `import` and a bare `import stdlib` (without `< >`) also work, with a warning. `coutf` and `cinf` of older versions still work with a warning: `cout` and `cin` handle every type.
 
 Standard library (`stdlib`, source in `std/`): 
 
@@ -533,7 +533,7 @@ Standard library (`stdlib`, source in `std/`):
 | `File` | `File::open(path, FileMode::Read)` `read` `write` `read_line` `close` |
 
 ```jk
-import <stdlib>
+#import <stdlib>
 using stdlib::str
 
 void main() {

@@ -38,7 +38,7 @@ For the complete list of features see [LANGUAGE.md](LANGUAGE.md); for the comman
 Every program starts at `main`. `cout <<` prints; `\n` is a new line. Save this as `hello.jk`.
 
 ```jk
-import <stdlib>
+#import <stdlib>
 using stdlib
 
 void main() {
@@ -59,10 +59,10 @@ and shows the line with a `^` under the problem.
 ## Lesson 2. Numbers and variables
 
 A variable has a type: `int` (whole number, 64 bit), `double` (decimal), `char` (one character), `bool` (true or false).
-Use `coutf` to print decimals. Lines end with `;`.
+`cout` prints decimals too. Lines end with `;`.
 
 ```jk
-import <stdlib>
+#import <stdlib>
 using stdlib
 
 void main() {
@@ -72,7 +72,7 @@ void main() {
     cout << "total = " << total << "\n";
 
     double price = 2.5;
-    coutf << "cost = " << price * 4.0 << "\n";
+    cout << "cost = " << price * 4.0 << "\n";
 
     char letter = 'J';
     cout << letter << "\n";
@@ -99,7 +99,7 @@ A `bool` is not a number: `if total` is an error, write `if total != 0`. Likewis
 `if`, `else if`, `else` choose what to run. Conditions use `== != < > <= >=` and `&&` (and), `||` (or), `!` (not). Braces are always needed.
 
 ```jk
-import <stdlib>
+#import <stdlib>
 using stdlib
 
 void main() {
@@ -131,7 +131,7 @@ passed
 `break` leaves a loop, `continue` skips to the next round.
 
 ```jk
-import <stdlib>
+#import <stdlib>
 using stdlib
 
 void main() {
@@ -165,7 +165,7 @@ Output:
 A function has a result type, a name and parameters. `void` means no result. A function can be written below the place that uses it.
 
 ```jk
-import <stdlib>
+#import <stdlib>
 using stdlib
 
 void main() {
@@ -205,7 +205,7 @@ Hello, Ann!
 `char word[] = "banana"` sizes it for you. Arrays can have up to three dimensions: `int grid[2][3]`.
 
 ```jk
-import <stdlib>
+#import <stdlib>
 using stdlib
 
 void main() {
@@ -243,10 +243,10 @@ Build with `jcmp prog.jk -d -o prog` to stop with a message when an index is out
 ## Lesson 7. Reading input
 
 `cin >> a >> b;` reads words from the keyboard. The type of the variable decides what is read: a number for `int`,
-a word for a `char` array. `cinf` reads decimals. Words are separated by spaces or new lines.
+a word for a `char` array. `cin` reads decimals too. Words are separated by spaces or new lines.
 
 ```jk
-import <stdlib>
+#import <stdlib>
 using stdlib
 
 void main() {
@@ -272,7 +272,7 @@ Run it and type `Ann 30` (or pipe it in: `echo "Ann 30" | ./input`). Bad input t
 A `struct` groups values. Functions inside it are methods; they receive the object as `self`. `Rect r = {3, 4};` fills the fields in order.
 
 ```jk
-import <stdlib>
+#import <stdlib>
 using stdlib
 
 struct Rect {
@@ -313,7 +313,7 @@ An `enum class` is a list of named values. `switch` picks the case that matches,
 An enum is not a number, so you cannot mix them up by accident.
 
 ```jk
-import <stdlib>
+#import <stdlib>
 using stdlib
 
 enum class Light { Red, Yellow, Green };
@@ -355,7 +355,7 @@ If a `switch` on an enum forgets a member, the compiler warns you (use `-st` to 
 `p[i]` reaches the i-th element (there is no `p + 1`).
 
 ```jk
-import <stdlib>
+#import <stdlib>
 using stdlib
 
 void bump(int^ p) {
@@ -388,7 +388,7 @@ Output:
 local variable made with `arr` or `alloc` at the end of the block, so you rarely call `free` yourself.
 
 ```jk
-import <stdlib>
+#import <stdlib>
 
 using stdlib
 int total(int[] list) {
@@ -426,7 +426,7 @@ Methods: `push`, `append`, `pop`, `clear`, `find`, `slice(from, to)`, `c()` (the
 A `String` is freed at the end of its block, and `String b = a;` makes a separate copy.
 
 ```jk
-import <stdlib>
+#import <stdlib>
 using stdlib
 
 String shout(String s) {
@@ -465,7 +465,7 @@ A function or struct can take a type as a parameter: write it in `<>` after the 
 You write the type at every use: `largest<int>(...)`, `Box<double>`.
 
 ```jk
-import <stdlib>
+#import <stdlib>
 using stdlib
 
 T largest<T>(T a, T b) {
@@ -480,7 +480,7 @@ struct Box<T> {
 
 void main() {
     cout << largest<int>(3, 9) << "\n";
-    coutf << largest<double>(2.5, 1.5) << "\n";
+    cout << largest<double>(2.5, 1.5) << "\n";
     Box<int> b = {7};
     cout << b.get() << "\n";
 }
@@ -502,7 +502,7 @@ A list is a dynamic array with more tools: `sort`, `insert`, `remove`, `contains
 `Map<K,V>` stores values by key and `Set<T>` stores each value once. They free themselves at the end of the block.
 
 ```jk
-import <stdlib>
+#import <stdlib>
 using stdlib
 
 void main() {
@@ -544,7 +544,7 @@ bob is 25
 `throw "text"` stops what you are doing and jumps to the nearest `catch`. Without a `catch` the program stops and prints `uncaught exception: text`.
 
 ```jk
-import <stdlib>
+#import <stdlib>
 using stdlib
 
 int divide(int a, int b) {
@@ -571,22 +571,22 @@ error: cannot divide by zero
 
 ## Lesson 16. Decimals and the Math library
 
-`import <stdlib>` brings the standard library and `using stdlib` lets you write `sqrt(x)` instead of `Math::sqrt(x)` (every program that prints needs both lines; the tutorial adds them at the top). If two modules have the same function name (`write` is in `Sys` and `File`), write the module: `File::write(...)`. Casts are explicit: `(int)x`, `(double)n`.
+`#import <stdlib>` brings the standard library and `using stdlib` lets you write `sqrt(x)` instead of `Math::sqrt(x)` (every program that prints needs both lines; the tutorial adds them at the top). If two modules have the same function name (`write` is in `Sys` and `File`), write the module: `File::write(...)`. Casts are explicit: `(int)x`, `(double)n`.
 
 ```jk
-import <stdlib>
+#import <stdlib>
 
 using stdlib
 void main() {
     double a = 3.0;
     double b = 4.0;
-    coutf << "hypotenuse = " << sqrt(a * a + b * b) << "\n";
+    cout << "hypotenuse = " << sqrt(a * a + b * b) << "\n";
 
     int whole = (int)floor(7.9);
     cout << whole << "\n";
 
     double half = (double)whole / 2.0;
-    coutf << half << "\n";
+    cout << half << "\n";
 }
 ```
 
@@ -605,7 +605,7 @@ The library has `Sys` (system calls), `Mem` (memory), `Str` (text), `Math` and `
 `File::open(path, mode)` gives a number (negative if it failed). `read`, `write`, `read_line` and `close` use it.
 
 ```jk
-import <stdlib>
+#import <stdlib>
 
 using stdlib
 void main() {
@@ -631,7 +631,7 @@ J2K can write files
 ## Lesson 18. A program in several files
 
 A file that ends in `.jk` is a program (it has `main`). A file that ends in `.j` is a component that other files `import`; it must not have `main`.
-`import "mathx"` finds `mathx.j` next to the file; `import "tools.mathx"` finds `tools/mathx.j`.
+`#import "mathx"` finds `mathx.j` next to the file; `#import "tools.mathx"` finds `tools/mathx.j`.
 
 `mathx.j`:
 
@@ -645,10 +645,10 @@ int cube(int x) {
 `multi.jk`:
 
 ```jk
-import <stdlib>
+#import <stdlib>
 using stdlib
 
-import "mathx"
+#import "mathx"
 
 void main() {
     cout << cube(3) << "\n";
@@ -668,7 +668,7 @@ Compile only the main file: `jcmp multi.jk -o multi`; the imported file is read 
 Putting it together: read words until the input ends (reading past the end throws `end of input`) and report how many there were and the longest.
 
 ```jk
-import <stdlib>
+#import <stdlib>
 using stdlib
 
 int length(char^ s) {

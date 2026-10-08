@@ -471,6 +471,7 @@ bool find_library(char^ rel, char^ out) {
 }
 
 int import_bare_warned;
+int import_hash;             // 1 if the last word import was written with its # (#import)
 int import_warned;           // 1 after the warning about a library written without < >
 
 // switch to the file at path (once)
@@ -521,6 +522,10 @@ void import_library(char^ name, char^ rel) {
 //   import <stdlib>   a library       import "file"   a file next to this one (or in the -I folder)
 void lex_import() {
     next();
+    if import_hash == 0 && import_bare_warned == 0 {
+        import_bare_warned = 1;
+        warn("write #import (with the #): #import <stdlib>, #import \"file\"", "import");
+    }
     if tok_is("<") {
         next();
         char lname[200];
@@ -553,10 +558,6 @@ void lex_import() {
         return;
     }
     if tok_kind == T_IDENT && (str_eq(@tok_text, "cpu") || str_eq(@tok_text, "std") || str_eq(@tok_text, "stdlib")) {
-        if import_bare_warned == 0 && !str_eq(@tok_text, "std") {
-            import_bare_warned = 1;
-            warn("a library is imported with import <name>, for example import <stdlib>", "import");
-        }
         char bn[64];
         str_copy(@bn, @tok_text, 64);
         import_library(@bn, @bn);
@@ -667,6 +668,13 @@ void next() {
             adv();
         }
         dw[dn] = 0;
+        if str_eq(@dw, "import") {
+            // #import <lib> / #import "file" : the token is the word import, written with its #
+            tok_kind = T_IDENT;
+            str_copy(@tok_text, "import", 8);
+            import_hash = 1;
+            return;
+        }
         if str_eq(@dw, "multithread") {
             mt_pending = 1;              // the next statement must be a for loop: its iterations run on several threads
             next();
@@ -729,6 +737,7 @@ void next() {
         }
         tok_text[wn] = 0;
         tok_kind = T_IDENT;
+        if wn == 6 && str_eq(@tok_text, "import") { import_hash = 0; }
         int dfound = find_define(@tok_text);
         if dfound >= 0 {
             push_macro(@def_val + dfound * 256);

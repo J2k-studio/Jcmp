@@ -1,4 +1,4 @@
-import <stdlib>
+#import <stdlib>
 using stdlib
 
 // hello.jk -- the smallest program

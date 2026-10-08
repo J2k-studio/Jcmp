@@ -23,7 +23,7 @@ jcmp input.jk output.jasm              (older form: write assembler text only)
 | `--emit-asm file`  | also (or only) write the assembler text, to read what the compiler generated |
 | `-color` / `-nocolor` | coloured messages (errors red, warnings yellow); the default is on when the messages go to a terminal |
 | `-st`              | strict: every warning becomes an error |
-| `-I dir`           | where `import "name"` also looks (after the folder of the importing file) |
+| `-I dir`           | where `#import "name"` also looks (after the folder of the importing file) |
 | `-version`, `-help` | print the version / a short list of the options (one or two dashes: `--version`; also `-v`, `-h`) |
 | `-d`               | debug build: array index checks. A bad index prints `runtime error: index out of bounds, array size is N` and the program exits with code 134 |
 
@@ -65,8 +65,8 @@ for e in hello fib shapes heap; do bin/jcmp examples/$e.jk -o /tmp/$e && /tmp/$e
 
 ## The standard library
 
-`import <stdlib>` puts the library in front of your program; `using stdlib` lets you call its functions without the prefix
-(or only one module: `using stdlib::mem`, `str`, `sys`, `math`, `fs`). `cout` and `cin` need `import <stdlib>` and `using stdlib`. Its source is `std/*.j`.
+`#import <stdlib>` puts the library in front of your program; `using stdlib` lets you call its functions without the prefix
+(or only one module: `using stdlib::mem`, `str`, `sys`, `math`, `fs`). `cout` and `cin` need `#import <stdlib>` and `using stdlib`. Its source is `std/*.j`.
 See [LANGUAGE.md](LANGUAGE.md).
 
 ## Should the documentation be a website?
