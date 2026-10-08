@@ -2,7 +2,7 @@
 // Build:  bin/jcmp jcmp/jcmp.jk -o jcmp1        (see bootstrap.sh)
 // Use:    jcmp1 input.jk -o program
 // the version of the compiler (also in the file VERSION; release.sh checks that they agree)
-#define JCMP_VERSION "0.3.1"
+#define JCMP_VERSION "0.3.2"
 
 import "jc_base"
 import "jc_asm"
@@ -27,6 +27,7 @@ void reset_state(char^ in_path) {
     cur_fidx = 0 - 1;
     used_fprint = 0;
     used_oob = 0;
+    used_divz = 0;
     used_uprint = 0;
     used_try = 0;
     used_thread = 0;
@@ -51,6 +52,8 @@ void help() {
     write_out("  -st              strict: warnings are errors\n");
     write_out("  -I dir           also look for imported files in dir\n");
     write_out("  -emit-asm file   also write the assembler text\n");
+    write_out("  -color           coloured messages (the default when stderr is a terminal)\n");
+    write_out("  -nocolor         plain messages\n");
     write_out("  -version         print the version\n");
     write_out("  -help            this text\n\n");
     write_out("example: jcmp hello.jk -o hello && ./hello\n");
@@ -75,6 +78,8 @@ void main() {
     char^ out_elf = null;
     char^ out_asm = null;
     int ai = 1;
+    char termios[64];
+    if syscall(29, 2, 21505, @termios) == 0 { use_color = 1; }       // standard error is a terminal: colours
     while ai < argc() {
         char^ a = arg(ai);
         if str_eq(a, "-o") {
@@ -88,6 +93,10 @@ void main() {
             syscall(93, 0);
         } else if is_opt(a, "help") || str_eq(a, "-h") || str_eq(a, "-?") {
             help();
+        } else if is_opt(a, "color") {
+            use_color = 1;
+        } else if is_opt(a, "nocolor") {
+            use_color = 0;
         } else if str_eq(a, "-d") {
             opt_debug = 1;
         } else if str_eq(a, "-st") {
@@ -135,6 +144,11 @@ void main() {
     if used_fprint == 1 { emit_fprint_helper(); }
     if used_oob == 1 { emit_oob_helper(); }
     if used_uprint == 1 { emit_uprint_helper(); }
+    if used_divz == 1 {
+        emit_divzero_helper();
+        used_try = 1;
+    }
+    emit_segv_handler();
     if used_try == 1 { emit_exc_helper(); }
     if used_thread == 1 { emit_thread_helper(); }
     emit_start_stub();
@@ -155,7 +169,11 @@ void main() {
         as_write_elf(out_elf);
     }
     if warn_count > 0 {
+        msg_kind = 2;
+        kind_color();
         write_err_int(warn_count);
-        write_err(" warning(s) generated.\n");
+        write_err(" warning(s) generated.");
+        color_reset();
+        write_err("\n");
     }
 }

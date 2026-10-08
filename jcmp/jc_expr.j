@@ -551,6 +551,9 @@ bool lookup_var(char^ name) {
     return false;
 }
 
+int luninit[8192];           // 1: a scalar declared without a value that nothing has written yet
+int lunloop[8192];           // the loop depth where it was declared
+
 // declare a local: bytes = 8 for a scalar, the (rounded) size for an array
 void add_local(char^ name, int kind, int elem, int bytes, int ptr) {
     if lcount >= 8192 { die("too many local variables"); }
@@ -567,6 +570,7 @@ void add_local(char^ name, int kind, int elem, int bytes, int ptr) {
     ltid[lcount] = ty_tid;
     ldyn[lcount] = ty_dyn;
     lblk[lcount] = cur_blk;
+    luninit[lcount] = 0;
     lnd[lcount] = 1;
     lst1[lcount] = 0;
     lst2[lcount] = 0;
@@ -1588,6 +1592,7 @@ void gen_identifier() {
         }
         die_name("unknown name", @id_name);
     }
+    if v_local >= 1 && v_kind == 0 { uninit_read(find_local(@id_name)); }
     char gi_name[256];
     str_copy(@gi_name, @id_name, 256);
     parse_lvalue();
@@ -2133,6 +2138,7 @@ void parse_unary() {
         str_copy(@id_name, @tok_text, 256);
         next();
         if !lookup_var(@id_name) { die_name("unknown name", @id_name); }
+        uninit_clear(@id_name);            // its address is taken: it may be written through it
         parse_lvalue();
         if lv_done == 1 { die("@ needs a variable, element or field"); }
         ex_w = 8;
@@ -2157,15 +2163,29 @@ void take_operands() {
 // x0 and x1
 int uns_op;                  // 1: the next arith() works on unsigned numbers
 
+// x1 = the divisor: 0 throws "division by zero" (catchable), in every build
+int div_nonzero;             // 1: the divisor is a literal other than 0: no check
+void emit_divzero_check() {
+    if div_nonzero == 1 { return; }
+    int lok = new_label();
+    emit_line("cmp x1, 0");
+    jump_if("ne", lok);
+    emit_line("bl j2k_divzero");
+    place_label(lok);
+    used_divz = 1;
+}
+
 void arith(char^ op) {
     if str_eq(op, "+") { emit_line("add x0, x0, x1"); return; }
     if str_eq(op, "-") { emit_line("sub x0, x0, x1"); return; }
     if str_eq(op, "*") { emit_line("mul x0, x0, x1"); return; }
     if str_eq(op, "/") {
+        emit_divzero_check();
         if uns_op == 1 { emit_line("udiv x0, x0, x1"); } else { emit_line("sdiv x0, x0, x1"); }
         return;
     }
     if str_eq(op, "%") {
+        emit_divzero_check();
         if uns_op == 1 { emit_line("udiv x2, x0, x1"); } else { emit_line("sdiv x2, x0, x1"); }
         emit_line("mul x2, x2, x1");
         emit_line("sub x0, x0, x2");
@@ -2191,6 +2211,8 @@ void parse_mul() {
         str_copy(@op, @tok_text, 8);
         next();
         push_x0();
+        int rhs_lit = 0;
+        if tok_kind == T_NUM && tok_float == 0 && tok_num != 0 { rhs_lit = 1; }
         parse_unary();
         if is_float(mlt) || is_float(ex_ty) {
             if str_eq(@op, "%") { die("% does not work on floats"); }
@@ -2207,7 +2229,9 @@ void parse_mul() {
             uns_op = 0;
             if is_unsigned(mlt_t) { uns_op = 1; }
             take_operands();
+            div_nonzero = rhs_lit;
             arith(@op);
+            div_nonzero = 0;
             mlw = res_w(mlw, ex_w);
             wrap_result(mlw);
         }

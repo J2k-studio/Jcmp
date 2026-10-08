@@ -90,31 +90,61 @@ void mark_pos() {
 // format:  file:line:col: error: message      (then the source line and a ^)
 
 void begin_msg(char^ kind) {
+    msg_kind = 1;
+    if str_eq(kind, "warning") { msg_kind = 2; }
+    set_color("[1m");
     write_err(@err_file);
     write_err(":");
     write_err_int(err_line);
     write_err(":");
     write_err_int(err_col);
     write_err(": ");
+    kind_color();
     write_err(kind);
-    write_err(": ");
+    write_err(":");
+    color_reset();
+    set_color("[1m");
+    write_err(" ");
 }
 
 // the end of a message: the source line and a ^ under the column
 void end_msg() {
+    color_reset();
     write_err("\n");
     int a = err_base + err_ls;
     int e = a;
     while src_bufs[e] != 0 && src_bufs[e] != 10 { e += 1; }
     if e > a {
+        // "  12 | source line" and "     | ^" under the column
+        char num[24];
+        num[0] = 0;
+        append_int(@num, err_line);
+        int w = str_len(@num);
+        set_color("[36m");
+        write_err(" ");
+        write_err(@num);
+        write_err(" | ");
+        color_reset();
         syscall(64, 2, @src_bufs + a, e - a);
         write_err("\n");
+        set_color("[36m");
+        write_err(" ");
+        int g = 0;
+        while g < w {
+            write_err(" ");
+            g += 1;
+        }
+        write_err(" | ");
+        color_reset();
         int k = 0;
         while k < err_col - 1 && k < e - a {
             if src_bufs[a + k] == 9 { write_err("\t"); } else { write_err(" "); }
             k += 1;
         }
-        write_err("^\n");
+        kind_color();
+        write_err("^");
+        color_reset();
+        write_err("\n");
     }
 }
 

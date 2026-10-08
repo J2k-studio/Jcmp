@@ -1,0 +1,6 @@
+int main() {
+    char x;
+    cout << "panel";
+    cin >> x;
+    cout << "Hello from J2K!\n";
+}

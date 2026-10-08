@@ -148,6 +148,29 @@ void write_err(char^ s) {
     syscall(64, 2, s, str_len(s));
 }
 
+// colours for messages (ANSI): used when standard error is a terminal (or with -color)
+int use_color;               // 1 = messages are coloured
+int msg_kind;                // 1 = the message being written is an error, 2 = a warning
+
+// an escape sequence such as "[1;31m" (only if colours are on)
+void set_color(char^ code) {
+    if use_color != 1 { return; }
+    char e[2];
+    e[0] = 27;
+    e[1] = 0;
+    write_err(@e);
+    write_err(code);
+}
+
+void color_reset() {
+    set_color("[0m");
+}
+
+// the colour of the word `error` (red) or `warning` (orange)
+void kind_color() {
+    if msg_kind == 1 { set_color("[1;31m"); } else { set_color("[1;38;5;208m"); }
+}
+
 void write_err_int(int v) {
     char buf[24];
     int n = 0;
@@ -179,6 +202,7 @@ int warn_count;
 int used_fprint;             // 1 if coutf was used: the float printing routine is emitted
 int used_uprint;             // 1 if an unsigned 64-bit number is printed: the routine is emitted
 int used_thread;             // 1 if a thread is started: the start routine is emitted
+int used_divz;               // 1 if a division was emitted: the 'division by zero' routine is added
 int used_oob;                // 1 if a bounds check was emitted: the error routine is added
 int pass_no;                 // 1 = learn declarations, 2 = check and note calls, 3 = generate code
 

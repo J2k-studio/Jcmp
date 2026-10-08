@@ -217,7 +217,33 @@ void patch_number(int at, int value) {
 // after "name" (already looked up): the rest of an assignment statement, or a
 // method call used as a statement:  = e;  op= e;  ++;  --;  name.f(...);
 // The target may be name, name[i], p^, a.b.c, a[i].f[j] ...
+// a scalar that was declared without a value and has not been written yet is read
+void uninit_read(int li) {
+    if li < 0 || luninit[li] == 0 || lunloop[li] != loop_depth { return; }
+    luninit[li] = 0;
+    char m[200];
+    str_copy(@m, "'", 200);
+    append_text(@m, @lname + li * 64);
+    append_text(@m, "' is read before it is given a value");
+    warn(@m, "uninit");
+}
+
+void uninit_clear(char^ name) {
+    int li = find_local(name);
+    if li >= 0 { luninit[li] = 0; }
+}
+
 void parse_assign(char^ target) {
+    int li = find_local(target);
+    if li >= 0 && luninit[li] == 1 && tok_is("=") {
+        parse_assign_core(target);       // the right side is read first: x = x + 1 warns
+        luninit[li] = 0;
+        return;
+    }
+    parse_assign_core(target);
+}
+
+void parse_assign_core(char^ target) {
     char op[8];
     op[0] = 0;
     str_copy(@id_name, target, 256);
@@ -725,6 +751,7 @@ void parse_cin() {
         str_copy(@id_name, @tok_text, 256);
         next();
         if !lookup_var(@ci_name) { die_name("unknown name", @ci_name); }
+        uninit_clear(@ci_name);
         parse_lvalue();
         if lv_done == 1 { die("cin needs a variable to read into"); }
         read_into_object(is_f);
@@ -1308,6 +1335,10 @@ void parse_local_decl() {
     expect(";");
     ty_tid = d_tid;
     add_local(@d_name, 0, d_width, 8, d_ptr);
+    if d_width < 16 {
+        luninit[lcount - 1] = 1;
+        lunloop[lcount - 1] = loop_depth;
+    }
 }
 
 void parse_statement() {
@@ -1489,6 +1520,7 @@ void parse_function() {
     int sv_ginit = ginit_count;
     int sv_fp = used_fprint;
     int sv_oob = used_oob;
+    int sv_dz = used_divz;
     int sv_try = used_try;
     int sv_up = used_uprint;
     int sv_thr = used_thread;
@@ -1691,6 +1723,7 @@ void parse_function() {
         ginit_count = sv_ginit;
         used_fprint = sv_fp;
         used_oob = sv_oob;
+        used_divz = sv_dz;
         used_try = sv_try;
         used_uprint = sv_up;
         used_thread = sv_thr;
@@ -1935,12 +1968,68 @@ void parse_program() {
 
 // the entry point: sets x28 (the global area), keeps the initial sp (argc /
 // argv live there), stores the global initial values, then runs main
+// division by zero: throw the text (the caller used bl; the exception routine does not return here)
+void emit_divzero_helper() {
+    emit_line("j2k_divzero:");
+    place_text("division by zero", 16);
+    emit_line("b j2k_throw");
+}
+
+// SIGSEGV (a null pointer, or a stack that ran out): say so and stop (the handler runs on its own stack)
+char segv_text[80];
+void emit_segv_handler() {
+    str_copy(@segv_text, "runtime error: segmentation fault (null pointer or stack overflow)\n", 80);
+    int n = str_len(@segv_text);
+    emit_line("j2k_segv:");
+    emit_line("sub sp, sp, #128");
+    emit_text_chunks(@segv_text, n);
+    emit_line("mov x0, 2");
+    emit_line("add x1, sp, #0");
+    emit_str("mov x2, ");
+    emit_int(n);
+    emit_nl();
+    emit_line("mov x8, 64");
+    emit_line("svc 0");
+    emit_line("mov x0, 139");
+    emit_line("mov x8, 94");
+    emit_line("svc 0");
+}
+
 void emit_start_stub() {
+    int alt = (gl_bytes + 15) / 16 * 16;       // the stack of the SIGSEGV handler
+    gl_bytes = alt + 32768;
     emit_line("j2k_start:");
     emit_line("mov x28, 268435456");
     emit_line("add x27, x28, #72");            // x27: this thread's block (thrown text, try handlers)
     emit_line("add x9, sp, #0");
     emit_line("str x9, [x28, #0]");
+    // SIGSEGV handler: rt_sigaction(11, {j2k_segv, SA_ONSTACK}) and sigaltstack
+    emit_line("sub sp, sp, #64");
+    emit_line("adr x0, j2k_segv");
+    emit_line("str x0, [sp, #0]");
+    emit_line("mov x0, 134217728");
+    emit_line("str x0, [sp, #8]");
+    emit_line("mov x0, 0");
+    emit_line("str x0, [sp, #16]");
+    emit_line("str x0, [sp, #24]");
+    emit_line("mov x0, 11");
+    emit_line("add x1, sp, #0");
+    emit_line("mov x2, 0");
+    emit_line("mov x3, 8");
+    emit_line("mov x8, 134");
+    emit_line("svc 0");
+    ins_n("mov x9, ", alt);
+    emit_line("add x0, x28, x9");
+    emit_line("str x0, [sp, #32]");
+    emit_line("mov x0, 0");
+    emit_line("str x0, [sp, #40]");
+    emit_line("mov x0, 32768");
+    emit_line("str x0, [sp, #48]");
+    emit_line("add x0, sp, #32");
+    emit_line("mov x1, 0");
+    emit_line("mov x8, 132");
+    emit_line("svc 0");
+    emit_line("add sp, sp, #64");
     int i = 0;
     while i < ginit_count {
         ins_n("mov x9, ", ginit_val[i]);

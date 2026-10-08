@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.2
+* **Division by zero throws** `"division by zero"` (catchable with `try`/`catch`) instead of silently giving 0. A literal divisor other than 0 costs nothing.
+* **A crash tells why:** a null pointer or a stack overflow prints `runtime error: segmentation fault (null pointer or stack overflow)` and exits with 139.
+* **New warning `-Wuninit`:** a variable declared without a value is read before anything was written to it.
+* **Messages are easier to read:** errors in red, warnings in orange (only when the output is a terminal; `-color` / `-nocolor` choose), and the source line has its line number: ` 12 | code` with a `^` under the place.
+
 ## 0.3.1
 * **Fixed:** calling a function that does not exist (for example `alloc` without `import std` / `using std::mem`) ended with a message from the assembler; it is now `error: unknown function 'name'` at the call.
 * **Fixed:** `cout << f()` printed a number when `f` returns `char`.
