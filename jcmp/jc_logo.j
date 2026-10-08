@@ -1,13 +1,13 @@
-// jc_logo.j -- the mascot: jcmp -space shows the J2K logo in ASCII style and in 3D: the Earth with the letter J raised on it,
-// in black, white and grey, that turns on its axis and goes round the Sun, with the Moon that goes round it and shows its
-// phases (full, half, crescent). The times are real: the turn of the Earth (23.93 hours), the month (27.32 days), the light
-// of the Sun (8 min 19 s) and of the Moon (1.28 s); the film runs N times faster than real time.
-// 50 x 20 characters, 24 frames a second, all in J2K with no library. Stops on Ctrl-C or Enter.
-// the picture has the size of the terminal allows: 50 x 20 (small), 60 x 24 or 76 x 30 (finer: every character is smaller
+// jc_logo.j -- the mascot: jcmp -space shows the J2K logo in ASCII style and in 3D: the Earth in the middle, the Moon that goes round it
+// with the letter J on its surface (the Moon turns on its own axis, the J turns with it), shaded in black, white and grey with
+// the characters  .:-=+*#%@  by the angle to a fixed Sun. The Moon starts where the real Moon is now (its real phase, from the
+// clock), and the film runs N times faster than real time (said under the picture; default 1 s = 30 min). Small, 24 frames a
+// second, all in J2K with no library. Stops on Ctrl-C or Enter.
+// the picture has the size the terminal allows: 50 x 20 (small), 60 x 24, 76 x 30 or 100 x 40 (finer: every character is smaller
 // compared with the globe, so there is more detail)
 #define LW lg_w
 #define LH lg_h
-#define LN 2400
+#define LN 4096
 #define LCELLS (lg_w * lg_h)
 
 int lg_w;
@@ -31,10 +31,10 @@ double lg_az;
 double lg_vx;                // the result of lg_rot
 double lg_vy;
 double lg_vz;
-char lg_buf[49152];          // the text of one frame
+char lg_buf[131072];          // the text of one frame
 int lg_len;
-char lg_cap[400];            // four lines of text under the picture, 100 characters each
-int lg_cl[4];
+char lg_cap[600];            // five lines of text under the picture, 100 characters each
+int lg_cl[5];
 int lg_cn;
 double lg_sx[60];            // the stars: place, speed and phase of the twinkling
 double lg_sy[60];
@@ -125,7 +125,7 @@ double lg_j(double x, double y) {
 
 void lg_text(char^ s) {
     int i = 0;
-    while s[i] != 0 && lg_len < 49000 {
+    while s[i] != 0 && lg_len < 130000 {
         lg_buf[lg_len] = s[i];
         lg_len += 1;
         i += 1;
@@ -234,6 +234,58 @@ void lg_cclock() {
     lg_ct(@t8);
 }
 
+// YYYY-MM-DD HH:MM:SS (UTC) of a time given as seconds since 1970
+void lg_cdate(int sec) {
+    int days = sec / 86400;
+    int day = sec % 86400;
+    int z = days + 719468;                                  // the civil calendar from the number of days
+    int era = z / 146097;
+    int doe = z - era * 146097;
+    int yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+    int y = yoe + era * 400;
+    int doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    int mp = (5 * doy + 2) / 153;
+    int d = doy - (153 * mp + 2) / 5 + 1;
+    int m = mp + 3;
+    if mp >= 10 { m = mp - 9; }
+    if m <= 2 { y = y + 1; }
+    char t[24];
+    t[0] = '0' + (y / 1000) % 10;
+    t[1] = '0' + (y / 100) % 10;
+    t[2] = '0' + (y / 10) % 10;
+    t[3] = '0' + y % 10;
+    t[4] = '-';
+    t[5] = '0' + m / 10;
+    t[6] = '0' + m % 10;
+    t[7] = '-';
+    t[8] = '0' + d / 10;
+    t[9] = '0' + d % 10;
+    t[10] = ' ';
+    t[11] = '0' + (day / 3600) / 10;
+    t[12] = '0' + (day / 3600) % 10;
+    t[13] = ':';
+    t[14] = '0' + ((day % 3600) / 60) / 10;
+    t[15] = '0' + ((day % 3600) / 60) % 10;
+    t[16] = ':';
+    t[17] = '0' + (day % 60) / 10;
+    t[18] = '0' + (day % 60) % 10;
+    t[19] = 0;
+    lg_ct(@t);
+}
+
+// the seconds since 1970 now (the clock of the computer, UTC)
+int lg_unix() {
+    char ts[16];
+    syscall(113, 0, @ts);
+    int sec = 0;
+    int k = 7;
+    while k >= 0 {
+        sec = sec * 256 + (ts[k] & 255);
+        k -= 1;
+    }
+    return sec;
+}
+
 void lg_find_color() {
     lg_color_on = 0;
     int i = argc() + 1;
@@ -279,7 +331,7 @@ void lg_read_size() {
 // the picture as text, in the middle of the terminal (every line is put in place with a cursor move)
 void lg_show() {
     int left = (lg_cols - LW) / 2 + 1;
-    int top = (lg_rows - LH - 4) / 2 + 1;
+    int top = (lg_rows - LH - 5) / 2 + 1;
     if left < 1 { left = 1; }
     if top < 1 { top = 1; }
     lg_len = 0;
@@ -324,7 +376,7 @@ void lg_show() {
     }
     // the four lines under the picture, each in the middle (the old text of the line is wiped first)
     int n = 0;
-    while n < 4 {
+    while n < 5 {
         lg_buf[lg_len] = 27;
         lg_len += 1;
         lg_text("[");
@@ -442,17 +494,10 @@ void lg_phase_name(double k, int waxing) {
 
 // the logo: frames = 0 runs until Ctrl-C or Enter; speed = how many times faster than real time the film runs
 void lg_run(int frames, int speed) {
-    if speed < 1 { speed = 7200; }
+    if speed < 1 { speed = 1800; }
     double ts = (double)speed;
     lg_find_color();
-    char^ rp = " .:-+cvunxzXYUJCLQ0OZmwqpdbkhaoMW&8%B@$#";
-    char^ mp = " 173529608@";
-    int mi = 0;
-    while mp[mi] != 0 && mi < 14 {
-        lg_ramp_m[mi] = mp[mi];
-        mi += 1;
-    }
-    lg_nm = mi;
+    char^ rp = " .:-=+*#%@";
     lg_n2 = 0;
     while rp[lg_n2] != 0 && lg_n2 < 90 {
         lg_ramp2[lg_n2] = rp[lg_n2];
@@ -462,9 +507,9 @@ void lg_run(int frames, int speed) {
     int i = 0;
     while i < 60 {
         seed = (seed * 1103515245 + 12345) & 2147483647;
-        lg_sx[i] = (double)((seed >> 8) % 1000) / 1000.0 * (double)LW;
+        lg_sx[i] = (double)((seed >> 8) % 1000) / 1000.0;               // 0..1 of the width
         seed = (seed * 1103515245 + 12345) & 2147483647;
-        lg_sy[i] = (double)((seed >> 8) % 1000) / 1000.0 * (double)LH;
+        lg_sy[i] = (double)((seed >> 8) % 1000) / 1000.0;               // 0..1 of the height
         seed = (seed * 1103515245 + 12345) & 2147483647;
         lg_sf[i] = 1.5 + (double)((seed >> 8) % 1000) / 1000.0 * 4.0;
         seed = (seed * 1103515245 + 12345) & 2147483647;
@@ -474,13 +519,17 @@ void lg_run(int frames, int speed) {
     lg_read_size();
     lg_w = 50;
     lg_h = 20;
-    if lg_cols >= 62 && lg_rows >= 28 {
+    if lg_cols >= 62 && lg_rows >= 29 {
         lg_w = 60;
         lg_h = 24;
     }
-    if lg_cols >= 78 && lg_rows >= 34 {
+    if lg_cols >= 78 && lg_rows >= 35 {
         lg_w = 76;
         lg_h = 30;
+    }
+    if lg_cols >= 104 && lg_rows >= 46 {
+        lg_w = 100;
+        lg_h = 40;
     }
     char clear[8];
     clear[0] = 27;
@@ -493,7 +542,11 @@ void lg_run(int frames, int speed) {
     double tau = 2.0 * pi;
     double cxs = (double)LW / 2.0;
     double cys = (double)LH / 2.0;
-    double unit = (double)LH * 0.33;                      // rows for the radius of the Earth (a character is twice as high as wide)
+    // the scale: the Earth and the Moon with its orbit have to fit in the width; the Earth has the radius 1
+    double dm = 1.70;                                     // the Moon is drawn at 1.70 Earth radii (real 60.3: not to scale, or it would be off the screen)
+    double rm = 0.62;                                     // and with the radius 0.62 of the Earth's (real 0.273), so that the J on it can be read
+    double unit = (double)LW / 10.2;                       // rows for the radius of the Earth (a character is twice as high as wide)
+    double km_row = 6371.0 / unit;                        // kilometres in one row of the picture
     // the view: from a little above, looking at the middle (all rays parallel)
     double pitch = 0.42;
     double sinp = lg_sin(pitch);
@@ -508,26 +561,34 @@ void lg_run(int frames, int speed) {
     lg_uy = cosp;
     lg_uz = sinp;
     // the real numbers
-    double day_s = 86164.1;                               // one turn of the Earth (a sidereal day), seconds
-    double month_s = 27.321661 * 86400.0;                 // one turn of the Moon round the Earth (a sidereal month)
-    double year_s = 365.25636 * 86400.0;                  // one turn of the Earth round the Sun
-    double sun_km = 149597870.7;                          // the Sun is that far,
-    double moon_km = 384400.0;                            // and the Moon
-    double c_kms = 299792.458;                            // the speed of light, km/s
-    double sun_delay = sun_km / c_kms;                    // 499 s: the sunlight we see left the Sun that long ago
+    double solar_day = 86400.0;                           // one turn of the Earth, seen from the Sun (the Sun is frozen in this picture)
+    double synodic = 29.530588853 * 86400.0;              // the Moon goes once round the Earth and back to the same phase
+    double sun_km = 149597870.7;
+    double moon_km = 384400.0;
+    double c_kms = 299792.458;
+    double sun_delay = sun_km / c_kms;                    // 499 s
     double moon_delay = moon_km / c_kms;                  // 1.28 s
-    // the axis of the Earth leans 23.44 degrees from the line to the pole of the orbit
+    // the Sun: a fixed direction (from the left and the front), in the plane of the orbits
+    double lam_s = 3.9;
+    double lx = lg_cos(lam_s);
+    double lz = lg_sin(lam_s);
+    double ly = 0.0;
+    // the axis of the Earth leans 23.44 degrees (its north pole towards us a little)
     double tilt = 23.44 * pi / 180.0;
-    lg_ax = 0.0;                                          // the north pole leans towards us, so that the J stays upright on the face
+    lg_ax = 0.0;
     lg_ay = lg_cos(tilt);
     lg_az = 0.0 - lg_sin(tilt);
-    // the letter J sits on the Earth, in the middle of the face that looks at us at the start: c0, with east and north there
+    // the Moon turns on its own axis (it leans 6.68 degrees); the letter J is on the face that looks at us at the start
+    double mtilt_ax = 6.68 * pi / 180.0;
+    double max_ = 0.0;
+    double may = lg_cos(mtilt_ax);
+    double maz = 0.0 - lg_sin(mtilt_ax);
     double c0x = 0.0;
     double c0y = 0.0;
     double c0z = 0.0 - 1.0;
-    double ex = c0y * lg_az - c0z * lg_ay;                // east = c0 x axis (to the right of the face that looks at us)
-    double ey = c0z * lg_ax - c0x * lg_az;
-    double ez = c0x * lg_ay - c0y * lg_ax;
+    double ex = c0y * maz - c0z * may;                    // east = c0 x axis
+    double ey = c0z * max_ - c0x * maz;
+    double ez = c0x * may - c0y * max_;
     double el = __fsqrt(ex * ex + ey * ey + ez * ez);
     ex = ex / el;
     ey = ey / el;
@@ -535,27 +596,27 @@ void lg_run(int frames, int speed) {
     double nx0 = ey * c0z - ez * c0y;                     // north = east x c0
     double ny0 = ez * c0x - ex * c0z;
     double nz0 = ex * c0y - ey * c0x;
-    double rm = 0.40;                                     // the Moon (drawn bigger than real, 0.27, and nearer: not to scale)
-    double dm = 1.80;
-    double mtilt = 0.0897;                                // its orbit leans 5.14 degrees
+    double moon_spin_s = 40.0;                            // the Moon turns once in 40 seconds of the film (an artist's number: the real Moon turns once a month, locked to the Earth)
+    double mtilt = 0.0897;                                // the orbit of the Moon leans 5.14 degrees
+    // where the real Moon is now: the phase from the clock (a new moon was on 2000-01-06 18:14 UTC, JD 2451550.26)
+    int unix0 = lg_unix();
+    double jd = (double)unix0 / 86400.0 + 2440587.5;
+    double cyc = (jd - 2451550.26) / 29.530588853;
+    cyc = cyc - (double)(int)cyc;
+    if cyc < 0.0 { cyc = cyc + 1.0; }
+    double theta0 = tau * cyc;                            // the angle of the Moon ahead of the Sun
     int frame = 0;
     int t0 = lg_now();
     while frames == 0 || frame < frames {
         double t = (double)frame / 24.0;
-        double real_s = t * ts;                           // the seconds that have passed on the Earth
-        // where the Sun is (seen from the Earth), as an angle in the plane of the orbit: it goes round once in a year.
-        // The light we see left the Sun sun_delay seconds ago.
-        double lam_s = 4.0 + tau * (real_s - sun_delay) / year_s;
-        double lx = lg_cos(lam_s);
-        double lz = lg_sin(lam_s);
-        double ly = 0.0;
-        // the Moon: an angle round the Earth, one turn in a month; it starts a little ahead of the Sun (a waxing crescent)
-        double lam_m = lam_s + 1.1 + tau * real_s / month_s - tau * real_s / year_s;
+        double real_s = t * ts;                           // the time that has passed on the Earth since the start, seconds
+        // the Moon goes round the Earth: relative to the fixed Sun one turn is the synodic month
+        double lam_m = lam_s + theta0 + tau * real_s / synodic;
         double mx = dm * lg_cos(lam_m);
         double mz = dm * lg_sin(lam_m);
         double my = dm * lg_sin(lam_m) * mtilt;
-        // the Earth turns on its axis
-        double spin = 0.0 - 0.15 - tau * real_s / day_s;       // west to east: the face we see goes from left to right
+        double espin = 0.0 - tau * real_s / solar_day;    // the Earth turns west to east: the face we see goes from left to right
+        double mspin = 0.0 - tau * t / moon_spin_s;       // the Moon the same way, about its own axis
         // the stars first
         i = 0;
         while i < LCELLS {
@@ -571,8 +632,12 @@ void lg_run(int frames, int speed) {
             if tw > 0.35 { c = '.'; }
             if tw > 0.65 { c = '+'; }
             if tw > 0.9 { c = '*'; }
-            lg_ch[(int)lg_sy[i] * LW + (int)lg_sx[i]] = c;
-            lg_col[(int)lg_sy[i] * LW + (int)lg_sx[i]] = lg_grey(0.35 + 0.55 * tw);
+            int sxs = (int)(lg_sx[i] * (double)LW);
+            int sys = (int)(lg_sy[i] * (double)LH);
+            if sxs < LW && sys < LH {
+                lg_ch[sys * LW + sxs] = c;
+                lg_col[sys * LW + sxs] = lg_grey(0.35 + 0.55 * tw);
+            }
             i += 1;
         }
         int y = 0;
@@ -587,37 +652,13 @@ void lg_run(int frames, int speed) {
                 double te = lg_ball(ox, oy, oz, lg_fx, lg_fy, lg_fz, 0.0, 0.0, 0.0, 1.0);
                 double tm = lg_ball(ox, oy, oz, lg_fx, lg_fy, lg_fz, mx, my, mz, rm);
                 if te < 999.0 && te <= tm {
-                    // the Earth
+                    // the Earth: a ball with the sea, the lands and the poles, turning on its axis
                     double hx = ox + lg_fx * te;
                     double hy = oy + lg_fy * te;
                     double hz = oz + lg_fz * te;
-                    // the point as it was before the Earth turned: its place on the surface
-                    lg_rot(hx, hy, hz, 0.0 - spin);
-                    double p0x = lg_vx;
-                    double p0y = lg_vy;
-                    double p0z = lg_vz;
-                    double facing = p0x * c0x + p0y * c0y + p0z * c0z;               // near the face with the J: 1
-                    double jx = (p0x * ex + p0y * ey + p0z * ez) * 0.95;
-                    double jy = 0.0 - (p0x * nx0 + p0y * ny0 + p0z * nz0) * 0.95 + 0.06;
-                    double cov = 0.0;
-                    double dcx = 0.0;
-                    double dcy = 0.0;
-                    if facing > 0.15 {
-                        cov = lg_j(jx, jy);
-                        double e = 0.03;
-                        dcx = (lg_j(jx + e, jy) - lg_j(jx - e, jy)) / (2.0 * e);
-                        dcy = (lg_j(jx, jy + e) - lg_j(jx, jy - e)) / (2.0 * e);
-                    }
-                    // the normal: the ball's, bent at the edges of the letter so that it stands out (in the frame of the surface, then turned back)
-                    double bump = 0.30;
-                    double qx = p0x - bump * (dcx * ex * 0.95 - dcy * nx0 * 0.95);
-                    double qy = p0y - bump * (dcx * ey * 0.95 - dcy * ny0 * 0.95);
-                    double qz = p0z - bump * (dcx * ez * 0.95 - dcy * nz0 * 0.95);
-                    double ql = __fsqrt(qx * qx + qy * qy + qz * qz);
-                    lg_rot(qx / ql, qy / ql, qz / ql, spin);
-                    double nx = lg_vx;
-                    double ny = lg_vy;
-                    double nz = lg_vz;
+                    double nx = hx;
+                    double ny = hy;
+                    double nz = hz;
                     double lam = nx * lx + ny * ly + nz * lz;
                     if lam < 0.0 { lam = 0.0; }
                     // the Moon may hide the Sun (an eclipse of the Sun)
@@ -625,71 +666,92 @@ void lg_run(int frames, int speed) {
                         double ts2 = lg_ball(hx, hy, hz, lx, ly, lz, mx, my, mz, rm);
                         if ts2 < 999.0 { lam = lam * 0.12; }
                     }
-                    // the paint: the sea is mid grey with fine lines of latitude and longitude, the letter is white
+                    // the place on the surface, before the Earth turned (turn about the axis: use the Earth's axis)
+                    lg_ax = 0.0;
+                    lg_ay = lg_cos(tilt);
+                    lg_az = 0.0 - lg_sin(tilt);
+                    lg_rot(hx, hy, hz, 0.0 - espin);
+                    double p0x = lg_vx;
+                    double p0y = lg_vy;
+                    double p0z = lg_vz;
+                    double lat = p0x * lg_ax + p0y * lg_ay + p0z * lg_az;               // the sine of the latitude
+                    double land = lg_sin(p0x * 2.6 + 1.0) * lg_sin(p0y * 3.1 + 0.5) * lg_sin(p0z * 2.3 + 2.0);
                     double albedo = 0.52;
-                    double lat = lg_abs(lg_sin(p0x * lg_ax * 9.4248 + p0y * lg_ay * 9.4248 + p0z * lg_az * 9.4248));
-                    double lon = lg_abs(lg_sin((lg_atan2(p0x * ex + p0y * ey + p0z * ez, p0x * c0x + p0y * c0y + p0z * c0z) + 3.1416) * 6.0));
-                    if lat < 0.07 || lon < 0.06 { albedo = 0.40; }
-                    albedo = albedo + (1.0 - albedo) * cov;
-                    // the glow at the rim, a small bright spot of reflected light on the sea
+                    if land > 0.12 { albedo = 0.92; }
+                    if lat > 0.86 || lat < 0.0 - 0.86 { albedo = 0.92; }                // the ice of the poles
                     double ndv = 0.0 - (nx * lg_fx + ny * lg_fy + nz * lg_fz);
                     if ndv < 0.0 { ndv = 0.0; }
                     double rim = 1.0 - ndv;
                     rim = rim * rim * rim;
-                    double hx2 = lx - lg_fx;
-                    double hy2 = ly - lg_fy;
-                    double hz2 = lz - lg_fz;
-                    double hl = __fsqrt(hx2 * hx2 + hy2 * hy2 + hz2 * hz2);
-                    double refl = 0.0;
-                    if hl > 0.0 {
-                        double nh = (nx * hx2 + ny * hy2 + nz * hz2) / hl;
-                        if nh > 0.0 {
-                            double n2 = nh * nh;
-                            n2 = n2 * n2;
-                            n2 = n2 * n2;
-                            refl = n2 * n2 * (1.0 - cov);
-                        }
-                    }
-                    double bright = 0.11 + 0.90 * lam * albedo + 0.18 * rim * (0.2 + lam) + 0.35 * refl;
+                    double bright = 0.08 + 0.92 * lam * albedo + 0.16 * rim * (0.2 + lam);
                     if bright > 1.0 { bright = 1.0; }
                     lg_ch[y * LW + x] = lg_pick(bright);
                     lg_col[y * LW + x] = lg_grey(bright);
                     lg_dep[y * LW + x] = te;
                 } else if tm < 999.0 {
-                    // the Moon: always the same face to the Earth (it turns once a month); its dark patches are the seas of lava
+                    // the Moon: the letter J on its surface, turning with it
                     double hx = ox + lg_fx * tm;
                     double hy = oy + lg_fy * tm;
                     double hz = oz + lg_fz * tm;
                     double nx = (hx - mx) / rm;
                     double ny = (hy - my) / rm;
                     double nz = (hz - mz) / rm;
-                    double lam = nx * lx + ny * ly + nz * lz;
+                    lg_ax = max_;
+                    lg_ay = may;
+                    lg_az = maz;
+                    lg_rot(nx, ny, nz, 0.0 - mspin);
+                    double p0x = lg_vx;
+                    double p0y = lg_vy;
+                    double p0z = lg_vz;
+                    // the letter is on two opposite faces of the Moon (a J on the front and one on the back, each the right way
+                    // round for someone who looks at it), so that one of them is always turned towards us
+                    double facing = p0x * c0x + p0y * c0y + p0z * c0z;
+                    double sgn = 1.0;
+                    if facing < 0.0 {
+                        sgn = 0.0 - 1.0;
+                        facing = 0.0 - facing;
+                    }
+                    double jx = sgn * (p0x * ex + p0y * ey + p0z * ez) * 0.95;
+                    double jy = 0.0 - (p0x * nx0 + p0y * ny0 + p0z * nz0) * 0.95 + 0.06;
+                    double cov = 0.0;
+                    double dcx = 0.0;
+                    double dcy = 0.0;
+                    if facing > 0.15 {
+                        cov = lg_j(jx, jy);
+                        double e = 0.03;
+                        dcx = sgn * (lg_j(jx + e, jy) - lg_j(jx - e, jy)) / (2.0 * e);
+                        dcy = (lg_j(jx, jy + e) - lg_j(jx, jy - e)) / (2.0 * e);
+                    }
+                    // the normal, bent at the edges of the letter so that it stands out of the surface
+                    double bump = 0.30;
+                    double qx = p0x - bump * (dcx * ex * 0.95 - dcy * nx0 * 0.95);
+                    double qy = p0y - bump * (dcx * ey * 0.95 - dcy * ny0 * 0.95);
+                    double qz = p0z - bump * (dcx * ez * 0.95 - dcy * nz0 * 0.95);
+                    double ql = __fsqrt(qx * qx + qy * qy + qz * qz);
+                    lg_rot(qx / ql, qy / ql, qz / ql, mspin);
+                    double bx = lg_vx;
+                    double by = lg_vy;
+                    double bz = lg_vz;
+                    double lam = bx * lx + by * ly + bz * lz;
                     if lam < 0.0 { lam = 0.0; }
-                    double rim_m = 1.0 + (nx * lg_fx + ny * lg_fy + nz * lg_fz);       // 0 in the middle of the disc, 1 at its edge
                     // the shadow of the Earth (an eclipse of the Moon)
                     if lam > 0.0 {
                         double ts2 = lg_ball(hx, hy, hz, lx, ly, lz, 0.0, 0.0, 0.0, 1.0);
                         if ts2 < 999.0 { lam = lam * 0.10; }
                     }
-                    // the patches: fixed on the Moon, so they turn with its orbit
-                    double ca = lg_cos(lam_m);
-                    double sa = lg_sin(lam_m);
-                    double mxl = nx * ca + nz * sa;
-                    double mzl = 0.0 - nx * sa + nz * ca;
-                    double patch = lg_sin(mxl * 4.0 + 1.0) * lg_sin(ny * 5.0 + 0.5) * lg_sin(mzl * 3.0 + 2.0);
-                    double albedo = 0.95;
-                    if patch > 0.18 { albedo = 0.60; }
-                    // the part that the Sun does not light is left black (a crescent or a half moon is only what is lit)
+                    // the grey of the Moon with a few dark seas, the letter white
+                    double patch = lg_sin(p0x * 4.0 + 1.0) * lg_sin(p0y * 5.0 + 0.5) * lg_sin(p0z * 3.0 + 2.0);
+                    double albedo = 0.62;
+                    if patch > 0.18 { albedo = 0.40; }
+                    albedo = albedo + (1.0 - albedo) * cov;
+                    // what the Sun does not light is left black
                     double bright = lam * albedo;
-                    if lam > 0.0 && rim_m > 0.6 { bright = bright + 0.10; }
+                    // the letter J glows a little (like a logo), so that it can be read even in the dark part; the rest is left black
+                    if bright < 0.55 * cov { bright = 0.55 * cov; }
                     if bright > 1.0 { bright = 1.0; }
-                    if bright > 0.04 {
-                        // digits for the Moon, letters for the Earth: so it can be told at a glance
-                        double mv = bright * (1.7 - 0.7 * bright);
-                        int mk = (int)(mv * (double)(lg_nm - 1) + 0.5);
-                        if mk < 1 { mk = 1; }
-                        lg_ch[y * LW + x] = lg_ramp_m[mk];
-                        lg_col[y * LW + x] = lg_grey(0.35 + 0.65 * bright);
+                    if bright > 0.05 {
+                        lg_ch[y * LW + x] = lg_pick(bright);
+                        lg_col[y * LW + x] = lg_grey(bright);
                         lg_dep[y * LW + x] = tm;
                     }
                 }
@@ -697,10 +759,10 @@ void lg_run(int frames, int speed) {
             }
             y += 1;
         }
-        // the orbit of the Moon: faint dots, hidden where the Earth or the Moon is in front
+        // the orbit of the Moon: faint dots
         int n = 0;
-        while n < 120 {
-            double a = (double)n * tau / 120.0;
+        while n < 140 {
+            double a = (double)n * tau / 140.0;
             double wx = dm * lg_cos(a);
             double wz = dm * lg_sin(a);
             double wy = wz * mtilt;
@@ -716,49 +778,49 @@ void lg_run(int frames, int speed) {
             }
             n += 1;
         }
-        // the word MOON under the Moon (a name for it)
+        // the word MOON under the Moon, and EARTH under the Earth
         double mqx = mx * lg_rx + my * lg_ry + mz * lg_rz;
         double mqy = mx * lg_ux + my * lg_uy + mz * lg_uz;
         int lcx = (int)(cxs + mqx * unit * 2.0);
-        int lcy = (int)(cys - mqy * unit + rm * unit + 1.6);
+        int lcy = (int)(cys - mqy * unit + rm * unit + 1.5);
         char^ word = "MOON";
         int wi = 0;
         while wi < 4 {
-            int wx = lcx - 2 + wi;
-            if wx >= 0 && wx < LW && lcy >= 0 && lcy < LH {
-                if lg_ch[lcy * LW + wx] == ' ' || lg_ch[lcy * LW + wx] == '.' {
-                    lg_ch[lcy * LW + wx] = word[wi];
-                    lg_col[lcy * LW + wx] = lg_grey(0.75);
+            int wx2 = lcx - 2 + wi;
+            if wx2 >= 0 && wx2 < LW && lcy >= 0 && lcy < LH {
+                if lg_ch[lcy * LW + wx2] == ' ' || lg_ch[lcy * LW + wx2] == '.' {
+                    lg_ch[lcy * LW + wx2] = word[wi];
+                    lg_col[lcy * LW + wx2] = lg_grey(0.70);
                 }
             }
             wi += 1;
         }
         // how much of the Moon is lit as we see it from the Earth, and whether it grows
-        double mex = mx;
-        double mez = mz;
-        double ml = __fsqrt(mex * mex + my * my + mez * mez);
-        double cth = (mex * lx + my * ly + mez * lz) / ml;              // the angle between the Moon and the Sun, seen from the Earth
+        double ml = __fsqrt(mx * mx + my * my + mz * mz);
+        double cth = (mx * lx + my * ly + mz * lz) / ml;
         double lit = (1.0 - cth) / 2.0;
         double dl = lam_m - lam_s;
         while dl > pi { dl = dl - tau; }
         while dl < 0.0 - pi { dl = dl + tau; }
         int waxing = 0;
         if dl > 0.0 { waxing = 1; }
-        // the four lines under the picture
+        // the five lines under the picture
         lg_cbegin(0);
         lg_ct("by J2k-studio  (Ctrl-C/Enter: stop)");
         lg_cbegin(1);
-        lg_ct("x");
-        lg_cnum(speed);
-        lg_ct("  Earth ");
-        lg_cdur(day_s / ts);
-        lg_ct("  Moon ");
-        lg_cdur(month_s / ts);
-        lg_cbegin(2);
-        lg_ct("UTC ");
-        lg_cclock();
-        lg_ct("  +");
+        lg_ct("UTC now ");
+        lg_cdate(lg_unix());
+        lg_ct("   film +");
         lg_cdur(real_s);
+        lg_cbegin(2);
+        lg_ct("time: 1 s = ");
+        lg_cdur(ts);
+        lg_ct(" (x");
+        lg_cnum(speed);
+        lg_ct(")  Earth turn ");
+        lg_cdur(solar_day / ts);
+        lg_ct("  Moon cycle ");
+        lg_cdur(synodic / ts);
         lg_cbegin(3);
         lg_ct("Moon: ");
         lg_phase_name(lit, waxing);
@@ -771,6 +833,10 @@ void lg_run(int frames, int speed) {
         lg_ct("s Moon ");
         lg_cdec(moon_delay);
         lg_ct("s");
+        lg_cbegin(4);
+        lg_ct("scale: 1 row = ");
+        lg_cnum((int)km_row);
+        lg_ct(" km; Moon at 1.70R, size 0.62R (real 60R, 0.27R)");
         lg_show();
         if frames == 0 && lg_key() { frame = 0 - 1; break; }
         frame += 1;
