@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.49
+* **Strings can be ordered:** `a < b`, `a > b`, `a <= b`, `a >= b` on a `String`, a text, or a mix (by the codes of the bytes, like `strcmp`; a capital letter comes before a small one, `"é"` after `"z"`). Sorting a `String[]` with `<` works (test `t256`).
+* **Fixed:** `@name` where `name` is a variable bound in a `switch` to a struct that frees itself (`Result::Ok(doc)`) is now the pointer to that struct (before, the address of the binding itself); so `total(@doc, ...)` works.
+* The trace of a panic shows library names without the leading underscores (`Arr::nullerr`, was `::Arr::nullerr`).
+* **Four larger test programs** whose output was checked against Python (8 queens and the longest Collatz chain, word counts and text functions, numerical integration and a determinant, generics with JSON and exceptions): `t257` - `t260`.
+
 ## 0.9.48
 * **Fixed (an old fault):** a loop `for i in lo..hi` with a **variable** at the start of the range did not compile ("this value has no fields"), only a number worked (`for i in 0..hi`). `for i in lo..hi`, `for i in lo + 1..hi + 1`, `for i in 0 - r..r` work now (test `t255`).
 * **gfx, drawing and effects on `Screen`:** `line` (Bresenham), `rect`, `fill_rect`, `circle`, `fill_circle`, `blend` (mix a colour into a dot), `gradient_v`; effects on the whole picture: `vignette`, `scanlines`, `brightness`, `invert`; `lit()` counts the dots that are not black. Checked by counting (a diagonal of 20 dots, a rectangle of 24, a filled circle of radius 5 of 81 dots, a circle border of 28).

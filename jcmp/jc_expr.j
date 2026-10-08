@@ -3340,6 +3340,9 @@ void parse_unary_core() {
         uninit_clear(@id_name);            // its address is taken: it may be written through it
         parse_lvalue();
         if lv_done == 1 { die("@ needs a variable, element or field"); }
+        // a name bound in a case to a struct that frees itself is already a pointer to that struct: @name is that pointer
+        int al = find_local(@lv_base);
+        if lv_fresh == 1 && lv_base_local == 1 && lv_kind == 0 && al >= 0 && lalias[al] == 1 { load_through(8); }
         ex_w = 8;
         ex_ty = 0;
         return;
@@ -3973,11 +3976,33 @@ void parse_relational() {
         char rel[4];
         str_copy(@rel, @tok_text, 4);
         int rel_lt = ex_ty;
-        if !is_float(rel_lt) { need_num(ex_ty); }
+        int rel_lw = ex_w;
+        if !is_float(rel_lt) && rel_lt != 80 { need_num(ex_ty); }
         next();
         int st = stash_left(rel_lt, 7);
         parse_bitor();
         int rel_rt = ex_ty;
+        if rel_lt == 80 || rel_rt == 80 || (rel_lw == 9 && ex_w == 9) {
+            // String < String (or a text, or a char): by the codes of the bytes
+            int kb = str_kind();
+            int ka = 0;
+            if rel_lt == 80 { ka = 1; } else if rel_lw == 2 { ka = 2; }
+            emit_line("mov x2, x0");
+            emit_line("ldr x0, [sp, #0]");
+            emit_line("add sp, sp, #16");
+            ins_n("mov x1, ", ka);
+            ins_n("mov x3, ", kb);
+            rt_call("__Str__order");
+            emit_line("mov x1, 0");
+            if str_eq(@rel, "<") { compare("lt"); }
+            if str_eq(@rel, ">") { compare("gt"); }
+            if str_eq(@rel, "<=") { compare("le"); }
+            if str_eq(@rel, ">=") { compare("ge"); }
+            ex_w = 8;
+            ex_ty = 1;
+            rv_valid = 0;
+            continue;
+        }
         if !is_float(rel_lt) && !is_float(rel_rt) { need_num(ex_ty); }
         take_operands_s(st);
         if is_float(rel_lt) || is_float(rel_rt) {

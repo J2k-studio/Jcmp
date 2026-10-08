@@ -30,6 +30,7 @@ void __panic(char^ msg) {
         char^ name = (char^)tab[best * 2 + 1];
         syscall(64, 2, "  at ", 5);
         int i = 0;
+        if name[0] == '_' && name[1] == '_' { i = 2; }              // a name of the library: __Arr__nullerr is shown as Arr::nullerr
         while name[i] != 0 {
             if name[i] == '_' && name[i + 1] == '_' {
                 syscall(64, 2, "::", 2);
@@ -455,6 +456,24 @@ struct __Str {
             i += 1;
         }
         return 1;
+    }
+    // -1, 0 or 1: a is before, the same as, or after b (by the codes of the bytes, like strcmp)
+    static int order(void^ a, int ka, void^ b, int kb) {
+        int na = __Str::len(a, ka);
+        int nb = __Str::len(b, kb);
+        char^ pa = __Str::ptr(a, ka, 0);
+        char^ pb = __Str::ptr(b, kb, 1);
+        int i = 0;
+        while i < na && i < nb {
+            int ca = pa[i] & 255;
+            int cb = pb[i] & 255;
+            if ca < cb { return 0 - 1; }
+            if ca > cb { return 1; }
+            i += 1;
+        }
+        if na < nb { return 0 - 1; }
+        if na > nb { return 1; }
+        return 0;
     }
     // the first place of t in s at or after `from`, or -1
     static int find(void^ s, void^ t, int kt) {
