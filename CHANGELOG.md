@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.27
+* **Example `examples/logo.jk`:** the J2K logo: a glowing J, a ring tilted 45 degrees that turns around it (with two beads running on it), twinkling stars, 24 frames a second (paced by the clock). Small and of a fixed size (64 x 40 dots, about 25 KB of memory).
+* `Screen.add(x, y, r, g, b)` adds light to a dot.
+
 ## 0.9.26
 * **Array lists:** `double dist[3] = {12.0, 18.0, 25.0};`, `int primes[] = {2, 3, 5};` (size counted), also for global arrays (constants). Values not given are zero. One dimension, not structs yet (docs/syntax-design.md section 56, waiting for the owner's confirmation of the form).
 * **Colour in gfx:** `using gfx::screen;` gives `Screen::make(w, h)`: a picture of rgb dots (`set`, `set_packed`, `get`, `clear`, `glow` = bloom, `frame`, `show`, `begin`, `end`); two dots in each character cell with 24-bit colour codes. `Screen::rgb(r, g, b)` packs a colour. `using gfx::canvas;` still gives the character `Canvas`; `using gfx;` gives both.

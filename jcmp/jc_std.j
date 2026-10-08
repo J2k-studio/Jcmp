@@ -2517,6 +2517,12 @@ void push_screen() {
     put("        if x < 0 || x >= self.w || y < 0 || y >= self.h { return; }");
     put("        self.pix[y * self.w + x] = c;");
     put("    }");
+    put("    // adds light to a dot (the colours are added up, to 255 at most)");
+    put("    void add(self, int x, int y, int r, int g, int b) {");
+    put("        if x < 0 || x >= self.w || y < 0 || y >= self.h { return; }");
+    put("        int c = self.pix[y * self.w + x];");
+    put("        self.pix[y * self.w + x] = Screen::rgb(((c >> 16) & 255) + r, ((c >> 8) & 255) + g, (c & 255) + b);");
+    put("    }");
     put("    int get(self, int x, int y) {");
     put("        if x < 0 || x >= self.w || y < 0 || y >= self.h { return 0; }");
     put("        return self.pix[y * self.w + x];");
