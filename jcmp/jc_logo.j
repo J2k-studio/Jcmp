@@ -767,6 +767,12 @@ void lg_run(int frames, int speed) {
                                 }
                             }
                             double bright = 0.07 + 0.90 * lam * albedo + 0.20 * rim * (0.15 + lam) + 0.30 * refl;
+                            // the lights of the cities: on the land that the Sun does not light, small bright points
+                            double night = 1.0 - lg_clamp(lam * 4.0, 0.0, 1.0);
+                            if night > 0.0 && land > 0.10 && lat < 0.80 && lat > 0.0 - 0.80 && cl < 0.30 {
+                                double ct = lg_sin(p0x * 21.0 + 1.0) * lg_sin(p0y * 17.0 + 2.0) * lg_sin(p0z * 19.0 + 0.5);
+                                if ct > 0.40 { bright = bright + lg_clamp((ct - 0.40) * 3.0, 0.0, 0.5) * night; }
+                            }
                             if bright > 1.0 { bright = 1.0; }
                             sumb = sumb + bright;
                             mask = mask | (1 << (sj * 2 + si));
@@ -847,6 +853,24 @@ void lg_run(int frames, int speed) {
                                 mask = mask | (1 << (sj * 2 + si));
                                 lit_n += 1;
                                 if tm < dmin { dmin = tm; }
+                            }
+                        } else {
+                            // the air of the Earth: a thin glow round the edge of the ball on the side that the Sun lights
+                            double along = ox * lg_fx + oy * lg_fy + oz * lg_fz;
+                            double px = ox - lg_fx * along;
+                            double py = oy - lg_fy * along;
+                            double pz = oz - lg_fz * along;
+                            double pd = __fsqrt(px * px + py * py + pz * pz);
+                            if pd > 1.0 && pd < 1.11 {
+                                double sun_side = (px * lx + py * ly + pz * lz) / pd + 0.25;
+                                double fade = (1.11 - pd) / 0.11;
+                                double bright = 0.55 * sun_side * fade * fade;
+                                if bright > 0.05 {
+                                    if bright > 1.0 { bright = 1.0; }
+                                    sumb = sumb + bright;
+                                    mask = mask | (1 << (sj * 2 + si));
+                                    lit_n += 1;
+                                }
                             }
                         }
                         si += 1;

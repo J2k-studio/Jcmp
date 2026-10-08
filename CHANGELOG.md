@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.52
+* **`examples/solar.jk` is in colour now** and no longer dull: every ball is lit by the sun and has its own surface (continents, clouds and ice caps on the Earth, bands and the red spot on Jupiter, the rusty Mars, the grey Mercury and Moon, the cream clouds of Venus), the rings of Saturn go behind and in front of the ball, a sun with a limb and a corona, faint orbits, an asteroid belt, twinkling coloured stars, glow and vignette. It uses `Screen` (like the black hole) and takes the size of the terminal. Test `t242`.
+* **The mascot (`jcmp -space`)** has an air glow round the lit edge of the Earth and the lights of the cities on its night side.
+
 ## 0.9.51
 * **`str(x)`** makes a `String` from a number, a character, a `bool` or another String: `str(42)`, `str(-7)`, `str(2.5)`, `str(1.5e20)` (`1.5e+20`), `str('x')`, `str(true)`, an unsigned `u64` up to 18446744073709551615. Floating point numbers print with up to 15 significant digits and no zeros at the end. Test `t262`.
 * **Any number of array parameters, in any place:** `int dot(int a[], int b[])`, `void scale(int a[], int k, int out[])` (before, one array parameter and it had to be the last). Methods too. Test `t263`.
