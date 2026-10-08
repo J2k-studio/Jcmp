@@ -2207,6 +2207,43 @@ bool str_member(char^ dm) {
         lv_done = 1;
         return true;
     }
+    if str_eq(dm, "count") {
+        expect("(");
+        expect(")");
+        load_through(8);
+        rt_call("__Str__count");
+        ex_w = 8;
+        ex_ty = 0;
+        lv_done = 1;
+        return true;
+    }
+    if str_eq(dm, "chars") {
+        expect("(");
+        expect(")");
+        load_through(8);
+        rt_call("__Str__chars");
+        ex_w = 8;
+        ex_ty = 99;
+        ex_dyn = dyn_pack(8, 0, 71);       // a String[] that the caller owns
+        last_call_owning = 1;
+        rv_valid = 0;
+        lv_done = 1;
+        return true;
+    }
+    if str_eq(dm, "char_at") {
+        expect("(");
+        load_through(8);
+        push_x0();
+        parse_expr();
+        expect(")");
+        emit_line("mov x1, x0");
+        emit_line("ldr x0, [sp, #0]");
+        emit_line("add sp, sp, #16");
+        rt_call("__Str__char_at");
+        str_temp();
+        lv_done = 1;
+        return true;
+    }
     if str_eq(dm, "to_int") || str_eq(dm, "to_double") {
         expect("(");
         expect(")");

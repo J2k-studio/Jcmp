@@ -220,7 +220,7 @@ cin >> a;                    // one word
 * A new String made by an expression (`a + b`, `slice`, a call that returns a String) is a temporary: the compiler frees it at the end of the statement unless it is stored in a variable. It cannot be made on the right of `&&` or `||` (the right side may not run): put it in a variable first.
 * `return s;` moves a local String out; returning a parameter or a field copies it. A String parameter only borrows, so it cannot be assigned inside the function.
 * A `String` that is a field of a struct or a global is not freed by itself: call `free()`.
-* Text is bytes (UTF-8): `len` counts bytes.
+* Text is UTF-8: `len` and `s[i]` count bytes; `s.count()` counts characters, `s.chars()` is a `String[]` with one character each, `s.char_at(i)` one character. `upper()` / `lower()` know Latin, Greek and Cyrillic letters.
 * Index checks happen in `-d` builds, like for every array.
 
 ## Generics

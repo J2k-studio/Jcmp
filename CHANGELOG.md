@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9.15
+* **UTF-8 text:** `s.count()` (characters), `s.chars()` (a `String[]`, one character each), `s.char_at(i)`; `upper()` / `lower()` handle Latin-1, Latin Extended-A, Greek and Cyrillic. `len` still counts bytes.
+
 ## 0.9.14
 * **`Num::parse_int(s)` / `Num::parse_double(s)`** return a `Result<…, Error>` (kind `Parse`) instead of throwing, so `int n = Num::parse_int(s)?;` works.
 

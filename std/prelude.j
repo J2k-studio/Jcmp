@@ -546,25 +546,118 @@ struct __Str {
         while b > a && __Str::isspace(p[b - 1]) { b -= 1; }
         return __Str::slice(s, a, b);
     }
-    static void^ upper(void^ s) {
-        void^ r = __Str::clone(s);
+    // ---- UTF-8: len counts bytes; these work on characters (code points)
+    // the upper case of a code point (ASCII, Latin-1, Latin Extended-A, Greek, Cyrillic); others stay
+    static int cp_upper(int c) {
+        if c < 128 {
+            if c >= 'a' && c <= 'z' { return c - 32; }
+            return c;
+        }
+        if c >= 0xE0 && c <= 0xFE && c != 0xF7 { return c - 32; }
+        if c == 0xFF { return 0x178; }
+        if c >= 0x100 && c <= 0x137 && c != 0x130 && c != 0x131 && c % 2 == 1 { return c - 1; }
+        if c >= 0x139 && c <= 0x148 && c % 2 == 0 { return c - 1; }
+        if c >= 0x14A && c <= 0x177 && c % 2 == 1 { return c - 1; }
+        if c >= 0x17A && c <= 0x17E && c % 2 == 0 { return c - 1; }
+        if c == 0x3C2 { return 0x3A3; }
+        if c >= 0x3B1 && c <= 0x3C9 { return c - 32; }
+        if c >= 0x430 && c <= 0x44F { return c - 32; }
+        if c >= 0x450 && c <= 0x45F { return c - 80; }
+        return c;
+    }
+    static int cp_lower(int c) {
+        if c < 128 {
+            if c >= 'A' && c <= 'Z' { return c + 32; }
+            return c;
+        }
+        if c >= 0xC0 && c <= 0xDE && c != 0xD7 { return c + 32; }
+        if c == 0x178 { return 0xFF; }
+        if c >= 0x100 && c <= 0x137 && c != 0x130 && c != 0x131 && c % 2 == 0 { return c + 1; }
+        if c >= 0x139 && c <= 0x148 && c % 2 == 1 { return c + 1; }
+        if c >= 0x14A && c <= 0x177 && c % 2 == 0 { return c + 1; }
+        if c >= 0x179 && c <= 0x17D && c % 2 == 1 { return c + 1; }
+        if c >= 0x391 && c <= 0x3A9 && c != 0x3A2 { return c + 32; }
+        if c >= 0x410 && c <= 0x42F { return c + 32; }
+        if c >= 0x400 && c <= 0x40F { return c + 80; }
+        return c;
+    }
+    // r (a fresh copy) changed in place to upper (up = 1) or lower case; every mapped letter keeps its size
+    static void map_case(void^ r, int up) {
         char^ p = __Str::ptr(r, 1, 0);
         int i = 0;
         while p[i] != 0 {
-            if p[i] >= 'a' && p[i] <= 'z' { p[i] = p[i] - 32; }
-            i += 1;
+            int b = p[i] & 255;
+            if b < 128 {
+                if up == 1 { p[i] = (char)__Str::cp_upper(b); } else { p[i] = (char)__Str::cp_lower(b); }
+                i += 1;
+            } else if b >= 0xC2 && b <= 0xDF && (p[i + 1] & 0xC0) == 0x80 {
+                int c = ((b & 0x1F) << 6) | (p[i + 1] & 0x3F);
+                if up == 1 { c = __Str::cp_upper(c); } else { c = __Str::cp_lower(c); }
+                p[i] = (char)(0xC0 | (c >> 6));
+                p[i + 1] = (char)(0x80 | (c & 0x3F));
+                i += 2;
+            } else {
+                i += 1;
+            }
         }
+    }
+    static void^ upper(void^ s) {
+        void^ r = __Str::clone(s);
+        __Str::map_case(r, 1);
         return r;
     }
     static void^ lower(void^ s) {
         void^ r = __Str::clone(s);
-        char^ p = __Str::ptr(r, 1, 0);
+        __Str::map_case(r, 0);
+        return r;
+    }
+    // the number of characters (code points)
+    static int count(void^ s) {
+        char^ p = __Str::ptr(s, 1, 0);
+        int n = __Str::len(s, 1);
+        int k = 0;
         int i = 0;
-        while p[i] != 0 {
-            if p[i] >= 'A' && p[i] <= 'Z' { p[i] = p[i] + 32; }
+        while i < n {
+            if (p[i] & 0xC0) != 0x80 { k += 1; }
             i += 1;
         }
+        return k;
+    }
+    // the size in bytes of the character that starts at byte i
+    static int cp_size(char^ p, int i, int n) {
+        int b = p[i] & 255;
+        int k = 1;
+        if b >= 0xF0 { k = 4; } else if b >= 0xE0 { k = 3; } else if b >= 0xC0 { k = 2; }
+        if i + k > n { k = n - i; }
+        return k;
+    }
+    // a String[] with every character as a String of its own
+    static void^ chars(void^ s) {
+        void^ r = __Arr::make(8, 4);
+        char^ p = __Str::ptr(s, 1, 0);
+        int n = __Str::len(s, 1);
+        int i = 0;
+        while i < n {
+            int k = __Str::cp_size(p, i, n);
+            __Str::apush(r, __Str::slice(s, i, i + k));
+            i += k;
+        }
         return r;
+    }
+    // the character number idx (counted from 0) as a String
+    static void^ char_at(void^ s, int idx) {
+        char^ p = __Str::ptr(s, 1, 0);
+        int n = __Str::len(s, 1);
+        int i = 0;
+        int k = 0;
+        while i < n {
+            int sz = __Str::cp_size(p, i, n);
+            if k == idx { return __Str::slice(s, i, i + sz); }
+            i += sz;
+            k += 1;
+        }
+        __panic("char_at: the position is out of range");
+        return __Str::make(1);
     }
     static int starts_with(void^ s, void^ x, int kx) {
         int ns = __Str::len(s, 1);
