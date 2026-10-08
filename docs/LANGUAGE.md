@@ -98,6 +98,8 @@ Constants: `#define MAX 100` (text substitution; defined before use).
 
 ## Control flow
 
+A condition has no parentheses: `if a > b { ... }`, `while n < 3 { ... }`, `for i in 0..5 { ... }`. The `{` ends the condition: an expression never continues with `{` (the only place where `{ ... }` is a value is the right side of a declaration, `Point p = {1, 2};`, and there the `{` comes straight after the `=`), so no ambiguity is possible.
+
 ```jk
 void main() {
     int n = 0;
@@ -160,6 +162,8 @@ void main() {
     int grid[3][4];                  // up to 3 dimensions
     grid[1][2] = 7;
     char name[] = "J2K";             // size counted for you (includes the 0 at the end)
+    double dist[3] = {12.0, 18.0, 25.0};   // a list of values (the rest, if any, is zero)
+    int primes[] = {2, 3, 5, 7};     // [] : the size is the number of values (1 dimension; also for globals, with constants)
     char path[] = r"C:\raw\string";  // raw string: no escapes
     cout << sum(v) << " " << grid[1][2] << " " << name << " " << path << "\n";
     cout << v.len << "\n";           // 5

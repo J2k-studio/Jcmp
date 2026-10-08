@@ -1,60 +1,98 @@
-// An ASCII black hole: for every character a ray of light is followed backwards from the eye; its path is
-// bent by gravity. The disk of hot gas around the hole shows up twice (the light of its far side is bent
-// over the top), one side is brighter because the gas comes towards us there, and the stars are bent too.
-//   blackhole          runs until you press Ctrl-C
-//   blackhole 300      stops after 300 frames
-// The terminal should be at least 100 x 37.
+// A black hole in colour: for every dot of the picture a ray of light is followed backwards from the eye and
+// bent by gravity. Hot gas (red, then orange, then white towards the hole), the bright blue ring of light that
+// has gone round the hole, the side of the disk that comes towards us brighter and bluer, a soft glow.
+//   blackhole            runs until you press Ctrl-C (or Enter)
+//   blackhole 300        stops after 300 frames
+// Needs a terminal with 24-bit colour (Termux has it); the picture takes the size of the terminal.
 #import <stdlib>
 #import <math>
 #import <gfx>
 using stdlib
 using math::matrix;
-using gfx::canvas;
+using gfx::screen;
 
 // the brightness (0..1) of the disk at radius r, angle a (around the hole), at time t
 double disk_light(double r, double a, double t) {
-    double inner = 2.6;                                       // the innermost stable orbit (the hole's radius is 1)
-    double outer = 9.0;
+    double inner = 2.6;
+    double outer = 7.6;
     if r < inner || r > outer { return 0.0; }
-    double heat = Math::pow(inner / r, 0.75);                // the gas is hotter inside (T ~ r^-3/4)
+    double heat = Math::pow(inner / r, 0.75);                 // hotter inside (T ~ r^-3/4)
     double fade = (outer - r) / (outer - inner);
-    double omega = 1.4 / (r * Math::sqrt(r));                 // inner gas goes round faster (Kepler)
+    double omega = 1.4 / (r * Math::sqrt(r));                 // the inner gas goes round faster
     double arms = 0.62 + 0.38 * Math::sin(3.0 * (a - omega * t) + r * 0.8);
-    return heat * Math::sqrt(fade) * arms;
+    return heat * fade * arms * 1.15;
 }
 
-// one ray: from the eye (ex, ey, ez) in the direction (dx, dy, dz).
-// Gives the brightness 0..1 of the disk it meets, or 2 / 3 if it ends at a faint / bright star, or 0 for dark space.
-double trace(double ex, double ey, double ez, double dx, double dy, double dz, double t) {
+// a colour for the heat l (0..1) of the gas; shift > 0 where it comes towards us (bluer), < 0 where it goes away (redder)
+int gas_colour(double l, double shift) {
+    double r = 0.0;
+    double g = 0.0;
+    double b = 0.0;
+    double stop[5] = {0.0, 0.25, 0.5, 0.75, 1.0};
+    double sr[5] = {20.0, 140.0, 250.0, 255.0, 255.0};
+    double sg[5] = {0.0, 15.0, 55.0, 120.0, 190.0};
+    double sb[5] = {0.0, 12.0, 50.0, 100.0, 170.0};
+    for i in 0..4 {
+        if l >= stop[i] && l <= stop[i + 1] {
+            double f = (l - stop[i]) / (stop[i + 1] - stop[i]);
+            r = sr[i] + (sr[i + 1] - sr[i]) * f;
+            g = sg[i] + (sg[i + 1] - sg[i]) * f;
+            b = sb[i] + (sb[i + 1] - sb[i]) * f;
+        }
+    }
+    r = r - shift * 70.0;
+    g = g + shift * 25.0;
+    b = b + shift * 150.0;
+    return Screen::rgb((int)r, (int)g, (int)b);
+}
+
+// one ray from the eye (ex, ey, ez) in the direction (dx, dy, dz): its colour
+int trace(double ex, double ey, double ez, double dx, double dy, double dz, double t, double ring_w) {
     double px = ex;
     double py = ey;
     double pz = ez;
     double vx = dx;
     double vy = dy;
     double vz = dz;
-    // the pull on light depends on the square of its angular momentum
     double hx = py * vz - pz * vy;
     double hy = pz * vx - px * vz;
     double hz = px * vy - py * vx;
-    double h2 = hx * hx + hy * hy + hz * hz;
+    double h2 = hx * hx + hy * hy + hz * hz;                  // the pull on light depends on this
     double best = 0.0;
+    double best_shift = 0.0;
     for steps in 0..420 {
         double r2 = px * px + py * py + pz * pz;
         double r = Math::sqrt(r2);
-        if r < 1.0 { return best; }                           // into the hole
+        if r < 1.0 {                                          // into the hole: only what the gas gave before
+            if best > 0.0 { return gas_colour(best, best_shift); }
+            return 0;
+        }
         if r > 45.0 && (px * vx + py * vy + pz * vz) > 0.0 {
-            if best > 0.0 { return best; }
-            // away for ever: a star in that direction, or nothing
-            int i = (int)((vx + 2.0) * 70.0);
-            int j = (int)((vy + 2.0) * 70.0);
-            int k = (int)((vz + 2.0) * 70.0);
-            int h = (i * 73856093 xor j * 19349663 xor k * 83492791) & 65535;
-            if h % 701 == 0 { return 3.0; }
-            if h % 223 == 0 { return 2.0; }
-            return 0.0;
+            // away for ever: the ring of light that went round the hole is a thin bright circle at the edge of the shadow
+            double rr = Math::sqrt(h2);
+            double off = (rr - 2.62) / ring_w;                 // the ring is as thin as the picture can show
+            double ring = Math::exp(0.0 - off * off);
+            int base = 0;
+            if best > 0.0 { base = gas_colour(best, best_shift); }
+            int cr = (base >> 16) & 255;
+            int cg = (base >> 8) & 255;
+            int cb = base & 255;
+            cr = cr + (int)(ring * 90.0);
+            cg = cg + (int)(ring * 170.0);
+            cb = cb + (int)(ring * 255.0);
+            if best == 0.0 {
+                // a star in that direction, or dark space
+                int i = (int)((vx + 2.0) * 90.0);
+                int j = (int)((vy + 2.0) * 90.0);
+                int k = (int)((vz + 2.0) * 90.0);
+                int hh = (i * 73856093 xor j * 19349663 xor k * 83492791) & 65535;
+                if hh % 700 == 0 { cr = cr + 255; cg = cg + 255; cb = cb + 255; }
+                else if hh % 260 == 0 { cr = cr + 90; cg = cg + 100; cb = cb + 140; }
+            }
+            return Screen::rgb(cr, cg, cb);
         }
         double step = 0.05 * r + 0.04;
-        double acc = 0.0 - 1.5 * h2 / (r2 * r2 * r);          // the bending of light
+        double acc = 0.0 - 1.5 * h2 / (r2 * r2 * r);
         vx += acc * px * step;
         vy += acc * py * step;
         vz += acc * pz * step;
@@ -62,31 +100,32 @@ double trace(double ex, double ey, double ez, double dx, double dy, double dz, d
         double ny = py + vy * step;
         double nz = pz + vz * step;
         if (py > 0.0 && ny <= 0.0) || (py < 0.0 && ny >= 0.0) {
-            // through the plane of the disk
             double rd = Math::sqrt(nx * nx + nz * nz);
             double l = disk_light(rd, Math::atan2(nz, nx), t);
             if l > 0.0 {
-                // the gas moves round the hole: where it comes towards us the light is boosted, where it goes away it is dimmed
                 double speed = 0.55 / Math::sqrt(rd);
                 double tx = 0.0 - nz / rd * speed;
                 double tz = nx / rd * speed;
                 double toward = 0.0 - (tx * vx + tz * vz) / Math::sqrt(vx * vx + vy * vy + vz * vz);
                 double boost = Math::clamp(1.0 + 1.6 * toward, 0.25, 2.2);
-                double red = Math::sqrt(Math::max(0.0, 1.0 - 1.0 / rd));       // light that climbs out of the hole loses energy
-                l = l * boost * red * 1.25;
-                if l > 1.0 { l = 1.0; }
-                if l > best { best = l; }
+                double red = Math::sqrt(Math::max(0.0, 1.0 - 1.0 / rd));
+                l = Math::min(1.0, l * boost * red * 1.3);
+                if l > best {
+                    best = l;
+                    best_shift = Math::clamp(toward * 1.8, -1.0, 1.0);
+                }
             }
         }
         px = nx;
         py = ny;
         pz = nz;
     }
-    return best;
+    if best > 0.0 { return gas_colour(best, best_shift); }
+    return 0;
 }
 
 void main() {
-    int frames = 0;                                           // 0: until Ctrl-C
+    int frames = 0;                                           // 0: until Ctrl-C or Enter
     String[] args = Env::args();
     if args.len > 1 {
         switch Num::parse_int(args[1]) {
@@ -97,52 +136,33 @@ void main() {
             }
         }
     }
-    String ramp = " .:-=+*#%@";
-    int W = 100;
-    int H = 37;
-    Canvas c = Canvas::make(W, H);
-    c.clear_screen();
+    int w = Math::min_int(Term::cols(), 120);
+    int h = Math::min_int((Term::rows() - 1) * 2, 80);
+    Screen s = Screen::make(w, h);
+    s.begin();
+    int side = Math::min_int(w, s.h);
+    double ring_w = Math::max(0.07, 15.0 * 1.4 / (double)side * 0.55);    // the size of a dot, in the units of the hole's radius
     int frame = 0;
     while frames == 0 || frame < frames {
         double t = (double)frame * 0.06;
-        // the eye: above the plane of the disk, looking at the hole; it moves up and down slowly
-        mat3 look = mat3::rotate_x(0.30 + 0.12 * Math::sin(t * 0.35));
-        vec3 eye0 = {0.0, 0.0, -17.0};
+        mat3 look = mat3::rotate_x(0.30 + 0.12 * Math::sin(t * 0.35));       // the eye moves up and down slowly
+        vec3 eye0 = {0.0, 0.0, -15.0};
         vec3 eye = look.mul_vec(eye0);
-        for cy in 0..H {
-            for cx in 0..W {
-                // two rays for each character, one above the other, and their average
-                double sum = 0.0;
-                int star = 0;
-                for sub in 0..2 {
-                    double u = ((double)cx - (double)W / 2.0 + 0.5) / ((double)H * 2.0) * 1.5;
-                    double v = ((double)cy - (double)H / 2.0 + 0.25 + (double)sub * 0.5) / (double)H * 1.5;
-                    vec3 d0 = {u, v, 1.0};
-                    vec3 d = look.mul_vec(d0.normalize());
-                    double got = trace(eye.x, eye.y, eye.z, d.x, d.y, d.z, t);
-                    if got >= 2.0 {
-                        star = (int)got;
-                    } else {
-                        sum += got;
-                    }
-                }
-                double light = sum / 2.0;
-                char ch = ' ';
-                if light > 0.06 {
-                    int k = (int)(light * 9.99);
-                    if k > 9 { k = 9; }
-                    if k < 1 { k = 1; }
-                    ch = ramp[k];
-                } else if star == 3 {
-                    ch = '*';
-                } else if star == 2 {
-                    ch = '.';
-                }
-                c.put(cx, cy, ch);
+        for y in 0..s.h {
+            for x in 0..w {
+                double u = ((double)x - (double)w / 2.0 + 0.5) / (double)side * 1.4;
+                double v = ((double)y - (double)s.h / 2.0 + 0.5) / (double)side * 1.4;
+                vec3 d0 = {u, v, 1.0};
+                vec3 d = look.mul_vec(d0.normalize());
+                s.set_packed(x, y, trace(eye.x, eye.y, eye.z, d.x, d.y, d.z, t, ring_w));
             }
         }
-        c.show();
-        Time::sleep_ms(20);
+        s.glow(0.45);
+        s.show();
+        cout << " Ctrl-C or Enter to stop\n";
+        if frames == 0 && Term::key_pressed() { break; }
+        Time::sleep_ms(10);
         frame += 1;
     }
+    s.end();
 }

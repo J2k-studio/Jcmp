@@ -36,6 +36,7 @@ int vector_loaded;           // 1 once `import <vector>` has been read
 int matrix_loaded;
 int gfx_loaded;              // 1 once `#import <gfx>` has been read
 int canvas_loaded;
+int screen_loaded;
 int math_loaded;             // 1 once `#import <math>` has been read (using math::vector loads the parts)           // 1 once `import <matrix>` has been read
 int std_loaded;              // 1 once `import std` has been read
 
@@ -341,6 +342,7 @@ void lex_init(char^ path) {
     math_loaded = 0;
     gfx_loaded = 0;
     canvas_loaded = 0;
+    screen_loaded = 0;
     mt_pending = 0;
     cpu_loaded = 0;
     lx_depth = 0;
@@ -548,6 +550,7 @@ void using_math() {
 // using gfx::canvas : like using_math (the current token is `gfx`)
 void using_gfx() {
     if gfx_loaded == 0 { die("using gfx needs  #import <gfx>  first"); }
+    int want = 3;                                    // 1 canvas, 2 screen, 3 both
     skip_blanks();
     if lc(0) == ':' && lc(1) == ':' {
         adv();
@@ -561,14 +564,20 @@ void using_gfx() {
             adv();
         }
         part[n] = 0;
-        if !str_eq(@part, "canvas") { die_name("unknown part of gfx (canvas)", @part); }
+        if str_eq(@part, "canvas") { want = 1; }
+        else if str_eq(@part, "screen") { want = 2; }
+        else { die_name("unknown part of gfx (canvas or screen)", @part); }
     }
     skip_blanks();
     if lc(0) == ';' { adv(); }
-    // read first: vector, then canvas
-    if canvas_loaded == 0 {
+    // read first: vector, then canvas / screen
+    if (want == 1 || want == 3) && canvas_loaded == 0 {
         canvas_loaded = 1;
         push_canvas();
+    }
+    if (want == 2 || want == 3) && screen_loaded == 0 {
+        screen_loaded = 1;
+        push_screen();
     }
     if vector_loaded == 0 {
         vector_loaded = 1;

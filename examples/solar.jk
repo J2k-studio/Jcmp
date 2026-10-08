@@ -33,16 +33,10 @@ void main() {
         }
     }
     // the planets: Mercury Venus Earth Mars Jupiter Saturn
-    double axis[6];
-    double ecc[6];
-    double size[6];
-    char sym[6];
-    axis[0] = 4.5;  ecc[0] = 0.21; size[0] = 0.7; sym[0] = 'm';
-    axis[1] = 7.0;  ecc[1] = 0.01; size[1] = 1.0; sym[1] = 'V';
-    axis[2] = 9.5;  ecc[2] = 0.02; size[2] = 1.1; sym[2] = 'E';
-    axis[3] = 12.5; ecc[3] = 0.09; size[3] = 0.8; sym[3] = 'M';
-    axis[4] = 16.5; ecc[4] = 0.05; size[4] = 2.0; sym[4] = 'J';
-    axis[5] = 20.0; ecc[5] = 0.06; size[5] = 1.6; sym[5] = 'S';
+    double axis[6] = {4.5, 7.0, 9.5, 12.5, 16.5, 20.0};      // the size of the orbit
+    double ecc[6] = {0.21, 0.01, 0.02, 0.09, 0.05, 0.06};    // how far from a circle
+    double size[6] = {0.7, 1.0, 1.1, 0.8, 2.0, 1.6};         // the radius of the ball, in rows
+    char sym[6] = {'m', 'V', 'E', 'M', 'J', 'S'};
     // stars in fixed places on the screen
     int star_x[70];
     int star_y[70];

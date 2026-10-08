@@ -352,3 +352,41 @@ struct Proc {
         return Result<String, Error>::Ok(text);
     }
 }
+
+// the terminal: its size, and whether a key was pressed (a program that runs until told to stop)
+//   int cols = Term::cols();   if Term::key_pressed() { break; }       (a line + Enter; Ctrl-C always stops a program)
+struct Term {
+    // the number of columns (80 if it cannot be asked)
+    static int cols() {
+        char ws[8];
+        int rc = syscall(29, 1, 0x5413, @ws);
+        if rc < 0 { return 80; }
+        int c = (ws[2] & 255) | ((ws[3] & 255) << 8);
+        if c < 10 { return 80; }
+        return c;
+    }
+    // the number of rows (24 if it cannot be asked)
+    static int rows() {
+        char ws[8];
+        int rc = syscall(29, 1, 0x5413, @ws);
+        if rc < 0 { return 24; }
+        int r = (ws[0] & 255) | ((ws[1] & 255) << 8);
+        if r < 5 { return 24; }
+        return r;
+    }
+    // true if something was typed (it is read and thrown away); nothing is waited for, and the terminal is not changed.
+    // With the keyboard line by line, the text arrives when Enter is pressed.
+    static bool key_pressed() {
+        char pfd[8];
+        char ts[16];
+        for i in 0..8 { pfd[i] = 0; }
+        for i in 0..16 { ts[i] = 0; }
+        pfd[4] = 1;                                   // POLLIN on file 0
+        int rc = syscall(73, @pfd, 1, @ts, 0, 8);
+        if rc <= 0 { return false; }
+        if (pfd[6] & 1) == 0 { return false; }
+        char buf[256];
+        int n = syscall(63, 0, @buf, 256);
+        return n > 0;                                 // 0 is the end of the input: no key
+    }
+}

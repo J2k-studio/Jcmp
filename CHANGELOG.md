@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.9.26
+* **Array lists:** `double dist[3] = {12.0, 18.0, 25.0};`, `int primes[] = {2, 3, 5};` (size counted), also for global arrays (constants). Values not given are zero. One dimension, not structs yet (docs/syntax-design.md section 56, waiting for the owner's confirmation of the form).
+* **Colour in gfx:** `using gfx::screen;` gives `Screen::make(w, h)`: a picture of rgb dots (`set`, `set_packed`, `get`, `clear`, `glow` = bloom, `frame`, `show`, `begin`, `end`); two dots in each character cell with 24-bit colour codes. `Screen::rgb(r, g, b)` packs a colour. `using gfx::canvas;` still gives the character `Canvas`; `using gfx;` gives both.
+* **Terminal (stdlib):** `Term::cols()`, `Term::rows()`, `Term::key_pressed()` (a line + Enter typed; nothing is waited for and the terminal is not changed). The examples stop on Ctrl-C or Enter.
+* **Examples:** `examples/blackhole.jk` is the colour version (hot red-orange gas, bluer where it comes towards us, the thin blue ring of light that went round the hole, glow, stars; it takes the size of the terminal); the character version is `examples/blackhole_ascii.jk`. `Math::min_int`, `Math::max_int`.
+* **Docs:** conditions have no parentheses and `{` ends them (no ambiguity); array lists.
+* **Housekeeping:** `ship.sh` refuses to release while untracked files lie in the folder (a binary and private files had been committed by mistake in 0.9.20 - 0.9.25).
+
 ## 0.9.25
 * **Examples run until Ctrl-C** when no number of frames is given (`solar`, `blackhole`; `solar 300` stops after 300 frames). Before, they stopped by themselves after a fixed number of frames.
 * **Solar system:** every orbit fits the screen; planets move on ellipses by Kepler's law and are lit by the sun (the side away from the sun is dark); moons, the ring of Saturn, an asteroid belt, twinkling stars.

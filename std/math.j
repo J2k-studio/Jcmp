@@ -12,6 +12,14 @@ struct Math {
         if b > a { return b; }
         return a;
     }
+    static int min_int(int a, int b) {
+        if b < a { return b; }
+        return a;
+    }
+    static int max_int(int a, int b) {
+        if b > a { return b; }
+        return a;
+    }
     static double sqrt(double x) {
         return __fsqrt(x);
     }

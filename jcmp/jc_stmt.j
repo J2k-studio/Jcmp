@@ -83,7 +83,11 @@ int vec_count_ahead() {
     o += 1;
     while is_space(lc(o)) { o += 1; }
     if lc(o) != '{' { return -1; }
-    o += 1;
+    return count_values_from(o + 1);
+}
+
+// the number of values in { a, b, c } : o is the offset just after the {  (-1 if it never closes)
+int count_values_from(int o) {
     int depth = 0;
     int n = 0;
     int any = 0;
@@ -1810,14 +1814,25 @@ void parse_local_decl_core() {
         int d_s1 = dim_s1;
         int d_s2 = dim_s2;
         int d_str = 0;
+        int d_list = 0;
         if tok_is("=") {
             next();
+            if tok_is("{") {
+                // double a[3] = {1.0, 2.0, 3.0};   (a[] takes its size from the number of values)
+                if d_nd != 1 { die("only a one-dimensional array can start from a list of values"); }
+                if d_elem >= 16 && d_ptr == 0 { die("an array of structs cannot start from a list of values yet"); }
+                d_list = count_values_from(0);                  // the current token is the {: its characters are already read
+                if d_list < 0 { die("a } was expected"); }
+                if d_count < 0 { d_count = d_list; }
+                if d_list > d_count { die("more values than the array can hold"); }
+            } else {
             if tok_kind != T_STR { die("a string was expected"); }
             if size_of(d_elem) != 1 { die("only a char array can start from a string"); }
             if d_nd != 1 { die("only a one-dimensional array can start from a string"); }
             d_str = 1;
             if d_count < 0 { d_count = tok_str_len + 1; }
             if tok_str_len + 1 > d_count { die("the string does not fit in the array"); }
+            }
         } else {
             if d_count < 0 { die("an array size (a number) was expected"); }
             expect(";");
@@ -1827,6 +1842,37 @@ void parse_local_decl_core() {
         lnd[lcount - 1] = d_nd;
         lst1[lcount - 1] = d_s1;
         lst2[lcount - 1] = d_s2;
+        if d_list > 0 || (d_list == 0 && tok_is("{")) {
+            int l_off = loff[lcount - 1];
+            int l_es = size_of(d_elem);
+            int l_tid = d_tid;
+            if d_ptr != 0 { l_tid = 0; }
+            next();                      // the {
+            int l_i = 0;
+            while !tok_is("}") {
+                if l_i >= d_count { die("more values than the array can hold"); }
+                parse_expr();
+                check_assign(l_tid);
+                emit_line("mov x1, x0");
+                ins_n("add x3, x29, #", l_off + l_i * l_es);
+                store_through(d_elem);
+                l_i += 1;
+                if tok_is(",") { next(); } else { break; }
+            }
+            if !tok_is("}") { die("} expected at the end of the list of values"); }
+            next();
+            // the values that are not given are zero
+            if l_i < d_count {
+                if d_count - l_i > 64 { die("give all the values of a big array, or none (the rest would not be zeroed)"); }
+                emit_line("mov x1, 0");
+                while l_i < d_count {
+                    ins_n("add x3, x29, #", l_off + l_i * l_es);
+                    store_through(d_elem);
+                    l_i += 1;
+                }
+            }
+            expect(";");
+        }
         if d_elem >= 16 && d_str == 0 && struct_has_init(d_elem - 16) {
             emit_init_array(d_elem - 16, loff[lcount - 1], d_count);
         }
@@ -2503,14 +2549,26 @@ void parse_global(char^ name) {
         int g_s1 = dim_s1;
         int g_s2 = dim_s2;
         int g_str = 0;
+        int g_list = 0 - 1;
         if tok_is("=") {
             next();
+            if tok_is("{") {
+                // double dist[3] = {1.0, 2.0, 3.0};   constants only
+                if g_nd != 1 { die("only a one-dimensional array can start from a list of values"); }
+                if g_elem >= 16 && g_ptr == 0 { die("an array of structs cannot start from a list of values yet"); }
+                if g_elem == 6 { die("a global float array cannot start from a list of values (use double, or set it in main)"); }
+                g_list = count_values_from(0);
+                if g_list < 0 { die("a } was expected"); }
+                if g_count < 0 { g_count = g_list; }
+                if g_list > g_count { die("more values than the array can hold"); }
+            } else {
             if tok_kind != T_STR { die("a string was expected"); }
             if size_of(g_elem) != 1 { die("only a char array can start from a string"); }
             if g_nd != 1 { die("only a one-dimensional array can start from a string"); }
             g_str = 1;
             if g_count < 0 { g_count = tok_str_len + 1; }
             if tok_str_len + 1 > g_count { die("the string does not fit in the array"); }
+            }
         } else {
             if g_count < 0 { die("an array size (a number) was expected"); }
             expect(";");
@@ -2520,6 +2578,56 @@ void parse_global(char^ name) {
         gnd[gcount - 1] = g_nd;
         gst1[gcount - 1] = g_s1;
         gst2[gcount - 1] = g_s2;
+        if g_list >= 0 {
+            int gl_off = goff[gcount - 1];
+            int gl_es = size_of(g_elem);
+            int gl_tid = g_tid;
+            if g_ptr != 0 { gl_tid = 0; }
+            next();                      // the {
+            int gl_i = 0;
+            int gl_word = 0;
+            while !tok_is("}") {
+                int gv = parse_const();
+                int gl_at = gl_off + gl_i * gl_es;
+                if cf_flag == 1 {
+                    if g_tid != 91 { die("a float constant needs a double array"); }
+                    if gfi_count >= 4096 { die("too many global float initializers"); }
+                    if pass_no >= 2 {
+                        gfi_off[gfi_count] = gl_at;
+                        gfi_mant[gfi_count] = cf_mant;
+                        gfi_exp[gfi_count] = cf_exp;
+                        gfi_neg[gfi_count] = cf_neg;
+                        gfi_f32[gfi_count] = 0;
+                        gfi_count += 1;
+                    }
+                } else {
+                    if g_ptr == 0 { check_assign(gl_tid); }
+                    if g_elem == 2 || g_elem == 11 { gv = gv & 255; }
+                    if g_elem == 12 { gv = gv & 4294967295; }
+                    if g_elem == 1 { gv = (gv & 255) xor 128; gv = gv - 128; gv = gv & 255; }
+                    if g_elem == 4 { gv = gv & 4294967295; }
+                    if gl_es == 8 {
+                        if gv != 0 { add_ginit(gl_at, gv); }
+                    } else {
+                        // small elements: the 8 bytes around are put together and stored once
+                        gl_word = gl_word | (gv << ((gl_at % 8) * 8));
+                        if (gl_at + gl_es) % 8 == 0 {
+                            if gl_word != 0 { add_ginit(gl_at + gl_es - 8, gl_word); }
+                            gl_word = 0;
+                        }
+                    }
+                }
+                gl_i += 1;
+                if gl_i > g_count { die("more values than the array can hold"); }
+                if tok_is(",") { next(); } else { break; }
+            }
+            if !tok_is("}") { die("} expected at the end of the list of values"); }
+            if gl_es < 8 && gl_word != 0 {
+                add_ginit(((gl_off + gl_i * gl_es - 1) / 8) * 8, gl_word);
+            }
+            next();
+            expect(";");
+        }
         if g_elem >= 16 && g_str == 0 && pass_no >= 2 && struct_has_init(g_elem - 16) {
             if gsi_count >= 4096 { die("too many global structs with init()"); }
             gsi_off[gsi_count] = goff[gcount - 1];
