@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9.29
+* **The mascot (`jcmp -space`) like Saturn:** the J is the planet and four thin rings (with a gap, like Saturn's) lean 45 degrees round it, a little slanted. The ring stays where it is; its gas goes round, the inner rings faster, as clumps of brighter characters. A cleaner, slimmer J with a hook that curls up. Under the picture: `created by J2k-studio`, and how to stop.
+
 ## 0.9.28
 * **The mascot:** `jcmp -space` shows the J2K logo in ASCII style until you press Ctrl-C or Enter: a J drawn with shaded characters (`.:-=+*#%@`) and a soft halo, a ring that leans 45 degrees and turns round it (in front of and behind the letter), twinkling stars, 24 frames a second. It reads the size of the terminal first and shows a small picture (48 x 18 characters) in the middle. It is written in J2K inside the compiler without any library (`jcmp/jc_logo.j`). `-spcae` and `-speac` do the same; it is not listed in `-help`. Plain characters: it works in any terminal (at least 50 x 20).
 ## 0.9.27

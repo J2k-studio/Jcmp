@@ -57,18 +57,19 @@ double lg_cos(double x) {
 // how close the point (x, y) is to the letter J (0 = far, 1 = inside the stroke); the letter fills -1..1
 double lg_j(double x, double y) {
     double d = 9.0;
-    double bx = lg_clamp(x, 0.0 - 0.20, 0.50);                                  // the top bar
-    d = lg_min(d, __fsqrt((x - bx) * (x - bx) + (y + 0.82) * (y + 0.82)));
-    double sy = lg_clamp(y, 0.0 - 0.82, 0.28);                                  // the stem
-    d = lg_min(d, __fsqrt((x - 0.20) * (x - 0.20) + (y - sy) * (y - sy)));
-    double cx = x + 0.15;                                                       // the hook: half a circle
-    double cy = y - 0.28;
+    double bx = lg_clamp(x, 0.0 - 0.18, 0.46);                                  // the top bar
+    d = lg_min(d, __fsqrt((x - bx) * (x - bx) + (y + 0.80) * (y + 0.80)));
+    double sy = lg_clamp(y, 0.0 - 0.80, 0.30);                                  // the stem
+    d = lg_min(d, __fsqrt((x - 0.14) * (x - 0.14) + (y - sy) * (y - sy)));
+    double cx = x + 0.17;                                                       // the hook: a half circle, curling up at its end
+    double cy = y - 0.30;
     if cy >= 0.0 {
-        d = lg_min(d, lg_abs(__fsqrt(cx * cx + cy * cy) - 0.35));
+        d = lg_min(d, lg_abs(__fsqrt(cx * cx + cy * cy) - 0.31));
     } else if cx < 0.0 {
-        d = lg_min(d, __fsqrt((x + 0.50) * (x + 0.50) + (y - 0.28) * (y - 0.28)));
+        double ey = lg_clamp(y, 0.12, 0.30);                                    // the end of the hook goes a little up
+        d = lg_min(d, __fsqrt((x + 0.48) * (x + 0.48) + (y - ey) * (y - ey)));
     }
-    return lg_clamp(1.0 - (d - 0.11) / 0.05, 0.0, 1.0);
+    return lg_clamp(1.0 - (d - 0.085) / 0.05, 0.0, 1.0);
 }
 
 void lg_text(char^ s) {
@@ -145,7 +146,7 @@ void lg_read_size() {
 // the picture as text, in the middle of the terminal (every line is put in place with a cursor move)
 void lg_show() {
     int left = (lg_cols - LW) / 2 + 1;
-    int top = (lg_rows - LH - 1) / 2 + 1;
+    int top = (lg_rows - LH - 2) / 2 + 1;
     if left < 1 { left = 1; }
     if top < 1 { top = 1; }
     lg_len = 0;
@@ -166,13 +167,21 @@ void lg_show() {
         }
         y += 1;
     }
+    // under the picture: who made it, and how to stop
     lg_buf[lg_len] = 27;
     lg_len += 1;
     lg_text("[");
     lg_num(top + LH);
     lg_text(";");
+    lg_num(left + LW / 2 - 11);
+    lg_text("Hcreated by J2k-studio");
+    lg_buf[lg_len] = 27;
+    lg_len += 1;
+    lg_text("[");
+    lg_num(top + LH + 1);
+    lg_text(";");
     lg_num(left + LW / 2 - 12);
-    lg_text("H J2K - Ctrl-C or Enter to stop");
+    lg_text("H(Ctrl-C or Enter to stop)");
     syscall(64, 1, @lg_buf, lg_len);
 }
 
@@ -253,7 +262,7 @@ void lg_run(int frames) {
     double pi = 3.141592653589793;
     double cxs = (double)LW / 2.0;
     double cys = (double)LH / 2.0;
-    double unit = (double)LH * 0.40;                    // rows for one unit of the picture; a character is twice as high as wide
+    double unit = (double)LH * 0.36;                    // rows for one unit of the picture; a character is twice as high as wide
     // the letter J once: each cell is looked at in 3 x 3 places
     int y = 0;
     while y < LH {
@@ -357,8 +366,8 @@ void lg_run(int frames) {
             }
             i += 1;
         }
-        double cy_ = lg_cos(t * 0.6);                        // the ring turns slowly round the letter
-        double sy_ = lg_sin(t * 0.6);
+        // the ring, like Saturn's: a flat ring that leans 45 degrees and is slanted a little, with a gap in it;
+        // it does not turn as a whole, but its gas does: the inner rings go round faster
         int pass = 0;
         while pass < 2 {
             if pass == 1 {
@@ -372,31 +381,36 @@ void lg_run(int frames) {
                     i += 1;
                 }
             }
-            i = 0;
-            while i < 720 {
-                double a = (double)i * 2.0 * pi / 720.0;
-                double px = 0.95 * lg_cos(a);
-                double pz = 0.95 * lg_sin(a);
-                double ly = 0.0 - pz * c45;                       // lean 45 degrees towards us
-                double lz = pz * c45;
-                double sx2 = px * cz - ly * sz;                   // a little sideways
-                double sy2 = px * sz + ly * cz;
-                double qx = sx2 * cy_ + lz * sy_;                 // turn round the up axis
-                double qz = 0.0 - sx2 * sy_ + lz * cy_;
-                double qy = sy2;
-                int behind = 0;
-                if qz > 0.0 { behind = 1; }
-                if (pass == 0 && behind == 1) || (pass == 1 && behind == 0) {
-                    double persp = 1.0 / (1.0 + 0.25 * qz);
-                    int dx = (int)(cxs + qx * persp * unit * 2.0 * 1.35);
-                    int dy = (int)(cys + qy * persp * unit * 1.35);
-                    double depth = 0.5 - 0.5 * qz;
-                    double bead = 0.0;
-                    double da = lg_sin((a - t * 2.2) * 0.5);
-                    if da * da > 0.985 { bead = 0.3; }
-                    lg_dot(dx, dy, 0.30 + 0.55 * depth + bead);
+            int rg = 0;
+            while rg < 4 {
+                double rad = 1.16;
+                double w = 1.3;
+                if rg == 1 { rad = 1.30; w = 1.1; }
+                if rg == 2 { rad = 1.56; w = 0.85; }
+                if rg == 3 { rad = 1.70; w = 0.7; }
+                i = 0;
+                while i < 720 {
+                    double a = (double)i * 2.0 * pi / 720.0;
+                    double px = rad * lg_cos(a);
+                    double pz = rad * lg_sin(a);
+                    double ly = 0.0 - pz * c45;                       // lean 45 degrees towards us
+                    double lz = pz * c45;
+                    double qx = px * cz - ly * sz;                    // slanted a little
+                    double qy = px * sz + ly * cz;
+                    double qz = lz;
+                    int behind = 0;
+                    if qz > 0.0 { behind = 1; }
+                    if (pass == 0 && behind == 1) || (pass == 1 && behind == 0) {
+                        int dx = (int)(cxs + qx * unit * 2.0);
+                        int dy = (int)(cys + qy * unit);
+                        double depth = 0.5 - 0.5 * qz / rad;
+                        double c = lg_sin(5.0 * (a - w * t));         // clumps of gas that go round
+                        double clump = 0.5 + 0.5 * c;
+                        lg_dot(dx, dy, 0.10 + 0.22 * depth + 0.40 * clump * clump * clump);
+                    }
+                    i += 1;
                 }
-                i += 1;
+                rg += 1;
             }
             pass += 1;
         }
