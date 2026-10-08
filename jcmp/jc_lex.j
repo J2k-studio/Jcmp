@@ -31,6 +31,9 @@ int inc_count;
 int lvl_inst[16];            // 1 = the level is the text of a generic instance: its end is an end of items, not a return to the file below
 int mt_pending;              // 1 after #multithread until the for loop it belongs to is parsed
 int cpu_loaded;              // 1 once `import cpu` has been read
+int lvl_lib[16];             // 1 for a level that is a built-in library (its warnings are not shown)
+int vector_loaded;           // 1 once `import <vector>` has been read
+int matrix_loaded;           // 1 once `import <matrix>` has been read
 int std_loaded;              // 1 once `import std` has been read
 
 // ---------------------------------------------------------------- #define
@@ -204,6 +207,7 @@ void append_text(char^ dst, char^ more) {
 // a warning (with -st it is an error); `flag` names it, e.g. "switch"
 void warn(char^ msg, char^ flag) {
     if pass_no != 3 { return; }          // each warning once
+    if lvl_lib[lx_depth] == 1 { return; } // not in a built-in library: the user cannot change it
     if opt_strict == 1 {
         begin_msg("error");
         write_err(msg);
@@ -255,6 +259,7 @@ void push_file(char^ path) {
     stk_line[lx_depth] = cur_line;
     stk_ls[lx_depth] = cur_line_start;
     lx_depth += 1;
+    lvl_lib[lx_depth] = 0;
     cur_base = lx_depth * 524288;
     str_copy(@lvl_name + lx_depth * 128, path, 128);
     int n = read_file(path, @src_bufs + cur_base, 524288);
@@ -274,6 +279,7 @@ void push_macro(char^ text) {
     stk_ls[lx_depth] = cur_line_start;
     str_copy(@lvl_name + (lx_depth + 1) * 128, @lvl_name + lx_depth * 128, 128);
     lx_depth += 1;
+    lvl_lib[lx_depth] = lvl_lib[lx_depth - 1];
     cur_base = lx_depth * 524288;
     str_copy(@src_bufs + cur_base, text, 300);
     cur_len = str_len(text);
@@ -290,6 +296,7 @@ void push_text(char^ text, int n, char^ file, int line) {
     stk_line[lx_depth] = cur_line;
     stk_ls[lx_depth] = cur_line_start;
     lx_depth += 1;
+    lvl_lib[lx_depth] = 0;
     cur_base = lx_depth * 524288;
     str_copy(@lvl_name + lx_depth * 128, file, 128);
     int i = 0;
@@ -326,6 +333,8 @@ void lex_init(char^ path) {
     lx_depth = 0;
     lvl_inst[0] = 0;
     std_loaded = 0;
+    vector_loaded = 0;
+    matrix_loaded = 0;
     mt_pending = 0;
     cpu_loaded = 0;
     lx_depth = 0;
@@ -503,6 +512,24 @@ void import_library(char^ name, char^ rel) {
         if std_loaded == 0 {
             std_loaded = 1;
             push_std();
+        }
+        next();
+        return;
+    }
+    if str_eq(name, "vector") || str_eq(name, "matrix") {
+        // the math libraries need stdlib (Math); matrix needs vector
+        if std_loaded == 0 {
+            std_loaded = 1;
+            push_std();
+        }
+        // the last one pushed is read first: vector must come before matrix
+        if str_eq(name, "matrix") && matrix_loaded == 0 {
+            matrix_loaded = 1;
+            push_matrix();
+        }
+        if vector_loaded == 0 {
+            vector_loaded = 1;
+            push_vector();
         }
         next();
         return;

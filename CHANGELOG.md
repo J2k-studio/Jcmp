@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.18
+* **Math libraries:** `#import <vector>` gives `Vec2`, `Vec3`, `Vec4` (make, zero, splat, add, sub, mul, div, neg, dot, cross, length, distance, normalize, lerp, min, max, abs, reflect, eq); `#import <matrix>` gives `Mat3`, `Mat4` (identity, scale, rotate_x/y/z, mul, mul_vec, transpose, and for `Mat4` translate, point, direction, project, perspective, look_at). Operators (`a + b`, `pos += vel * dt`) and swizzle come later (docs/syntax-design.md section 55).
+* Warnings inside the built-in libraries are no longer shown to the user.
+
 ## 0.9.17
 * **`Sha256`:** `Sha256::hex(text)` and `Sha256::file(path)` (a `Result`) give the SHA-256 digest as 64 hex digits. Checked against `sha256sum`, also on a 1 MB binary.
 
