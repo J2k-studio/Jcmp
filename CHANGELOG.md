@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9.31
+* **The mascot is Saturn:** the solid J is the planet; it has rings like Saturn's (a faint inner ring, a bright broad ring, a dark gap, an outer ring) whose gas goes round by Kepler's law (the inner part is faster, in clumps that move from left to right in front). Light and shadow: the J is lit from above, the rings throw a shadow on the lower part of the J, and the J throws its shadow on the rings. The view swings and breathes with two slow motions that do not repeat together, so the turning no longer looks stiff.
+
 ## 0.9.30
 * **The mascot (`jcmp -space`) in 3D (isometric):** a solid J (an extruded letter) seen from above at the isometric angle, lit from above so that its top faces, front and sides get different characters (`.:-=+*#%@`), with four small balls that go round it on dotted ellipses by Kepler's laws (the J is at a focus; a ball is faster near the J; period ~ radius^1.5). The view turns a little to and fro, which makes the picture look solid; the J and the balls hide the orbit dots behind them. Every character is one ray into the scene (ray marching with distance functions), written in J2K inside the compiler.
 ## 0.9.29
