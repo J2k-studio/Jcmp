@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.50
+* **Two functions with the same name are an error** ("this function is defined twice"). Before, the second one silently replaced the first, which hid a fault in 0.9.49 (a new library function got the name of an old one and three tests failed). Test `t261`.
+* Faster `x += e`, `x -= e`, ... on a plain variable: the peephole pass makes the six lines into four (300 million `s = s + i % 7`: 1030 -> 882 ms).
+
 ## 0.9.49
 * **Strings can be ordered:** `a < b`, `a > b`, `a <= b`, `a >= b` on a `String`, a text, or a mix (by the codes of the bytes, like `strcmp`; a capital letter comes before a small one, `"é"` after `"z"`). Sorting a `String[]` with `<` works (test `t256`).
 * **Fixed:** `@name` where `name` is a variable bound in a `switch` to a struct that frees itself (`Result::Ok(doc)`) is now the pointer to that struct (before, the address of the binding itself); so `total(@doc, ...)` works.

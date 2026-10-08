@@ -228,6 +228,85 @@ bool peep_try() {
         }
         return false;
     }
+    // x op= value:  add x3, xB, #N / mov x1, x0 / ldr x0, [x3, #0] / OP x0, x0, x1 / mov x1, x0 / str x1, [x3, #0]
+    //   ->  mov x1, x0 / ldr x0, [xB, #N] / OP x0, x0, x1 / str x0, [xB, #N]
+    if peep_is(l0, "str x1, [x3, #0]") {
+        int l1 = peep_start(1);
+        int l2 = peep_start(2);
+        int l3 = peep_start(3);
+        int l4 = peep_start(4);
+        int l5 = peep_start(5);
+        if l5 >= 0 && peep_is(l1, "mov x1, x0") && peep_is(l3, "ldr x0, [x3, #0]") && peep_is(l4, "mov x1, x0") && peep_has(l5, "add x3, x2") {
+            int bch = peep_buf[l5 + 10];
+            bool opok = peep_has(l2, "add x0, x0, x1") || peep_has(l2, "sub x0, x0, x1") || peep_has(l2, "mul x0, x0, x1") || peep_has(l2, "and x0, x0, x1") || peep_has(l2, "orr x0, x0, x1") || peep_has(l2, "eor x0, x0, x1") || peep_has(l2, "lsl x0, x0, x1") || peep_has(l2, "lsr x0, x0, x1") || peep_has(l2, "asr x0, x0, x1");
+            if opok && (bch == '8' || bch == '9') && peep_buf[l5 + 11] == ',' && peep_buf[l5 + 13] == '#' {
+                int e5 = peep_end(l5);
+                int n = peep_number(l5 + 14, e5);
+                if n >= 0 && n < 4096 && n % 8 == 0 && peep_end(l2) - l2 == 14 {
+                    // the arithmetic line is copied, the others are written again
+                    char oper[16];
+                    int k = 0;
+                    while k < 14 {
+                        oper[k] = peep_buf[l2 + k];
+                        k += 1;
+                    }
+                    oper[14] = 0;
+                    peep_len = l5;
+                    str_copy(@peep_buf + peep_len, "mov x1, x0\n", 20);
+                    peep_len += 11;
+                    peep_buf[peep_len] = 'l';
+                    peep_buf[peep_len + 1] = 'd';
+                    peep_buf[peep_len + 2] = 'r';
+                    peep_buf[peep_len + 3] = ' ';
+                    peep_buf[peep_len + 4] = 'x';
+                    peep_buf[peep_len + 5] = '0';
+                    peep_buf[peep_len + 6] = ',';
+                    peep_buf[peep_len + 7] = ' ';
+                    peep_buf[peep_len + 8] = '[';
+                    peep_buf[peep_len + 9] = 'x';
+                    peep_buf[peep_len + 10] = '2';
+                    peep_buf[peep_len + 11] = bch;
+                    peep_buf[peep_len + 12] = ',';
+                    peep_buf[peep_len + 13] = ' ';
+                    peep_buf[peep_len + 14] = '#';
+                    peep_len += 15;
+                    peep_len = peep_put_number(n, peep_len);
+                    peep_buf[peep_len] = ']';
+                    peep_buf[peep_len + 1] = 10;
+                    peep_len += 2;
+                    k = 0;
+                    while k < 14 {
+                        peep_buf[peep_len] = oper[k];
+                        peep_len += 1;
+                        k += 1;
+                    }
+                    peep_buf[peep_len] = 10;
+                    peep_len += 1;
+                    peep_buf[peep_len] = 's';
+                    peep_buf[peep_len + 1] = 't';
+                    peep_buf[peep_len + 2] = 'r';
+                    peep_buf[peep_len + 3] = ' ';
+                    peep_buf[peep_len + 4] = 'x';
+                    peep_buf[peep_len + 5] = '0';
+                    peep_buf[peep_len + 6] = ',';
+                    peep_buf[peep_len + 7] = ' ';
+                    peep_buf[peep_len + 8] = '[';
+                    peep_buf[peep_len + 9] = 'x';
+                    peep_buf[peep_len + 10] = '2';
+                    peep_buf[peep_len + 11] = bch;
+                    peep_buf[peep_len + 12] = ',';
+                    peep_buf[peep_len + 13] = ' ';
+                    peep_buf[peep_len + 14] = '#';
+                    peep_len += 15;
+                    peep_len = peep_put_number(n, peep_len);
+                    peep_buf[peep_len] = ']';
+                    peep_buf[peep_len + 1] = 10;
+                    peep_len += 2;
+                    return true;
+                }
+            }
+        }
+    }
     // add x3, xB, #N / mov x1, x0 / str x1, [x3, #0]   ->   str x0, [xB, #N]   (also strb, strw)
     if peep_has(l0, "str x1, [x3, #0]") || peep_has(l0, "strb x1, [x3, #0]") || peep_has(l0, "strw x1, [x3, #0]") {
         int l1 = peep_start(1);

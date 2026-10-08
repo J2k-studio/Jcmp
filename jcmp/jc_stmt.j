@@ -2319,6 +2319,7 @@ void parse_function() {
     if ty_ptr != 0 { f_rettid = 0; }
     cur_ret_tid = f_rettid;
     int f_idx = find_func(@d_fname);
+    if f_idx >= 0 && pass_no == 1 { die_name("this function is defined twice (a name can be used for one function only)", @d_fname); }
     int f_oper = op_pending;
     op_pending = 0;
     if f_idx < 0 {
