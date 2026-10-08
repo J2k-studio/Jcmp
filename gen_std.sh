@@ -4,7 +4,7 @@
 # "import std". Run it after changing a file in std/, then ./bootstrap.sh.
 cd "$(dirname "$0")"
 python3 - <<'PY'
-files = ["sys", "str", "math", "fs", "result", "collections", "os", "hash"]
+files = ["sys", "str", "math", "fs", "result", "collections", "os", "hash", "json"]
 def gen(name, files, doc):
     out = ['void %s() {' % name,
            '    if lx_depth >= 15 { die("imports nested too deeply"); }',

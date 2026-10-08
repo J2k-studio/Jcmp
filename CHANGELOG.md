@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.21
+* **JSON (stdlib):** `Json::parse(text)` gives a `Result<JsonDoc, Error>` (an error says what and at which byte); a `JsonDoc` is a table of nodes (a node is a number, -1 = none): `root get at len has name_of text number integer boolean is_null kind_of dump`. `Json::quote(s)` and `Json::num_text(x)` make JSON text. Strings are decoded (`\n`, `\u00e9`, surrogate pairs to UTF-8).
+* **Fixed:** a data enum member with a parameter named `s` (`Name(String s)`) clashed with a name made by the compiler.
+* **Fixed:** `return v;` of a name bound in a case to a struct that frees itself (for example `Result<JsonDoc, Error>::unwrap`) is a move now: the struct is copied out and the enum's copy is emptied. Before, `Result<T, E>` with such a `T` did not compile.
+* Warnings about passing a large struct by value are not given for generic instances.
+
 ## 0.9.20
 * **Operator methods:** a struct method declared with the word `operator` can be used with an operator: `+` calls `add`, `-` calls `sub`, `*` calls `mul`, `/` calls `div`, `==` / `!=` call `eq`; `a += b` (also `-= *= /=`) is `a = a.add(b)`. Example: `operator vec3 add(self, vec3 o) { ... }`, then `p = a + b * 2.0;`. A struct on the left only (`v * 2.0`); `2.0 * v` is an error that says so. A method without `operator` is never called by an operator.
 * **Renamed:** the math types are `vec2 vec3 vec4 mat3 mat4` (lower case), and their `add sub mul div eq` are operators.

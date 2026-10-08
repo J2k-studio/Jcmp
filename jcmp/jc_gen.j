@@ -1574,13 +1574,13 @@ int gen_data_enum(char^ b, int s, int n, int line) {
         if m_ps[v] >= 0 { de_range(b, m_ps[v], m_pe[v]); }
         de_str(") { ");
         de_str(@en_name);
-        de_str(" s; s.__tag = ");
+        de_str(" __r; __r.__tag = ");
         append_int_to_de(v);
         de_put(';');
         int pk = 0;
         while pk < dvv_nparam[gv2] {
             int px2 = dvv_pfirst[gv2] + pk;
-            de_str(" s.");
+            de_str(" __r.");
             de_str(@dvp_field + px2 * 64);
             de_str(" = ");
             de_str(@dvp_pname + px2 * 64);
@@ -1588,7 +1588,7 @@ int gen_data_enum(char^ b, int s, int n, int line) {
             de_put(';');
             pk += 1;
         }
-        de_str(" return s; }\n");
+        de_str(" return __r; }\n");
         v += 1;
     }
     // a member that holds something that frees itself (a String, an array, a struct with free(self)): the enum frees it

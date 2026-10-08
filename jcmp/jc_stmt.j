@@ -2039,15 +2039,30 @@ void parse_statement_inner() {
             int rhow = 0;
             int rsrc = 0;
             if cur_ret_tid >= 100 && struct_has_free(cur_ret_tid - 100) {
-                rhow = struct_source(cur_ret_tid - 100);       // a value that frees itself moves out
-                rsrc = own_src_off;
+                if alias_src == 1 {
+                    rhow = 3;                                  // taken out of a data enum: copied, and the enum's copy is emptied
+                } else {
+                    rhow = struct_source(cur_ret_tid - 100);   // a value that frees itself moves out
+                    rsrc = own_src_off;
+                }
             }
+            if rhow == 3 { push_x0(); }
             if cur_ret_tid >= 100 {
                 ins_mem("ldr", "x3", "x29", cur_ret_off);
                 ins_n("mov x2, ", ssize[cur_ret_tid - 100]);
                 emit_line("bl j2k_copy");
             }
             if rhow == 2 { emit_zero_local(rsrc, ssize[cur_ret_tid - 100]); }
+            if rhow == 3 {
+                emit_line("ldr x1, [sp, #0]");
+                emit_line("add sp, sp, #16");
+                emit_line("mov x2, 0");
+                int zk3 = 0;
+                while zk3 < ssize[cur_ret_tid - 100] {
+                    ins_mem("str", "x2", "x1", zk3);
+                    zk3 += 8;
+                }
+            }
             expect(";");
         }
         leave_tries(try_depth);
@@ -2293,7 +2308,7 @@ void parse_function() {
                 ty_tid = p_tid;
                 add_local(@p_name, 0, ty_width, ssize[p_tid - 100], 0);
                 if cp_count >= 8 { die("too many struct parameters"); }
-                if ssize[p_tid - 100] > 64 && pass_no >= 2 {
+                if ssize[p_tid - 100] > 64 && pass_no >= 2 && lvl_inst[lx_depth] == 0 {
                     char bmsg[300];
                     str_copy(@bmsg, "passing '", 300);
                     append_text(@bmsg, @sname + (p_tid - 100) * 64);

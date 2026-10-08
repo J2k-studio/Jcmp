@@ -35,6 +35,7 @@ int own_ok = 1;              // 0 where a declaration may not run (a case body w
 int ex_dyn;                  // the packed element type of the dynamic array the last expression was (0 = none)
 int ex_arr_cnt = -1;         // set when the last expression was a whole fixed array: its element count ...
 int ex_arr_code;             // ... and its element width code
+int alias_src;               // 1: the last value read was a name in a case that points into a data enum (see return)
 int lalias[8192];            // 1: a variable that is a pointer to a struct but is used like the struct itself (a name in a case)
 int lused[8192];             // 1 once the name was looked up after its declaration
 int lwarn[8192];             // 1: warn if it is never used (a scalar or array made by a declaration statement)
@@ -1334,6 +1335,7 @@ void gen_call() {
     if str_eq(@callee, "__cas") || str_eq(@callee, "__xchg") || str_eq(@callee, "__fetch_add") { is_atomic = 1; }
     if fi >= 0 && farr[fi] == 1 { arr_call_at = fnpar[fi] - 1 - is_method; }
     last_call_struct = 0;
+    alias_src = 0;
     if res_ty >= 100 {
         // a struct result: a temporary in this frame, its address goes first
         ty_tid = 0;
@@ -2769,6 +2771,18 @@ bool try_indirect_call() {
 // the value of the object found by the l-value chain (x0 = its address)
 void finish_rvalue() {
     if lv_done == 1 { return; }
+    alias_src = 0;
+    if lv_fresh == 1 && lv_kind == 0 && lv_ptr >= 16 && lv_ptr < 1000 && lv_base_local == 1 {
+        int ali = find_local(@lv_base);
+        if ali >= 0 && lalias[ali] == 1 {
+            // a name bound in a case to a struct that frees itself, read as a whole: the struct (its address)
+            load_through(8);
+            ex_w = 8;
+            ex_ty = 100 + lv_ptr - 16;
+            alias_src = 1;
+            return;
+        }
+    }
     if lv_fresh == 1 && lv_base_local == 1 && (lv_kind == 0 || lv_kind == 3) {
         rv_valid = 1;
         rv_off = lv_base_off;
