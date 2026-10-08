@@ -737,3 +737,31 @@ The math libraries are chosen with one import: `#import <math>` and then `using 
 `vec3`) and its parts can be picked with letters: `p.xy`, `p.zyx`, `c.rgb` (several letters: a new vector, read only; one letter:
 the part itself, which can be assigned). The graphics library: `#import <gfx>` and `using gfx::canvas;` (characters, with a depth
 buffer) or `using gfx::screen;` (colour dots). The standard library has `Term::cols()`, `Term::rows()` and `Term::key_pressed()`.
+
+## The standard library at a glance
+
+```jk
+#import <stdlib>
+using stdlib
+
+void main() {
+    // text and numbers
+    String s = "  Hello, J2K  ";
+    cout << s.trim().upper() << " " << s.trim().count() << "\n";         // HELLO, J2K 10
+    // Num::parse_int("42") and Num::parse_double("2.5") give a Result (see the Option, Result and ? section)
+    // files, folders, the environment, time and random numbers
+    //   Fs::read_text(path)?  Fs::write_text(path, text)?  Dir::list(path)?  Env::get("HOME")  Time::now_ms()  Random::range(1, 6)
+    // data
+    //   Json::parse(text)? (a JsonDoc: root get at len text number dump)     Sha256::hex(text)   Sha256::file(path)?
+    //   Hex::encode / decode   Base64::encode / decode   Path::join name parent ext stem
+    // other programs
+    //   int code = Proc::run("ls", args)?     String out = Proc::output("echo", args)?
+    // the terminal
+    //   Term::cols()  Term::rows()  Term::key_pressed()
+}
+```
+
+Collections: `List<T>` (`push pop len ...`), `Map<K, V>` (`put get try_get remove keys_list`), `Set<T>`. Strings compare with `== != < > <= >=`
+(by the codes of the bytes); `s.count()` counts characters, `s.chars()` gives them one by one, `upper()` and `lower()` know Latin, Greek and Cyrillic.
+
+A loop over a range takes numbers or variables: `for i in 0..n`, `for i in lo..hi`, `for i in lo + 1..hi + 1`.

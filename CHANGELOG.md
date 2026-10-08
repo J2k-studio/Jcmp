@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9.50.1
+* **Docs:** the status tables of `README.md` and `README.th.md` (they still said that dynamic arrays, `cin` and threads were missing) and a section "The standard library at a glance" in `docs/LANGUAGE.md` now describe what the language and the libraries really have.
+
 ## 0.9.50
 * **Two functions with the same name are an error** ("this function is defined twice"). Before, the second one silently replaced the first, which hid a fault in 0.9.49 (a new library function got the name of an old one and three tests failed). Test `t261`.
 * Faster `x += e`, `x -= e`, ... on a plain variable: the peephole pass makes the six lines into four (300 million `s = s + i % 7`: 1030 -> 882 ms).

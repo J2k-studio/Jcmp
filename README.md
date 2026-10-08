@@ -30,15 +30,15 @@ Hello from J2K!
 |---------------------------------------------|-------|
 | Compiler written in J2K (`jcmp/`)           | **Working, self-hosting** (two generations are identical, byte for byte) |
 | Assembler written in J2K (`jcmp/jc_asm.j`)  | Working, built into the compiler |
-| Language                                    | Integers (`i8 i32 int char bool`, unsigned `u8 u32 u64`), floats (`float double`), arrays (up to 3 dimensions), pointers (`T^`, `T^^`), function pointers, structs with methods, enums, `switch`, `for`/`while`, `try`/`catch`, `sizeof`, dynamic arrays (`T[]`), `String` (text that grows, `+`, `==`), generics (`T max<T>(T a, T b)`, `struct Box<T>`), `#define`, imports |
-| Standard library (`std/`)                   | `Sys`, `Mem` (heap), `Str`, `Math`, `File` |
+| Language                                    | Integers (`i8 i32 int char bool`, unsigned `u8 u32 u64`), floats (`float double`), arrays (up to 3 dimensions, with lists `int a[3] = {1, 2, 3};`), pointers (`T^`, `T^^`), function pointers and lambdas (`int(int a) { ... }`), structs with methods and **operator methods** (`operator vec3 add(self, vec3 o)` makes `a + b`, `-a`, `2.0 * a` work), enums (also **with data**: `Shape::Circle(r)`), `switch` that takes a value apart, `Option<T>` / `Result<T, E>` and `?`, `defer`, `try`/`catch`/`throw`, panics with a stack trace, `sizeof`, dynamic arrays (`T[]`), `String` (UTF-8, `+`, `==`, `<`), generics with inference (`T max<T>(T a, T b)`, `struct Stack<T>`), `#define`, imports |
+| Standard library                            | `#import <stdlib>`: `Sys`, `Mem`, `Str`, `Math` (complete), `File`, `Fs`, `Dir`, `Env`, `Time`, `Random`, `Num` (parse), `Term` (size, key), `List` / `Map` / `Set`, `Json`, `Sha256`, `Proc` (run programs), `Path`, `Hex`, `Base64` |
+| Math and graphics                           | `#import <math>` then `using math::vector;` (`vec2 vec3 vec4`, swizzle `v.xy`, `c.rgb`), `matrix` (`mat3 mat4`: rotate, perspective, look_at), `quat`, `complex`, `stats`; `#import <gfx>` then `using gfx::canvas;` (characters with a depth buffer) or `using gfx::screen;` (colour dots: lines, circles, gradients, glow, vignette) |
 | Diagnostics                                 | `file:line:col: error/warning:` with the source line and `^`; `-st` makes warnings errors |
-| Debug build (`-d`)                          | array bounds checks |
-| Errors                                      | `try` / `catch` / `throw` with text |
-| Memory                                      | `alloc`/`free`, dynamic arrays, automatic freeing of owned memory at the end of a block |
-| Input                                       | `cin` / `cin` (type decides what is read; bad input throws) |
+| Debug build (`-d`)                          | array bounds checks, a report of memory that was not freed |
+| Memory                                      | `alloc`/`free`, dynamic arrays, automatic freeing of owned memory at the end of a block, structs that free themselves and move |
+| Input                                       | `cin` (type decides what is read; bad input throws) |
 | Threads                                     | `#import <cpu>`: `Thread` (create, join, detach), `Mutex` (futex based), `#multithread` loops |
-| Not done yet                                | optimisation |
+| Speed                                       | about 1.5 to 4 times slower than `clang -O2` on loops and recursion (a peephole pass, operands in registers, division by a literal without `sdiv`); more is planned |
 | Target                                      | Linux **ARM64** only |
 
 Release history: [CHANGELOG.md](CHANGELOG.md).
@@ -72,7 +72,7 @@ wget -qO- https://raw.githubusercontent.com/J2k-studio/Jcmp/main/install.sh | sh
 | Option | Meaning |
 |--------|---------|
 | `--dir DIR`        | install into `DIR` (created if needed) |
-| `--version 0.9.50`  | a specific release instead of the latest |
+| `--version 0.9.50.1`  | a specific release instead of the latest |
 | `--with-assembler` | also install `j2k_asm`, the stand-alone assembler |
 
 Run it again to update. To uninstall, delete the file.
@@ -107,7 +107,7 @@ sha256sum -c --ignore-missing SHA256SUMS      # must print:  jcmp: OK
 chmod +x jcmp && rm SHA256SUMS
 ```
 
-A specific version: replace `latest/download` with `download/v0.9.50` (also a good idea right after a new release, when the `latest` links can lag behind for a minute). The bundle
+A specific version: replace `latest/download` with `download/v0.9.50.1` (also a good idea right after a new release, when the `latest` links can lag behind for a minute). The bundle
 `jcmp-<version>-linux-arm64.tar.gz` of the same release holds the compiler, the assembler, the examples and the docs.
 
 ### Use it
@@ -116,7 +116,7 @@ Put the folder on your `PATH` (once per shell, or add the line to `~/.bashrc`), 
 
 ```bash
 export PATH="$PWD:$PATH"            # inside the folder; or the full path of your folder
-jcmp -version                      # jcmp 0.9.50 (J2K compiler, Linux ARM64)
+jcmp -version                      # jcmp 0.9.50.1 (J2K compiler, Linux ARM64)
 
 printf '#import <stdlib>\nusing stdlib\nvoid main() { cout << "hi\\n"; }\n' > hi.jk
 jcmp hi.jk -o hi && ./hi            # hi

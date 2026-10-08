@@ -20,7 +20,7 @@ wget -qO- https://raw.githubusercontent.com/J2k-studio/Jcmp/main/install.sh | sh
 curl -fsSL https://raw.githubusercontent.com/J2k-studio/Jcmp/main/install.sh | sh -s -- --dir ../bin
 wget -qO- https://raw.githubusercontent.com/J2k-studio/Jcmp/main/install.sh | sh -s -- --dir ../bin
 ```
-ตัวเลือก: `--dir โฟลเดอร์`, `--version 0.9.50` (เลือกรุ่น), `--with-assembler` (ติดตั้ง `j2k_asm` ด้วย)
+ตัวเลือก: `--dir โฟลเดอร์`, `--version 0.9.50.1` (เลือกรุ่น), `--with-assembler` (ติดตั้ง `j2k_asm` ด้วย)
 โฟลเดอร์เริ่มต้นคือ `$PREFIX/bin` (Termux) หรือ `~/.local/bin` รันซ้ำเพื่ออัปเดต ลบไฟล์เพื่อถอนการติดตั้ง
 
 **วิธีที่ 2 — คำสั่งเดียวด้วย `tar` (ไฟล์ที่ได้รันได้ทันที):** ไฟล์ธรรมดาที่โหลดจาก release จะ **ไม่มีสิทธิ์รัน** (GitHub ไม่เก็บสิทธิ์ของไฟล์)
@@ -55,13 +55,16 @@ jcmp hi.jk -o hi && ./hi
 ถ้าอยากอ่าน/สร้างคอมไพเลอร์เอง: `git clone https://github.com/J2k-studio/Jcmp.git` (มี `bin/jcmp` พร้อมใช้)
 
 ## สถานะ
-* ใช้ได้แล้ว: ชนิดจำนวนเต็ม (`int i32 i8 char bool`), `float/double`, array (สูงสุด 3 มิติ), pointer,
-  struct + method, enum, `switch`, `for`/`while`, string, `#define`, `import`
-* ไลบรารีมาตรฐาน (`std/`): `Sys`, `Mem` (heap), `Str`, `Math`, `File`
+* **ภาษา:** จำนวนเต็ม (`int i32 i8 char bool`, `u8 u32 u64`), `float/double`, array (สูงสุด 3 มิติ, เริ่มต้นด้วยลิสต์ค่า `int a[3] = {1, 2, 3};`),
+  pointer, function pointer และ lambda, struct + method + **operator method** (`operator vec3 add(self, vec3 o)` ทำให้ `a + b`, `-a`, `2.0 * a` ใช้ได้),
+  enum (แบบมีข้อมูลด้วย `Shape::Circle(r)`), `switch` ที่แกะค่า, `Option<T>` / `Result<T, E>` และ `?`, `defer`, `try`/`catch`/`throw`,
+  panic พร้อม stack trace, dynamic array (`T[]`), `String` (UTF-8, `+`, `==`, `<`), generics แบบเดาชนิดให้, `#define`, `#import`
+* **ไลบรารีมาตรฐาน** (`#import <stdlib>`): `Sys Mem Str Math File Fs Dir Env Time Random Num Term List Map Set Json Sha256 Proc Path Hex Base64`
+* **คณิตศาสตร์และกราฟิก:** `#import <math>` + `using math::vector;` (`vec2 vec3 vec4`, swizzle `v.xy` `c.rgb`), `matrix`, `quat`, `complex`, `stats`;
+  `#import <gfx>` + `using gfx::canvas;` (ตัวอักษร + depth buffer) หรือ `using gfx::screen;` (จุดสี เส้น วงกลม ไล่สี เรืองแสง)
 * ข้อความ error/warning แบบ `ไฟล์:บรรทัด:คอลัมน์: error: ...` พร้อมบรรทัดซอร์สและ `^`
-* ยังไม่มี: dynamic array, `cin`,
-  thread, การทำให้โค้ดเร็วขึ้น
-* `-d` ตรวจขอบเขต array ตอนรัน (ผิดแล้วโปรแกรมหยุดพร้อมข้อความ)
+* thread (`#import <cpu>`), `cin`, `-d` ตรวจขอบเขต array และรายงานหน่วยความจำที่ไม่ได้คืน
+* ความเร็ว: ช้ากว่า `clang -O2` ประมาณ 1.5–4 เท่าในลูปและการเรียกซ้ำ (จะปรับต่อ)
 * รองรับเฉพาะ Linux **ARM64**
 
 ## เอกสาร
