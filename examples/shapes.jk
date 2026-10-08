@@ -1,5 +1,5 @@
-import std
-using std
+import <stdlib>
+using stdlib
 
 // shapes.jk -- structs, methods, enums, switch, floats
 enum class Kind { Circle, Square, Triangle };

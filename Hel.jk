@@ -1,8 +1,14 @@
+import std
+using std;
+double p = 1.12;
+int max(){
+   cout << p"\n";
+}
 int main() {
     char x;
     cout << "panel\n";
     cin >> x;
-    f64 p = 0.01;
+    float p = 0.01;
     cout << "Hello from J2K!\n";
     return x;
 }

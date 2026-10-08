@@ -38,8 +38,8 @@ jcmp hello.jk -o hello      # คอมไพล์
 โปรแกรมเริ่มทำงานที่ `main` คำสั่ง `cout <<` ใช้พิมพ์ และ `\n` คือขึ้นบรรทัดใหม่ บันทึกเป็นไฟล์ `hello.jk`
 
 ```jk
-import std
-using std
+import <stdlib>
+using stdlib
 
 void main() {
     cout << "Hello, J2K!\n";
@@ -61,8 +61,8 @@ Hello, J2K!
 พิมพ์ทศนิยมด้วย `coutf` ทุกบรรทัดจบด้วย `;`
 
 ```jk
-import std
-using std
+import <stdlib>
+using stdlib
 
 void main() {
     int apples = 5;
@@ -97,8 +97,8 @@ enough fruit
 `if`, `else if`, `else` เลือกว่าจะทำอะไร เงื่อนไขใช้ `== != < > <= >=` และ `&&` (และ) `||` (หรือ) `!` (ไม่) ต้องมี `{ }` เสมอ
 
 ```jk
-import std
-using std
+import <stdlib>
+using stdlib
 
 void main() {
     int score = 72;
@@ -129,8 +129,8 @@ passed
 `break` ออกจากลูป `continue` ข้ามไปรอบถัดไป
 
 ```jk
-import std
-using std
+import <stdlib>
+using stdlib
 
 void main() {
     int i = 1;
@@ -163,8 +163,8 @@ void main() {
 ฟังก์ชันมีชนิดผลลัพธ์ ชื่อ และพารามิเตอร์ `void` คือไม่คืนค่า เขียนฟังก์ชันไว้ใต้จุดที่เรียกใช้ก็ได้
 
 ```jk
-import std
-using std
+import <stdlib>
+using stdlib
 
 void main() {
     cout << square(7) << "\n";
@@ -203,8 +203,8 @@ Hello, Ann!
 `char word[] = "banana"` คำนวณขนาดให้เอง อาร์เรย์มีได้ถึงสามมิติ เช่น `int grid[2][3]`
 
 ```jk
-import std
-using std
+import <stdlib>
+using stdlib
 
 void main() {
     int scores[5];
@@ -244,8 +244,8 @@ banana has 3 letter a
 `cinf` อ่านทศนิยม คำคั่นด้วยช่องว่างหรือขึ้นบรรทัดใหม่
 
 ```jk
-import std
-using std
+import <stdlib>
+using stdlib
 
 void main() {
     char name[20];
@@ -270,8 +270,8 @@ Ann will be 31 next year
 `struct` รวมค่าหลายตัวเข้าด้วยกัน ฟังก์ชันที่อยู่ข้างในคือ method รับตัวมันเองเป็น `self` `Rect r = {3, 4};` ใส่ค่าให้ field ตามลำดับ
 
 ```jk
-import std
-using std
+import <stdlib>
+using stdlib
 
 struct Rect {
     int w;
@@ -310,8 +310,8 @@ method ชื่อ `init(self)` จะทำงานเองเมื่อ�
 enum ไม่ใช่ตัวเลข จึงไม่สับสนโดยไม่ตั้งใจ
 
 ```jk
-import std
-using std
+import <stdlib>
+using stdlib
 
 enum class Light { Red, Yellow, Green };
 
@@ -352,8 +352,8 @@ three
 `p[i]` เข้าถึงสมาชิกตัวที่ i (ไม่มี `p + 1`)
 
 ```jk
-import std
-using std
+import <stdlib>
+using stdlib
 
 void bump(int^ p) {
     p^ = p^ + 1;
@@ -385,9 +385,9 @@ void main() {
 ตัวแปร local ที่สร้างจาก `arr` หรือ `alloc` จะถูกคอมไพเลอร์ปล่อยให้เองตอนจบบล็อก จึงแทบไม่ต้องเรียก `free` เอง
 
 ```jk
-import std
+import <stdlib>
 
-using std
+using stdlib
 int total(int[] list) {
     int s = 0;
     for i in 0..list.len { s += list[i]; }
@@ -423,8 +423,8 @@ void main() {
 `String` ถูกปล่อยเองตอนจบบล็อก และ `String b = a;` ทำสำเนาแยกอิสระ
 
 ```jk
-import std
-using std
+import <stdlib>
+using stdlib
 
 String shout(String s) {
     String r = s + "!";
@@ -462,8 +462,8 @@ same
 ตอนใช้ต้องเขียนชนิดทุกครั้ง: `largest<int>(...)`, `Box<double>`
 
 ```jk
-import std
-using std
+import <stdlib>
+using stdlib
 
 T largest<T>(T a, T b) {
     if a > b { return a; }
@@ -499,8 +499,8 @@ generic ต้องเขียนไว้ก่อนจุดแรกที
 `Map<K,V>` เก็บค่าตามคีย์ ส่วน `Set<T>` เก็บแต่ละค่าครั้งเดียว ทั้งสองปล่อยหน่วยความจำเองตอนจบบล็อก
 
 ```jk
-import std
-using std
+import <stdlib>
+using stdlib
 
 void main() {
     int[] scores = arr(4);
@@ -541,8 +541,8 @@ bob is 25
 `throw "ข้อความ"` หยุดงานที่ทำอยู่และกระโดดไปที่ `catch` ที่ใกล้ที่สุด ถ้าไม่มี `catch` โปรแกรมจะหยุดและพิมพ์ `uncaught exception: ข้อความ`
 
 ```jk
-import std
-using std
+import <stdlib>
+using stdlib
 
 int divide(int a, int b) {
     if b == 0 { throw "cannot divide by zero"; }
@@ -568,12 +568,12 @@ error: cannot divide by zero
 
 ## บทที่ 16. ทศนิยมและไลบรารี Math
 
-`import std` นำไลบรารีมาตรฐานเข้ามา และ `using std` ทำให้เขียน `sqrt(x)` แทน `Math::sqrt(x)` ได้ (ทุกโปรแกรมที่พิมพ์ข้อความต้องมีสองบรรทัดนี้ บทเรียนเติมให้ที่บนสุด) ถ้าสองโมดูลมีฟังก์ชันชื่อเดียวกัน (`write` อยู่ทั้งใน `Sys` และ `File`) ให้เขียนชื่อโมดูล: `File::write(...)` การแปลงชนิดต้องเขียนเอง: `(int)x`, `(double)n`
+`import <stdlib>` นำไลบรารีมาตรฐานเข้ามา และ `using stdlib` ทำให้เขียน `sqrt(x)` แทน `Math::sqrt(x)` ได้ (ทุกโปรแกรมที่พิมพ์ข้อความต้องมีสองบรรทัดนี้ บทเรียนเติมให้ที่บนสุด) ถ้าสองโมดูลมีฟังก์ชันชื่อเดียวกัน (`write` อยู่ทั้งใน `Sys` และ `File`) ให้เขียนชื่อโมดูล: `File::write(...)` การแปลงชนิดต้องเขียนเอง: `(int)x`, `(double)n`
 
 ```jk
-import std
+import <stdlib>
 
-using std
+using stdlib
 void main() {
     double a = 3.0;
     double b = 4.0;
@@ -602,9 +602,9 @@ hypotenuse = 5.000000
 `File::open(path, mode)` คืนเลขตัวหนึ่ง (ติดลบถ้าล้มเหลว) แล้วใช้ `read`, `write`, `read_line`, `close` กับเลขนั้น
 
 ```jk
-import std
+import <stdlib>
 
-using std
+using stdlib
 void main() {
     i32 f = File::open("note.txt", FileMode::Write);
     if f < 0 { throw "cannot create note.txt"; }
@@ -642,8 +642,8 @@ int cube(int x) {
 `multi.jk`:
 
 ```jk
-import std
-using std
+import <stdlib>
+using stdlib
 
 import "mathx"
 
@@ -665,8 +665,8 @@ void main() {
 รวมทุกอย่างเข้าด้วยกัน: อ่านคำไปเรื่อยๆ จนข้อมูลหมด (อ่านเกินจะ throw `end of input`) แล้วรายงานจำนวนคำและคำที่ยาวที่สุด
 
 ```jk
-import std
-using std
+import <stdlib>
+using stdlib
 
 int length(char^ s) {
     int n = 0;

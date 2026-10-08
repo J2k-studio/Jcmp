@@ -37,7 +37,7 @@ Hello from J2K!
 | Errors                                      | `try` / `catch` / `throw` with text |
 | Memory                                      | `alloc`/`free`, dynamic arrays, automatic freeing of owned memory at the end of a block |
 | Input                                       | `cin` / `cinf` (type decides what is read; bad input throws) |
-| Threads                                     | `import cpu`: `Thread` (create, join, detach), `Mutex` (futex based), `#multithread` loops |
+| Threads                                     | `import <cpu>`: `Thread` (create, join, detach), `Mutex` (futex based), `#multithread` loops |
 | Not done yet                                | optimisation |
 | Target                                      | Linux **ARM64** only |
 
@@ -72,7 +72,7 @@ wget -qO- https://raw.githubusercontent.com/J2k-studio/Jcmp/main/install.sh | sh
 | Option | Meaning |
 |--------|---------|
 | `--dir DIR`        | install into `DIR` (created if needed) |
-| `--version 0.6.0`  | a specific release instead of the latest |
+| `--version 0.7.0`  | a specific release instead of the latest |
 | `--with-assembler` | also install `j2k_asm`, the stand-alone assembler |
 
 Run it again to update. To uninstall, delete the file.
@@ -107,7 +107,7 @@ sha256sum -c --ignore-missing SHA256SUMS      # must print:  jcmp: OK
 chmod +x jcmp && rm SHA256SUMS
 ```
 
-A specific version: replace `latest/download` with `download/v0.6.0` (also a good idea right after a new release, when the `latest` links can lag behind for a minute). The bundle
+A specific version: replace `latest/download` with `download/v0.7.0` (also a good idea right after a new release, when the `latest` links can lag behind for a minute). The bundle
 `jcmp-<version>-linux-arm64.tar.gz` of the same release holds the compiler, the assembler, the examples and the docs.
 
 ### Use it
@@ -116,9 +116,9 @@ Put the folder on your `PATH` (once per shell, or add the line to `~/.bashrc`), 
 
 ```bash
 export PATH="$PWD:$PATH"            # inside the folder; or the full path of your folder
-jcmp -version                      # jcmp 0.6.0 (J2K compiler, Linux ARM64)
+jcmp -version                      # jcmp 0.7.0 (J2K compiler, Linux ARM64)
 
-printf 'import std\nusing std\nvoid main() { cout << "hi\\n"; }\n' > hi.jk
+printf 'import <stdlib>\nusing std\nvoid main() { cout << "hi\\n"; }\n' > hi.jk
 jcmp hi.jk -o hi && ./hi            # hi
 ```
 
@@ -147,8 +147,8 @@ More: [docs/USAGE.md](docs/USAGE.md) (command line, building, testing) and
 ## The language in one screen
 
 ```jk
-import std                      // the standard library: Sys, Mem, Str, Math, File (and cout, cin)
-using std                       // use its names without the prefix (cout needs both lines)
+import <stdlib>                      // the standard library: Sys, Mem, Str, Math, File (and cout, cin)
+using stdlib                       // use its names without the prefix (cout needs both lines)
 
 enum class Color { Red, Green, Blue };
 

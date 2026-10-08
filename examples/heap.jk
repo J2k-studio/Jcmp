@@ -1,8 +1,8 @@
 // heap.jk -- std: Mem (alloc/free), Str, pointers
-import std
-using std
-using std::mem
-using std::str
+import <stdlib>
+using stdlib
+using stdlib::mem
+using stdlib::str
 
 struct Node {
     int value;

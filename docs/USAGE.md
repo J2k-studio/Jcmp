@@ -65,8 +65,8 @@ for e in hello fib shapes heap; do bin/jcmp examples/$e.jk -o /tmp/$e && /tmp/$e
 
 ## The standard library
 
-`import std` puts the library in front of your program; `using std` lets you call its functions without the prefix
-(or only one module: `using std::mem`, `str`, `sys`, `math`, `fs`). `cout` and `cin` need `import std` and `using std`. Its source is `std/*.j`.
+`import <stdlib>` puts the library in front of your program; `using stdlib` lets you call its functions without the prefix
+(or only one module: `using stdlib::mem`, `str`, `sys`, `math`, `fs`). `cout` and `cin` need `import <stdlib>` and `using stdlib`. Its source is `std/*.j`.
 See [LANGUAGE.md](LANGUAGE.md).
 
 ## Should the documentation be a website?

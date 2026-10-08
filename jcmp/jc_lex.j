@@ -375,18 +375,128 @@ bool file_exists(char^ p) {
     return true;
 }
 
-// the token is the word "import": switch to the named file (once)
-void lex_import() {
-    next();
-    if tok_kind == T_IDENT && str_eq(@tok_text, "cpu") {
-        if cpu_loaded == 0 {
-            cpu_loaded = 1;
-            push_cpu();
-        }
-        next();
-        return;
+// the value of an environment variable (the strings after the arguments of the program), or null
+char^ env_get(char^ name) {
+    int i = argc() + 1;
+    int nl = str_len(name);
+    while arg(i) != null {
+        char^ e = arg(i);
+        int k = 0;
+        while k < nl && e[k] == name[k] { k += 1; }
+        if k == nl && e[k] == '=' { return e + nl + 1; }
+        i += 1;
     }
-    if tok_kind == T_IDENT && str_eq(@tok_text, "std") {
+    return null;
+}
+
+// dir/rel.j or dir/rel.jk, or dir/rel/last.j(k) where last is the last part of rel (a package folder);
+// the path that exists is left in out
+bool try_lib_dir(char^ dir, char^ rel, char^ out) {
+    int n = str_len(dir);
+    if n == 0 || n > 150 { return false; }
+    str_copy(out, dir, 256);
+    out[n] = '/';
+    n += 1;
+    int r = str_len(rel);
+    if n + r > 240 { return false; }
+    int k = 0;
+    while k < r {
+        out[n + k] = rel[k];
+        k += 1;
+    }
+    n += r;
+    out[n] = 0;
+    if try_ext(out, n) { return true; }
+    int last = 0;
+    k = 0;
+    while k < r {
+        if rel[k] == '/' { last = k + 1; }
+        k += 1;
+    }
+    out[n] = '/';
+    n += 1;
+    k = last;
+    while k < r && n < 245 {
+        out[n] = rel[k];
+        n += 1;
+        k += 1;
+    }
+    out[n] = 0;
+    return try_ext(out, n);
+}
+
+// import <name> : look for a library, in order: -I dir, the folders of J2K_PATH (separated by :), ~/.j2k/lib,
+// the lib folder next to the compiler. rel is the name with / for the dots.
+bool find_library(char^ rel, char^ out) {
+    if inc_dir[0] != 0 && try_lib_dir(@inc_dir, rel, out) { return true; }
+    char^ jp = env_get("J2K_PATH");
+    if jp != null {
+        char one[256];
+        int p = 0;
+        while true {
+            int n = 0;
+            while jp[p] != 0 && jp[p] != ':' && n < 250 {
+                one[n] = jp[p];
+                n += 1;
+                p += 1;
+            }
+            one[n] = 0;
+            if n > 0 && try_lib_dir(@one, rel, out) { return true; }
+            if jp[p] == 0 { break; }
+            p += 1;
+        }
+    }
+    char^ home = env_get("HOME");
+    if home != null {
+        char hd[256];
+        str_copy(@hd, home, 200);
+        append_text(@hd, "/.j2k/lib");
+        if try_lib_dir(@hd, rel, out) { return true; }
+    }
+    char exe[256];
+    int en = syscall(78, -100, "/proc/self/exe", @exe, 200);
+    if en > 0 {
+        exe[en] = 0;
+        int cut = en;
+        while cut > 0 && exe[cut - 1] != '/' { cut -= 1; }
+        if cut > 0 {
+            exe[cut - 1] = 0;
+            char ld[256];
+            str_copy(@ld, @exe, 200);
+            append_text(@ld, "/lib");
+            if try_lib_dir(@ld, rel, out) { return true; }
+        }
+    }
+    return false;
+}
+
+int import_bare_warned;
+int import_warned;           // 1 after the warning about a library written without < >
+
+// switch to the file at path (once)
+void import_file(char^ path) {
+    int j = 0;
+    while j < inc_count {
+        if str_eq(@inc_names + j * 128, path) {
+            next();                      // already imported: skip it
+            return;
+        }
+        j += 1;
+    }
+    if inc_count >= 512 { die("too many imported files"); }
+    str_copy(@inc_names + inc_count * 128, path, 128);
+    inc_count += 1;
+    push_file(path);
+    next();
+}
+
+// the library `name` (with / for the dots) is loaded: the built-in ones (stdlib, cpu), else a file found by find_library
+void import_library(char^ name, char^ rel) {
+    if str_eq(name, "stdlib") || str_eq(name, "std") {
+        if str_eq(name, "std") && import_warned == 0 {
+            import_warned = 1;
+            warn("the library 'std' is now called 'stdlib': write import <stdlib>", "deprecated");
+        }
         if std_loaded == 0 {
             std_loaded = 1;
             push_std();
@@ -394,7 +504,65 @@ void lex_import() {
         next();
         return;
     }
-    if tok_kind != T_STR { die("import needs a file name in quotes"); }
+    if str_eq(name, "cpu") {
+        if cpu_loaded == 0 {
+            cpu_loaded = 1;
+            push_cpu();
+        }
+        next();
+        return;
+    }
+    char found[256];
+    if !find_library(rel, @found) { die_name("library not found (looked in -I, J2K_PATH, ~/.j2k/lib and lib next to the compiler)", name); }
+    import_file(@found);
+}
+
+// the token is the word "import": switch to the named file (once)
+//   import <stdlib>   a library       import "file"   a file next to this one (or in the -I folder)
+void lex_import() {
+    next();
+    if tok_is("<") {
+        next();
+        char lname[200];
+        char lrel[200];
+        int ln = 0;
+        while true {
+            if tok_kind != T_IDENT { die("a library name was expected after import <"); }
+            int w = 0;
+            while tok_text[w] != 0 && ln < 190 {
+                lname[ln] = tok_text[w];
+                lrel[ln] = tok_text[w];
+                ln += 1;
+                w += 1;
+            }
+            next();
+            if tok_is(".") {
+                lname[ln] = '.';
+                lrel[ln] = '/';
+                ln += 1;
+                next();
+            } else {
+                break;
+            }
+        }
+        lname[ln] = 0;
+        lrel[ln] = 0;
+        if !tok_is(">") { die("> expected to end import <name>"); }
+        // the library is loaded from here on: import_library calls next() for the token after >
+        import_library(@lname, @lrel);
+        return;
+    }
+    if tok_kind == T_IDENT && (str_eq(@tok_text, "cpu") || str_eq(@tok_text, "std") || str_eq(@tok_text, "stdlib")) {
+        if import_bare_warned == 0 && !str_eq(@tok_text, "std") {
+            import_bare_warned = 1;
+            warn("a library is imported with import <name>, for example import <stdlib>", "import");
+        }
+        char bn[64];
+        str_copy(@bn, @tok_text, 64);
+        import_library(@bn, @bn);
+        return;
+    }
+    if tok_kind != T_STR { die("import needs a library in < > or a file name in quotes"); }
     char path[256];
     int n = 0;
     int i = 0;
@@ -448,19 +616,7 @@ void lex_import() {
         }
         if try_ext(@alt, an) { str_copy(@path, @alt, 256); }
     }
-    int j = 0;
-    while j < inc_count {
-        if str_eq(@inc_names + j * 128, @path) {
-            next();                      // already imported: skip it
-            return;
-        }
-        j += 1;
-    }
-    if inc_count >= 512 { die("too many imported files"); }
-    str_copy(@inc_names + inc_count * 128, @path, 128);
-    inc_count += 1;
-    push_file(@path);
-    next();
+    import_file(@path);
 }
 
 // ----------------------------------------------------------------- tokens

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.0
+* **`import <library>`** for libraries and **`import "file"`** for your own files. A library is looked up in `-I`, `J2K_PATH`, `~/.j2k/lib` and the `lib` folder next to the compiler.
+* **`std` is now `stdlib`:** `import <stdlib>`, `using stdlib`, `using stdlib::math`. `cpu` is `import <cpu>`. The old forms (`import std`, `using std`, a bare `import cpu`) still work with a warning (`[-Wdeprecated]`, `[-Wimport]`).
+
 ## 0.6.0
 * **Collections:** `Map<K,V>` (`put get has remove len keys_list values_list`), `Set<T>` (`add has remove len items_list`) in the standard library; keys can be numbers, chars, pointers or Strings. `get` throws `key not found`.
 * **`String[]`**: an array of Strings (it owns them). **List methods** on every dynamic array: `insert`, `remove`, `sort`, `contains`, `index_of`.

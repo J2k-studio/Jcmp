@@ -10,17 +10,17 @@ Files: `.jk` is a program (it has `main`); `.j` is a component that other files 
 ## Program shape
 
 ```jk
-import std
-using std
+import <stdlib>
+using stdlib
 
 void main() {
     cout << "hi\n";
 }
 ```
 
-`cout`, `coutf`, `cin` and `cinf` come with the standard library: a program that uses them starts with `import std` and `using std`
+`cout`, `coutf`, `cin` and `cinf` come with the standard library: a program that uses them starts with `import <stdlib>` and `using stdlib`
 (the snippets below leave these two lines out). Without them the compiler warns `[-Wstd]` for now; a later version makes it an error.
-`using std` makes the names of all the std modules usable without the prefix; if two modules have the same name (`write` is in `Sys` and
+`using stdlib` makes the names of all the std modules usable without the prefix; if two modules have the same name (`write` is in `Sys` and
 `File`) the compiler reports it and you write `File::write(...)`. `float` is the 32-bit and `double` the 64-bit decimal type (they were
 called `f32` and `f64`; the old names still work with a warning).
 
@@ -257,7 +257,7 @@ names[0] = "zoe";             // the array keeps its own copy
 `for x in list { ... }` goes through the elements (also a String: its characters, a fixed array, and a list returned by a call, which is freed
 after the loop). `x` is a copy of the element (a String element is only borrowed). `for i in a..b` still counts numbers.
 
-`Map<K,V>` and `Set<T>` are hash tables in the standard library (`import std`). Keys can be whole numbers, chars, floats, pointers or Strings.
+`Map<K,V>` and `Set<T>` are hash tables in the standard library (`import <stdlib>`). Keys can be whole numbers, chars, floats, pointers or Strings.
 
 ```jk
 Map<String, int> ages;
@@ -278,8 +278,8 @@ if seen.add(3) { cout << "new\n"; }     // add says whether it was new
 ## Heap memory that frees itself
 
 ```jk
-import std
-using std
+import <stdlib>
+using stdlib
 
 struct Node { int value; Node^ next; }
 
@@ -456,7 +456,7 @@ void main() {
 ## Threads and locks
 
 ```jk
-import cpu
+import <cpu>
 using cpu::thread
 using cpu::mutex
 
@@ -511,12 +511,18 @@ Not allowed inside the body: `break`, `return`, and another `#multithread`.
 ## Modules
 
 ```jk
-import "mylib"            // mylib.j (or mylib.jk) next to this file; "dir.mylib" = dir/mylib.j
-import std                // the standard library
-using std::str            // call only the Str functions without the prefix (using std: all modules)
+import "mylib"            // your own file: mylib.j (or mylib.jk) next to this file, then the -I folder; "dir.mylib" = dir/mylib.j
+import <stdlib>           // a library: the standard library (built in)
+import <cpu>              // a library: threads and locks (built in)
+import <greet>            // a library found by name (see below)
+using stdlib::str         // call only the Str functions without the prefix (using stdlib: all modules)
 ```
 
-Standard library (`std/`): 
+`import <name>` looks for `name.j` (or `name.jk`, or `name/name.j`) in these places, in this order: the `-I` folder, the folders of the
+environment variable `J2K_PATH` (separated by `:`), `~/.j2k/lib`, and the `lib` folder next to the compiler. `<a.b>` means `a/b`.
+The library used to be called `std`; `import std` and `using std` still work with a warning. A bare `import stdlib` (without `< >`) also warns.
+
+Standard library (`stdlib`, source in `std/`): 
 
 | Struct | Functions |
 |--------|-----------|
@@ -527,8 +533,8 @@ Standard library (`std/`):
 | `File` | `File::open(path, FileMode::Read)` `read` `write` `read_line` `close` |
 
 ```jk
-import std
-using std::str
+import <stdlib>
+using stdlib::str
 
 void main() {
     char buf[32];

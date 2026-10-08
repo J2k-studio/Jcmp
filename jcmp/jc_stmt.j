@@ -75,6 +75,7 @@ bool at_type() {
 
 // TYPE [^] ; sets the ty_* variables and leaves the token after the type
 // f32 / f64 were the first names of float / double: still accepted, with one warning per program
+int using_warned;
 int old_float_warned;
 int using_std_seen;          // 1 after `using std` (the whole module) at the top level
 int io_warned;
@@ -88,7 +89,7 @@ void old_float_name() {
 void check_io_std() {
     if io_warned == 1 || (std_loaded == 1 && using_std_seen == 1) { return; }
     io_warned = 1;
-    warn("cout, coutf, cin and cinf need 'import std' and 'using std' at the top of the file (this will become an error)", "std");
+    warn("cout, coutf, cin and cinf need 'import <stdlib>' and 'using stdlib' at the top of the file (this will become an error)", "std");
 }
 
 void parse_type() {
@@ -1106,7 +1107,11 @@ void parse_using() {
                 if ud >= 0 { us_g[ud] = 1; }
             }
         }
-    } else if tok_is("std") {
+    } else if tok_is("std") || tok_is("stdlib") {
+        if tok_is("std") && using_warned == 0 {
+            using_warned = 1;
+            warn("the library 'std' is now called 'stdlib': write using stdlib", "deprecated");
+        }
         next();
         if tok_is("::") {
             // using std::fs / mem / str / sys / math : the struct of that module

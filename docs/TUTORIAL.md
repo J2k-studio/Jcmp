@@ -38,8 +38,8 @@ For the complete list of features see [LANGUAGE.md](LANGUAGE.md); for the comman
 Every program starts at `main`. `cout <<` prints; `\n` is a new line. Save this as `hello.jk`.
 
 ```jk
-import std
-using std
+import <stdlib>
+using stdlib
 
 void main() {
     cout << "Hello, J2K!\n";
@@ -62,8 +62,8 @@ A variable has a type: `int` (whole number, 64 bit), `double` (decimal), `char` 
 Use `coutf` to print decimals. Lines end with `;`.
 
 ```jk
-import std
-using std
+import <stdlib>
+using stdlib
 
 void main() {
     int apples = 5;
@@ -99,8 +99,8 @@ A `bool` is not a number: `if total` is an error, write `if total != 0`. Likewis
 `if`, `else if`, `else` choose what to run. Conditions use `== != < > <= >=` and `&&` (and), `||` (or), `!` (not). Braces are always needed.
 
 ```jk
-import std
-using std
+import <stdlib>
+using stdlib
 
 void main() {
     int score = 72;
@@ -131,8 +131,8 @@ passed
 `break` leaves a loop, `continue` skips to the next round.
 
 ```jk
-import std
-using std
+import <stdlib>
+using stdlib
 
 void main() {
     int i = 1;
@@ -165,8 +165,8 @@ Output:
 A function has a result type, a name and parameters. `void` means no result. A function can be written below the place that uses it.
 
 ```jk
-import std
-using std
+import <stdlib>
+using stdlib
 
 void main() {
     cout << square(7) << "\n";
@@ -205,8 +205,8 @@ Hello, Ann!
 `char word[] = "banana"` sizes it for you. Arrays can have up to three dimensions: `int grid[2][3]`.
 
 ```jk
-import std
-using std
+import <stdlib>
+using stdlib
 
 void main() {
     int scores[5];
@@ -246,8 +246,8 @@ Build with `jcmp prog.jk -d -o prog` to stop with a message when an index is out
 a word for a `char` array. `cinf` reads decimals. Words are separated by spaces or new lines.
 
 ```jk
-import std
-using std
+import <stdlib>
+using stdlib
 
 void main() {
     char name[20];
@@ -272,8 +272,8 @@ Run it and type `Ann 30` (or pipe it in: `echo "Ann 30" | ./input`). Bad input t
 A `struct` groups values. Functions inside it are methods; they receive the object as `self`. `Rect r = {3, 4};` fills the fields in order.
 
 ```jk
-import std
-using std
+import <stdlib>
+using stdlib
 
 struct Rect {
     int w;
@@ -313,8 +313,8 @@ An `enum class` is a list of named values. `switch` picks the case that matches,
 An enum is not a number, so you cannot mix them up by accident.
 
 ```jk
-import std
-using std
+import <stdlib>
+using stdlib
 
 enum class Light { Red, Yellow, Green };
 
@@ -355,8 +355,8 @@ If a `switch` on an enum forgets a member, the compiler warns you (use `-st` to 
 `p[i]` reaches the i-th element (there is no `p + 1`).
 
 ```jk
-import std
-using std
+import <stdlib>
+using stdlib
 
 void bump(int^ p) {
     p^ = p^ + 1;
@@ -388,9 +388,9 @@ Output:
 local variable made with `arr` or `alloc` at the end of the block, so you rarely call `free` yourself.
 
 ```jk
-import std
+import <stdlib>
 
-using std
+using stdlib
 int total(int[] list) {
     int s = 0;
     for i in 0..list.len { s += list[i]; }
@@ -426,8 +426,8 @@ Methods: `push`, `append`, `pop`, `clear`, `find`, `slice(from, to)`, `c()` (the
 A `String` is freed at the end of its block, and `String b = a;` makes a separate copy.
 
 ```jk
-import std
-using std
+import <stdlib>
+using stdlib
 
 String shout(String s) {
     String r = s + "!";
@@ -465,8 +465,8 @@ A function or struct can take a type as a parameter: write it in `<>` after the 
 You write the type at every use: `largest<int>(...)`, `Box<double>`.
 
 ```jk
-import std
-using std
+import <stdlib>
+using stdlib
 
 T largest<T>(T a, T b) {
     if a > b { return a; }
@@ -502,8 +502,8 @@ A list is a dynamic array with more tools: `sort`, `insert`, `remove`, `contains
 `Map<K,V>` stores values by key and `Set<T>` stores each value once. They free themselves at the end of the block.
 
 ```jk
-import std
-using std
+import <stdlib>
+using stdlib
 
 void main() {
     int[] scores = arr(4);
@@ -544,8 +544,8 @@ bob is 25
 `throw "text"` stops what you are doing and jumps to the nearest `catch`. Without a `catch` the program stops and prints `uncaught exception: text`.
 
 ```jk
-import std
-using std
+import <stdlib>
+using stdlib
 
 int divide(int a, int b) {
     if b == 0 { throw "cannot divide by zero"; }
@@ -571,12 +571,12 @@ error: cannot divide by zero
 
 ## Lesson 16. Decimals and the Math library
 
-`import std` brings the standard library and `using std` lets you write `sqrt(x)` instead of `Math::sqrt(x)` (every program that prints needs both lines; the tutorial adds them at the top). If two modules have the same function name (`write` is in `Sys` and `File`), write the module: `File::write(...)`. Casts are explicit: `(int)x`, `(double)n`.
+`import <stdlib>` brings the standard library and `using stdlib` lets you write `sqrt(x)` instead of `Math::sqrt(x)` (every program that prints needs both lines; the tutorial adds them at the top). If two modules have the same function name (`write` is in `Sys` and `File`), write the module: `File::write(...)`. Casts are explicit: `(int)x`, `(double)n`.
 
 ```jk
-import std
+import <stdlib>
 
-using std
+using stdlib
 void main() {
     double a = 3.0;
     double b = 4.0;
@@ -605,9 +605,9 @@ The library has `Sys` (system calls), `Mem` (memory), `Str` (text), `Math` and `
 `File::open(path, mode)` gives a number (negative if it failed). `read`, `write`, `read_line` and `close` use it.
 
 ```jk
-import std
+import <stdlib>
 
-using std
+using stdlib
 void main() {
     i32 f = File::open("note.txt", FileMode::Write);
     if f < 0 { throw "cannot create note.txt"; }
@@ -645,8 +645,8 @@ int cube(int x) {
 `multi.jk`:
 
 ```jk
-import std
-using std
+import <stdlib>
+using stdlib
 
 import "mathx"
 
@@ -668,8 +668,8 @@ Compile only the main file: `jcmp multi.jk -o multi`; the imported file is read 
 Putting it together: read words until the input ends (reading past the end throws `end of input`) and report how many there were and the longest.
 
 ```jk
-import std
-using std
+import <stdlib>
+using stdlib
 
 int length(char^ s) {
     int n = 0;
