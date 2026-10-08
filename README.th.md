@@ -20,24 +20,24 @@ wget -qO- https://raw.githubusercontent.com/J2k-studio/Jcmp/main/install.sh | sh
 curl -fsSL https://raw.githubusercontent.com/J2k-studio/Jcmp/main/install.sh | sh -s -- --dir ../bin
 wget -qO- https://raw.githubusercontent.com/J2k-studio/Jcmp/main/install.sh | sh -s -- --dir ../bin
 ```
-ตัวเลือก: `--dir โฟลเดอร์`, `--version 0.2.1` (เลือกรุ่น), `--with-assembler` (ติดตั้ง `j2k_asm` ด้วย)
+ตัวเลือก: `--dir โฟลเดอร์`, `--version 0.2.2` (เลือกรุ่น), `--with-assembler` (ติดตั้ง `j2k_asm` ด้วย)
 โฟลเดอร์เริ่มต้นคือ `$PREFIX/bin` (Termux) หรือ `~/.local/bin` รันซ้ำเพื่ออัปเดต ลบไฟล์เพื่อถอนการติดตั้ง
 
 **วิธีที่ 2 — ทำเองทีละขั้นลง `../bin`:**
 
 ```bash
 mkdir -p ../bin && cd ../bin
-curl -fLO https://github.com/J2k-studio/Jcmp/releases/latest/download/jcmp-linux-arm64     # หรือ wget URL เดียวกัน
+curl -fLO https://github.com/J2k-studio/Jcmp/releases/latest/download/jcmp     # หรือ wget URL เดียวกัน
 curl -fLO https://github.com/J2k-studio/Jcmp/releases/latest/download/SHA256SUMS
-sha256sum -c --ignore-missing SHA256SUMS      # ต้องขึ้น: jcmp-linux-arm64: OK
-mv jcmp-linux-arm64 jcmp && chmod +x jcmp && rm SHA256SUMS
+sha256sum -c --ignore-missing SHA256SUMS      # ต้องขึ้น: jcmp: OK
+chmod +x jcmp && rm SHA256SUMS
 ```
 
 **ใช้งาน:** ใส่โฟลเดอร์ใน `PATH` แล้วลอง
 
 ```bash
 export PATH="$PWD:$PATH"                      # รันในโฟลเดอร์ที่ลง jcmp
-jcmp --version
+jcmp -version
 printf 'void main() { cout << "hi\\n"; }\n' > hi.jk
 jcmp hi.jk -o hi && ./hi
 ```

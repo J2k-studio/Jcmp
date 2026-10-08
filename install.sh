@@ -57,16 +57,20 @@ mkdir -p "$BINDIR"
 BINDIR="$(cd "$BINDIR" && pwd)"
 echo "downloading from $BASE ..."
 fetch "$BASE/SHA256SUMS" "$TMP/SHA256SUMS"
-install_one() {   # install_one RELEASE-FILE NAME-IN-BINDIR
-    fetch "$BASE/$1" "$TMP/$1"
-    WANT="$(grep " $1\$" "$TMP/SHA256SUMS" | cut -d' ' -f1)"
-    HAVE="$(sha256sum "$TMP/$1" | cut -d' ' -f1)"
-    [ -n "$WANT" ] && [ "$WANT" = "$HAVE" ] || { echo "install: the checksum of $1 does not match, nothing installed"; exit 1; }
-    cp "$TMP/$1" "$BINDIR/$2"
-    chmod +x "$BINDIR/$2"
+install_one() {   # install_one NAME OLD-NAME : releases before 0.2.2 called the files NAME-linux-arm64
+    GOT="$1"
+    if ! fetch "$BASE/$1" "$TMP/$1" 2>/dev/null; then
+        GOT="$2"
+        fetch "$BASE/$2" "$TMP/$2"
+    fi
+    WANT="$(grep " $GOT\$" "$TMP/SHA256SUMS" | cut -d' ' -f1)"
+    HAVE="$(sha256sum "$TMP/$GOT" | cut -d' ' -f1)"
+    [ -n "$WANT" ] && [ "$WANT" = "$HAVE" ] || { echo "install: the checksum of $GOT does not match, nothing installed"; exit 1; }
+    cp "$TMP/$GOT" "$BINDIR/$1"
+    chmod +x "$BINDIR/$1"
 }
-install_one jcmp-linux-arm64 jcmp
-[ "$WITH_ASM" = 1 ] && install_one j2k_asm-linux-arm64 j2k_asm
-echo "installed: $BINDIR/jcmp  ($("$BINDIR/jcmp" --version))"
+install_one jcmp jcmp-linux-arm64
+[ "$WITH_ASM" = 1 ] && install_one j2k_asm j2k_asm-linux-arm64
+echo "installed: $BINDIR/jcmp  ($("$BINDIR/jcmp" -version))"
 [ "$WITH_ASM" = 1 ] && echo "installed: $BINDIR/j2k_asm"
 case ":$PATH:" in *":$BINDIR:"*) ;; *) echo "add the folder to your PATH:  export PATH=\"$BINDIR:\$PATH\"" ;; esac

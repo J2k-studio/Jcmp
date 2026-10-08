@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.2
+* The release files are named `jcmp` and `j2k_asm` (no more `-linux-arm64` in the name of the program); the bundle is still `jcmp-<version>-linux-arm64.tar.gz`. `install.sh` also installs older releases.
+* `jcmp -version` and `jcmp -help` (one or two dashes: `-version`, `--version`, also `-v`, `-h`); the help is a short list of the options.
+
 ## 0.2.1
 * Fixed: a character literal (`'J'`) that came after a decimal literal (`2.5`) was taken for a decimal number.
 * New: a step-by-step tutorial, `docs/TUTORIAL.md` (and `docs/TUTORIAL.th.md` in Thai); every program in it is compiled and run.

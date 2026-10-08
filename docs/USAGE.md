@@ -23,6 +23,7 @@ jcmp input.jk output.jasm              (older form: write assembler text only)
 | `--emit-asm file`  | also (or only) write the assembler text, to read what the compiler generated |
 | `-st`              | strict: every warning becomes an error |
 | `-I dir`           | where `import "name"` also looks (after the folder of the importing file) |
+| `-version`, `-help` | print the version / a short list of the options (one or two dashes: `--version`; also `-v`, `-h`) |
 | `-d`               | debug build: array index checks. A bad index prints `runtime error: index out of bounds, array size is N` and the program exits with code 134 |
 
 Exit code of `jcmp`: 0 = success (warnings may have been printed), 1 = error.
