@@ -19,9 +19,12 @@ double lg_rz;
 double lg_ux;
 double lg_uy;
 double lg_uz;
+double lg_ts;              // how many times faster than real time the film runs
+int lg_col[LN];            // the colour of each character (0xRRGGBB), used if the terminal has 24-bit colour
+int lg_color_on;           // 1: use the colours
 double lg_cs;              // the planet turns about its axis: cos and sin of the angle now
 double lg_sn;
-char lg_buf[8192];           // the text of one frame
+char lg_buf[24576];           // the text of one frame
 int lg_len;
 double lg_sx[60];            // the stars: place, speed and phase of the twinkling
 double lg_sy[60];
@@ -112,6 +115,38 @@ void lg_num(int v) {
     }
 }
 
+int lg_mix(int a, int b, double f) {
+    if f < 0.0 { f = 0.0; }
+    if f > 1.0 { f = 1.0; }
+    int r = (int)((double)((a >> 16) & 255) * (1.0 - f) + (double)((b >> 16) & 255) * f);
+    int g = (int)((double)((a >> 8) & 255) * (1.0 - f) + (double)((b >> 8) & 255) * f);
+    int bl = (int)((double)(a & 255) * (1.0 - f) + (double)(b & 255) * f);
+    return (r << 16) | (g << 8) | bl;
+}
+
+int lg_scale(int a, double f) {
+    int r = (int)((double)((a >> 16) & 255) * f);
+    int g = (int)((double)((a >> 8) & 255) * f);
+    int b = (int)((double)(a & 255) * f);
+    if r > 255 { r = 255; }
+    if g > 255 { g = 255; }
+    if b > 255 { b = 255; }
+    return (r << 16) | (g << 8) | b;
+}
+
+// does the terminal say it has 24-bit colour? (COLORTERM=truecolor or 24bit in the environment)
+void lg_find_color() {
+    lg_color_on = 0;
+    int i = argc() + 1;
+    while arg(i) != null {
+        char^ e = arg(i);
+        if e[0] == 'C' && e[1] == 'O' && e[2] == 'L' && e[3] == 'O' && e[4] == 'R' && e[5] == 'T' && e[6] == 'E' && e[7] == 'R' && e[8] == 'M' && e[9] == '=' {
+            if e[10] == 't' || e[10] == '2' { lg_color_on = 1; }
+        }
+        i += 1;
+    }
+}
+
 // the character for a brightness 0..1
 char lg_pick(double v) {
     if v < 0.0 { v = 0.0; }
@@ -172,10 +207,32 @@ void lg_show() {
         lg_num(left);
         lg_text("H");
         int x = 0;
+        int last = 0 - 1;
         while x < LW {
+            if lg_color_on == 1 {
+                int c = lg_col[y * LW + x];
+                if lg_ch[y * LW + x] == ' ' { c = 0; }
+                if c != last {
+                    lg_buf[lg_len] = 27;
+                    lg_len += 1;
+                    lg_text("[38;2;");
+                    lg_num((c >> 16) & 255);
+                    lg_text(";");
+                    lg_num((c >> 8) & 255);
+                    lg_text(";");
+                    lg_num(c & 255);
+                    lg_text("m");
+                    last = c;
+                }
+            }
             lg_buf[lg_len] = lg_ch[y * LW + x];
             lg_len += 1;
             x += 1;
+        }
+        if lg_color_on == 1 {
+            lg_buf[lg_len] = 27;
+            lg_len += 1;
+            lg_text("[0m");
         }
         y += 1;
     }
@@ -200,7 +257,8 @@ void lg_show() {
     lg_num(top + LH + 2);
     lg_text(";");
     lg_num(left + LW / 2 - 21);
-    lg_text("Hreal Saturn speeds, time x4000");
+    lg_text("Hreal Saturn speeds, time x");
+    lg_num((int)lg_ts);
     syscall(64, 1, @lg_buf, lg_len);
 }
 
@@ -341,8 +399,11 @@ double lg_ring(double r) {
     return 0.52;                                            // A ring
 }
 
-// the logo: frames = 0 runs until Ctrl-C or Enter
-void lg_run(int frames) {
+// the logo: frames = 0 runs until Ctrl-C or Enter; speed = how many times faster than real time the planet and rings go
+void lg_run(int frames, int speed) {
+    if speed < 1 { speed = 1500; }
+    lg_ts = (double)speed;
+    lg_find_color();
     lg_ramp[0] = ' ';
     lg_ramp[1] = '.';
     lg_ramp[2] = ':';
@@ -393,7 +454,7 @@ void lg_run(int frames) {
         double pulse = 0.9 + 0.1 * lg_sin(t * 2.0);
         // the view turns a little to and fro: that is what makes it look solid
         // the view does not move: all the motion is the planet's and the rings' own. The planet turns once in 10.56 hours
-        // (real time), 4000 times faster here; its axis leans 26.73 degrees.
+        // (real time), lg_ts times faster here; its axis leans 26.73 degrees.
         double yaw = 0.7853981633974483;
         double sinp = 0.5773502691896258;                       // looking down at the isometric angle
         double cosp = 0.816496580927726;
@@ -403,7 +464,7 @@ void lg_run(int frames) {
         lg_rx = lg_cos(yaw);
         lg_ry = 0.0;
         lg_rz = 0.0 - lg_sin(yaw);
-        double spin = 0.66100 * t;
+        double spin = 0.0001653 * lg_ts * t;
         lg_cs = lg_cos(spin);
         lg_sn = lg_sin(spin);
         lg_ux = lg_fy * lg_rz - lg_fz * lg_ry;            // up = forward x right
@@ -439,6 +500,7 @@ void lg_run(int frames) {
             if tw > 0.65 { c = '+'; }
             if tw > 0.9 { c = '*'; }
             lg_ch[(int)lg_sy[i] * LW + (int)lg_sx[i]] = c;
+            lg_col[(int)lg_sy[i] * LW + (int)lg_sx[i]] = lg_scale(14739711, 0.45 + 0.55 * tw);        // pale blue-white
             i += 1;
         }
         // every character: a ray goes into the scene (the picture is isometric: all rays are parallel)
@@ -484,9 +546,9 @@ void lg_run(int frames) {
                     int sub = (int)(rr * 28.0);
                     double sr = ((double)sub + 0.5) / 28.0;
                     // Kepler with Saturn's real mass: omega = sqrt(GM / r^3) = 4.1626e-4 rad/s at one planet radius, / rho^1.5;
-                    // the film runs 4000 times faster than real time
+                    // the film runs lg_ts times faster than real time
                     double rho = sr / 0.85;
-                    double omega = 1.66504 / (rho * __fsqrt(rho));
+                    double omega = 0.00041626 * lg_ts / (rho * __fsqrt(rho));
                     double clump = 0.5 + 0.5 * lg_sin(5.0 * (ra - omega * t) + 7.0 * (double)sub);
                     double v = band * (0.55 + 0.45 * clump);
                     // the shadow of the planet: a ray from here towards the light meets the letter?
@@ -502,8 +564,13 @@ void lg_run(int frames) {
                         sd = sd + dd * 0.9 + 0.01;
                         ss += 1;
                     }
+                    int tint = 14267522;                                   // the B ring: warm sand
+                    if band < 0.4 { tint = 9863790; }                      // the C ring: darker, greyer
+                    if band > 0.4 && band < 0.7 { tint = 12624508; }       // the A ring
                     if shadow == 1 { v = v * 0.16; }
                     lg_ch[y * LW + x] = lg_pick(v * pulse * 1.15);
+                    lg_col[y * LW + x] = lg_scale(tint, 0.35 + 0.9 * v * pulse);
+                    if shadow == 1 { lg_col[y * LW + x] = lg_mix(lg_col[y * LW + x], 1317434, 0.6); }     // the shadow is bluish dark
                     lg_dep[y * LW + x] = tp;
                 } else if hit == 1 {
                     double hx = ox + lg_fx * tt;
@@ -529,7 +596,30 @@ void lg_run(int frames) {
                         double cz2 = hz + lz * tq;
                         if lg_ring(__fsqrt(cx2 * cx2 + cz2 * cz2)) > 0.0 { lam = lam * 0.22; }
                     }
-                    lg_ch[y * LW + x] = lg_pick((0.20 + 0.80 * lam) * pulse);
+                    // like a globe: a day side, a night side with a soft edge between, a glow at the rim where the atmosphere
+                    // is seen edge on, and a small bright spot of reflected light
+                    double ndv = 0.0 - (nx * lg_fx + ny * lg_fy + nz * lg_fz);
+                    if ndv < 0.0 { ndv = 0.0; }
+                    double rim = 1.0 - ndv;
+                    rim = rim * rim * rim;
+                    double refl = 0.0;
+                    double hx2 = lx - lg_fx;
+                    double hy2 = ly - lg_fy;
+                    double hz2 = lz - lg_fz;
+                    double hl = __fsqrt(hx2 * hx2 + hy2 * hy2 + hz2 * hz2);
+                    if hl > 0.0 {
+                        double nh = (nx * hx2 + ny * hy2 + nz * hz2) / hl;
+                        if nh > 0.0 { refl = nh * nh * nh * nh * nh * nh * nh * nh * nh * nh; }
+                    }
+                    double day = lam;
+                    if day > 1.0 { day = 1.0; }
+                    double bright = 0.14 + 0.78 * day + 0.25 * rim * (0.35 + day) + 0.30 * refl;
+                    if bright > 1.0 { bright = 1.0; }
+                    lg_ch[y * LW + x] = lg_pick(bright * pulse);
+                    int c = lg_mix(1778228, 16245412, day);                // from a dark night blue to warm gold
+                    c = lg_mix(c, 9482495, rim * 0.5);                     // a bluish glow at the edge
+                    c = lg_mix(c, 16777215, refl * 0.8);
+                    lg_col[y * LW + x] = lg_scale(c, 0.6 + 0.4 * pulse);
                     lg_dep[y * LW + x] = tt;
                 }
                 x += 1;

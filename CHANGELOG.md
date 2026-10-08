@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.33
+* **The mascot looks like a lit planet:** with a 24-bit colour terminal (`COLORTERM=truecolor`, as in Termux) the characters get colours: the J has a day side (warm gold), a night side (dark blue) with a soft edge between, a bluish glow at its rim where the atmosphere is seen edge-on, and a small bright spot of reflected light; the rings are sand-coloured (the C ring greyer); the shadow cast by the rings and by the planet is bluish dark; stars are pale blue-white. Without that variable it stays plain characters.
+* **`jcmp -space N`:** N is how many times faster than real time the planet and rings go (default 1500; 4000 was too fast to read the letter). The line under the picture says it. Saturn's real ring radii, Kepler speeds from its real mass, its 10.56 hour day and its 26.73 degree tilt are used at any speed.
+
 ## 0.9.32
 * **The mascot with real physics (Saturn's numbers):** the rings have their real radii (C ring 74 658 - 92 000 km, B ring to 117 580 km, the Cassini division to 122 170 km, A ring to 136 775 km, the planet 60 268 km) and their gas goes round with Kepler's law and Saturn's real mass (GM = 3.793e7 km^3/s^2: omega = 4.16e-4 rad/s at one planet radius, falling with radius^-1.5). The planet turns once in its real 10.56 hours, and its axis leans its real 26.73 degrees. The film runs 4000 times faster than real time (written under the picture). The view does not swing any more: all the motion is real motion, so the J turns as the planet does.
 * Array lists (`double a[3] = {1.0, 2.0, 3.0};`) are confirmed by the owner (docs/syntax-design.md section 56).

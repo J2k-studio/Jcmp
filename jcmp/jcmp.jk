@@ -2,7 +2,7 @@
 // Build:  bin/jcmp jcmp/jcmp.jk -o jcmp1        (see bootstrap.sh)
 // Use:    jcmp1 input.jk -o program
 // the version of the compiler (also in the file VERSION; release.sh checks that they agree)
-#define JCMP_VERSION "0.9.32"
+#define JCMP_VERSION "0.9.33"
 
 #import "jc_base"
 #import "jc_asm"
@@ -108,7 +108,17 @@ void main() {
         } else if is_opt(a, "nocolor") {
             use_color = 0;
         } else if str_eq(a, "-space") || str_eq(a, "-spcae") || str_eq(a, "-speac") {
-            lg_run(0);                   // the mascot (not in -help)
+            // the mascot (not in -help); an optional number after it: how many times faster than real time (default 1500)
+            int lg_speed = 0;
+            if ai + 1 < argc() {
+                char^ sp = arg(ai + 1);
+                int sk = 0;
+                while sp[sk] >= '0' && sp[sk] <= '9' && sk < 8 {
+                    lg_speed = lg_speed * 10 + (sp[sk] - '0');
+                    sk += 1;
+                }
+            }
+            lg_run(0, lg_speed);
             syscall(93, 0);
         } else if str_eq(a, "-d") {
             opt_debug = 1;
