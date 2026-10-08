@@ -1164,7 +1164,7 @@ int own_find(int off) {
 // records out again (own_unlink).
 void own_add(int off, int kind, int aux) {
     if own_count >= 256 { die("too many owning variables in one function"); }
-    if kind != 2 && kind != 6 { str_flush(stmt_t0, 1); }       // Strings made by this statement go first: the records must be in order
+    if kind != 2 && kind != 6 && kind != 7 && kind != 9 { str_flush(stmt_t0, 1); }       // Strings made by this statement go first: the records must be in order
     own_off[own_count] = off;
     own_kind[own_count] = kind;
     own_aux[own_count] = aux;
@@ -1178,7 +1178,7 @@ void own_add(int off, int kind, int aux) {
         mode = 2;                            // a deferred statement: aux is the label of its code, off is not used
     } else if kind == 0 {
         str_copy(@fn, "Mem__free", 128);
-    } else if kind == 3 {
+    } else if kind == 3 || kind == 9 {
         str_copy(@fn, "__Str__free_all", 128);
     } else if kind == 4 || kind == 6 {
         str_copy(@fn, @sname + aux * 64, 64);
@@ -1232,7 +1232,7 @@ void emit_owner_free(int i) {
         return;
     }
     ins_mem("ldr", "x0", "x29", own_off[i]);
-    if own_kind[i] == 3 {
+    if own_kind[i] == 3 || own_kind[i] == 9 {
         rt_call("__Str__free_all");
     } else if own_kind[i] >= 1 {
         rt_call("__Arr__free");
@@ -1638,6 +1638,10 @@ void lvalue_loop() {
                 if find_func(@m_full) < 0 && pass_no >= 2 { die_name("the struct has no such method", @m_name); }
                 if pass_no >= 2 && fself[find_func(@m_full)] == 0 { die_name("this function is static: call it as Struct::name(...)", @m_name); }
                 str_copy(@id_name, @m_full, 256);
+                if lv_fresh == 1 && lv_base_local == 1 {
+                    int mvi = own_find(lv_base_off);
+                    if mvi >= 0 && own_moved[mvi] == 1 { warn("this variable was moved and is used afterwards (it is empty now)", "moved"); }
+                }
                 call_pre = 1;
                 call_method = 1;
                 gen_call();
@@ -1717,6 +1721,11 @@ void gen_scope() {
 
 // after a call: f(...)(...) , f().field , f().method() , f()[i] , and a String result with a method (f().trim())
 void call_postfix() {
+    int again = 1;
+    int guard = 0;
+    while again == 1 && guard < 8 {
+    guard += 1;
+    again = 0;
     while ex_ty < 0 && tok_is("(") {
         gen_call_indirect(ex_ty);            // f(...)(...) : call the pointer that f returned
     }
@@ -1729,6 +1738,29 @@ void call_postfix() {
         lv_kind = 0;
         lv_ptr = 0;
         lv_tid = ex_ty;
+        lvalue_loop();
+        finish_rvalue();
+    } else if ex_ty == 99 && tok_is(".") && ex_dyn != 0 {
+        // f().len : the array that f returned is a temporary kept in a frame slot until the end of the statement
+        int tk = 7;
+        if is_strarr_dyn(ex_dyn) { tk = 9; }
+        if cond_depth > 0 { die("a new array cannot be made on the right of && or ||"); }
+        ty_tid = 0;
+        add_local(".t", 0, 8, 8, 0);
+        int toff = loff[lcount - 1];
+        ins_mem("str", "x0", "x29", toff);
+        own_add(toff, tk, 0);
+        last_call_owning = 0;
+        lv_done = 0;
+        lv_self = 0;
+        lv_fresh = 0;
+        ins_n("add x0, x29, #", toff);
+        lv_code = 8;
+        lv_kind = 3;
+        lv_ptr = 0;
+        lv_tid = 99;
+        lv_dyn = ex_dyn;
+        lv_nd = 1;
         lvalue_loop();
         finish_rvalue();
     } else if ex_ty == 80 && tok_is(".") && rv_valid == 1 {
@@ -1745,6 +1777,8 @@ void call_postfix() {
         lv_nd = 1;
         lvalue_loop();
         finish_rvalue();
+    }
+    if (ex_ty == 80 || ex_ty == 99 || ex_ty >= 100) && tok_is(".") && lv_done == 1 { again = 1; }
     }
 }
 
@@ -1837,6 +1871,7 @@ void gen_identifier() {
     parse_lvalue();
     if try_indirect_call() { return; }
     finish_rvalue();
+    if lv_done == 1 && tok_is(".") { call_postfix(); }       // s.trim().len : go on with the result of a method
 }
 
 // the function f used as a value (its name without a call): x0 = its address,
@@ -2012,20 +2047,24 @@ void str_adopt() {
 }
 
 // the temporaries from own[t0..] are freed (keep = 1: x0 is kept) and leave the list
+bool is_temp_kind(int k) {
+    return k == 2 || k == 6 || k == 7 || k == 9;
+}
+
 void str_flush(int t0, int keep) {
     int i = t0;
     int any = 0;
     int first_tmp = 0 - 1;
     while i < own_count {
-        if (own_kind[i] == 2 || own_kind[i] == 6) && own_moved[i] == 0 { any = 1; }
-        if (own_kind[i] == 2 || own_kind[i] == 6) && first_tmp < 0 { first_tmp = i; }
+        if is_temp_kind(own_kind[i]) && own_moved[i] == 0 { any = 1; }
+        if is_temp_kind(own_kind[i]) && first_tmp < 0 { first_tmp = i; }
         i += 1;
     }
     if any == 1 {
         if keep == 1 { push_x0(); }
         i = own_count - 1;
         while i >= t0 {
-            if (own_kind[i] == 2 || own_kind[i] == 6) && own_moved[i] == 0 { emit_owner_free(i); }
+            if is_temp_kind(own_kind[i]) && own_moved[i] == 0 { emit_owner_free(i); }
             i -= 1;
         }
         if keep == 1 {
@@ -2037,7 +2076,7 @@ void str_flush(int t0, int keep) {
     int w = t0;
     i = t0;
     while i < own_count {
-        if own_kind[i] != 2 && own_kind[i] != 6 {
+        if !is_temp_kind(own_kind[i]) {
             own_off[w] = own_off[i];
             own_kind[w] = own_kind[i];
             own_aux[w] = own_aux[i];
@@ -2851,6 +2890,12 @@ void parse_unary_core() {
         gen_string();
         ex_w = 9;
         ex_ty = 0;
+        if tok_is(".") {
+            // "text".trim() : the text becomes a String (a temporary) that has the methods
+            rt_call("__Str__from");
+            str_temp();
+            call_postfix();
+        }
         return;
     }
     if tok_kind == T_IDENT {

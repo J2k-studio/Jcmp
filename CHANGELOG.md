@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.12.1
+* **Methods and `.len` on any String / array expression:** `"  text ".trim().len`, `s.trim().upper()`, `Env::args().len`, `words().join("+")`, `"MiXed".upper()` (before, only on variables and on the result of a call).
+* A moved value that is used again by a method call (`b = a; a.len()`) gets the `-Wmoved` warning, like a plain read.
+
 ## 0.9.12
 * **`Math` is complete:** `exp log log2 log10 pow sin cos tan asin acos atan atan2 sinh cosh tanh cbrt hypot fmod round sign clamp lerp radians degrees pi tau e inf nan is_nan is_inf powi from_bits to_bits`. Checked against known values to 12 digits.
 * **Changed:** `Math::pow(x, y)` takes two decimals (like C). The old `pow(x, n)` with a whole-number exponent is now `Math::powi(x, n)` (and fast: by squaring, negative n allowed).
