@@ -13,13 +13,13 @@ and the ELF writer are inside the compiler.
 ### Command line
 
 ```
-jcmp input.jk -o output [-d] [-st] [-I dir] [--emit-asm file.jasm]
+jcmp input.jk [-o output] [-d] [-st] [-I dir] [--emit-asm file.jasm]
 jcmp input.jk output.jasm              (older form: write assembler text only)
 ```
 
 | Option | Meaning |
 |--------|---------|
-| `-o file`          | write the ARM64 executable |
+| `-o file`          | write the ARM64 executable; without `-o` it is named like the source without `.jk` / `.j`, in the current folder (`jcmp test.jk` makes `test`) |
 | `--emit-asm file`  | also (or only) write the assembler text, to read what the compiler generated |
 | `-color` / `-nocolor` | coloured messages (errors red, warnings yellow); the default is on when the messages go to a terminal |
 | `-st`              | strict: every warning becomes an error |

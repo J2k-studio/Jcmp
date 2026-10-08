@@ -2,7 +2,7 @@
 // Build:  bin/jcmp jcmp/jcmp.jk -o jcmp1        (see bootstrap.sh)
 // Use:    jcmp1 input.jk -o program
 // the version of the compiler (also in the file VERSION; release.sh checks that they agree)
-#define JCMP_VERSION "0.9.3"
+#define JCMP_VERSION "0.9.4"
 
 #import "jc_base"
 #import "jc_asm"
@@ -44,7 +44,7 @@ void reset_state(char^ in_path) {
 }
 
 void usage() {
-    write_err("usage: jcmp input.jk -o output [-d] [-st] [-I dir] [--emit-asm file.jasm]\n");
+    write_err("usage: jcmp input.jk [-o output] [-d] [-st] [-I dir] [--emit-asm file.jasm]\n");
     write_err("       jcmp -help      (all options)      jcmp -version\n");
     syscall(93, 1);
 }
@@ -54,7 +54,7 @@ void help() {
     write_out("jcmp ");
     write_out(JCMP_VERSION);
     write_out(" - the J2K compiler (Linux ARM64)\n\n");
-    write_out("usage: jcmp input.jk -o output [options]\n\n");
+    write_out("usage: jcmp input.jk [-o output] [options]      (without -o the program is named like the source: test.jk -> test)\n\n");
     write_out("  -o file          write the program to file\n");
     write_out("  -d               debug build: array bounds checks, memory leak report\n");
     write_out("  -st              strict: warnings are errors\n");
@@ -132,7 +132,33 @@ void main() {
         ai += 1;
     }
     if in_path == null { usage(); }
-    if out_elf == null && out_asm == null { usage(); }
+    char derived[256];
+    if out_elf == null && out_asm == null {
+        // no -o: the program gets the name of the source without .jk / .j, in the current folder
+        int last = 0;
+        int k = 0;
+        while in_path[k] != 0 {
+            if in_path[k] == '/' { last = k + 1; }
+            k += 1;
+        }
+        int n = 0;
+        k = last;
+        while in_path[k] != 0 && n < 250 {
+            derived[n] = in_path[k];
+            n += 1;
+            k += 1;
+        }
+        if n > 3 && derived[n - 3] == '.' && derived[n - 2] == 'j' && derived[n - 1] == 'k' {
+            n -= 3;
+        } else if n > 2 && derived[n - 2] == '.' && derived[n - 1] == 'j' {
+            n -= 2;
+        } else {
+            write_err("jcmp: the source file has no .jk or .j name, so say where the program goes: -o name\n");
+            syscall(93, 1);
+        }
+        derived[n] = 0;
+        out_elf = @derived;
+    }
     // pass 1 learns the functions, structs and enums (they may be used before they
     // are written); pass 2 checks everything and records which function calls which
     // (its code is thrown away); pass 3 makes the code, leaving out unused functions.
