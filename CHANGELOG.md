@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9.17
+* **`Sha256`:** `Sha256::hex(text)` and `Sha256::file(path)` (a `Result`) give the SHA-256 digest as 64 hex digits. Checked against `sha256sum`, also on a 1 MB binary.
+
 ## 0.9.16
 * **`Proc`:** `Proc::run(cmd, args)` runs a program and returns its exit code; `Proc::output(cmd, args)` returns what it printed. The program is looked for in `PATH` unless its name has a `/`; 127 means it could not be started.
 
