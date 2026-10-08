@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9.54
+* **The mascot in pixels (two ways to compare):** `jcmp -space px` draws it with half-block pixels in colour (blue sea, green land, white clouds, warm city lights, a gold J, a blue air glow); `jcmp -space pxg` draws the same picture in white, grey and black. Plain `jcmp -space` is still the ASCII picture. A speed number can follow (`jcmp -space px 600`). Needs a terminal with 24-bit colour.
+
 ## 0.9.53
 * **The mascot's Moon follows its phase:** at a full Moon there is no letter; as the Moon wanes or waxes the J fades in on the surface, and from a half Moon down to a thin crescent the Moon itself becomes the letter J (drawn flat, facing us, glowing).
 

@@ -48,6 +48,12 @@ char lg_ramp2[96];
 char lg_ramp_m[16];          // the Moon is made of digits: 1 7 3 5 2 9 6 0 8 @           // a long ramp of characters from empty to dense: many steps of shade
 int lg_n2;
 int lg_nm;
+int lg_px;                   // 0: characters, 1: pixels in colour, 2: pixels in white, grey and black
+int lg_pt[LN];               // pixel mode: the colour of the top dot of each cell and of the bottom dot (0xRRGGBB)
+int lg_pbm[LN];
+double lg_ar[2];             // the colour (red, green, blue, 0..1 each) added up from the rays of the top and of the bottom dot of one cell
+double lg_ag[2];
+double lg_ab[2];
 int lg_cols;                 // the size of the terminal, read once
 int lg_rows;
 
@@ -350,6 +356,29 @@ char lg_edge_char(int m) {
     return ':';
 }
 
+// pixel mode: a ray of the row sj of the cell found something of the colour (kr, kg, kb) with the brightness b
+void lg_pacc(int sj, double kr, double kg, double kb, double b) {
+    if lg_px == 2 {
+        kr = 1.0;
+        kg = 1.0;
+        kb = 1.0;
+    }
+    lg_ar[sj] = lg_ar[sj] + kr * b;
+    lg_ag[sj] = lg_ag[sj] + kg * b;
+    lg_ab[sj] = lg_ab[sj] + kb * b;
+}
+
+// the colour number of the sum of two rays (red, green, blue added up, each 0..2)
+int lg_pcol(double r, double g, double b) {
+    int ri = (int)(r * 127.5);
+    int gi = (int)(g * 127.5);
+    int bi = (int)(b * 127.5);
+    if ri > 255 { ri = 255; }
+    if gi > 255 { gi = 255; }
+    if bi > 255 { bi = 255; }
+    return (ri << 16) | (gi << 8) | bi;
+}
+
 // grey, as a colour number
 int lg_grey(double v) {
     if v < 0.0 { v = 0.0; }
@@ -388,6 +417,45 @@ void lg_show() {
         lg_text("H");
         int x = 0;
         int last = 0 - 1;
+        int lastb = 0 - 1;
+        while x < LW && lg_px > 0 {
+            int ct = lg_pt[y * LW + x];
+            int cb = lg_pbm[y * LW + x];
+            if ct != last {
+                lg_buf[lg_len] = 27;
+                lg_len += 1;
+                lg_text("[38;2;");
+                lg_num((ct >> 16) & 255);
+                lg_text(";");
+                lg_num((ct >> 8) & 255);
+                lg_text(";");
+                lg_num(ct & 255);
+                lg_text("m");
+                last = ct;
+            }
+            if cb != lastb {
+                lg_buf[lg_len] = 27;
+                lg_len += 1;
+                lg_text("[48;2;");
+                lg_num((cb >> 16) & 255);
+                lg_text(";");
+                lg_num((cb >> 8) & 255);
+                lg_text(";");
+                lg_num(cb & 255);
+                lg_text("m");
+                lastb = cb;
+            }
+            lg_buf[lg_len] = 226;                       // the upper half block (UTF-8: E2 96 80)
+            lg_buf[lg_len + 1] = 150;
+            lg_buf[lg_len + 2] = 128;
+            lg_len += 3;
+            x += 1;
+        }
+        if lg_px > 0 {
+            lg_buf[lg_len] = 27;
+            lg_len += 1;
+            lg_text("[0m");
+        }
         while x < LW {
             if lg_color_on == 1 {
                 int c = lg_col[y * LW + x];
@@ -539,6 +607,7 @@ void lg_run(int frames, int speed) {
     if speed < 1 { speed = 1800; }
     double ts = (double)speed;
     lg_find_color();
+    if lg_px > 0 { lg_color_on = 1; }
     char^ rp = " .'`^\",:;Il!i><~+_-?][}{1)(|/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$";
     lg_n2 = 0;
     while rp[lg_n2] != 0 && lg_n2 < 90 {
@@ -685,6 +754,8 @@ void lg_run(int frames, int speed) {
             lg_ch[i] = ' ';
             lg_col[i] = 0;
             lg_dep[i] = 1000.0;
+            lg_pt[i] = 0;
+            lg_pbm[i] = 0;
             i += 1;
         }
         i = 0;
@@ -699,6 +770,12 @@ void lg_run(int frames, int speed) {
             if sxs < LW && sys < LH {
                 lg_ch[sys * LW + sxs] = c;
                 lg_col[sys * LW + sxs] = lg_grey(0.35 + 0.55 * tw);
+                if lg_px > 0 {
+                    int sv = (int)(40.0 + 200.0 * tw * tw);
+                    if lg_px == 1 && i % 3 == 1 { lg_pt[sys * LW + sxs] = (sv * 8 / 10 << 16) | (sv * 9 / 10 << 8) | sv; }
+                    else if lg_px == 1 && i % 3 == 2 { lg_pt[sys * LW + sxs] = (sv << 16) | (sv * 9 / 10 << 8) | (sv * 7 / 10); }
+                    else { lg_pt[sys * LW + sxs] = (sv << 16) | (sv << 8) | sv; }
+                }
             }
             i += 1;
         }
@@ -712,6 +789,12 @@ void lg_run(int frames, int speed) {
                 int lit_n = 0;
                 double dmin = 1000.0;
                 int sj = 0;
+                lg_ar[0] = 0.0;
+                lg_ag[0] = 0.0;
+                lg_ab[0] = 0.0;
+                lg_ar[1] = 0.0;
+                lg_ag[1] = 0.0;
+                lg_ab[1] = 0.0;
                 while sj < 2 {
                     int si = 0;
                     while si < 2 {
@@ -773,12 +856,41 @@ void lg_run(int frames, int speed) {
                             }
                             double bright = 0.07 + 0.90 * lam * albedo + 0.20 * rim * (0.15 + lam) + 0.30 * refl;
                             // the lights of the cities: on the land that the Sun does not light, small bright points
+                            double cityb = 0.0;
                             double night = 1.0 - lg_clamp(lam * 4.0, 0.0, 1.0);
                             if night > 0.0 && land > 0.10 && lat < 0.80 && lat > 0.0 - 0.80 && cl < 0.30 {
                                 double ct = lg_sin(p0x * 21.0 + 1.0) * lg_sin(p0y * 17.0 + 2.0) * lg_sin(p0z * 19.0 + 0.5);
-                                if ct > 0.40 { bright = bright + lg_clamp((ct - 0.40) * 3.0, 0.0, 0.5) * night; }
+                                if ct > 0.40 { cityb = lg_clamp((ct - 0.40) * 3.0, 0.0, 0.5) * night; }
                             }
+                            bright = bright + cityb;
                             if bright > 1.0 { bright = 1.0; }
+                            if lg_px > 0 {
+                                // the colour: the sea blue, the land green, the clouds and the ice white; the cities warm; the glint white
+                                double kr = 0.30;
+                                double kg = 0.55;
+                                double kb = 1.0;
+                                if land > 0.10 {
+                                    kr = 0.55;
+                                    kg = 0.95;
+                                    kb = 0.35;
+                                }
+                                if cl > 0.30 {
+                                    double wc = lg_clamp((cl - 0.30) * 3.0, 0.0, 1.0);
+                                    kr = kr + (1.0 - kr) * wc;
+                                    kg = kg + (1.0 - kg) * wc;
+                                    kb = kb + (1.0 - kb) * wc;
+                                }
+                                if lat > 0.86 || lat < 0.0 - 0.86 {
+                                    kr = 1.0;
+                                    kg = 1.0;
+                                    kb = 1.0;
+                                }
+                                double bmain = bright - cityb - 0.30 * refl;
+                                if bmain < 0.0 { bmain = 0.0; }
+                                lg_pacc(sj, kr, kg, kb, bmain);
+                                lg_pacc(sj, 1.0, 0.80, 0.45, cityb);
+                                lg_pacc(sj, 1.0, 1.0, 1.0, 0.30 * refl);
+                            }
                             sumb = sumb + bright;
                             mask = mask | (1 << (sj * 2 + si));
                             lit_n += 1;
@@ -867,6 +979,10 @@ void lg_run(int frames, int speed) {
                             if bright < 0.80 * cov * (0.6 + 0.4 * j_bill) { bright = 0.80 * cov * (0.6 + 0.4 * j_bill); }
                             if bright > 1.0 { bright = 1.0; }
                             if bright > 0.04 {
+                                if lg_px > 0 {
+                                    double cv = lg_clamp(cov, 0.0, 1.0);
+                                    lg_pacc(sj, 1.0, 0.98 - 0.05 * cv, 0.92 - 0.27 * cv, bright);
+                                }
                                 sumb = sumb + bright;
                                 mask = mask | (1 << (sj * 2 + si));
                                 lit_n += 1;
@@ -885,6 +1001,7 @@ void lg_run(int frames, int speed) {
                                 double bright = 0.55 * sun_side * fade * fade;
                                 if bright > 0.05 {
                                     if bright > 1.0 { bright = 1.0; }
+                                    if lg_px > 0 { lg_pacc(sj, 0.35, 0.60, 1.0, bright); }
                                     sumb = sumb + bright;
                                     mask = mask | (1 << (sj * 2 + si));
                                     lit_n += 1;
@@ -894,6 +1011,12 @@ void lg_run(int frames, int speed) {
                         si += 1;
                     }
                     sj += 1;
+                }
+                if lg_px > 0 {
+                    int pt = lg_pcol(lg_ar[0], lg_ag[0], lg_ab[0]);
+                    int pbm = lg_pcol(lg_ar[1], lg_ag[1], lg_ab[1]);
+                    if pt != 0 { lg_pt[y * LW + x] = pt; }
+                    if pbm != 0 { lg_pbm[y * LW + x] = pbm; }
                 }
                 if mask == 15 {
                     // the cell is full: a character of the ramp by the shade
@@ -929,6 +1052,18 @@ void lg_run(int frames, int speed) {
                     lg_col[dy * LW + dx] = lg_grey(0.30);
                 }
             }
+            if lg_px > 0 {
+                int dy2 = (int)((cys - syr * unit) * 2.0);
+                if dx >= 0 && dx < LW && dy2 >= 0 && dy2 < LH * 2 {
+                    int pc = 0x303a55;
+                    if lg_px == 2 { pc = 0x3c3c3c; }
+                    if dy2 % 2 == 0 {
+                        if lg_pt[(dy2 / 2) * LW + dx] == 0 { lg_pt[(dy2 / 2) * LW + dx] = pc; }
+                    } else {
+                        if lg_pbm[(dy2 / 2) * LW + dx] == 0 { lg_pbm[(dy2 / 2) * LW + dx] = pc; }
+                    }
+                }
+            }
             n += 1;
         }
         // the word MOON under the Moon, and EARTH under the Earth
@@ -938,7 +1073,7 @@ void lg_run(int frames, int speed) {
         int lcy = (int)(cys - mqy * unit + rm * unit + 1.5);
         char^ word = "MOON";
         int wi = 0;
-        while wi < 4 {
+        while wi < 4 && lg_px == 0 {
             int wx2 = lcx - 2 + wi;
             if wx2 >= 0 && wx2 < LW && lcy >= 0 && lcy < LH {
                 if lg_ch[lcy * LW + wx2] == ' ' || lg_ch[lcy * LW + wx2] == '.' {
