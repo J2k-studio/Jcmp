@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9.14
+* **`Num::parse_int(s)` / `Num::parse_double(s)`** return a `Result<…, Error>` (kind `Parse`) instead of throwing, so `int n = Num::parse_int(s)?;` works.
+
 ## 0.9.13
 * **A panic prints where it happened:** after `panic: <what>` the running functions follow, innermost first (`  at inner`, `  at outer`, `  at main`; methods as `Type::name`).
 * **`using enum` works for data enums:** after `using enum Shape`, `switch` can use the short member names (`Circle(r):`).
