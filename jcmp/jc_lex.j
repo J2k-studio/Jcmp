@@ -639,8 +639,20 @@ int read_escape() {
     return 0;
 }
 
+
+int prev_tok_line;           // the line of the token before the current one
+int prev_end_line;           // where that token ended
+int prev_end_col;
+int prev_end_base;
+int prev_end_ls;
+
 // the next token
 void next() {
+    prev_tok_line = err_line;
+    prev_end_line = cur_line;
+    prev_end_col = cur_pos - cur_line_start + 1;
+    prev_end_base = cur_base;
+    prev_end_ls = cur_line_start;
     while true {
         skip_blanks();
         if cur_pos < cur_len { break; }
@@ -901,7 +913,22 @@ bool accept(char^ s) {
     return false;
 }
 
+void missing_semicolon() {
+    char m[100];
+    err_line = prev_end_line;            // the message points just after the last token of the line above
+    err_col = prev_end_col;
+    err_base = prev_end_base;
+    err_ls = prev_end_ls;
+    str_copy(@m, "expected ';' at the end of line ", 100);
+    append_int(@m, prev_tok_line);
+    append_text(@m, " (it is missing there)");
+    die(@m);
+}
+
 void expect(char^ s) {
-    if !tok_is(s) { die_name("expected", s); }
+    if !tok_is(s) {
+        if str_eq(s, ";") && err_line > prev_tok_line && prev_tok_line > 0 { missing_semicolon(); }
+        die_name("expected", s);
+    }
     next();
 }

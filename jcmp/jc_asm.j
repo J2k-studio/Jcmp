@@ -791,7 +791,16 @@ void as_assemble(int len) {
 // write the ELF file of the last as_assemble
 void as_write_elf(char^ path) {
     int out = syscall(56, -100, path, 577, 493);
-    if out < 0 { as_fail(); }
+    if out < 0 {
+        char e1[48] = "cannot write the program file '";
+        syscall(64, 2, @e1, 31);
+        int pn = 0;
+        while path[pn] != 0 { pn += 1; }
+        syscall(64, 2, path, pn);
+        char e2[96] = "' (a folder with that name, a program that is running, or no permission?)\n";
+        syscall(64, 2, @e2, 74);
+        syscall(93, 1);
+    }
     syscall(64, out, @as_hdr, 176);
     syscall(64, out, @as_code, as_pos);
     syscall(57, out);

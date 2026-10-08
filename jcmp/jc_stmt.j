@@ -895,7 +895,10 @@ void parse_cout() {
         c_count += 1;
     }
     if c_count == 0 { die("<< expected after cout"); }
-    if !tok_is(";") { die("expected ';' or '<<' here (is a '<<' missing between two values?)"); }
+    if !tok_is(";") {
+        if err_line > prev_tok_line && prev_tok_line > 0 { missing_semicolon(); }
+        die("expected ';' or '<<' here (is a '<<' missing between two values?)");
+    }
     expect(";");
     if c_count == 1 && c_last != 9 && c_last != 2 {
         emit_line("mov x0, 10");
@@ -979,7 +982,10 @@ void parse_cin() {
         count += 1;
     }
     if count == 0 { die(">> expected after cin"); }
-    if !tok_is(";") { die("expected ';' or '>>' here (is a '>>' missing between two variables?)"); }
+    if !tok_is(";") {
+        if err_line > prev_tok_line && prev_tok_line > 0 { missing_semicolon(); }
+        die("expected ';' or '>>' here (is a '>>' missing between two variables?)");
+    }
     expect(";");
 }
 

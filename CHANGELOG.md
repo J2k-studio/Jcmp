@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.3
+* **A missing `;` is reported where it is missing:** `expected ';' at the end of line 4 (it is missing there)` with the `^` right after the last token of that line (before, the message pointed at the next line and talked about `<<`).
+* **A program file that cannot be written has a clear message:** `cannot write the program file 'test' (a folder with that name, a program that is running, or no permission?)` (before: `j2k_asm: error at line 155 ... parse or I/O error`).
+
 ## 0.9.2
 * **A generic function finds its types from the arguments:** `largest(3, 9)`, `swap(@x, @y)`, `first(names)`. Numbers, chars, texts, variables, `@variable` and arrays are understood; anything else, a mix of types (`largest(1, 2.5)`) or a `T` that no parameter shows must be written with `<type>`. A struct (`Box<int>`) is still always written.
 
