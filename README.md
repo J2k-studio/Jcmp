@@ -94,7 +94,7 @@ sha256sum -c --ignore-missing SHA256SUMS      # must print:  jcmp-linux-arm64: O
 mv jcmp-linux-arm64 jcmp && chmod +x jcmp && rm SHA256SUMS
 ```
 
-A specific version: replace `latest/download` with `download/v0.2.0`. The bundle
+A specific version: replace `latest/download` with `download/v0.2.0` (also a good idea right after a new release, when the `latest` links can lag behind for a minute). The bundle
 `jcmp-<version>-linux-arm64.tar.gz` of the same release holds the compiler, the assembler, the examples and the docs.
 
 ### Use it

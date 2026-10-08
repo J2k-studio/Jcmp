@@ -30,6 +30,19 @@ case "$(uname -m)" in
     aarch64|arm64) ;;
     *) echo "install: Jcmp makes programs for Linux ARM64 only (this machine is $(uname -m))"; exit 1 ;;
 esac
+fetch() {   # fetch URL FILE
+    if command -v curl >/dev/null 2>&1; then curl -fsSL -o "$2" "$1"
+    elif command -v wget >/dev/null 2>&1; then wget -q -O "$2" "$1"
+    else echo "install: curl or wget is needed"; exit 1; fi
+}
+TMP="$(mktemp -d)"
+trap 'rm -rf "$TMP"' EXIT
+if [ -z "${JCMP_BASE:-}" ] && [ -z "$VERSION" ]; then
+    # find the number of the latest release first, so that all files come from the same release
+    if fetch "https://api.github.com/repos/$REPO/releases/latest" "$TMP/latest.json" 2>/dev/null; then
+        VERSION="$(sed -n 's/.*"tag_name": *"v\{0,1\}\([^"]*\)".*/\1/p' "$TMP/latest.json" | head -1)"
+    fi
+fi
 if [ -n "${JCMP_BASE:-}" ]; then
     BASE="$JCMP_BASE"
 elif [ -n "$VERSION" ]; then
@@ -42,13 +55,6 @@ if [ -z "$BINDIR" ]; then
 fi
 mkdir -p "$BINDIR"
 BINDIR="$(cd "$BINDIR" && pwd)"
-TMP="$(mktemp -d)"
-trap 'rm -rf "$TMP"' EXIT
-fetch() {   # fetch URL FILE
-    if command -v curl >/dev/null 2>&1; then curl -fsSL -o "$2" "$1"
-    elif command -v wget >/dev/null 2>&1; then wget -q -O "$2" "$1"
-    else echo "install: curl or wget is needed"; exit 1; fi
-}
 echo "downloading from $BASE ..."
 fetch "$BASE/SHA256SUMS" "$TMP/SHA256SUMS"
 install_one() {   # install_one RELEASE-FILE NAME-IN-BINDIR
