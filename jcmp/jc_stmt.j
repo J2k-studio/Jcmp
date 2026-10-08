@@ -2697,12 +2697,17 @@ void emit_start_stub() {
             int gf_i = 0;
             int gf_e = gfi_exp[gf_k];
             if gf_e < 0 { gf_e = 0 - gf_e; }
-            while gf_i < gf_e {
-                gf_p = gf_p * 10;
-                gf_i += 1;
+            if gf_e <= 18 {
+                while gf_i < gf_e {
+                    gf_p = gf_p * 10;
+                    gf_i += 1;
+                }
+                ins_n("mov x1, ", gf_p);
+                emit_line("scvtf d1, x1");
+            } else {
+                ins_n("mov x1, ", pow10_bits(gf_e));
+                emit_line("fmov d1, x1");
             }
-            ins_n("mov x1, ", gf_p);
-            emit_line("scvtf d1, x1");
             if gfi_exp[gf_k] < 0 {
                 emit_line("fdiv d0, d0, d1");
             } else {

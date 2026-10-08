@@ -267,7 +267,7 @@ void f32_to_f64(int r) {
 // x0 = left, x1 = right, types lt / rt: both must be floats (a literal adapts);
 // returns 90 when the operation is done in f32, else 91; the operands are ready
 int fp_prepare(int lt, int rt) {
-    if !is_float(lt) || !is_float(rt) { die("cannot mix a float and a non-float (use a cast, e.g. (double)n)"); }
+    if (!is_float(lt) || !is_float(rt)) && pass_no >= 2 { die("cannot mix a float and a non-float (use a cast, e.g. (double)n)"); }
     if (lt == 90 && rt == 91) || (lt == 91 && rt == 90) { die("cannot mix float and double (use a cast)"); }
     if lt == 90 || rt == 90 {
         if lt == 92 { lit_to_f32(0); }
@@ -327,6 +327,14 @@ void fp_compare(char^ cond, int lt, int rt) {
     place_label(ld);
 }
 
+// the bits of the double 10^k for k = 19 .. 22 (exact)
+int pow10_bits(int k) {
+    if k == 19 { return 4891288408196988160; }
+    if k == 20 { return 4906019910204099648; }
+    if k == 21 { return 4921056587992461136; }
+    return 4936209963552724370;
+}
+
 // the literal being read (tok_mant * 10^tok_exp) -> x0 as f64 bits
 void gen_float_literal() {
     ins_n("mov x0, ", tok_mant);
@@ -336,12 +344,18 @@ void gen_float_literal() {
         int pk = 0;
         int ae = tok_exp;
         if ae < 0 { ae = 0 - ae; }
-        while pk < ae {
-            p10 = p10 * 10;
-            pk += 1;
+        if ae <= 18 {
+            while pk < ae {
+                p10 = p10 * 10;
+                pk += 1;
+            }
+            ins_n("mov x1, ", p10);
+            emit_line("scvtf d1, x1");
+        } else {
+            // 10^19 .. 10^22 do not fit an integer register but are exact doubles: their bits
+            ins_n("mov x1, ", pow10_bits(ae));
+            emit_line("fmov d1, x1");
         }
-        ins_n("mov x1, ", p10);
-        emit_line("scvtf d1, x1");
         if tok_exp < 0 {
             emit_line("fdiv d0, d0, d1");
         } else {

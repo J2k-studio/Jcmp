@@ -666,7 +666,7 @@ Standard library (`stdlib`, source in `std/`):
 | `Sys`  | `exit argc arg open close read write mmap munmap` |
 | `Mem`  | `alloc(n)` `free(p)` `set` `copy`  (a heap built on `mmap`) |
 | `Str`  | `len eq cmp copy append find starts_with to_int from_int` |
-| `Math` | `abs min max sqrt floor ceil trunc pow` (floats), `iabs imin imax ipow` (ints) |
+| `Math` | floats: `abs min max sqrt floor ceil trunc round sign clamp lerp fmod hypot cbrt`, `pow(x, y)`, `powi(x, n)`, `exp log log2 log10`, `sin cos tan asin acos atan atan2 sinh cosh tanh`, `radians degrees`, `pi() tau() e() inf() nan() is_nan() is_inf()`; ints: `iabs imin imax ipow` |
 | `File` | `File::open(path, FileMode::Read)` `read` `write` `read_line` `close` |
 
 ```jk

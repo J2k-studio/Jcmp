@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.12
+* **`Math` is complete:** `exp log log2 log10 pow sin cos tan asin acos atan atan2 sinh cosh tanh cbrt hypot fmod round sign clamp lerp radians degrees pi tau e inf nan is_nan is_inf powi from_bits to_bits`. Checked against known values to 12 digits.
+* **Changed:** `Math::pow(x, y)` takes two decimals (like C). The old `pow(x, n)` with a whole-number exponent is now `Math::powi(x, n)` (and fast: by squaring, negative n allowed).
+* **Fixed:** a decimal literal with an exponent beyond 18 (for example `0.00004539992976248485`, which is 4539992976248485e-20) gave a wrong value; it is exact now (to e22).
+* **Fixed:** a forward call that returns a decimal could not be mixed with a decimal in an expression (`0.0 - f()` with `f` written later).
+
 ## 0.9.11
 * **Fixed (serious):** names of functions longer than 23 characters were cut short by the assembler, so two functions whose names start the same way (for example `Result__String___Error__Ok` and `...__free`) could be taken for one. Names up to 63 characters are exact now (a longer one is an error).
 * **Standard library:** `Fs` (read_text, read_lines, write_text, append_text, exists, size, remove, rename), `Dir` (exists, make, make_all, remove, list, current), `Env` (get, args), `Time` (now_ms, mono_ns, sleep_ms), `Random` (seed, next, range, unit).
