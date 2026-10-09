@@ -2,7 +2,7 @@
 // Build:  bin/jcmp jcmp/jcmp.jk -o jcmp1        (see bootstrap.sh)
 // Use:    jcmp1 input.jk -o program
 // the version of the compiler (also in the file VERSION; release.sh checks that they agree)
-#define JCMP_VERSION "0.9.54"
+#define JCMP_VERSION "0.9.55"
 
 #import "jc_base"
 #import "jc_asm"
@@ -110,12 +110,14 @@ void main() {
             use_color = 0;
         } else if str_eq(a, "-space") || str_eq(a, "-spcae") || str_eq(a, "-speac") {
             // the mascot (not in -help); an optional number after it: how many times faster than real time (default 1800)
-            // "px": the picture in pixels with colour; "pxg": pixels in white, grey and black (the two ways are being compared)
+            // pixels with colour by default (ASCII if the terminal has no 24-bit colour); "ascii": always characters; "pxg": pixels in white, grey and black
+            lg_px = 1;
             int lg_speed = 0;
             int lg_arg = 1;
             while lg_arg <= 2 && ai + lg_arg < argc() {
                 char^ sp = arg(ai + lg_arg);
                 if str_eq(sp, "px") { lg_px = 1; }
+                else if str_eq(sp, "ascii") { lg_px = 0; }
                 else if str_eq(sp, "pxg") { lg_px = 2; }
                 else {
                     int sk = 0;

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.55
+* **`jcmp -space` is the pixel picture now** (colour, half-block pixels). The compiler looks at the terminal (`COLORTERM=truecolor` or `24bit`) and, if there is no 24-bit colour, shows the ASCII picture instead. `jcmp -space ascii` forces the characters, `jcmp -space pxg` gives white, grey and black pixels; a speed number can follow.
+* The J is a little smaller and has the colour of the Moon; the orbit line is gone: only the Earth and the Moon (and the stars) are left.
+
 ## 0.9.54
 * **The mascot in pixels (two ways to compare):** `jcmp -space px` draws it with half-block pixels in colour (blue sea, green land, white clouds, warm city lights, a gold J, a blue air glow); `jcmp -space pxg` draws the same picture in white, grey and black. Plain `jcmp -space` is still the ASCII picture. A speed number can follow (`jcmp -space px 600`). Needs a terminal with 24-bit colour.
 

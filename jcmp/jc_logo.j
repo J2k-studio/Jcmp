@@ -607,7 +607,7 @@ void lg_run(int frames, int speed) {
     if speed < 1 { speed = 1800; }
     double ts = (double)speed;
     lg_find_color();
-    if lg_px > 0 { lg_color_on = 1; }
+    if lg_color_on == 0 { lg_px = 0; }                  // pixels need 24-bit colour: without it the picture is ASCII
     char^ rp = " .'`^\",:;Il!i><~+_-?][}{1)(|/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$";
     lg_n2 = 0;
     while rp[lg_n2] != 0 && lg_n2 < 90 {
@@ -918,8 +918,8 @@ void lg_run(int frames, int speed) {
                                 sgn = 0.0 - 1.0;
                                 facing = 0.0 - facing;
                             }
-                            double jx = sgn * (p0x * ex + p0y * ey + p0z * ez) * 0.95;
-                            double jy = 0.0 - (p0x * nx0 + p0y * ny0 + p0z * nz0) * 0.95 + 0.06;
+                            double jx = sgn * (p0x * ex + p0y * ey + p0z * ez) * 1.15;
+                            double jy = 0.0 - (p0x * nx0 + p0y * ny0 + p0z * nz0) * 1.15 + 0.06;
                             double cov = 0.0;
                             double dcx = 0.0;
                             double dcy = 0.0;
@@ -933,7 +933,7 @@ void lg_run(int frames, int speed) {
                                 // the letter drawn flat on the disk, facing us
                                 double ux = (hx - mx) * lg_rx + (hy - my) * lg_ry + (hz - mz) * lg_rz;
                                 double uy = (hx - mx) * lg_ux + (hy - my) * lg_uy + (hz - mz) * lg_uz;
-                                double covs = lg_j(ux / rm * 0.95, 0.0 - uy / rm * 0.95 + 0.06);
+                                double covs = lg_j(ux / rm * 1.15, 0.0 - uy / rm * 1.15 + 0.06);
                                 cov = cov * j_surf * (1.0 - j_bill) + covs * j_bill;
                                 dcx = dcx * j_surf * (1.0 - j_bill);
                                 dcy = dcy * j_surf * (1.0 - j_bill);
@@ -981,7 +981,7 @@ void lg_run(int frames, int speed) {
                             if bright > 0.04 {
                                 if lg_px > 0 {
                                     double cv = lg_clamp(cov, 0.0, 1.0);
-                                    lg_pacc(sj, 1.0, 0.98 - 0.05 * cv, 0.92 - 0.27 * cv, bright);
+                                    lg_pacc(sj, 1.0, 0.98, 0.92, bright + 0.0 * cv);
                                 }
                                 sumb = sumb + bright;
                                 mask = mask | (1 << (sj * 2 + si));
@@ -1034,37 +1034,6 @@ void lg_run(int frames, int speed) {
                 x += 1;
             }
             y += 1;
-        }
-        // the orbit of the Moon: faint dots
-        int n = 0;
-        while n < 140 {
-            double a = (double)n * tau / 140.0;
-            double wx = dm * lg_cos(a);
-            double wz = dm * lg_sin(a);
-            double wy = wz * mtilt;
-            double sxr = wx * lg_rx + wy * lg_ry + wz * lg_rz;
-            double syr = wx * lg_ux + wy * lg_uy + wz * lg_uz;
-            int dx = (int)(cxs + sxr * unit * 2.0);
-            int dy = (int)(cys - syr * unit);
-            if dx >= 0 && dx < LW && dy >= 0 && dy < LH {
-                if lg_ch[dy * LW + dx] == ' ' || lg_ch[dy * LW + dx] == '.' {
-                    lg_ch[dy * LW + dx] = '.';
-                    lg_col[dy * LW + dx] = lg_grey(0.30);
-                }
-            }
-            if lg_px > 0 {
-                int dy2 = (int)((cys - syr * unit) * 2.0);
-                if dx >= 0 && dx < LW && dy2 >= 0 && dy2 < LH * 2 {
-                    int pc = 0x303a55;
-                    if lg_px == 2 { pc = 0x3c3c3c; }
-                    if dy2 % 2 == 0 {
-                        if lg_pt[(dy2 / 2) * LW + dx] == 0 { lg_pt[(dy2 / 2) * LW + dx] = pc; }
-                    } else {
-                        if lg_pbm[(dy2 / 2) * LW + dx] == 0 { lg_pbm[(dy2 / 2) * LW + dx] = pc; }
-                    }
-                }
-            }
-            n += 1;
         }
         // the word MOON under the Moon, and EARTH under the Earth
         double mqx = mx * lg_rx + my * lg_ry + mz * lg_rz;
