@@ -273,7 +273,7 @@ void rg_function(int is_main) {
         int round = 0;
         while round < 7 {
             int best = 0 - 1;
-            int bw = 5;                                       // at least 6 uses (weighted) to be worth two memory accesses
+            int bw = 3;                                       // at least 6 uses (weighted) to be worth two memory accesses
             int w = 0;
             while w < 8192 {
                 if rg_state[w] == 1 && rg_slotreg[w] == 0 && rg_wt[w] > bw {
@@ -325,27 +325,22 @@ void rg_function(int is_main) {
                 while k2 < rg_npick {
                     rg_text("ldr x");
                     rg_int(19 + k2);
-                    rg_text(", [sp, #");
-                    rg_int(k2 * 8);
+                    rg_text(", [x29, #");
+                    rg_int(rg_pick[k2] * 8);
                     rg_text("]\n");
                     k2 += 1;
                 }
-                rg_text("add sp, sp, #");
-                rg_int((rg_npick + 1) / 2 * 16);
-                rg_put(10);
             }
         }
         rg_copy(st, en);
         if rg_npick > 0 && rg_has(st, "add x29, sp, #0") && is_main == 0 {
-            rg_text("sub sp, sp, #");
-            rg_int((rg_npick + 1) / 2 * 16);
-            rg_put(10);
+            // the frame slots of the moved variables are free now: the old values of the registers are kept there
             int k3 = 0;
             while k3 < rg_npick {
                 rg_text("str x");
                 rg_int(19 + k3);
-                rg_text(", [sp, #");
-                rg_int(k3 * 8);
+                rg_text(", [x29, #");
+                rg_int(rg_pick[k3] * 8);
                 rg_text("]\n");
                 k3 += 1;
             }
@@ -536,10 +531,12 @@ int pt_label_at(int num) {
 }
 
 // is the register r not needed any more from the line idx on? (slot 3 of the parse arrays is used)
+int pt_steps;
 bool pt_dead(int idx, int r, int budget) {
-    while budget > 0 {
+    if budget == 40 { pt_steps = 400; }                  // a new question: the whole search may take 400 lines
+    while pt_steps > 0 {
         if idx >= pt_n { return false; }
-        budget -= 1;
+        pt_steps -= 1;
         int b = idx * 64;
         if pt_txt[b] == 0 {
             idx += 1;
@@ -570,7 +567,7 @@ bool pt_dead(int idx, int r, int budget) {
             int num2 = rg_numpt(o2 + 1);
             int at2 = pt_label_at(num2);
             if at2 < 0 { return false; }
-            if !pt_dead(at2, r, budget / 2) { return false; }
+            if !pt_dead(at2, r, 1) { return false; }
             idx += 1;
             continue;
         }
@@ -669,12 +666,97 @@ void pt_build(int s, int k, char^ r) {
     pt_line[n] = 0;
 }
 
+// the mnemonics in which a register that is read may be replaced by a copy of it
+bool pt_copy_ok(int s) {
+    return pt_mn(s, "add") || pt_mn(s, "sub") || pt_mn(s, "mul") || pt_mn(s, "sdiv") || pt_mn(s, "udiv") || pt_mn(s, "and") || pt_mn(s, "orr") || pt_mn(s, "eor") || pt_mn(s, "lsl") || pt_mn(s, "lsr") || pt_mn(s, "asr") || pt_mn(s, "cmp") || pt_mn(s, "str") || pt_mn(s, "ldr") || pt_mn(s, "strb") || pt_mn(s, "ldrb") || pt_mn(s, "ldrsb") || pt_mn(s, "ldrsw") || pt_mn(s, "strh") || pt_mn(s, "ldrh") || pt_mn(s, "fmov") || pt_mn(s, "scvtf") || pt_mn(s, "neg") || pt_mn(s, "mvn") || pt_mn(s, "sxtw") || pt_mn(s, "uxtb") || pt_mn(s, "sxtb") || pt_mn(s, "msub") || pt_mn(s, "madd") || pt_mn(s, "smulh") || pt_mn(s, "mov");
+}
+
+// the line of the slot s with every x<r> that is read replaced by the text rep, in pt_line; returns how many were replaced
+// (the first operand is a destination, and is left as it is, for the mnemonics that write their first operand)
+int pt_subst(int s, int r, char^ rep, bool dest_first) {
+    int n = 0;
+    int m = s * 16;
+    int i = 0;
+    int count = 0;
+    while pt_m[m + i] != 0 {
+        pt_line[n] = pt_m[m + i];
+        n += 1;
+        i += 1;
+    }
+    int j = 0;
+    while j < pt_no[s] {
+        pt_line[n] = ',';
+        if j == 0 { pt_line[n] = ' '; }
+        n += 1;
+        if j > 0 {
+            pt_line[n] = ' ';
+            n += 1;
+        }
+        int o = (s * 4 + j) * 40;
+        int c = 0;
+        while pt_o[o + c] != 0 {
+            bool hit = false;
+            if pt_o[o + c] == 'x' && (c == 0 || pt_o[o + c - 1] < 'a' || pt_o[o + c - 1] > 'z') && pt_o[o + c + 1] >= '0' && pt_o[o + c + 1] <= '9' && !(j == 0 && dest_first) {
+                int q = c + 1;
+                int v = 0;
+                while pt_o[o + q] >= '0' && pt_o[o + q] <= '9' {
+                    v = v * 10 + (pt_o[o + q] - '0');
+                    q += 1;
+                }
+                if v == r {
+                    int t = 0;
+                    while rep[t] != 0 {
+                        pt_line[n] = rep[t];
+                        n += 1;
+                        t += 1;
+                    }
+                    c = q;
+                    count += 1;
+                    hit = true;
+                }
+            }
+            if !hit {
+                pt_line[n] = pt_o[o + c];
+                n += 1;
+                c += 1;
+            }
+        }
+        j += 1;
+    }
+    pt_line[n] = 0;
+    return count;
+}
+
 // one try of all the rules at the line i: true if something was changed
 bool pt_rules(int i) {
     int j = pt_next(i);
     if j < 0 { return false; }
     if !pt_parse(0, i) { return false; }
     if !pt_parse(1, j) { return false; }
+    // mov x0, S / I  ->  I with S in place of x0   (and the same for x1): when I writes x0 itself, or x0 is not needed afterwards
+    if pt_mn(0, "mov") && pt_no[0] == 2 && pt_isreg(0, 0) && pt_isreg(0, 1) && (pt_op(0, 0, "x0") || pt_op(0, 0, "x1")) && pt_copy_ok(1) && !pt_mn(1, "mov") && !pt_has_reg(0, 1, 8) {
+        int rr = 0;
+        if pt_op(0, 0, "x1") { rr = 1; }
+        if !pt_has_reg(0, 1, rr) {
+            char sx[40];
+            int o0 = (0 * 4 + 1) * 40;
+            int c = 0;
+            while pt_o[o0 + c] != 0 { sx[c] = pt_o[o0 + c]; c += 1; }
+            sx[c] = 0;
+            bool dest_r = pt_writes_first(1) && pt_isreg(1, 0) && pt_has_reg(1, 0, rr);
+            int cnt = pt_subst(1, rr, @sx, pt_writes_first(1));
+            // the line is copied before the next test (pt_dead uses slot 3 only, pt_line stays)
+            if cnt > 0 && (dest_r || pt_dead(pt_next(j), rr, 40)) {
+                char nl[64];
+                int q = 0;
+                while pt_line[q] != 0 { nl[q] = pt_line[q]; q += 1; }
+                nl[q] = 0;
+                pt_set(j, @nl);
+                pt_set(i, "");
+                return true;
+            }
+        }
+    }
     // mov x0, S / mov D, x0     ->   mov D, S
     if pt_mn(0, "mov") && pt_op(0, 0, "x0") && pt_no[0] == 2 && pt_mn(1, "mov") && pt_isreg(1, 0) && pt_op(1, 1, "x0") && !pt_op(1, 0, "x0") && (pt_isreg(0, 1) || pt_isnum(0, 1)) && pt_dead(pt_next(j), 0, 40) {
         char dd[40];

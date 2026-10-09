@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.57
+* **Faster floats and array access:** a float literal is worked out when the program is compiled (`0.5` is one `mov` of its bits, before: five instructions at run time; checked against Python bit by bit, test `t266`). The left operand of an operator waits in a register also when the right operand is an array element, a float, a cast or a group of plain things (before: pushed on the stack). The base address of a global or local array with a big offset is added after the index (no push). 
+* **Register pass, second step:** the old value of a register is saved in the frame slot of the variable that moved (no change of `sp`); a variable needs 4 weighted uses (was 6); the moves that are left are removed more often (a copied register is used directly: `mov x1, x20 / mul x0, x0, x1` becomes `mul x0, x0, x20`, `cmp` on registers), and the search for "not needed afterwards" follows up to 400 lines.
+* Measured (ms, `clang -O2` in brackets): `fib(35)` 99 -> 87 (65), 300 million `s = s + i % 7` 767 -> 747 (200), a sieve of 5 million 98 -> 60 (75), a 200 x 200 matrix product 62 -> 36 (30).
+
 ## 0.9.56
 * **Faster code, third step: a register pass** (`jcmp/jc_regs.j`, `-noregs` switches it off). In a function, the whole-number locals that are used most (weighted by how deep in loops they are used, at most seven) live in the registers `x19`..`x25` instead of the stack frame; the registers are saved at the start and given back at the end of the function. The compiler tells the pass which locals are plain 8-byte values; a local whose address is taken, a function with owners/`defer` (the cleanup chain), with a `#multithread` loop, and every program with `try`/`catch` are left alone. A second part removes the moves that are left (`mov x0, x19 / mov x10, x0` becomes `mov x10, x19`, `cmp` on registers, `add x20, x10, x0`) after finding out that the register is not needed afterwards by following the code. Test `t265`.
 * Measured (ms, `clang -O2` in brackets): `fib(35)` 105 -> 99 (65), 300 million `s = s + i % 7` 881 -> 767 (200), a sieve of 5 million 143 -> 98 (79), a 200 x 200 matrix product 85 -> 62 (28).

@@ -338,32 +338,36 @@ int pow10_bits(int k) {
 
 // the literal being read (tok_mant * 10^tok_exp) -> x0 as f64 bits
 void gen_float_literal() {
-    ins_n("mov x0, ", tok_mant);
-    emit_line("scvtf d0, x0");
+    // worked out here with the same operations that the program would do (an exact integer, one division or product): the
+    // bits of the result are the constant
+    double fl[1];
+    fl[0] = (double)tok_mant;
     if tok_exp != 0 {
-        int p10 = 1;
-        int pk = 0;
+        double pw = 1.0;
         int ae = tok_exp;
         if ae < 0 { ae = 0 - ae; }
         if ae <= 18 {
+            int p10 = 1;
+            int pk = 0;
             while pk < ae {
                 p10 = p10 * 10;
                 pk += 1;
             }
-            ins_n("mov x1, ", p10);
-            emit_line("scvtf d1, x1");
+            pw = (double)p10;
         } else {
-            // 10^19 .. 10^22 do not fit an integer register but are exact doubles: their bits
-            ins_n("mov x1, ", pow10_bits(ae));
-            emit_line("fmov d1, x1");
+            double pb[1];
+            int^ pbi = (int^)@pb[0];
+            pbi[0] = pow10_bits(ae);
+            pw = pb[0];
         }
         if tok_exp < 0 {
-            emit_line("fdiv d0, d0, d1");
+            fl[0] = fl[0] / pw;
         } else {
-            emit_line("fmul d0, d0, d1");
+            fl[0] = fl[0] * pw;
         }
     }
-    emit_line("fmov x0, d0");
+    int^ fbits = (int^)@fl[0];
+    ins_n("mov x0, ", fbits[0]);
     ex_w = 7;
     ex_ty = 92;
     next();
@@ -1748,7 +1752,7 @@ void lvalue_loop() {
             int bbase = 29;
             if pure_raw_ahead(100) {
                 int tn = tail_add_base();
-                if tn >= 0 && tn < 4096 {
+                if tn >= 0 && tn < 16777216 {
                     bkind = 1;
                     bnum = tn;
                     bbase = tail_base;
@@ -3701,23 +3705,54 @@ int op_level_at(int o) {
 // is the right operand that comes next made of plain numbers and plain variables only (no call, no parentheses, no strings)?
 // Then nothing in it can change a variable or use a register of the stash, so the left operand may wait in a register.
 // lvl is the level of the parser of the right operand (see op_level_at: the operators of a lower level belong to the right operand).
+// the text at offset o (just after a "(") starts a group or a cast that is safe: a number, a sign, a nested group, a type
+// name (a cast) or a plain variable (a whole number, a float, an element of an array of those)
+bool pure_group_ok(int o) {
+    while is_space(lc(o)) { o += 1; }
+    int c = lc(o);
+    if is_digit(c) || c == '-' || c == '(' || c == '!' || c == '~' { return true; }
+    if !is_letter(c) && c != '_' { return false; }
+    char w[64];
+    int n = 0;
+    while (is_letter(lc(o)) || is_digit(lc(o)) || lc(o) == '_') && n < 62 {
+        w[n] = lc(o);
+        n += 1;
+        o += 1;
+    }
+    w[n] = 0;
+    if str_eq(@w, "int") || str_eq(@w, "double") || str_eq(@w, "float") || str_eq(@w, "char") || str_eq(@w, "bool") || str_eq(@w, "i8") || str_eq(@w, "i32") || str_eq(@w, "u8") || str_eq(@w, "u32") || str_eq(@w, "u64") {
+        return true;
+    }
+    if !lookup_var(@w) { return false; }
+    if (v_kind != 0 && v_kind != 1) || v_elem >= 16 || v_tid < 0 || v_ptr >= 16 || v_tid >= 98 { return false; }
+    return true;
+}
+
 bool pure_right_ahead(int lvl) {
+    int pd0 = 0;
     if tok_kind == T_NUM {
-        if tok_float == 1 { return false; }
+        // a number (a float is a constant now)
     } else if tok_kind == T_IDENT {
         if !lookup_var(@tok_text) { return false; }
-        if v_kind != 0 || v_elem >= 16 || v_tid < 0 || v_ptr >= 16 { return false; }
+        if (v_kind != 0 && v_kind != 1) || v_elem >= 16 || v_tid < 0 || v_ptr >= 16 { return false; }
         if v_tid >= 98 { return false; }
+    } else if tok_is("(") {
+        if !pure_group_ok(0) { return false; }
+        pd0 = 1;                                           // a group or a cast: looked at as a part of the text that follows
     } else {
         return false;
     }
-    return pure_raw_ahead(lvl);
+    return pure_raw_ahead2(lvl, pd0);
+}
+
+bool pure_raw_ahead(int lvl) {
+    return pure_raw_ahead2(lvl, 0);
 }
 
 // the same for the raw text that follows the current token (nothing of it is read yet): is it free of calls, parentheses, strings
 // and anything else that could change a variable or use the registers of the stash, up to the end of the operand that the
 // parser of level lvl reads (or up to ; ) , { } or an unmatched ] )?
-bool pure_raw_ahead(int lvl) {
+bool pure_raw_ahead2(int lvl, int pd) {
     int o = 0;
     int bd = 0;
     while o < 240 {
@@ -3725,8 +3760,24 @@ bool pure_raw_ahead(int lvl) {
         int c = lc(o);
         int d = lc(o + 1);
         if c == 0 { return false; }
+        if c == '(' && o > 0 {
+            // a group or a cast, unless it follows a name or a ] (then it is a call)
+            int pc = o - 1;
+            while pc > 0 && is_space(lc(pc)) { pc -= 1; }
+            int pch = lc(pc);
+            if is_letter(pch) || is_digit(pch) || pch == '_' || pch == ']' { return false; }
+            if !pure_group_ok(o + 1) { return false; }
+            pd += 1;
+            o += 1;
+            continue;
+        }
+        if c == ')' && pd > 0 {
+            pd -= 1;
+            o += 1;
+            continue;
+        }
         if c == ';' || c == ')' || c == ',' || c == '{' || c == '}' {
-            if bd == 0 { return true; }
+            if bd == 0 && pd == 0 { return true; }
             return false;
         }
         if c == ']' {
@@ -3748,7 +3799,7 @@ bool pure_raw_ahead(int lvl) {
             int nl0 = 99;
             if bd == 0 { nl0 = op_level_at(o); }
             if nl0 != 99 && !(is_letter(lc(o - 1)) || is_digit(lc(o - 1))) {
-                if nl0 >= lvl { return true; }
+                if nl0 >= lvl && pd == 0 { return true; }
                 o += op_len;
             } else {
                 while is_letter(lc(o)) || is_digit(lc(o)) || lc(o) == '_' { o += 1; }
@@ -3759,7 +3810,7 @@ bool pure_raw_ahead(int lvl) {
                 if c == '-' || c == '!' || c == '~' { o += 1; continue; }
                 return false;                                            // ( " : @ ? ' or something else: do not guess
             }
-            if bd == 0 && nl >= lvl { return true; }
+            if bd == 0 && pd == 0 && nl >= lvl { return true; }
             o += op_len;
             // a sign in front of the next operand
             while is_space(lc(o)) { o += 1; }
