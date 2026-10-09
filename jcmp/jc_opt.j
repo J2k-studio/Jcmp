@@ -2713,3 +2713,39 @@ void al_run() {
     }
     out_len = regs_len;
 }
+
+// ---------------------------------------------------------------------------------------------- @no_reorder (the statement: jc_low.j)
+// after the code is made: the lines between ";NB" and ";NE" get a marker in front of each instruction
+void nr_run() {
+    bool any = false;
+    int i = 0;
+    while i < out_len {
+        int en = rg_end(i);
+        if rg_has(i, ";NB\n") { any = true; }
+        i = en + 1;
+    }
+    if !any { return; }
+    regs_len = 0;
+    bool inside = false;
+    i = 0;
+    while i < out_len {
+        int en2 = rg_end(i);
+        if rg_has(i, ";NB\n") {
+            inside = true;
+        } else if rg_has(i, ";NE\n") {
+            inside = false;
+        } else {
+            if inside && out_buf[i] != ';' && !(out_buf[en2 - 1] == ':') {
+                rg_text(";N\n");
+            }
+            rg_copy(i, en2);
+        }
+        i = en2 + 1;
+    }
+    int t = 0;
+    while t < regs_len {
+        out_buf[t] = regs_buf[t];
+        t += 1;
+    }
+    out_len = regs_len;
+}

@@ -436,7 +436,8 @@ void as_h_rrr(int base) {
     as_put32(base | (rm << 16) | (rn << 5) | rd);
 }
 
-// stp xA, xB, [sp, #-N]!   (the prologue: N is a multiple of 8, at most 512)   and   ldp xA, xB, [sp], #N   (the epilogue: at most 504)
+// stp xA, xB, [sp, #-N]!  (pre-index: the prologue)     ldp xA, xB, [sp], #N  (post-index: the epilogue)
+// stp xA, xB, [xN, #off]    ldp xA, xB, [xN, #off]  (an offset, no write back: off is a multiple of 8, -512 .. 504)
 void as_h_pair(bool store) {
     as_skip_spaces();
     int rt = as_parse_reg();
@@ -449,32 +450,46 @@ void as_h_pair(bool store) {
     int rn = as_parse_reg_or_sp();
     as_skip_spaces();
     int imm = 0;
-    if store {
-        if as_cur() != ',' { as_fail(); }
+    if as_cur() == ']' {
         as_ci += 1;
-        as_skip_spaces();
-        if as_cur() != '#' { as_fail(); }
-        as_ci += 1;
-        if as_cur() != '-' { as_fail(); }
-        as_ci += 1;
-        imm = 0 - as_parse_number();
-        as_skip_spaces();
-        if as_cur() != ']' { as_fail(); }
-        as_ci += 1;
-        if as_cur() != '!' { as_fail(); }
-        as_ci += 1;
-        if imm < 0 - 512 || (imm & 7) != 0 { as_fail(); }
-        as_put32(0xA9800000 | (((imm >> 3) & 127) << 15) | (rt2 << 10) | (rn << 5) | rt);
-    } else {
-        if as_cur() != ']' { as_fail(); }
-        as_ci += 1;
-        as_expect_comma();
-        if as_cur() != '#' { as_fail(); }
-        as_ci += 1;
-        imm = as_parse_number();
-        if imm > 504 || (imm & 7) != 0 { as_fail(); }
-        as_put32(0xA8C00000 | (((imm >> 3) & 127) << 15) | (rt2 << 10) | (rn << 5) | rt);
+        if as_cur() == ',' {
+            // post-index:  [xN], #off
+            as_ci += 1;
+            as_skip_spaces();
+            if as_cur() == '#' { as_ci += 1; }
+            imm = as_parse_signed();
+            if imm < 0 - 512 || imm > 504 || (imm & 7) != 0 { as_fail(); }
+            int base = 0xA8C00000;
+            if store { base = 0xA8800000; }
+            as_put32(base | (((imm >> 3) & 127) << 15) | (rt2 << 10) | (rn << 5) | rt);
+            return;
+        }
+        // [xN]: offset 0
+        int base0 = 0xA9400000;
+        if store { base0 = 0xA9000000; }
+        as_put32(base0 | (rt2 << 10) | (rn << 5) | rt);
+        return;
     }
+    if as_cur() != ',' { as_fail(); }
+    as_ci += 1;
+    as_skip_spaces();
+    if as_cur() == '#' { as_ci += 1; }
+    imm = as_parse_signed();
+    as_skip_spaces();
+    if as_cur() != ']' { as_fail(); }
+    as_ci += 1;
+    if imm < 0 - 512 || imm > 504 || (imm & 7) != 0 { as_fail(); }
+    if as_cur() == '!' {
+        // pre-index with write back
+        as_ci += 1;
+        int base1 = 0xA9C00000;
+        if store { base1 = 0xA9800000; }
+        as_put32(base1 | (((imm >> 3) & 127) << 15) | (rt2 << 10) | (rn << 5) | rt);
+        return;
+    }
+    int base2 = 0xA9400000;
+    if store { base2 = 0xA9000000; }
+    as_put32(base2 | (((imm >> 3) & 127) << 15) | (rt2 << 10) | (rn << 5) | rt);
 }
 
 // ldr/str family: op = the instruction's high 16 bits, shift = log2(size)

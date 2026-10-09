@@ -1785,3 +1785,6 @@ Step 5 done: `Sys::name` (read and write, in every function) and `device` (idea 
 
 ### 63.11 Status (0.9.81)
 Step 6 done: `#reserve`, pinned variables `int n @ x19` (the look the owner chose), `Reg::` in normal code for reserved registers and x18, `register { }` blocks (question 5: yes, a warning). Not yet: `interrupt`, `frame`, `@no_reorder`.
+
+### 63.12 Status (0.9.82): the plan of 63.4 is done
+Steps 7 and 8: `frame` with `save` / `restore` / `size`, `interrupt` functions (x0 .. x18 saved in the frame, `eret`), `align(N)`, `@no_reorder { }`. Open ideas from 61 / 62 that are not done: `Order::` arguments for `Atomic::`, LSE forms, `callconv` per function and two return values, `volatile` as a word, `mock` devices, the instruction table (design 08), SIMD (59).

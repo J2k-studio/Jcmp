@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.82
+* **`frame`: a record of registers** (plan step 7): `frame Context { x19..x30; sp; d8..d15; }`; inside naked functions and register blocks `Context::save(x0);` writes the registers of the list to the memory at the address in x0 (`stp` pairs, `sp` through `x17`), `Context::restore(x1);` reads them back; `Context::size` is the size in bytes. A coroutine switch is a naked function of two lines (test `t302_context_switch`: two stacks, a coroutine that is resumed six times, running at user level).
+* **`interrupt` functions**: `interrupt void on_timer() { ... }` saves `x0 .. x18` in its frame, runs the body as any function, gives them back and ends with `eret`. No parameters. (The floating point registers are not saved: an interrupt handler must not use doubles.) It cannot run in a program (`eret` is for the kernel), so the test (`t303_interrupt`) looks at the text.
+* **`align(N)` before a function** (a power of two, 4 .. 4096): the function starts at an address that is a multiple of N (vector tables want 128 or 2048).
+* **`@no_reorder { ... }`** (plan step 8): every instruction of the block is written after a marker, so no pass of the compiler moves, merges or removes it (the function is not lifted and keeps its variables in the frame). Test `t304_no_reorder` (two divisions that the optimiser would make one stay two).
+* The assembler: `stp` / `ldp` with an offset and without write back, `[xN]` with offset 0 (checked against llvm-mc: 116 instructions, 0 differences).
+
 ## 0.9.81
 * **Registers you keep for yourself** (plan step 6): `#reserve x18, x19` (x18 and x19 .. x25) - the compiler never gives them to a variable; `Reg::x18 = p;` and `int q = Reg::x18;` read and write a reserved register (and x18) in normal code; `register { x1 = [x0 + 8]; x1 += 1; ... }` runs the statements of the low level inside a normal function with the bare register names (a function with such a block keeps its variables in the frame; a block that leaves a callee-saved register x19 .. x28 changed and not reserved gets a warning).
 * **Pinned variables**: `int n @ x19 = 0;` lives in that register (x18 or x19 .. x25) for the whole function, also across calls (x19 .. x25 are saved and given back by the function; x18 is never used by the compiler). It must be a whole number, pointer, bool, char or enum; its address cannot be taken; two variables cannot share a register in one function; not possible in a program that has try / catch. The register pass honours the pin or the compiler says why it could not.

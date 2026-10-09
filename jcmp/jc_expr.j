@@ -2141,6 +2141,7 @@ void gen_scope() {
         gen_sys_read();
         return;
     }
+    if find_frame(@id_name) >= 0 && gen_frame_size() { return; }
     int abx = find_abi(@id_name);
     if abx >= 0 {
         // Syscall::call(number, args ...): the values go to the registers that the abi names

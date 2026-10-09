@@ -2183,6 +2183,10 @@ void parse_statement_inner() {
         parse_register_block();
         return;
     }
+    if tok_is("@") {
+        parse_no_reorder();
+        return;
+    }
     if tok_is("{") {
         parse_block();
         return;
@@ -2392,6 +2396,11 @@ void parse_function() {
     op_pending = 0;
     int f_naked = fn_naked;
     fn_naked = 0;
+    int f_interrupt = fn_interrupt;
+    fn_interrupt = 0;
+    int f_align = fn_align;
+    fn_align = 0;
+    if f_interrupt == 1 && f_naked == 1 { die("a function is naked or interrupt, not both (an interrupt function has a prologue that saves the registers)"); }
     if f_idx < 0 {
         if fcount >= 16384 { die("too many functions"); }
         fop[fcount] = 0;
@@ -2463,6 +2472,11 @@ void parse_function() {
         }
     }
     ret_label = new_label();
+    if f_align != 0 {
+        emit_str(".align ");
+        emit_int(f_align);
+        emit_nl();
+    }
     emit_str(@d_fname);
     emit_str(":\n");
     if pass_no == 3 && f_skip == 0 && ft_count < 4096 {
@@ -2495,6 +2509,27 @@ void parse_function() {
     emit_line("str x29, [sp, #0]");
     emit_line("str x30, [sp, #8]");
     emit_line("add x29, sp, #0");
+    int int_off = 0;
+    if f_interrupt == 1 {
+        // an interrupt handler: the registers x0 .. x18 are saved in the frame and given back by the epilogue, which ends with eret
+        if cur_is_main == 1 { die("main cannot be an interrupt function"); }
+        int_off = frame_bytes;
+        frame_bytes += 152;
+        int ir = 0;
+        while ir < 18 {
+            emit_str("stp x");
+            emit_int(ir);
+            emit_str(", x");
+            emit_int(ir + 1);
+            emit_str(", [x29, #");
+            emit_int(int_off + ir * 8);
+            emit_line("]");
+            ir += 2;
+        }
+        emit_str("str x18, [x29, #");
+        emit_int(int_off + 144);
+        emit_line("]");
+    }
     expect("(");
     int nparams = 0;
     if f_rettid >= 100 {
@@ -2609,6 +2644,7 @@ void parse_function() {
         }
     }
     expect(")");
+    if f_interrupt == 1 && f_declared > 0 { die("an interrupt function takes no parameters"); }
     fnpar[f_idx] = f_declared;
     scope_base = 0;
     body_pending = 1;
@@ -2669,13 +2705,29 @@ void parse_function() {
             note_call("__panic");
         }
         place_label(ret_label);
+        if f_interrupt == 1 {
+            int ir2 = 0;
+            while ir2 < 18 {
+                emit_str("ldp x");
+                emit_int(ir2);
+                emit_str(", x");
+                emit_int(ir2 + 1);
+                emit_str(", [x29, #");
+                emit_int(int_off + ir2 * 8);
+                emit_line("]");
+                ir2 += 2;
+            }
+            emit_str("ldr x18, [x29, #");
+            emit_int(int_off + 144);
+            emit_line("]");
+        }
         emit_line("ldr x29, [sp, #0]");
         emit_line("ldr x30, [sp, #8]");
         emit_str("add sp, sp, #");
         patch_b = out_len;
         emit_str("0000000");
         emit_nl();
-        emit_line("ret");
+        if f_interrupt == 1 { emit_line("eret"); } else { emit_line("ret"); }
     }
     int frame = (frame_bytes + 15) / 16 * 16;
     patch_number(patch_a, frame);
@@ -2973,8 +3025,20 @@ void parse_struct() {
 void parse_top_item() {
     fn_naked = 0;
     fn_noreturn = 0;
-    while tok_is("naked") || tok_is("noreturn") {
-        if tok_is("naked") { fn_naked = 1; } else { fn_noreturn = 1; }
+    fn_interrupt = 0;
+    fn_align = 0;
+    while tok_is("naked") || tok_is("noreturn") || tok_is("interrupt") || tok_is("align") {
+        if tok_is("naked") { fn_naked = 1; }
+        else if tok_is("noreturn") { fn_noreturn = 1; }
+        else if tok_is("interrupt") { fn_interrupt = 1; }
+        else {
+            next();
+            expect("(");
+            if tok_kind != T_NUM || tok_num < 4 || tok_num > 4096 || (tok_num & (tok_num - 1)) != 0 { die("align(N) takes a power of two from 4 to 4096"); }
+            fn_align = tok_num;
+            next();
+            if !tok_is(")") { die(") expected after align(N"); }
+        }
         next();
     }
     parse_type();
@@ -2985,7 +3049,7 @@ void parse_top_item() {
         parse_function();
         return;
     }
-    if fn_naked == 1 || fn_noreturn == 1 { die("naked and noreturn are for functions"); }
+    if fn_naked == 1 || fn_noreturn == 1 || fn_interrupt == 1 || fn_align != 0 { die("naked, noreturn, interrupt and align(N) are for functions"); }
     if ty_void == 1 && ty_ptr == 0 { die("a variable cannot be void"); }
     parse_global(@d_fname);
 }
@@ -3006,6 +3070,8 @@ void parse_one_item() {
         parse_abi();
     } else if tok_is("device") {
         parse_device();
+    } else if tok_is("frame") {
+        parse_frame();
     } else {
         parse_top_item();
     }

@@ -21,6 +21,8 @@
 
 int fn_naked;                    // 1 while the function being parsed is naked
 int fn_noreturn;
+int fn_interrupt;               // 1 for the function being parsed: an interrupt handler
+int fn_align;                   // align(N) before the function
 char nk_lname[2048];             // the labels of the function: 32 names of 64 characters
 int nk_lnum[32];
 int nk_ldef[32];
@@ -662,6 +664,10 @@ void parse_naked_stmt() {
         expect("::");
         nk_cpu();
         nk_end();
+        return;
+    }
+    if tok_kind == T_IDENT && find_frame(@tok_text) >= 0 {
+        nk_frame_stmt();
         return;
     }
     if tok_is("Sys") {
@@ -1430,3 +1436,195 @@ void parse_reg_assign() {
     append_text(@nk_line, ", x0");
     emit_line(@nk_line);
 }
+
+// ---------------------------------------------------------------------------------------------- frame: a record of registers (context switch)
+//   frame Context { x19..x30; sp; d8..d15; }          // 12 + 1 + 8 words: the order of the list is the order in memory
+//   Context::save(x0);      Context::restore(x1);     // inside naked functions and register blocks: x0 / x1 hold the address of the record
+//   Context::size           // the size in bytes, a number
+// save writes the registers of the list to the record; restore reads them back (sp is written with `mov sp, x17`: x17 is the scratch register).
+
+char frm_name[1024];             // 16 frames of 64 characters
+int frm_n[16];
+int frm_regs[640];               // 40 registers for each: 0 .. 30 = xN, 31 = sp, 100 + N = dN
+int frm_count;
+
+int find_frame(char^ name) {
+    int i = 0;
+    while i < frm_count {
+        if str_eq(@frm_name + i * 64, name) { return i; }
+        i += 1;
+    }
+    return 0 - 1;
+}
+
+void parse_frame() {
+    next();                                  // frame
+    if tok_kind != T_IDENT { die("a name for the frame was expected"); }
+    int f = find_frame(@tok_text);
+    bool fresh = false;
+    if pass_no == 1 {
+        if f >= 0 { die_name("this frame exists already", @tok_text); }
+        if frm_count >= 16 { die("too many frames (16 at most)"); }
+        f = frm_count;
+        frm_count += 1;
+        str_copy(@frm_name + f * 64, @tok_text, 64);
+        frm_n[f] = 0;
+        fresh = true;
+    }
+    next();
+    expect("{");
+    while !tok_is("}") {
+        if tok_kind != T_IDENT { die("a register (x19, x19..x30, sp, d8..d15) was expected"); }
+        int first = 0 - 1;
+        int last = 0 - 1;
+        int base = 0;
+        if str_eq(@tok_text, "sp") {
+            first = 31;
+            last = 31;
+            next();
+        } else if tok_text[0] == 'd' && tok_text[1] >= '0' && tok_text[1] <= '9' {
+            int dn = 0;
+            int di = 1;
+            while tok_text[di] >= '0' && tok_text[di] <= '9' { dn = dn * 10 + (tok_text[di] - '0'); di += 1; }
+            if tok_text[di] != 0 || dn > 31 { die_name("this is not a register (d0 .. d31)", @tok_text); }
+            first = 100 + dn;
+            last = first;
+            next();
+            if tok_is(".") {
+                next();
+                expect(".");
+                if tok_kind != T_IDENT || tok_text[0] != 'd' { die("the last register of the range was expected (d15)"); }
+                int dm = 0;
+                int dj = 1;
+                while tok_text[dj] >= '0' && tok_text[dj] <= '9' { dm = dm * 10 + (tok_text[dj] - '0'); dj += 1; }
+                if tok_text[dj] != 0 || dm > 31 || dm < dn { die_name("this is not a register after the first one (d0 .. d31)", @tok_text); }
+                last = 100 + dm;
+                next();
+            }
+        } else {
+            first = nk_xnum(@tok_text);
+            if first < 0 { die_name("this is not a register (x0 .. x30, sp, d0 .. d31)", @tok_text); }
+            last = first;
+            next();
+            if tok_is(".") {
+                next();
+                expect(".");
+                last = abi_reg();
+                if last < first { die("the last register of a range comes after the first one"); }
+            }
+        }
+        expect(";");
+        int r = first;
+        while r <= last {
+            if fresh {
+                if frm_n[f] >= 40 { die("a frame has 40 registers at most"); }
+                frm_regs[f * 40 + frm_n[f]] = r;
+                frm_n[f] += 1;
+            }
+            r += 1;
+        }
+        base = base + 0;
+    }
+    expect("}");
+    accept(";");
+}
+
+// Context::save(R) / Context::restore(R) : the token is the name of the frame
+void nk_frame_stmt() {
+    int f = find_frame(@tok_text);
+    next();
+    expect("::");
+    if tok_kind != T_IDENT { die("save or restore was expected"); }
+    bool save = str_eq(@tok_text, "save");
+    if !save && !str_eq(@tok_text, "restore") { die_name("a frame has save(R) and restore(R)", @tok_text); }
+    next();
+    expect("(");
+    int rb = nk_reg();
+    expect(")");
+    nk_end();
+    if rb == 17 { die("the base register of save / restore cannot be x17 (the scratch register)"); }
+    if rb == 32 { die("the zero register cannot hold an address"); }
+    int n = frm_n[f];
+    int i = 0;
+    while i < n {
+        int r = frm_regs[f * 40 + i];
+        if !save && r == rb { die("the register that holds the address is restored by the frame too: use x0 .. x17 for it"); }
+        i += 1;
+    }
+    i = 0;
+    while i < n {
+        int r1 = frm_regs[f * 40 + i];
+        int off = i * 8;
+        if r1 <= 30 && i + 1 < n && frm_regs[f * 40 + i + 1] <= 30 && off <= 496 {
+            int r2 = frm_regs[f * 40 + i + 1];
+            if save { str_copy(@nk_line, "stp x", 256); } else { str_copy(@nk_line, "ldp x", 256); }
+            append_int(@nk_line, r1);
+            append_text(@nk_line, ", x");
+            append_int(@nk_line, r2);
+            append_text(@nk_line, ", [");
+            nk_add_reg(@nk_line, rb);
+            append_text(@nk_line, ", #");
+            append_int(@nk_line, off);
+            append_text(@nk_line, "]");
+            nk_emit(@nk_line);
+            i += 2;
+        } else if r1 == 31 {
+            if save {
+                nk_emit("add x17, sp, #0");
+                nk_mem("str", 17, rb, off);
+            } else {
+                nk_mem("ldr", 17, rb, off);
+                nk_emit("add sp, x17, #0");
+            }
+            i += 1;
+        } else if r1 >= 100 {
+            if save { str_copy(@nk_line, "str d", 256); } else { str_copy(@nk_line, "ldr d", 256); }
+            append_int(@nk_line, r1 - 100);
+            append_text(@nk_line, ", [");
+            nk_add_reg(@nk_line, rb);
+            append_text(@nk_line, ", #");
+            append_int(@nk_line, off);
+            append_text(@nk_line, "]");
+            nk_emit(@nk_line);
+            i += 1;
+        } else {
+            if save { nk_mem("str", r1, rb, off); } else { nk_mem("ldr", r1, rb, off); }
+            i += 1;
+        }
+    }
+}
+
+// Context::size in an expression
+bool gen_frame_size() {
+    int f = find_frame(@id_name);
+    if f < 0 { return false; }
+    next();                                  // ::
+    if tok_kind != T_IDENT || !str_eq(@tok_text, "size") { die("a frame has save(R), restore(R) (in naked functions) and size"); }
+    next();
+    if tok_is("(") {
+        next();
+        expect(")");
+    }
+    ins_n("mov x0, ", frm_n[f] * 8);
+    ex_w = 8;
+    ex_ty = 0;
+    rv_valid = 0;
+    return true;
+}
+
+// ---------------------------------------------------------------------------------------------- @no_reorder { ... }
+// The statements of the block are compiled as usual, then every instruction of the block is written after a marker line ";N": no pass of
+// the compiler (the IR, the register pass, the peephole pass) moves, merges or removes it. The rest of the function is not optimised
+// either (a function with a marker is not lifted to the IR and keeps its variables in the frame): use it for the short functions where the
+// order and the number of instructions is the point (constant-time code, the sequence of a device).
+
+void parse_no_reorder() {
+    next();                                  // @
+    if tok_kind != T_IDENT || !str_eq(@tok_text, "no_reorder") { die("@no_reorder { ... } was expected"); }
+    next();
+    if !tok_is("{") { die("@no_reorder needs a block { ... }"); }
+    emit_line(";NB");
+    parse_block();
+    emit_line(";NE");
+}
+

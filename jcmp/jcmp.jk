@@ -2,7 +2,7 @@
 // Build:  bin/jcmp jcmp/jcmp.jk -o jcmp1        (see bootstrap.sh)
 // Use:    jcmp1 input.jk -o program
 // the version of the compiler (also in the file VERSION; release.sh checks that they agree)
-#define JCMP_VERSION "0.9.81"
+#define JCMP_VERSION "0.9.82"
 
 #import "jc_base"
 #import "jc_asm"
@@ -323,6 +323,7 @@ void main() {
     if used_try == 1 { emit_exc_helper(); }
     if used_thread == 1 { emit_thread_helper(); }
     emit_start_stub();
+    nr_run();
     if ir_mode > 0 && opt_peep == 1 && ir_pre == 1 { peep_run(); }
     if ir_mode > 0 { ir_run(); }
     if opt_peep == 1 { peep_run(); }

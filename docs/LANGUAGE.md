@@ -344,6 +344,27 @@ free[b];                       // only b goes back (a still works, and the next 
 ```
 If a variable is called `alloc`, `alloc0`, `free`, `grow` or `arr`, a `[` after it is an index as always.
 
+### `frame`, `interrupt`, `align(N)`, `@no_reorder` (0.9.82)
+
+```jk
+frame Context { x19..x30; sp; }                  // a record of registers: 13 words in the order of the list
+
+naked void ctx_switch(int^ from, int^ to) {      // a coroutine switch in two lines
+    Context::save(x0);                           // x0 = the address of the record that receives this task's registers
+    Context::restore(x1);                        // x1 = the record of the task to run: x30 and sp change, so `ret` goes into it
+    ret;
+}
+
+interrupt void on_timer() { ticks += 1; }        // saves x0 .. x18, ends with eret (no floating point inside)
+align(128) interrupt void on_irq() { ... }       // starts at an address that is a multiple of 128
+
+@no_reorder {                                     // every instruction here stays: not moved, merged or removed
+    t = a / 7;
+    t = a / 7;
+}
+```
+`Context::size` is the size of the record in bytes. `Context::save` and `restore` are statements of naked functions and register blocks; the base register cannot be `x17` and, for `restore`, not one that the frame restores.
+
 ### Registers of your own: `#reserve`, `register { }`, pinned variables (0.9.81)
 
 ```jk
