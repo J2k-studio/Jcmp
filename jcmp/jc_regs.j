@@ -93,6 +93,43 @@ bool rg_is_func(int st) {
 // the form "ldr xR, [x29, #N]" or "str xR, [x29, #N]" at st: returns N (and rg_reg = R, rg_isload), or -1
 int rg_reg;
 int rg_isload;
+// does the line st write the register x<r> as its first operand?
+bool rg_writes_x(int st, int r) {
+    int en = rg_end(st);
+    int k = st;
+    while k < en && out_buf[k] != ' ' { k += 1; }
+    if k + 1 < en && out_buf[k + 1] == 'x' && rg_num(k + 2) == r { return true; }
+    return false;
+}
+
+// a load of the slot into x<r> at line i is followed (within a few plain lines) by "fmov dN, x<r>"
+bool rg_fmov_ahead(int i, int r) {
+    int k = i + 1;
+    while k < rg_n && k <= i + 4 {
+        int st = rg_ls[k];
+        if rg_fmov_from(st, r) { return true; }
+        if rg_writes_x(st, r) { return false; }
+        int en = rg_end(st);
+        if out_buf[en - 1] == ':' || out_buf[st] == 'b' { return false; }
+        k += 1;
+    }
+    return false;
+}
+
+// a store of x<r> at line i is preceded (within a few plain lines) by "fmov x<r>, dN"
+bool rg_fmov_back(int i, int r) {
+    int k = i - 1;
+    while k >= 0 && k >= i - 4 {
+        int st = rg_ls[k];
+        if rg_fmov_to(st, r) { return true; }
+        if rg_writes_x(st, r) { return false; }
+        int en = rg_end(st);
+        if out_buf[en - 1] == ':' || out_buf[st] == 'b' { return false; }
+        k -= 1;
+    }
+    return false;
+}
+
 int rg_slot_use(int st) {
     int i = st;
     if rg_has(st, "ldr x") {
@@ -572,8 +609,8 @@ void rg_function(int is_main) {
             if n >= 0 {
                 if n % 8 == 0 && n / 8 < 8192 {
                     rg_tot[n / 8] += 1;
-                    if rg_isload == 1 && i + 1 < rg_n && rg_fmov_from(rg_ls[i + 1], rg_reg) { rg_fl[n / 8] += 1; }
-                    if rg_isload == 0 && i > 0 && rg_fmov_to(rg_ls[i - 1], rg_reg) { rg_fl[n / 8] += 1; }
+                    if rg_isload == 1 && rg_fmov_ahead(i, rg_reg) { rg_fl[n / 8] += 1; }
+                    if rg_isload == 0 && rg_fmov_back(i, rg_reg) { rg_fl[n / 8] += 1; }
                     int d = rg_dep[i];
                     if d > 3 { d = 3; }
                     int wgt = 1;

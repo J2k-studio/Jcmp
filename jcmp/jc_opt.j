@@ -1011,6 +1011,15 @@ void op_prop_block(int b) {
                 }
             }
         }
+        // a double made from a known whole number: a double constant (one instruction when the number fits in 8 bits)
+        if op == IR_BITS2F && cp_get(ir_a[i]) == 1 && ir_vcls[ir_d[i]] == 1 {
+            ir_op[i] = IR_FCONST;
+            ir_k[i] = cp_val[ir_a[i]];
+            ir_a[i] = 0;
+            ir_bi[i] = 1;
+            op_clean_changes += 1;
+            op = IR_FCONST;
+        }
         // what the instruction writes
         int d = ir_d[i];
         if op == IR_CALL || op == IR_CALLIND || op == IR_SYSCALL {
@@ -1039,7 +1048,7 @@ void op_prop_block(int b) {
 
 bool op_pure(int op) {
     return op == IR_CONST || op == IR_COPY || (op >= IR_ADD && op <= IR_MULHS) || op == IR_NEG || op == IR_NOT || op == IR_EXT || op == IR_SETCC
-        || (op >= IR_FADD && op <= IR_FSETCC) || op == IR_ADDR_GLOBAL || op == IR_ADDR_FUNC || (op >= IR_CLZ && op <= IR_POPCNT) || op == IR_FTRUNC || op == IR_FCEIL;
+        || (op >= IR_FADD && op <= IR_FSETCC) || op == IR_ADDR_GLOBAL || op == IR_ADDR_FUNC || op == IR_FCONST || (op >= IR_CLZ && op <= IR_POPCNT) || op == IR_FTRUNC || op == IR_FCEIL;
 }
 
 int op_tl[IR_MAXV];
@@ -1626,5 +1635,138 @@ void op_bits_run() {
     while b < ir_nb {
         if op_po[b] >= 0 { op_bits_block(b); }
         b += 1;
+    }
+}
+
+// ---------------------------------------------------------------------------------------------- the frame of a function (the last text pass)
+// sub sp, sp, #N / str x29, [sp, #0] / str x30, [sp, #8] / add x29, sp, #0     ->   stp x29, x30, [sp, #-N]! / add x29, sp, #0
+// ldr x29, [sp, #0] / ldr x30, [sp, #8] / add sp, sp, #N                     ->   ldp x29, x30, [sp], #N
+int fr_on = 0;                  // off: stp/ldp pre- and post-index were 9 % SLOWER than sub/str/str on the Cortex-A55 (fib), measured 0.9.71
+
+int fr_number(int p) {
+    int n = 0;
+    while out_buf[p] >= '0' && out_buf[p] <= '9' {
+        n = n * 10 + (out_buf[p] - '0');
+        p += 1;
+    }
+    return n;
+}
+
+void fr_run() {
+    regs_len = 0;
+    int i = 0;
+    while i < out_len {
+        int en = rg_end(i);
+        if rg_has(i, "sub sp, sp, #") {
+            int n = fr_number(i + 13);
+            int l2 = en + 1;
+            int l3 = 0 - 1;
+            int l4 = 0 - 1;
+            if l2 < out_len && rg_has(l2, "str x29, [sp, #0]\n") { l3 = rg_end(l2) + 1; }
+            if l3 > 0 && l3 < out_len && rg_has(l3, "str x30, [sp, #8]\n") { l4 = rg_end(l3) + 1; }
+            if l4 > 0 && l4 < out_len && rg_has(l4, "add x29, sp, #0\n") && n >= 16 && n <= 512 && n % 8 == 0 {
+                rg_text("stp x29, x30, [sp, #-");
+                rg_int(n);
+                rg_text("]!\nadd x29, sp, #0\n");
+                i = rg_end(l4) + 1;
+                continue;
+            }
+        }
+        if rg_has(i, "ldr x29, [sp, #0]\n") {
+            int l2 = en + 1;
+            int l3 = 0 - 1;
+            if l2 < out_len && rg_has(l2, "ldr x30, [sp, #8]\n") { l3 = rg_end(l2) + 1; }
+            if l3 > 0 && l3 < out_len && rg_has(l3, "add sp, sp, #") {
+                int n = fr_number(l3 + 13);
+                if n >= 16 && n <= 504 && n % 8 == 0 {
+                    rg_text("ldp x29, x30, [sp], #");
+                    rg_int(n);
+                    rg_put(10);
+                    i = rg_end(l3) + 1;
+                    continue;
+                }
+            }
+        }
+        rg_copy(i, en);
+        i = en + 1;
+    }
+    int t = 0;
+    while t < regs_len {
+        out_buf[t] = regs_buf[t];
+        t += 1;
+    }
+    out_len = regs_len;
+}
+
+// ---------------------------------------------------------------------------------------------- jump threading
+// A block that holds only "br cc xR, #N" and is jumped to from a block that has just set xR to a constant: the jump goes straight to the
+// right target (the boolean that && and || make with  mov x0, 1 / mov x0, 0  and test again). The constant stays where it is; dead code removes it.
+bool tj_holds(int cc, int a, int b) {
+    if cc == IR_EQ { return a == b; }
+    if cc == IR_NE { return a != b; }
+    if cc == IR_LT { return a < b; }
+    if cc == IR_LE { return a <= b; }
+    if cc == IR_GT { return a > b; }
+    if cc == IR_GE { return a >= b; }
+    // unsigned: compare after flipping the sign bit
+    int sign = 1 << 63;
+    int ua = a + sign;
+    int ub = b + sign;
+    if cc == IR_ULT { return ua < ub; }
+    if cc == IR_ULE { return ua <= ub; }
+    if cc == IR_UGT { return ua > ub; }
+    return ua >= ub;
+}
+
+// the target an edge from the block b to the block t can be threaded to, or -1
+int tj_target(int b, int t, int upto) {
+    if t == b { return 0 - 1; }
+    // the first instruction that does something; it must be the last of the block
+    int br = ir_bs[t];
+    while br < ir_be[t] - 1 && ir_op[br] == IR_NOP { br += 1; }
+    if br != ir_be[t] - 1 { return 0 - 1; }
+    if ir_op[br] == IR_JMP {
+        if ir_t1[br] == t { return 0 - 1; }
+        return ir_t1[br];
+    }
+    if ir_op[br] != IR_BR || ir_bi[br] != 1 || ir_a[br] < 1 || ir_a[br] > 31 { return 0 - 1; }
+    int r = ir_a[br];
+    // the last definition of r in b before the terminator
+    int i = upto - 1;
+    while i >= ir_bs[b] {
+        if ir_d[i] == r {
+            if ir_op[i] != IR_CONST { return 0 - 1; }
+            if tj_holds(ir_k[br], ir_k[i], ir_b[br]) { return ir_t1[br]; }
+            return ir_t2[br];
+        }
+        if ir_op[i] == IR_CALL || ir_op[i] == IR_CALLIND || ir_op[i] == IR_SYSCALL { return 0 - 1; }
+        i -= 1;
+    }
+    return 0 - 1;
+}
+
+int tj_changes;
+
+void op_thread() {
+    int pass = 0;
+    while pass < 3 {
+        int before = tj_changes;
+        int b = 0;
+        int nb0 = ir_nb;
+        while b < nb0 {
+            int t = ir_be[b] - 1;
+            int op = ir_op[t];
+            if op == IR_JMP || op == IR_BR || op == IR_FBR {
+                int n1 = tj_target(b, ir_t1[t], t);
+                if n1 >= 0 { ir_t1[t] = n1; tj_changes += 1; }
+                if op != IR_JMP {
+                    int n2 = tj_target(b, ir_t2[t], t);
+                    if n2 >= 0 { ir_t2[t] = n2; tj_changes += 1; }
+                }
+            }
+            b += 1;
+        }
+        if tj_changes == before { return; }
+        pass += 1;
     }
 }

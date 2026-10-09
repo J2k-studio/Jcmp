@@ -398,6 +398,47 @@ void as_h_rrr(int base) {
     as_put32(base | (rm << 16) | (rn << 5) | rd);
 }
 
+// stp xA, xB, [sp, #-N]!   (the prologue: N is a multiple of 8, at most 512)   and   ldp xA, xB, [sp], #N   (the epilogue: at most 504)
+void as_h_pair(bool store) {
+    as_skip_spaces();
+    int rt = as_parse_reg();
+    as_expect_comma();
+    int rt2 = as_parse_reg();
+    as_expect_comma();
+    if as_cur() != '[' { as_fail(); }
+    as_ci += 1;
+    as_skip_spaces();
+    int rn = as_parse_reg_or_sp();
+    as_skip_spaces();
+    int imm = 0;
+    if store {
+        if as_cur() != ',' { as_fail(); }
+        as_ci += 1;
+        as_skip_spaces();
+        if as_cur() != '#' { as_fail(); }
+        as_ci += 1;
+        if as_cur() != '-' { as_fail(); }
+        as_ci += 1;
+        imm = 0 - as_parse_number();
+        as_skip_spaces();
+        if as_cur() != ']' { as_fail(); }
+        as_ci += 1;
+        if as_cur() != '!' { as_fail(); }
+        as_ci += 1;
+        if imm < 0 - 512 || (imm & 7) != 0 { as_fail(); }
+        as_put32(0xA9800000 | (((imm >> 3) & 127) << 15) | (rt2 << 10) | (rn << 5) | rt);
+    } else {
+        if as_cur() != ']' { as_fail(); }
+        as_ci += 1;
+        as_expect_comma();
+        if as_cur() != '#' { as_fail(); }
+        as_ci += 1;
+        imm = as_parse_number();
+        if imm > 504 || (imm & 7) != 0 { as_fail(); }
+        as_put32(0xA8C00000 | (((imm >> 3) & 127) << 15) | (rt2 << 10) | (rn << 5) | rt);
+    }
+}
+
 // ldr/str family: op = the instruction's high 16 bits, shift = log2(size)
 void as_h_mem(int op, int shift) {
     as_skip_spaces();
@@ -782,6 +823,16 @@ void as_instruction() {
     if as_mn_is("rbit") { as_h_sxt(0xDAC0, 0x0000); return; }
     if as_mn_is("rev") { as_h_sxt(0xDAC0, 0x0C00); return; }
     if as_mn_is("popcnt") { as_h_popcnt(); return; }
+    if as_mn_is("fmovi") {
+        as_skip_spaces();
+        int fd = as_parse_freg();
+        as_expect_comma();
+        int im = as_parse_number();
+        as_put32(0x1E601000 | ((im & 255) << 13) | fd);
+        return;
+    }
+    if as_mn_is("stp") { as_h_pair(true); return; }
+    if as_mn_is("ldp") { as_h_pair(false); return; }
     if as_mn_is("ldr") { as_h_mem(0xF940, 3); return; }
     if as_mn_is("str") { as_h_mem(0xF900, 3); return; }
     if as_mn_is("ldrb") { as_h_mem(0x3940, 0); return; }

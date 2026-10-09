@@ -66,6 +66,7 @@
 #define IR_ROTR 51           // d = a turned right by b|k places (modulo 64)
 #define IR_POPCNT 52         // d = the number of bits 1 in a
 #define IR_NOP 53            // nothing (an instruction that a pass removed)
+#define IR_FCONST 54         // d (double) = the double whose bits are k
 
 // the conditions (cc) of IR_SETCC and IR_BR
 #define IR_EQ 0
@@ -118,7 +119,7 @@ int ir_nnames;
 char ir_fname[128];          // the name of the function
 int op_changed;              // 1: the function is written again from the IR
 int ir_pre = 1;              // the peephole pass runs before the lifting too
-int ir_opt = 108;           // the passes: 1 constants out of loops, 2 allocator, 4 cleaning, 8 value numbering, 32 double round trips, 64 always write back
+int ir_opt = 236;           // the passes: 1 constants out of loops, 2 allocator, 4 cleaning, 8 value numbering, 32 double round trips, 64 always write back
 int ir_mode = 2;            // 0 off (-noir), 1 -irstat, 2 lift and write back, 3 -irdump
 int lf_hint_n;               // the hint line ";H ..." of the function (kept for the register pass)
 char lf_hint_text[16384];
@@ -264,6 +265,7 @@ char^ ir_opname(int op) {
     if op == IR_ROTR { return "rotr"; }
     if op == IR_POPCNT { return "popcnt"; }
     if op == IR_NOP { return "nop"; }
+    if op == IR_FCONST { return "fconst"; }
     return "?";
 }
 
@@ -339,7 +341,7 @@ void ir_print_instr(int i) {
         ir_ps(" = ");
     }
     ir_ps(ir_opname(op));
-    if op == IR_CONST || op == IR_PARAM {
+    if op == IR_CONST || op == IR_PARAM || op == IR_FCONST {
         ir_pc(' ');
         ir_pn(ir_k[i]);
     } else if op == IR_COPY || op == IR_NEG || op == IR_NOT || op == IR_CLZ || op == IR_RBIT || op == IR_BSWAP || op == IR_POPCNT || op == IR_FSQRT || op == IR_FNEG || op == IR_FABS || op == IR_FFLOOR || op == IR_FTRUNC || op == IR_FCEIL || op == IR_I2F || op == IR_F2I || op == IR_BITS2F || op == IR_F2BITS {

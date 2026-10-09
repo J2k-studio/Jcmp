@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.9.71
+* **Jump threading on the IR:** the boolean that `&&` and `||` make with `mov x0, 1` / `mov x0, 0` and then test again (`cmp x0, 0` / `b.eq`) is gone: a jump goes straight to the right target when the block before it has just set the register to a constant. Blocks that only jump are skipped, and blocks that nobody reaches are not written. `fib` 88 -> 70 ms (-20 %).
+* **Double constants in one instruction:** `fmov dN, #imm` for the constants that the instruction can make (2.0, 0.5, 3.5, 31.0 ... eight bits: sign, four bits of fraction, exponent from -3 to 4). In the assembler it is written `fmovi dN, imm8`. New IR operation `fconst`.
+* The register pass sees again that a variable is a double when the load is not right in front of the `fmov` (the IR moved things): `mandel` is back to the speed of the code without the IR.
+* The assembler knows `stp` / `ldp` with pre- and post-index; the pass that uses them for the frame is OFF (`-stp`): measured 9 % slower on the Cortex-A55 than `sub sp` + two `str`.
+* Tests: `t281_thread` (&&, || with side effects, comparison of doubles, bool variables, a loop with two conditions; double constants that fit in 8 bits and some that do not; checked against Python).
+* Measured (best of 5, without the IR -> with): fib 88 -> 70, nbody 366 -> 286, matmul 38 -> 37, mandel 55 -> 55, gcd 368 -> 374, sieve 76 -> 82 (noise), loop 851 -> 847.
+
 ## 0.9.70
 * **Every function that can be lifted is now written from the IR** (before: only when the IR made it smaller). Fewer instructions overall: the compiler has 171,6xx instead of 179,3xx instructions (-4.3 %); compiling it takes 4.7 s instead of 3.6 s (lifting and writing back the text).
 * Jumps: when the true branch of a conditional jump is the next block, the jump is made on the opposite condition and the extra `b` is not written (also for double compares: a not-a-number still goes the right way).

@@ -910,9 +910,24 @@ bool lw_fuse(int k, int b) {
 int lw_next(int b) {
     if b == ir_lastb { return 0 - 1; }
     int n = b + 1;
-    if n == ir_lastb { n += 1; }
+    while n < ir_nb && (n == ir_lastb || (ir_opt != 0 && op_po[n] < 0)) { n += 1; }
     if n >= ir_nb { n = ir_lastb; }
     return n;
+}
+
+// the 8-bit number of a double that "fmov dN, #imm" can make (sign, 4 bits of fraction, exponent from -3 to 4), or -1
+int lw_fpimm(int bits) {
+    int low = bits & 281474976710655;                  // the lower 48 bits of the fraction must be 0
+    if low != 0 { return 0 - 1; }
+    int e = (bits >> 52) & 2047;
+    int sign = (bits >> 63) & 1;
+    int f = (bits >> 48) & 15;
+    int bb = 0;
+    int cd = 0;
+    if e >= 1024 && e <= 1027 { bb = 0; cd = e - 1024; }
+    else if e >= 1020 && e <= 1023 { bb = 1; cd = e - 1020; }
+    else { return 0 - 1; }
+    return sign * 128 + bb * 64 + cd * 16 + f;
 }
 
 // one instruction as text; the block b is the one that it is in (for the fall through of jumps)
@@ -939,6 +954,24 @@ bool lw_instr(int i, int b) {
         rg_text(", ");
         rg_int(ir_k[i]);
         rg_put(10);
+        return true;
+    }
+    if op == IR_FCONST {
+        lw_def(d);
+        int imm8 = lw_fpimm(ir_k[i]);
+        if imm8 >= 0 {
+            rg_text("fmovi ");
+            lw_reg(d);
+            rg_text(", ");
+            rg_int(imm8);
+            rg_put(10);
+        } else {
+            rg_text("mov x17, ");
+            rg_int(ir_k[i]);
+            rg_text("\nfmov ");
+            lw_reg(d);
+            rg_text(", x17\n");
+        }
         return true;
     }
     if op == IR_COPY {
@@ -1192,14 +1225,16 @@ bool lw_function() {
         if (ir_op[i] == IR_LOAD || ir_op[i] == IR_STORE) && ir_a[i] == 30 && ir_k[i] < 0 { lw_note_cell(lf_frame + lw_maxq + ir_k[i]); }
         i += 1;
     }
+    if ir_opt != 0 { op_graph(); }
     int ord = 0;
     while ord <= ir_nb {
         // the blocks in order, except that the last block of the function (the one with the exit) is written at the end
         b = ord;
         if ord == ir_lastb { ord += 1; continue; }
         if ord == ir_nb { b = ir_lastb; }
-        if b == ir_lastb && lf_epi_line < 0 { lw_hint(); }
         ord += 1;
+        if ir_opt != 0 && b != ir_lastb && op_po[b] < 0 { continue; }
+        if b == ir_lastb && lf_epi_line < 0 { lw_hint(); }
         rg_text("L");
         rg_int(lw_lab[b]);
         rg_text(":\n");
@@ -1323,8 +1358,10 @@ void ir_run() {
                     int cnt0 = 0;
                     if (ir_opt & 64) == 0 { cnt0 = op_count(); }
                     int bt0 = bt_changes;
+                    if (ir_opt & 128) != 0 { op_thread(); }
                     if (ir_opt & 8) != 0 { op_cse_run(); }
                     if (ir_opt & 4) != 0 { op_clean_run(); }
+                    if (ir_opt & 128) != 0 { op_thread(); }
                     if (ir_opt & 32) != 0 { op_bits_run(); }
                     if (ir_opt & 1) != 0 { op_run(); }
                     if (ir_opt & 2) != 0 { op_ra_run(); }

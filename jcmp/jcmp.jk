@@ -2,7 +2,7 @@
 // Build:  bin/jcmp jcmp/jcmp.jk -o jcmp1        (see bootstrap.sh)
 // Use:    jcmp1 input.jk -o program
 // the version of the compiler (also in the file VERSION; release.sh checks that they agree)
-#define JCMP_VERSION "0.9.70"
+#define JCMP_VERSION "0.9.71"
 
 #import "jc_base"
 #import "jc_asm"
@@ -150,6 +150,8 @@ void main() {
         } else if str_eq(a, "-irlicm") {
             ir_mode = 2;
             ir_opt = ir_opt | 1;
+        } else if str_eq(a, "-stp") {
+            fr_on = 1;
         } else if str_eq(a, "-iropt") {
             ir_mode = 2;
             ir_opt = ir_opt | 44;
@@ -301,6 +303,7 @@ void main() {
     if opt_peep == 1 { peep_run(); }
     regs_run();
     if opt_peep == 1 && opt_regs != 0 { peep_run(); }
+    if fr_on == 1 { fr_run(); }
     if out_asm != null {
         if write_file(out_asm, @out_buf, out_len) != 0 {
             write_err("jcmp: cannot write the output file\n");
