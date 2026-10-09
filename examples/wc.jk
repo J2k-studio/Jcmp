@@ -19,8 +19,8 @@ void main() {
         cout << "cannot open file\n";
         return;
     }
-    int size = read(f, data);
-    close(f);
+    int size = File::read(f, data);
+    File::close(f);
     int lines = 0;
     int words = 0;
     bool in_word = false;
