@@ -1887,7 +1887,21 @@ void parse_local_decl_core() {
     decl_ls = err_ls;
     check_local_name(@d_name);
     next();
+    int d_pin = 0;
+    if tok_is("@") {
+        // int n @ x19 = 0;  the variable lives in that register (x18, x19 .. x25) for its whole life
+        next();
+        if tok_kind != T_IDENT { die("a register (x18, x19 .. x25) was expected after @"); }
+        int pr = nk_xnum(@tok_text);
+        if pr != 18 && !(pr >= 19 && pr <= 25) { die_name("a variable can be pinned to x18 or x19 .. x25 only (the other registers are used by the code of every expression)", @tok_text); }
+        if tok_is("[") || d_dyn != 0 || (d_width >= 16 && d_ptr == 0) || d_tid == 91 { die("only a whole number, a pointer, a bool, a char or an enum can be pinned to a register"); }
+        d_pin = pr;
+        pin_used = 1;
+        next();
+        next_pin = 0;
+    }
     if tok_is("[") {
+        if d_pin > 0 { die("an array cannot be pinned to a register"); }
         int d_count = parse_dims();
         int d_nd = dim_nd;
         int d_s1 = dim_s1;
@@ -2095,6 +2109,7 @@ void parse_local_decl_core() {
         if d_ptr != 0 && last_call_owning == 1 && own_ok == 1 { d_own = 1; }     // the variable owns what alloc gave
         expect(";");
         ty_tid = d_tid;
+        next_pin = d_pin;
         add_local(@d_name, 0, d_width, 8, d_ptr);
         lookup_var(@d_name);
         lused[lcount - 1] = 0;           // the declaration itself is not a use
@@ -2104,6 +2119,7 @@ void parse_local_decl_core() {
     }
     expect(";");
     ty_tid = d_tid;
+    next_pin = d_pin;
     add_local(@d_name, 0, d_width, 8, d_ptr);
     if d_width < 16 {
         luninit[lcount - 1] = 1;
@@ -2161,6 +2177,10 @@ void parse_statement_inner() {
         mt_pending = 0;
         if !tok_is("for") { die("#multithread must be followed by a for loop"); }
         parse_mt_for();
+        return;
+    }
+    if tok_is("register") {
+        parse_register_block();
         return;
     }
     if tok_is("{") {
@@ -2314,6 +2334,10 @@ void parse_statement_inner() {
     }
     if tok_is("::") && str_eq(@s_name, "Sys") {
         parse_sys_assign();              // Sys::name = value;
+        return;
+    }
+    if tok_is("::") && str_eq(@s_name, "Reg") {
+        parse_reg_assign();              // Reg::x18 = value;
         return;
     }
     if tok_is("::") {                    // Struct::function(...);

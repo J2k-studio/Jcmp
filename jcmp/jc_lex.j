@@ -47,6 +47,7 @@ int std_loaded;              // 1 once `import std` has been read
 char def_name[131072];         // 256 names x 64
 char def_val[524288];         // 256 values x 256
 int def_count;
+int reserve_mask;            // #reserve x18, x19 ...: bit n = register xn is never used by the compiler (x18, x19 .. x25)
 
 int find_define(char^ name) {
     int i = 0;
@@ -824,6 +825,27 @@ void next() {
         }
         if str_eq(@dw, "multithread") {
             mt_pending = 1;              // the next statement must be a for loop: its iterations run on several threads
+            next();
+            return;
+        }
+        if str_eq(@dw, "reserve") {
+            // #reserve x19, x20 : the compiler never uses these registers; the program does (Reg::x19, register { })
+            while true {
+                while lc(0) == 32 || lc(0) == 9 { adv(); }
+                if lc(0) != 'x' { die("#reserve takes registers: #reserve x18, x19"); }
+                adv();
+                int rn = 0;
+                int rd = 0;
+                while is_digit(lc(0)) {
+                    rn = rn * 10 + (lc(0) - '0');
+                    rd += 1;
+                    adv();
+                }
+                if rd == 0 || !(rn == 18 || (rn >= 19 && rn <= 25)) { die("only x18 and x19 .. x25 can be reserved (x0 .. x17 are used by every expression, x26 .. x30 by the runtime)"); }
+                reserve_mask = reserve_mask | (1 << rn);
+                while lc(0) == 32 || lc(0) == 9 { adv(); }
+                if lc(0) == ',' { adv(); } else { break; }
+            }
             next();
             return;
         }

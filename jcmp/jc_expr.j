@@ -55,6 +55,9 @@ int own_src_off;             // struct_source: the frame offset of the local var
 int cond_depth;              // > 0 while the right side of && or || is compiled (it may not run)
 int last_call_struct_off;    // the frame offset of the temporary that the last call's struct result is in
 int last_call_owning;        // the last call made returns memory its receiver owns
+int next_pin;                // the register (18 .. 25) the next local variable is pinned to (int n @ x19), else 0
+int lpin[8192];              // for each local: its pinned register, or 0
+int pin_used;                // 1 once a variable was pinned to a register
 int ty_tid;                  // type of values: 0 number, 1 bool, 3+n enum number n
 int ex_ty;                   // type of the last operand/result: 0 number, 1 bool, 2 the literal 0 or 1, 3+n enum n
 int ex_w;                    // width code of the last operand/result: 0 = a plain number, else 1 i8, 2 char, 3 bool, 4 i32, 8 int
@@ -647,6 +650,15 @@ void add_local(char^ name, int kind, int elem, int bytes, int ptr) {
     loff[lcount] = frame_bytes;
     int hint_flag = 0;
     if kind == 0 && bytes == 8 && ty_tid < 99 { hint_flag = 1; }
+    lpin[lcount] = 0;
+    if next_pin > 0 {
+        // a pinned variable: the flag of the hint line is 100 + the register (the register pass puts it there)
+        if hint_flag == 1 {
+            hint_flag = 100 + next_pin;
+            lpin[lcount] = next_pin;
+        }
+        next_pin = 0;
+    }
     hint_add(frame_bytes, bytes, hint_flag);
     frame_bytes += (bytes + 7) / 8 * 8;
     lcount += 1;
@@ -2121,6 +2133,10 @@ void lvalue_loop() {
 
 // Struct::function(args) or Enum::Member: the name is in id_name, the token is "::"
 void gen_scope() {
+    if str_eq(@id_name, "Reg") {
+        gen_reg_read();
+        return;
+    }
     if str_eq(@id_name, "Sys") {
         gen_sys_read();
         return;
@@ -3910,6 +3926,8 @@ void parse_unary_core() {
         str_copy(@id_name, @tok_text, 256);
         next();
         if !lookup_var(@id_name) { die_name("unknown name", @id_name); }
+        int pin_i = find_local(@id_name);
+        if pin_i >= 0 && lpin[pin_i] > 0 { die_name("the address of a pinned variable cannot be taken (it lives in a register)", @id_name); }
         uninit_clear(@id_name);            // its address is taken: it may be written through it
         parse_lvalue();
         if lv_done == 1 { die("@ needs a variable, element or field"); }

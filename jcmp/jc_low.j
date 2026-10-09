@@ -436,6 +436,7 @@ void nk_end() {
 
 // R = ...;  (the destination register was read, tok is "=" or an operator with =)
 void nk_assign(int rd, char^ op_eq) {
+    nk_dest(rd);
     // op_eq: "=" or "+=" "-=" ...
     bool plain = str_eq(op_eq, "=");
     char op[8];
@@ -1343,4 +1344,89 @@ void parse_device_assign(char^ dname) {
     else if str_eq(@op, "-=") { emit_line("sub x1, x1, x0"); }
     else { die_name("this operator cannot change a device register (= |= &= += -=)", @op); }
     dev_store(f, "x1");
+}
+
+// ---------------------------------------------------------------------------------------------- register { } blocks and Reg:: in normal code
+//   #reserve x18                        // the compiler never uses x18 (or x19 .. x25 if you name them)
+//   register {                          // the statements of the low level (docs/LANGUAGE.md), with the bare names x0 .. x30
+//       x1 = [x0 + 8];
+//       x1 += 1;
+//       [x0 + 8] = x1;
+//   }
+//   Reg::x18 = p;   int q = Reg::x18;   // in normal code only a reserved register (and x18) can be read and written
+// A function with a register { } block keeps its variables in the frame (no register is given to them) and is not changed by the optimiser
+// inside the block. The block may change x0 .. x17 (the work registers of the statement); a change of a callee-saved register that was not
+// reserved (x19 .. x28) is a warning.
+
+int nk_dests;                    // bit n: the register xn was written by the statements of the block
+
+void nk_dest(int r) {
+    if r >= 0 && r <= 30 { nk_dests = nk_dests | (1 << r); }
+}
+
+void parse_register_block() {
+    next();                                  // register
+    if !tok_is("{") { die("register { ... } was expected"); }
+    nk_reset();
+    nk_dests = 0;
+    next();
+    emit_line(";N");
+    while !tok_is("}") {
+        if tok_kind == T_EOF { die("} expected at the end of the register block"); }
+        parse_naked_stmt();
+    }
+    nk_check_labels();
+    next();
+    emit_line(";N");
+    // callee-saved registers that the block changed and nobody reserved
+    int r = 19;
+    while r <= 28 {
+        if (nk_dests & (1 << r)) != 0 && (reserve_mask & (1 << r)) == 0 {
+            char wm[200];
+            str_copy(@wm, "this register block changes x", 200);
+            append_int(@wm, r);
+            append_text(@wm, ", which a function must give back unchanged (reserve it with #reserve x");
+            append_int(@wm, r);
+            append_text(@wm, " if the program owns it)");
+            if pass_no >= 2 { warn(@wm, "register-block"); }
+        }
+        r += 1;
+    }
+}
+
+// a register of normal code: only x18 and the reserved ones
+int nk_normal_reg() {
+    if tok_kind != T_IDENT { die("a register name was expected after Reg::"); }
+    int r = nk_xnum(@tok_text);
+    if r < 0 { die_name("this is not a register (x18 or a reserved one)", @tok_text); }
+    if r != 18 && (reserve_mask & (1 << r)) == 0 {
+        die_name("normal code can read and write x18 and the registers named in #reserve only; use a register { } block for the others", @tok_text);
+    }
+    next();
+    return r;
+}
+
+// Reg::x18 in an expression
+void gen_reg_read() {
+    next();                                  // ::
+    int r = nk_normal_reg();
+    str_copy(@nk_line, "mov x0, x", 256);
+    append_int(@nk_line, r);
+    emit_line(@nk_line);
+    ex_w = 8;
+    ex_ty = 0;
+    rv_valid = 0;
+}
+
+// Reg::x18 = expression;
+void parse_reg_assign() {
+    next();                                  // ::
+    int r = nk_normal_reg();
+    expect("=");
+    parse_expr();
+    expect(";");
+    str_copy(@nk_line, "mov x", 256);
+    append_int(@nk_line, r);
+    append_text(@nk_line, ", x0");
+    emit_line(@nk_line);
 }

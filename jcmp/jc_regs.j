@@ -25,6 +25,7 @@ int rg_labl[8192];
 int rg_nlab;
 int rg_pick[8];              // the slots that got a register
 int rg_npick;
+int rg_pin[8192];            // the register (18, 19 .. 25) a slot is pinned to, or 0 (int n @ x19)
 int rg_slotreg[8192];        // the register number (19..25) of a slot, or 0
 int rg_slotd[8192];          // the double register number (8..15) of a slot, or 0
 int rg_fl[8192];             // how many uses of the slot are conversions to and from a double register
@@ -224,6 +225,16 @@ void rg_allocate(int epi, int is_main) {
         rg_cidx[w] = 0 - 1;
         w += 1;
     }
+    // the pinned slots are candidates whatever their weight
+    w = 0;
+    while w < 8192 {
+        if rg_state[w] == 1 && rg_pin[w] > 0 && rg_cidx[w] < 0 && rg_ncand < 256 && rg_tot[w] > 0 {
+            rg_cidx[w] = rg_ncand;
+            rg_cand[rg_ncand] = w;
+            rg_ncand += 1;
+        }
+        w += 1;
+    }
     int thr = 2;
     int rounds = 0;
     while rounds < 300 {
@@ -401,7 +412,28 @@ void rg_allocate(int epi, int is_main) {
     while k < 8 {
         xowner[k] = 0 - 1;
         downer[k] = 0 - 1;
+        // a register that the program reserved (#reserve x19) is never given to a variable
+        if k < 7 && (reserve_mask & (1 << (19 + k))) != 0 { xowner[k] = 0 - 2; }
         k += 1;
+    }
+    // a pinned variable owns its register for the whole function
+    c2 = 0;
+    while c2 < rg_ncand {
+        int ps = rg_cand[c2];
+        if rg_pin[ps] > 0 {
+            int pk = rg_pin[ps] - 19;
+            if rg_pin[ps] == 18 { pk = 7; }
+            if xowner[pk] != 0 - 1 {
+                if xowner[pk] == 0 - 2 { die("a variable is pinned to a register that #reserve keeps for the program (reserved registers are not given to variables)"); }
+                die("two variables are pinned to the same register in one function");
+            }
+            xowner[pk] = c2;
+            taken[c2] = 1;
+            done += 1;
+            if pk == 7 { rg_slotreg[ps] = 18; } else { rg_slotreg[ps] = 19 + pk; }
+            if pk < 7 && rg_xsave[pk] < 0 { rg_xsave[pk] = ps; }
+        }
+        c2 += 1;
     }
     while done < rg_ncand {
         // the interval that starts first among the ones not done
@@ -424,7 +456,7 @@ void rg_allocate(int epi, int is_main) {
             while k < nreg {
                 int ow = xowner[k];
                 if is_d { ow = downer[k]; }
-                if ow >= 0 && rg_last[ow] < rg_first[cur] {
+                if ow >= 0 && rg_last[ow] < rg_first[cur] && (is_d || rg_pin[rg_cand[ow]] == 0) {
                     if is_d { downer[k] = 0 - 1; } else { xowner[k] = 0 - 1; }
                 }
                 k += 1;
@@ -435,7 +467,7 @@ void rg_allocate(int epi, int is_main) {
             while k < nreg && pick < 0 {
                 int ow2 = xowner[k];
                 if is_d { ow2 = downer[k]; }
-                if ow2 < 0 { pick = k; }
+                if ow2 == 0 - 1 { pick = k; }
                 k += 1;
             }
             if pick < 0 {
@@ -444,10 +476,10 @@ void rg_allocate(int epi, int is_main) {
                 while k < nreg {
                     int ow3 = xowner[k];
                     if is_d { ow3 = downer[k]; }
-                    if low < 0 || rg_wt[rg_cand[ow3]] < rg_wt[rg_cand[low]] { low = ow3; pick = k; }
+                    if ow3 >= 0 && (is_d || rg_pin[rg_cand[ow3]] == 0) && (low < 0 || rg_wt[rg_cand[ow3]] < rg_wt[rg_cand[low]]) { low = ow3; pick = k; }
                     k += 1;
                 }
-                if rg_wt[rg_cand[low]] < rg_wt[slot] {
+                if low >= 0 && rg_wt[rg_cand[low]] < rg_wt[slot] {
                     // the old owner stays in memory
                     int os = rg_cand[low];
                     rg_slotreg[os] = 0;
@@ -500,11 +532,18 @@ void rg_function(int is_main) {
     while s < 8192 {
         rg_state[s] = 0;
         rg_wt[s] = 0;
+        rg_pin[s] = 0;
         rg_slotreg[s] = 0;
         rg_slotd[s] = 0;
         rg_fl[s] = 0;
         rg_tot[s] = 0;
         s += 1;
+    }
+    // a function with a register { } block writes registers by itself: nothing moves into registers
+    i = 0;
+    while i < rg_n {
+        if rg_has(rg_ls[i], ";N") { ok = 0; }
+        i += 1;
     }
     // the hints
     i = 0;
@@ -527,9 +566,12 @@ void rg_function(int is_main) {
                     int w1 = (off + size - 1) / 8;
                     if size <= 0 { w1 = w0; }
                     int w = w0;
+                    int pinv = 0;
+                    if flag >= 100 { pinv = flag - 100; flag = 1; }
                     while w <= w1 && w < 8192 {
                         if flag == 1 && size == 8 && off % 8 == 0 && rg_state[w] != 2 {
                             rg_state[w] = 1;
+                            rg_pin[w] = pinv;
                         } else {
                             rg_state[w] = 2;
                         }
@@ -656,6 +698,14 @@ void rg_function(int is_main) {
     if ok == 1 {
         rg_allocate(epi, is_main);
     }
+    // a pinned variable must have its register
+    int pw = 0;
+    while pw < 8192 {
+        if rg_pin[pw] > 0 && rg_slotreg[pw] == 0 && rg_tot[pw] > 0 {
+            die("a pinned variable (int n @ x19) could not be kept in its register: its address is used, or the function has a register { } block, defer, try or a #multithread loop");
+        }
+        pw += 1;
+    }
     // write it
     i = 0;
     while i < rg_n {
@@ -757,6 +807,7 @@ void regs_run() {
     regs_len = 0;
     int i = 0;
     int work = 1;
+    if used_try == 1 && pin_used == 1 { die("pinned variables (int n @ x19) are not possible in a program that has try / catch: a throw jumps over the frames and the registers would not be given back"); }
     if opt_regs == 0 || used_try == 1 { work = 0; }
     while i < out_len {
         int en = rg_end(i);

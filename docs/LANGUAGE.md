@@ -344,6 +344,25 @@ free[b];                       // only b goes back (a still works, and the next 
 ```
 If a variable is called `alloc`, `alloc0`, `free`, `grow` or `arr`, a `[` after it is an index as always.
 
+### Registers of your own: `#reserve`, `register { }`, pinned variables (0.9.81)
+
+```jk
+#reserve x18, x19                       // the compiler never gives these to a variable (x18 and x19 .. x25 can be reserved)
+
+int work(int n) {
+    int acc @ x20 = 0;                   // lives in x20 for the whole function, also across calls
+    for i in 0..n { acc += i; }
+    Reg::x18 = acc;                      // normal code can read / write x18 and the reserved registers
+    register {                           // the statements of the low level, with the bare names x0 .. x30
+        x1 = x18;
+        x1 <<= 1;
+        x18 = x1;
+    }
+    return Reg::x18;
+}
+```
+A pinned variable (`int n @ x19`) is a whole number, pointer, bool, char or enum; its address cannot be taken; two variables of one function cannot share a register; programs with try / catch cannot pin. A function with a `register { }` block keeps its variables in the frame. Changing x19 .. x28 in a block without reserving it is a warning.
+
 ### `device`: hardware registers as data, and `Sys::` (0.9.80)
 
 ```jk
