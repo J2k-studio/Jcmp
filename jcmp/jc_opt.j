@@ -1949,3 +1949,433 @@ void op_copy_inline() {
         b += 1;
     }
 }
+
+// ---------------------------------------------------------------------------------------------- inlining of small functions
+// The IR of every small function that can be lifted is kept (after the passes). A call to such a function is replaced by a copy of its
+// blocks: the block of the call is cut in two, the callee's frame slots and stack cells get new places in the frame of the caller,
+// its temporaries get new vregs, its returns jump to the second half. The arguments are in x0..x7 at the call already (as the callee
+// expects them), the result is in x0.
+
+#define IS_MAXF 1024
+#define IS_MAXI 60000
+#define IS_MAXB 6000
+#define IS_MAXA 60000
+#define IS_MAXV 60000
+#define IS_MAXN 4096
+
+char is_fname[65536];            // 64 characters each
+int is_i0[IS_MAXF];              // the first instruction in the store
+int is_ni[IS_MAXF];
+int is_b0[IS_MAXF];
+int is_nb[IS_MAXF];
+int is_a0[IS_MAXF];
+int is_n0[IS_MAXF];              // its names (64 characters each in is_names)
+int is_frame[IS_MAXF];
+int is_h0[IS_MAXF];              // its hint line in is_hint
+int is_hn[IS_MAXF];
+int is_nv[IS_MAXF];              // how many vregs it uses (the classes of those from 64 are in is_vc from is_v0)
+int is_v0[IS_MAXF];
+int is_recursive[IS_MAXF];
+int is_size[IS_MAXF];                 // instructions that do something
+int is_count;
+int is_ti;
+int is_tb;
+int is_ta;
+int is_tn;
+int is_th;
+int is_tv;
+
+int is_op[IS_MAXI];
+int is_d[IS_MAXI];
+int is_a[IS_MAXI];
+int is_b[IS_MAXI];
+int is_bi[IS_MAXI];
+int is_k[IS_MAXI];
+int is_w[IS_MAXI];
+int is_t1[IS_MAXI];
+int is_t2[IS_MAXI];
+int is_as[IS_MAXI];
+int is_ac[IS_MAXI];
+int is_args[IS_MAXA];
+int is_bs[IS_MAXB];
+int is_be[IS_MAXB];
+char is_names[262144];
+char is_hint[65536];
+int is_vc[IS_MAXV];
+
+int inl_done;                    // how many calls were replaced by their bodies (all functions)
+int inl_maxsize = 60;
+int inl_tiny = 8;                // a callee this small is inlined everywhere, a bigger one only inside loops            // the biggest callee (instructions that do something)
+
+int is_find(char^ name) {
+    int f = 0;
+    while f < is_count {
+        if str_eq(@is_fname + f * 64, name) { return f; }
+        f += 1;
+    }
+    return 0 - 1;
+}
+
+// keep the function that is in the ir_ arrays now (if it is small and fine to copy)
+void is_save(char^ name) {
+    if is_count >= IS_MAXF { return; }
+    if str_len(name) >= 63 { return; }
+    int cnt = op_count();
+    if cnt > inl_maxsize || ir_nb > 40 { return; }
+    int total_b = ir_nb;
+    int total_i = 0;
+    int b = 0;
+    while b < ir_nb {
+        total_i += ir_be[b] - ir_bs[b];
+        b += 1;
+    }
+    if is_ti + total_i >= IS_MAXI || is_tb + total_b >= IS_MAXB || is_ta + ir_nargs >= IS_MAXA || is_tn + ir_nnames >= IS_MAXN || is_th + lf_hint_n >= 65000 || is_tv + ir_nv >= IS_MAXV { return; }
+    // no indirect calls, no system calls in the middle, and it must not call itself
+    int rec = 0;
+    b = 0;
+    while b < ir_nb {
+        int i = ir_bs[b];
+        while i < ir_be[b] {
+            if ir_op[i] == IR_CALLIND { return; }
+            // the frame pointer may only be the base of a load / store, or the first operand of an add of a number (the slots are moved when the function is inlined)
+            int o5 = ir_op[i];
+            if o5 == IR_CALL || o5 == IR_SYSCALL {
+                int g5 = 0;
+                while g5 < ir_ac[i] {
+                    if ir_args[ir_as[i] + g5] == 30 { return; }
+                    g5 += 1;
+                }
+            }
+            if ir_a[i] == 30 && !((o5 == IR_LOAD || o5 == IR_STORE) || (o5 == IR_ADD && ir_bi[i] == 1)) { return; }
+            if ir_uses_b(o5) && ir_bi[i] == 0 && ir_b[i] == 30 { return; }
+            if ir_op[i] == IR_CALL && str_eq(@ir_name + ir_k[i] * 64, name) { rec = 1; }
+            i += 1;
+        }
+        b += 1;
+    }
+    int f = is_count;
+    str_copy(@is_fname + f * 64, name, 64);
+    is_i0[f] = is_ti;
+    is_b0[f] = is_tb;
+    is_a0[f] = is_ta;
+    is_n0[f] = is_tn;
+    is_h0[f] = is_th;
+    is_v0[f] = is_tv;
+    is_nb[f] = ir_nb;
+    is_frame[f] = lf_frame;
+    is_hn[f] = lf_hint_n;
+    is_nv[f] = ir_nv;
+    is_recursive[f] = rec;
+    is_size[f] = cnt;
+    // blocks and instructions, in block order, with the blocks' ranges relative to the function's first instruction
+    int at = is_ti;
+    b = 0;
+    while b < ir_nb {
+        is_bs[is_tb + b] = at - is_ti;
+        int i2 = ir_bs[b];
+        while i2 < ir_be[b] {
+            is_op[at] = ir_op[i2]; is_d[at] = ir_d[i2]; is_a[at] = ir_a[i2]; is_b[at] = ir_b[i2]; is_bi[at] = ir_bi[i2];
+            is_k[at] = ir_k[i2]; is_w[at] = ir_w[i2]; is_t1[at] = ir_t1[i2]; is_t2[at] = ir_t2[i2];
+            is_ac[at] = ir_ac[i2];
+            if ir_ac[i2] > 0 {
+                is_as[at] = is_ta;
+                int g = 0;
+                while g < ir_ac[i2] {
+                    is_args[is_ta] = ir_args[ir_as[i2] + g];
+                    is_ta += 1;
+                    g += 1;
+                }
+            }
+            at += 1;
+            i2 += 1;
+        }
+        is_be[is_tb + b] = at - is_ti;
+        b += 1;
+    }
+    is_ti = at;
+    is_tb += ir_nb;
+    int n = 0;
+    while n < ir_nnames {
+        str_copy(@is_names + (is_tn + n) * 64, @ir_name + n * 64, 64);
+        n += 1;
+    }
+    is_tn += ir_nnames;
+    int h = 0;
+    while h < lf_hint_n {
+        is_hint[is_th + h] = lf_hint_text[h];
+        h += 1;
+    }
+    is_th += lf_hint_n;
+    int v = 0;
+    while v < ir_nv {
+        is_vc[is_tv + v] = ir_vcls[v];
+        v += 1;
+    }
+    is_tv += ir_nv;
+    is_count += 1;
+}
+
+// write one instruction at the end of the arrays
+int in_put(int op, int d, int a, int b, int bi, int k, int w, int t1, int t2) {
+    int j = ir_n;
+    ir_op[j] = op; ir_d[j] = d; ir_a[j] = a; ir_b[j] = b; ir_bi[j] = bi; ir_k[j] = k; ir_w[j] = w;
+    ir_t1[j] = t1; ir_t2[j] = t2; ir_as[j] = 0; ir_ac[j] = 0;
+    ir_n += 1;
+    return j;
+}
+
+int in_map[IS_MAXV];
+
+int in_v(int v) {
+    if v >= 64 { return in_map[v]; }
+    return v;
+}
+
+// the hint line of the callee, its offsets moved by delta, added to the hint line of the caller
+void in_hint(int f, int delta) {
+    int n = is_hn[f];
+    int base = is_h0[f];
+    int p = 2;
+    while p < n {
+        while p < n && is_hint[base + p] == ' ' { p += 1; }
+        if p < n {
+            int off = 0;
+            while p < n && is_hint[base + p] >= '0' && is_hint[base + p] <= '9' { off = off * 10 + (is_hint[base + p] - '0'); p += 1; }
+            p += 1;
+            int size = 0;
+            while p < n && is_hint[base + p] >= '0' && is_hint[base + p] <= '9' { size = size * 10 + (is_hint[base + p] - '0'); p += 1; }
+            p += 1;
+            int flag = 0;
+            while p < n && is_hint[base + p] >= '0' && is_hint[base + p] <= '9' { flag = flag * 10 + (is_hint[base + p] - '0'); p += 1; }
+            // write " off:size:flag"
+            if lf_hint_n < 16000 - 40 {
+                if lf_hint_n == 0 {
+                    lf_hint_text[0] = ';';
+                    lf_hint_text[1] = 'H';
+                    lf_hint_n = 2;
+                }
+                lf_hint_text[lf_hint_n] = ' ';
+                lf_hint_n += 1;
+                int parts[3];
+                parts[0] = off + delta;
+                parts[1] = size;
+                parts[2] = flag;
+                int q = 0;
+                while q < 3 {
+                    char dg[12];
+                    int dn = 0;
+                    int dv = parts[q];
+                    if dv == 0 { dg[0] = '0'; dn = 1; }
+                    while dv > 0 { dg[dn] = '0' + dv % 10; dv = dv / 10; dn += 1; }
+                    while dn > 0 { dn -= 1; lf_hint_text[lf_hint_n] = dg[dn]; lf_hint_n += 1; }
+                    if q < 2 { lf_hint_text[lf_hint_n] = ':'; lf_hint_n += 1; }
+                    q += 1;
+                }
+            }
+        }
+    }
+}
+
+// replace the call c in the block b by the body of the function f; false if there is no room
+bool in_inline(int b, int c, int f) {
+    int nbc = is_nb[f];
+    // room
+    if ir_nb + nbc + 2 >= IR_MAXB - 2 || ir_n + 2 * (ir_be[b] - ir_bs[b]) + 4 * is_ni[f] + 64 >= IR_MAXI || ir_nv + is_nv[f] >= IR_MAXV - 8 { return false; }
+    // the temporaries of the callee get new vregs
+    int v = 64;
+    while v < is_nv[f] {
+        in_map[v] = ir_vreg(is_vc[is_v0[f] + v]);
+        v += 1;
+    }
+    // frame: the slots (offsets from 16) move up by delta; the stack cells (negative offsets) go below the deepest one of the caller
+    int delta = lf_frame - 16;
+    int neg = op_maxq();
+    lf_frame = lf_frame + is_frame[f] - 16;
+    in_hint(f, delta);
+    int base = ir_nb;
+    int kb = base + nbc;                      // the second half of the block of the call
+    // the first half: the instructions before the call, then a jump into the copy
+    int s0 = ir_n;
+    int i = ir_bs[b];
+    while i < c {
+        int j = in_put(ir_op[i], ir_d[i], ir_a[i], ir_b[i], ir_bi[i], ir_k[i], ir_w[i], ir_t1[i], ir_t2[i]);
+        ir_as[j] = ir_as[i];
+        ir_ac[j] = ir_ac[i];
+        i += 1;
+    }
+    in_put(IR_JMP, 0, 0, 0, 0, 0, 0, base, 0 - 1);
+    int oldend = ir_be[b];
+    int oldstart = ir_bs[b];
+    // the copy of the callee's blocks
+    int cb = 0;
+    while cb < nbc {
+        int bid = base + cb;
+        ir_bs[bid] = ir_n;
+        int ci = is_i0[f] + is_bs[is_b0[f] + cb];
+        int ce = is_i0[f] + is_be[is_b0[f] + cb];
+        while ci < ce {
+            int op = is_op[ci];
+            int d = is_d[ci];
+            if op == IR_PARAM || (op == IR_ADDR_SLOT && d == 30) {
+                ci += 1;
+                continue;
+            }
+            int a = is_a[ci];
+            int k = is_k[ci];
+            int bb = is_b[ci];
+            if is_bi[ci] == 0 && (ir_uses_b(op)) { bb = in_v(bb); }
+            if (op == IR_LOAD || op == IR_STORE) && a == 30 {
+                if k >= 0 { k = k + delta; } else { k = k - neg; }
+            } else if op == IR_ADDR_SLOT {
+                k = k + delta;
+            } else if op == IR_ADD && a == 30 && is_bi[ci] == 1 {
+                bb = bb + delta;
+            }
+            if op == IR_RET {
+                if a != 1 && a != 0 { in_put(IR_COPY, 1, in_v(a), 0, 0, 0, 0, 0 - 1, 0 - 1); }
+                in_put(IR_JMP, 0, 0, 0, 0, 0, 0, kb, 0 - 1);
+                ci += 1;
+                continue;
+            }
+            int t1 = is_t1[ci];
+            int t2 = is_t2[ci];
+            if op == IR_JMP || op == IR_BR || op == IR_FBR { t1 = t1 + base; }
+            if op == IR_BR || op == IR_FBR { t2 = t2 + base; }
+            if op == IR_CALL {
+                k = ir_name_index(@is_names + (is_n0[f] + k) * 64);
+            }
+            int j2 = in_put(op, in_v(d), in_v(a), bb, is_bi[ci], k, is_w[ci], t1, t2);
+            if is_ac[ci] > 0 {
+                int regs[16];
+                int g = 0;
+                while g < is_ac[ci] && g < 16 {
+                    regs[g] = in_v(is_args[is_as[ci] + g]);
+                    g += 1;
+                }
+                ir_set_args(j2, g, @regs);
+            }
+            ci += 1;
+        }
+        ir_be[bid] = ir_n;
+        cb += 1;
+    }
+    // the second half
+    ir_bs[kb] = ir_n;
+    i = c + 1;
+    while i < oldend {
+        int j3 = in_put(ir_op[i], ir_d[i], ir_a[i], ir_b[i], ir_bi[i], ir_k[i], ir_w[i], ir_t1[i], ir_t2[i]);
+        ir_as[j3] = ir_as[i];
+        ir_ac[j3] = ir_ac[i];
+        i += 1;
+    }
+    ir_be[kb] = ir_n;
+    ir_blab[kb] = 0 - 1;
+    int z = 0;
+    while z < nbc {
+        ir_blab[base + z] = 0 - 1;
+        z += 1;
+    }
+    ir_bs[b] = s0;
+    ir_be[b] = s0 + (c - oldstart) + 1;
+    ir_nb = kb + 1;
+    if ir_lastb == b { ir_lastb = kb; }
+    inl_done += 1;
+    return true;
+}
+
+int inl_inloop[IR_MAXB];
+
+// the blocks that are in a loop of the function now
+void inl_find_loops() {
+    op_graph();
+    int b = 0;
+    while b < ir_nb {
+        inl_inloop[b] = 0;
+        b += 1;
+    }
+    b = 0;
+    while b < ir_nb {
+        if op_po[b] >= 0 {
+            int k = 0;
+            while k < 2 {
+                int sc = op_succ(b, k);
+                if sc >= 0 && op_dom(sc, b) {
+                    // the loop of the back edge b -> sc: sc and everything that reaches b without passing sc
+                    op_stamp += 1;
+                    op_mark[sc] = op_stamp;
+                    inl_inloop[sc] = 1;
+                    int sp = 0;
+                    if b != sc {
+                        op_mark[b] = op_stamp;
+                        op_stack[0] = b;
+                        sp = 1;
+                    }
+                    while sp > 0 {
+                        sp -= 1;
+                        int x = op_stack[sp];
+                        inl_inloop[x] = 1;
+                        int e = op_phead[x];
+                        while e >= 0 {
+                            int p = e / 2;
+                            if op_po[p] >= 0 && op_mark[p] != op_stamp {
+                                op_mark[p] = op_stamp;
+                                op_stack[sp] = p;
+                                sp += 1;
+                            }
+                            e = op_enext[e];
+                        }
+                    }
+                }
+                k += 1;
+            }
+        }
+        b += 1;
+    }
+}
+
+// the calls in the function now that can be replaced
+void op_inline(char^ self) {
+    // is there a call at all to a function that is kept?
+    bool any = false;
+    int b0 = 0;
+    while b0 < ir_nb && !any {
+        int i0 = ir_bs[b0];
+        while i0 < ir_be[b0] && !any {
+            if ir_op[i0] == IR_CALL && is_find(@ir_name + ir_k[i0] * 64) >= 0 { any = true; }
+            i0 += 1;
+        }
+        b0 += 1;
+    }
+    if !any { return; }
+    inl_find_loops();
+    int guard = 0;
+    bool again = true;
+    while again && guard < 12 {
+        again = false;
+        int b = 0;
+        while b < ir_nb && !again {
+            int i = ir_bs[b];
+            while i < ir_be[b] && !again {
+                if ir_op[i] == IR_CALL && ir_n < 2500 {
+                    int f = is_find(@ir_name + ir_k[i] * 64);
+                    if f >= 0 && is_recursive[f] == 0 && !str_eq(@is_fname + f * 64, self) && (is_size[f] <= inl_tiny || (inl_inloop[b] == 1 && is_size[f] <= inl_maxsize)) {
+                        int nb_before = ir_nb;
+                        bool inloop = inl_inloop[b] == 1;
+                        if in_inline(b, i, f) {
+                            // the new blocks are in a loop if the block of the call was
+                            int z = nb_before;
+                            while z < ir_nb {
+                                if z < IR_MAXB { inl_inloop[z] = 0; if inloop { inl_inloop[z] = 1; } }
+                                z += 1;
+                            }
+                            again = true;
+                            guard += 1;
+                        }
+                    }
+                }
+                i += 1;
+            }
+            b += 1;
+        }
+    }
+}

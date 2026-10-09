@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.9.75
+* **Inlining of small functions on the IR** (`jcmp/jc_opt.j`, `ir_collect` in `jc_lift.j`; off with `-noinl`, off in `-d` builds because the stack of calls is what the leak report and the fault message walk). Before any function is written, every function with less than 160 lines of code is lifted, gets the usual passes and is kept if it has at most 60 instructions that do something. A call to a kept function is replaced by a copy of its blocks: the block of the call is cut in two, the slots of the callee's frame and its stack cells get new places in the frame of the caller (the hint line for the register pass is extended), its temporaries get new vregs, its returns jump to the second half. The arguments are in `x0..x7` at the call already, the result is in `x0`. After that the caller gets all the passes, so value numbering and dead code work across the old border (the copy of a by-value struct parameter, the result copied out).
+* Where: a callee of at most 8 instructions anywhere; one of at most 60 only in a block that is in a loop; not recursive; not into a function that is already bigger than 2,500 instructions; at most 12 calls per caller.
+* The lifter accepts `bl f` followed by `add sp, sp, #N` when `f` is a runtime helper (`j2k_...`) or has at most 5 parameters and no array parameter (it is a pop of a pushed value, not arguments on the stack): `main` of a program with struct operators is lifted now.
+* The assembler knows `fmovi` and the IR knows `fconst` since 0.9.71; here `IR_NOP`, `IR_FCONST` are copied too.
+* Test `t284_inline` (clamp with three returns, a struct passed and returned by value, a callee with a loop, nested calls, a double, a recursive function that must not be inlined; checked against Python).
+* Measured (best of 5, 0.9.74 -> 0.9.75): **vec3 196 -> 120 ms** (C: 50), the rest unchanged within the noise: fib 67 -> 68, sieve 71 -> 69, matmul 33 -> 32, mandel 45 -> 45, gcd 308 -> 308, nbody 200 -> 198, qsort 155 -> 159. The price: the compiler has 210,000 lines of text instead of 181,000 and compiles itself in 4.1 s instead of 3.1 s (the compiler itself runs about 10 % faster when built with inlining).
+
 ## 0.9.74
 * **Small copies of structs are loads and stores** (IR pass `op_copy_inline`): `bl j2k_copy` with a size that is known and at most 128 bytes becomes pairs of `ldr` / `str` (a `vec3` is three pairs, not a call with a loop). It runs for the copy of a by-value parameter, the copy of the result, assignments of structs.
 * `std/vector.j`: the operators of `vec2 / vec3 / vec4` build the result in place (`vec3 r; r.x = ...; return r;`) instead of calling `vec3::make` (a call with four stores of arguments). `make` stays for users.

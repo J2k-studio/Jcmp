@@ -11,7 +11,6 @@
 // registers, run passes on the IR and allocate registers.
 
 char lf_why[100];                 // why the last function could not be lifted
-int lf_frame;                     // the size of the frame that the prologue made
 int lf_lifted;                    // counts, for -irstat
 int lf_failed;
 int lf_blab[8192];                // the labels of the function: their numbers and the block that each one starts
@@ -710,7 +709,6 @@ int lf_function(char^ name) {
             continue;
         }
         if pt_mn(0, "bl") && pt_no[0] == 1 {
-            if i + 1 < lf_total && lf_starts(i + 1, "add sp, sp, #") { return lf_fail("a call with arguments on the stack (more than 8)"); }
             char fn[64];
             int c = 0;
             while pt_o[c] != 0 && c < 62 {
@@ -718,6 +716,14 @@ int lf_function(char^ name) {
                 c += 1;
             }
             fn[c] = 0;
+            if i + 1 < lf_total && lf_starts(i + 1, "add sp, sp, #") {
+                // the stack is popped after the call: arguments on the stack (more than 8) or only a value that was pushed before? The runtime
+                // helpers and the functions with few parameters take everything in registers, so it is a pop.
+                bool regs_only = fn[0] == 'j' && fn[1] == '2' && fn[2] == 'k' && fn[3] == '_';
+                int ff = find_func(@fn);
+                if ff >= 0 && fnpar[ff] + fself[ff] <= 5 && farr[ff] == 0 { regs_only = true; }
+                if !regs_only { return lf_fail("a call with arguments on the stack (more than 8)"); }
+            }
             int ce = ir_add(IR_CALL, lf_x(0), 0, 0, 0, ir_name_index(@fn));
             lf_set_call_args(ce);
             if lf_noreturn(@fn) {
@@ -1335,11 +1341,80 @@ void ir_say(char^ a, char^ b, char^ c) {
     write_err("\n");
 }
 
+// the passes that every function gets (the same for the functions that are kept for inlining and the others)
+void ir_passes_basic() {
+    if (ir_opt & 4096) != 0 { op_copy_inline(); }
+    if (ir_opt & 128) != 0 { op_thread(); }
+    if (ir_opt & 8) != 0 { op_cse_run(); }
+    if (ir_opt & 4) != 0 { op_clean_run(); }
+    if (ir_opt & 128) != 0 { op_thread(); }
+    if (ir_opt & 32) != 0 { op_bits_run(); }
+}
+
+// lift the small functions first and keep them, so that the calls to them can be replaced by their bodies
+void ir_collect() {
+    is_count = 0;
+    is_ti = 0; is_tb = 0; is_ta = 0; is_tn = 0; is_th = 0; is_tv = 0;
+    int i = 0;
+    while i < out_len {
+        int en = rg_end(i);
+        if rg_is_func(i) {
+            int p = i;
+            bool done = false;
+            bool seen_epi = false;
+            bool is_main = rg_has(i, "main:\n");
+            int cnt = 0;
+            while p < out_len && !done {
+                int pe = rg_end(p);
+                if p != i && rg_is_func(p) { break; }
+                cnt += 1;
+                if rg_has(p, "ldr x29, [sp, #0]") { seen_epi = true; }
+                if seen_epi && rg_has(p, "ret\n") { done = true; }
+                if is_main && rg_has(p, "svc 0\n") { done = true; }
+                p = pe + 1;
+            }
+            if done && !is_main && cnt < 160 {
+                int nl = 0;
+                while i + nl < en - 1 && nl < 120 {
+                    ir_stat_fn[nl] = out_buf[i + nl];
+                    nl += 1;
+                }
+                ir_stat_fn[nl] = 0;
+                if lf_load(i, p) {
+                    if lf_function(@ir_stat_fn) == 1 {
+                        ir_passes_basic();
+                        is_save(@ir_stat_fn);
+                    }
+                }
+            }
+            if p == i { p = en + 1; }
+            i = p;
+        } else {
+            i = en + 1;
+        }
+    }
+    if (ir_opt & 16384) != 0 {
+        write_err("kept for inlining: ");
+        write_err_int(is_count);
+        write_err("\n");
+        int f = 0;
+        while f < is_count {
+            write_err("    ");
+            write_err(@is_fname + f * 64);
+            write_err("  ");
+            write_err_int(is_size[f]);
+            write_err("\n");
+            f += 1;
+        }
+    }
+}
+
 // every function that can be lifted is lifted (and lowered again in mode 2)
 void ir_run() {
     regs_len = 0;
     lf_lifted = 0;
     lf_failed = 0;
+    if (ir_opt & 8192) != 0 && opt_debug == 0 && ir_mode == 2 && inl_off == 0 { ir_collect(); }
     int i = 0;
     while i < out_len {
         int en = rg_end(i);
@@ -1392,12 +1467,8 @@ void ir_run() {
                     if (ir_opt & 64) == 0 { cnt0 = op_count(); }
                     int bt0 = bt_changes;
                     int ci0 = ci_changes;
-                    if (ir_opt & 4096) != 0 { op_copy_inline(); }
-                    if (ir_opt & 128) != 0 { op_thread(); }
-                    if (ir_opt & 8) != 0 { op_cse_run(); }
-                    if (ir_opt & 4) != 0 { op_clean_run(); }
-                    if (ir_opt & 128) != 0 { op_thread(); }
-                    if (ir_opt & 32) != 0 { op_bits_run(); }
+                    if (ir_opt & 8192) != 0 && is_count > 0 && opt_debug == 0 { op_inline(@ir_stat_fn); }
+                    ir_passes_basic();
                     if (ir_opt & 1) != 0 { op_run(); }
                     if (ir_opt & 2) != 0 { op_ra_run(); }
                     if op_hoisted == h0 && op_ra_changes == c0 && (vn_cellhits == vh0 || (ir_opt & 64) != 0 || op_count() >= cnt0) && bt_changes == bt0 && ci_changes == ci0 && (ir_opt & 64) == 0 { op_changed = 0; }
