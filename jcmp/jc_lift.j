@@ -837,6 +837,22 @@ char^ lw_cc(int cc, int is_float) {
     return "hs";
 }
 
+// the opposite condition of a b.cc (also for the double compares: a not-a-number makes both "less than" and "not less than" true for the second)
+char^ lw_inv(char^ cc) {
+    if str_eq(cc, "eq") { return "ne"; }
+    if str_eq(cc, "ne") { return "eq"; }
+    if str_eq(cc, "lt") { return "ge"; }
+    if str_eq(cc, "ge") { return "lt"; }
+    if str_eq(cc, "le") { return "gt"; }
+    if str_eq(cc, "gt") { return "le"; }
+    if str_eq(cc, "lo") { return "hs"; }
+    if str_eq(cc, "hs") { return "lo"; }
+    if str_eq(cc, "ls") { return "hi"; }
+    if str_eq(cc, "hi") { return "ls"; }
+    if str_eq(cc, "mi") { return "pl"; }
+    return "mi";
+}
+
 void lw_label(int b) {
     rg_text("L");
     rg_int(lw_lab[b]);
@@ -1073,7 +1089,17 @@ bool lw_instr(int i, int b) {
         if ir_bi[i] == 1 { rg_int(ir_b[i]); } else { lw_reg(ir_b[i]); }
         rg_put(10);
         rg_text("b.");
-        if op == IR_FBR { rg_text(lw_cc(ir_k[i], 1)); } else { rg_text(lw_cc(ir_k[i], 0)); }
+        char^ ccs = lw_cc(ir_k[i], 0);
+        if op == IR_FBR { ccs = lw_cc(ir_k[i], 1); }
+        if ir_t1[i] == lw_next(b) && ir_t2[i] != lw_next(b) {
+            // the true branch is the next block: jump on the opposite condition to the other one
+            rg_text(lw_inv(ccs));
+            rg_text(" ");
+            lw_label(ir_t2[i]);
+            rg_put(10);
+            return true;
+        }
+        rg_text(ccs);
         rg_text(" ");
         lw_label(ir_t1[i]);
         rg_put(10);
@@ -1232,10 +1258,6 @@ void lw_note_cell(int off) {
 
 int ir_max = 1000000;             // -irmax N: only the first N functions that can be lifted are lowered again (to find a fault)
 int ir_min;                       // -irmin N: not the first N
-int op_changed;                   // 1: the function is written again from the IR (always, unless a pass is on and changed nothing)
-int ir_pre = 1;                       // -irpre: the peephole pass runs before the lifting too
-int ir_opt = 12;                       // -irlicm: the passes of jc_opt.j run between lifting and lowering
-int ir_mode = 2;                      // 0 off, 1 -irstat (say which functions can be lifted), 2 -irtrip (lift and lower them again), 3 -irdump (print the IR)
 char ir_stat_fn[128];
 
 void ir_say(char^ a, char^ b, char^ c) {
@@ -1298,12 +1320,15 @@ void ir_run() {
                     int h0 = op_hoisted;
                     int c0 = op_ra_changes;
                     int vh0 = vn_cellhits;
-                    int cnt0 = op_count();
+                    int cnt0 = 0;
+                    if (ir_opt & 64) == 0 { cnt0 = op_count(); }
+                    int bt0 = bt_changes;
                     if (ir_opt & 8) != 0 { op_cse_run(); }
                     if (ir_opt & 4) != 0 { op_clean_run(); }
+                    if (ir_opt & 32) != 0 { op_bits_run(); }
                     if (ir_opt & 1) != 0 { op_run(); }
                     if (ir_opt & 2) != 0 { op_ra_run(); }
-                    if op_hoisted == h0 && op_ra_changes == c0 && (vn_cellhits == vh0 || op_count() >= cnt0) { op_changed = 0; }
+                    if op_hoisted == h0 && op_ra_changes == c0 && (vn_cellhits == vh0 || (ir_opt & 64) != 0 || op_count() >= cnt0) && bt_changes == bt0 && (ir_opt & 64) == 0 { op_changed = 0; }
                 }
                 if ir_mode == 3 {
                     ir_print();

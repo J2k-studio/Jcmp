@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.9.70
+* **Every function that can be lifted is now written from the IR** (before: only when the IR made it smaller). Fewer instructions overall: the compiler has 171,6xx instead of 179,3xx instructions (-4.3 %); compiling it takes 4.7 s instead of 3.6 s (lifting and writing back the text).
+* Jumps: when the true branch of a conditional jump is the next block, the jump is made on the opposite condition and the extra `b` is not written (also for double compares: a not-a-number still goes the right way).
+* Value numbering does not replace a load of a frame cell by a copy of a register any more (the register pass could not then use the register of the promoted variable directly: `matmul` was slower).
+* Round trips `fmov xN, dM` ... `fmov dK, xN` (a double that waits in a whole number register while the code between writes `dM`) are copies between double registers now.
+* Measured (best of 5): `nbody` 363 -> 286 ms (-21 %), `matmul` 46 -> 38, `alloc` 138 -> 134, `gcd` 370 -> 362, `fib` 87, `sieve` 79 -> 75; `mandel` 54 -> 61 (the code of the inner loop is the same; probably the alignment of the jumps), `loop` 843 -> 849 (noise).
+* Hidden switches: `-noir` (no IR at all), `-irtrip` (lift and write back, no passes).
+
 ## 0.9.69
 * **The IR optimiser is on by default** (switch it off with the hidden `-noir`). Every function that can be lifted goes through the IR; the result is written back only when it is smaller (fewer instructions) than the text it came from. What the IR does now:
   * **value numbering inside a block** (`jcmp/jc_opt.j`): the same operation on the same values is one value. A value that a register still holds becomes a copy of that register; a repeated **heavy** value (a multiplication, division, square root, or anything made of them: the address `b + i * 56` of an element of an array of structs) is computed once and read from a new stack cell afterwards (the register pass keeps the cell in a register when it can). Frame cells that are plain 8-byte values are numbered by version, so a store followed by a load is seen. `fmov x, d` + `fmov d, x` round trips are removed. This is the first optimisation that the text passes could not do.

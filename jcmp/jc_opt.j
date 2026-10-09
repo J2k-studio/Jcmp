@@ -1103,7 +1103,7 @@ void op_dce() {
 
 void op_clean_run() {
     int round = 0;
-    while round < 2 {
+    while round < 1 {
         op_graph();
         int b = 0;
         while b < ir_nb {
@@ -1366,7 +1366,7 @@ void vn_block(int b) {
                 // a register that holds the value already: a copy
                 bool done = false;
                 int h = vn_holder[V];
-                if (op != IR_CONST || (ir_k[i] != 0 && op_costly(ir_k[i]))) && h >= 1 && vn_holds(h, V) && ir_vcls[h] == ir_vcls[d] && vn_def[V] != i {
+                if op != IR_LOAD && (op != IR_CONST || (ir_k[i] != 0 && op_costly(ir_k[i]))) && h >= 1 && vn_holds(h, V) && ir_vcls[h] == ir_vcls[d] && vn_def[V] != i {
                     if h == d {
                         ir_op[i] = IR_NOP;
                         ir_d[i] = 0;
@@ -1517,4 +1517,114 @@ int op_count() {
         b += 1;
     }
     return n;
+}
+
+// ---------------------------------------------------------------------------------------------- double -> whole number -> double round trips
+// "fmov x1, d0 / (code that writes d0) / fmov d1, x1" (the value of a compound assignment waits in a whole number register) becomes a copy
+// into a double register that the block does not use: "fmov d20, d0 / ... / fmov d1, d20". A move between a double and a whole number
+// register takes several cycles on the phone, a move between double registers one.
+bool bt_mentions(int b, int r) {
+    int i = ir_bs[b];
+    while i < ir_be[b] {
+        if ir_d[i] == r || ir_a[i] == r || (ir_uses_b(ir_op[i]) && ir_bi[i] == 0 && ir_b[i] == r) { return true; }
+        if ir_op[i] == IR_CALL || ir_op[i] == IR_CALLIND || ir_op[i] == IR_SYSCALL {
+            int g = 0;
+            while g < ir_ac[i] {
+                if ir_args[ir_as[i] + g] == r { return true; }
+                g += 1;
+            }
+        }
+        i += 1;
+    }
+    return false;
+}
+
+int bt_changes;
+
+// the only instruction after `from` in the block b that reads the register x before x is written again (-1: none, more than one, or x lives on)
+int bt_reader(int b, int from, int x) {
+    int j = from;
+    int found = 0 - 1;
+    int count = 0;
+    while j < ir_be[b] {
+        bool reads = ir_a[j] == x || (ir_uses_b(ir_op[j]) && ir_bi[j] == 0 && ir_b[j] == x);
+        bool call = ir_op[j] == IR_CALL || ir_op[j] == IR_CALLIND || ir_op[j] == IR_SYSCALL;
+        if call {
+            int g = 0;
+            while g < ir_ac[j] {
+                if ir_args[ir_as[j] + g] == x { reads = true; }
+                g += 1;
+            }
+        }
+        if reads {
+            count += 1;
+            if found < 0 { found = j; }
+        }
+        if call || ir_d[j] == x {
+            if count == 1 { return found; }
+            return 0 - 1;
+        }
+        j += 1;
+    }
+    if count == 1 && (op_lo[b] & (1 << x)) == 0 { return found; }
+    return 0 - 1;
+}
+
+void op_bits_block(int b) {
+    int i = ir_bs[b];
+    while i < ir_be[b] {
+        if ir_op[i] == IR_F2BITS && ir_d[i] >= 1 && ir_d[i] <= 31 && ir_vcls[ir_a[i]] == 1 {
+            int x = ir_d[i];
+            int src = ir_a[i];
+            int j1 = bt_reader(b, i + 1, x);
+            int use = 0 - 1;
+            int mid = 0 - 1;
+            if j1 >= 0 && ir_op[j1] == IR_BITS2F { use = j1; }
+            else if j1 >= 0 && ir_op[j1] == IR_COPY && ir_a[j1] == x && ir_d[j1] >= 1 && ir_d[j1] <= 31 {
+                int j2 = bt_reader(b, j1 + 1, ir_d[j1]);
+                if j2 >= 0 && ir_op[j2] == IR_BITS2F { use = j2; mid = j1; }
+            }
+            if use >= 0 {
+                // is the source written between the two? then a copy is needed, else nothing to do
+                bool written = false;
+                int m = i + 1;
+                while m < use {
+                    if ir_d[m] == src || ir_op[m] == IR_CALL || ir_op[m] == IR_CALLIND { written = true; }
+                    m += 1;
+                }
+                if written {
+                    int r = 48;
+                    int pick = 0;
+                    while r <= 61 && pick == 0 {
+                        if r != 59 && (op_li[b] & (1 << r)) == 0 && (op_lo[b] & (1 << r)) == 0 && !bt_mentions(b, r) { pick = r; }
+                        r += 1;
+                    }
+                    if pick != 0 {
+                        ir_op[i] = IR_COPY;
+                        ir_d[i] = pick;
+                        ir_a[i] = src;
+                        if mid >= 0 {
+                            ir_op[mid] = IR_NOP;
+                            ir_d[mid] = 0;
+                            ir_a[mid] = 0;
+                            ir_bi[mid] = 1;
+                        }
+                        ir_op[use] = IR_COPY;
+                        ir_a[use] = pick;
+                        bt_changes += 1;
+                    }
+                }
+            }
+        }
+        i += 1;
+    }
+}
+
+void op_bits_run() {
+    if (ir_opt & 4) == 0 { op_webs(); }       // liveness (op_li, op_lo); the cleaning pass has made it already (a little too much live: safe)
+    int b = 0;
+    while b < ir_nb {
+        if op_po[b] >= 0 { op_bits_block(b); }
+        b += 1;
+    }
 }
