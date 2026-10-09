@@ -11,15 +11,15 @@ struct vec2 {
         r.y = y;
         return r;
     }
-    static vec2 zero() { return vec2::make(0.0, 0.0); }
-    static vec2 splat(double v) { return vec2::make(v, v); }
-    operator vec2 add(self, vec2 o) { return vec2::make(self.x + o.x, self.y + o.y); }
-    operator vec2 sub(self, vec2 o) { return vec2::make(self.x - o.x, self.y - o.y); }
-    vec2 mulv(self, vec2 o) { return vec2::make(self.x * o.x, self.y * o.y); }
-    vec2 divv(self, vec2 o) { return vec2::make(self.x / o.x, self.y / o.y); }
-    operator vec2 mul(self, double k) { return vec2::make(self.x * k, self.y * k); }
-    operator vec2 div(self, double k) { return vec2::make(self.x / k, self.y / k); }
-    operator vec2 neg(self) { return vec2::make(0.0 - self.x, 0.0 - self.y); }
+    static vec2 zero() { vec2 r; r.x = 0.0; r.y = 0.0; return r; }
+    static vec2 splat(double v) { vec2 r; r.x = v; r.y = v; return r; }
+    operator vec2 add(self, vec2 o) { vec2 r; r.x = self.x + o.x; r.y = self.y + o.y; return r; }
+    operator vec2 sub(self, vec2 o) { vec2 r; r.x = self.x - o.x; r.y = self.y - o.y; return r; }
+    vec2 mulv(self, vec2 o) { vec2 r; r.x = self.x * o.x; r.y = self.y * o.y; return r; }
+    vec2 divv(self, vec2 o) { vec2 r; r.x = self.x / o.x; r.y = self.y / o.y; return r; }
+    operator vec2 mul(self, double k) { vec2 r; r.x = self.x * k; r.y = self.y * k; return r; }
+    operator vec2 div(self, double k) { vec2 r; r.x = self.x / k; r.y = self.y / k; return r; }
+    operator vec2 neg(self) { vec2 r; r.x = 0.0 - self.x; r.y = 0.0 - self.y; return r; }
     double dot(self, vec2 o) { return self.x * o.x + self.y * o.y; }
     double length_sq(self) { return self.x * self.x + self.y * self.y; }
     double length(self) { return Math::sqrt(self.length_sq()); }
@@ -30,15 +30,15 @@ struct vec2 {
         if l == 0.0 { return self.mul(1.0); }
         return self.div(l);
     }
-    vec2 lerp(self, vec2 o, double t) { return vec2::make(self.x + (o.x - self.x) * t, self.y + (o.y - self.y) * t); }
-    vec2 min(self, vec2 o) { return vec2::make(Math::min(self.x, o.x), Math::min(self.y, o.y)); }
-    vec2 max(self, vec2 o) { return vec2::make(Math::max(self.x, o.x), Math::max(self.y, o.y)); }
-    vec2 abs(self) { return vec2::make(Math::abs(self.x), Math::abs(self.y)); }
+    vec2 lerp(self, vec2 o, double t) { vec2 r; r.x = self.x + (o.x - self.x) * t; r.y = self.y + (o.y - self.y) * t; return r; }
+    vec2 min(self, vec2 o) { vec2 r; r.x = Math::min(self.x, o.x); r.y = Math::min(self.y, o.y); return r; }
+    vec2 max(self, vec2 o) { vec2 r; r.x = Math::max(self.x, o.x); r.y = Math::max(self.y, o.y); return r; }
+    vec2 abs(self) { vec2 r; r.x = Math::abs(self.x); r.y = Math::abs(self.y); return r; }
     vec2 reflect(self, vec2 n) { return self.sub(n.mul(2.0 * self.dot(n))); }
     operator bool eq(self, vec2 o) { return self.x == o.x && self.y == o.y; }
     // the z of the 3D cross product
     double cross(self, vec2 o) { return self.x * o.y - self.y * o.x; }
-    vec2 perp(self) { return vec2::make(0.0 - self.y, self.x); }
+    vec2 perp(self) { vec2 r; r.x = 0.0 - self.y; r.y = self.x; return r; }
 }
 
 struct vec3 {
@@ -52,15 +52,15 @@ struct vec3 {
         r.z = z;
         return r;
     }
-    static vec3 zero() { return vec3::make(0.0, 0.0, 0.0); }
-    static vec3 splat(double v) { return vec3::make(v, v, v); }
-    operator vec3 add(self, vec3 o) { return vec3::make(self.x + o.x, self.y + o.y, self.z + o.z); }
-    operator vec3 sub(self, vec3 o) { return vec3::make(self.x - o.x, self.y - o.y, self.z - o.z); }
-    vec3 mulv(self, vec3 o) { return vec3::make(self.x * o.x, self.y * o.y, self.z * o.z); }
-    vec3 divv(self, vec3 o) { return vec3::make(self.x / o.x, self.y / o.y, self.z / o.z); }
-    operator vec3 mul(self, double k) { return vec3::make(self.x * k, self.y * k, self.z * k); }
-    operator vec3 div(self, double k) { return vec3::make(self.x / k, self.y / k, self.z / k); }
-    operator vec3 neg(self) { return vec3::make(0.0 - self.x, 0.0 - self.y, 0.0 - self.z); }
+    static vec3 zero() { vec3 r; r.x = 0.0; r.y = 0.0; r.z = 0.0; return r; }
+    static vec3 splat(double v) { vec3 r; r.x = v; r.y = v; r.z = v; return r; }
+    operator vec3 add(self, vec3 o) { vec3 r; r.x = self.x + o.x; r.y = self.y + o.y; r.z = self.z + o.z; return r; }
+    operator vec3 sub(self, vec3 o) { vec3 r; r.x = self.x - o.x; r.y = self.y - o.y; r.z = self.z - o.z; return r; }
+    vec3 mulv(self, vec3 o) { vec3 r; r.x = self.x * o.x; r.y = self.y * o.y; r.z = self.z * o.z; return r; }
+    vec3 divv(self, vec3 o) { vec3 r; r.x = self.x / o.x; r.y = self.y / o.y; r.z = self.z / o.z; return r; }
+    operator vec3 mul(self, double k) { vec3 r; r.x = self.x * k; r.y = self.y * k; r.z = self.z * k; return r; }
+    operator vec3 div(self, double k) { vec3 r; r.x = self.x / k; r.y = self.y / k; r.z = self.z / k; return r; }
+    operator vec3 neg(self) { vec3 r; r.x = 0.0 - self.x; r.y = 0.0 - self.y; r.z = 0.0 - self.z; return r; }
     double dot(self, vec3 o) { return self.x * o.x + self.y * o.y + self.z * o.z; }
     double length_sq(self) { return self.x * self.x + self.y * self.y + self.z * self.z; }
     double length(self) { return Math::sqrt(self.length_sq()); }
@@ -71,13 +71,13 @@ struct vec3 {
         if l == 0.0 { return self.mul(1.0); }
         return self.div(l);
     }
-    vec3 lerp(self, vec3 o, double t) { return vec3::make(self.x + (o.x - self.x) * t, self.y + (o.y - self.y) * t, self.z + (o.z - self.z) * t); }
-    vec3 min(self, vec3 o) { return vec3::make(Math::min(self.x, o.x), Math::min(self.y, o.y), Math::min(self.z, o.z)); }
-    vec3 max(self, vec3 o) { return vec3::make(Math::max(self.x, o.x), Math::max(self.y, o.y), Math::max(self.z, o.z)); }
-    vec3 abs(self) { return vec3::make(Math::abs(self.x), Math::abs(self.y), Math::abs(self.z)); }
+    vec3 lerp(self, vec3 o, double t) { vec3 r; r.x = self.x + (o.x - self.x) * t; r.y = self.y + (o.y - self.y) * t; r.z = self.z + (o.z - self.z) * t; return r; }
+    vec3 min(self, vec3 o) { vec3 r; r.x = Math::min(self.x, o.x); r.y = Math::min(self.y, o.y); r.z = Math::min(self.z, o.z); return r; }
+    vec3 max(self, vec3 o) { vec3 r; r.x = Math::max(self.x, o.x); r.y = Math::max(self.y, o.y); r.z = Math::max(self.z, o.z); return r; }
+    vec3 abs(self) { vec3 r; r.x = Math::abs(self.x); r.y = Math::abs(self.y); r.z = Math::abs(self.z); return r; }
     vec3 reflect(self, vec3 n) { return self.sub(n.mul(2.0 * self.dot(n))); }
     operator bool eq(self, vec3 o) { return self.x == o.x && self.y == o.y && self.z == o.z; }
-    vec3 cross(self, vec3 o) { return vec3::make(self.y * o.z - self.z * o.y, self.z * o.x - self.x * o.z, self.x * o.y - self.y * o.x); }
+    vec3 cross(self, vec3 o) { vec3 r; r.x = self.y * o.z - self.z * o.y; r.y = self.z * o.x - self.x * o.z; r.z = self.x * o.y - self.y * o.x; return r; }
 }
 
 struct vec4 {
@@ -93,15 +93,15 @@ struct vec4 {
         r.w = w;
         return r;
     }
-    static vec4 zero() { return vec4::make(0.0, 0.0, 0.0, 0.0); }
-    static vec4 splat(double v) { return vec4::make(v, v, v, v); }
-    operator vec4 add(self, vec4 o) { return vec4::make(self.x + o.x, self.y + o.y, self.z + o.z, self.w + o.w); }
-    operator vec4 sub(self, vec4 o) { return vec4::make(self.x - o.x, self.y - o.y, self.z - o.z, self.w - o.w); }
-    vec4 mulv(self, vec4 o) { return vec4::make(self.x * o.x, self.y * o.y, self.z * o.z, self.w * o.w); }
-    vec4 divv(self, vec4 o) { return vec4::make(self.x / o.x, self.y / o.y, self.z / o.z, self.w / o.w); }
-    operator vec4 mul(self, double k) { return vec4::make(self.x * k, self.y * k, self.z * k, self.w * k); }
-    operator vec4 div(self, double k) { return vec4::make(self.x / k, self.y / k, self.z / k, self.w / k); }
-    operator vec4 neg(self) { return vec4::make(0.0 - self.x, 0.0 - self.y, 0.0 - self.z, 0.0 - self.w); }
+    static vec4 zero() { vec4 r; r.x = 0.0; r.y = 0.0; r.z = 0.0; r.w = 0.0; return r; }
+    static vec4 splat(double v) { vec4 r; r.x = v; r.y = v; r.z = v; r.w = v; return r; }
+    operator vec4 add(self, vec4 o) { vec4 r; r.x = self.x + o.x; r.y = self.y + o.y; r.z = self.z + o.z; r.w = self.w + o.w; return r; }
+    operator vec4 sub(self, vec4 o) { vec4 r; r.x = self.x - o.x; r.y = self.y - o.y; r.z = self.z - o.z; r.w = self.w - o.w; return r; }
+    vec4 mulv(self, vec4 o) { vec4 r; r.x = self.x * o.x; r.y = self.y * o.y; r.z = self.z * o.z; r.w = self.w * o.w; return r; }
+    vec4 divv(self, vec4 o) { vec4 r; r.x = self.x / o.x; r.y = self.y / o.y; r.z = self.z / o.z; r.w = self.w / o.w; return r; }
+    operator vec4 mul(self, double k) { vec4 r; r.x = self.x * k; r.y = self.y * k; r.z = self.z * k; r.w = self.w * k; return r; }
+    operator vec4 div(self, double k) { vec4 r; r.x = self.x / k; r.y = self.y / k; r.z = self.z / k; r.w = self.w / k; return r; }
+    operator vec4 neg(self) { vec4 r; r.x = 0.0 - self.x; r.y = 0.0 - self.y; r.z = 0.0 - self.z; r.w = 0.0 - self.w; return r; }
     double dot(self, vec4 o) { return self.x * o.x + self.y * o.y + self.z * o.z + self.w * o.w; }
     double length_sq(self) { return self.x * self.x + self.y * self.y + self.z * self.z + self.w * self.w; }
     double length(self) { return Math::sqrt(self.length_sq()); }
@@ -112,10 +112,10 @@ struct vec4 {
         if l == 0.0 { return self.mul(1.0); }
         return self.div(l);
     }
-    vec4 lerp(self, vec4 o, double t) { return vec4::make(self.x + (o.x - self.x) * t, self.y + (o.y - self.y) * t, self.z + (o.z - self.z) * t, self.w + (o.w - self.w) * t); }
-    vec4 min(self, vec4 o) { return vec4::make(Math::min(self.x, o.x), Math::min(self.y, o.y), Math::min(self.z, o.z), Math::min(self.w, o.w)); }
-    vec4 max(self, vec4 o) { return vec4::make(Math::max(self.x, o.x), Math::max(self.y, o.y), Math::max(self.z, o.z), Math::max(self.w, o.w)); }
-    vec4 abs(self) { return vec4::make(Math::abs(self.x), Math::abs(self.y), Math::abs(self.z), Math::abs(self.w)); }
+    vec4 lerp(self, vec4 o, double t) { vec4 r; r.x = self.x + (o.x - self.x) * t; r.y = self.y + (o.y - self.y) * t; r.z = self.z + (o.z - self.z) * t; r.w = self.w + (o.w - self.w) * t; return r; }
+    vec4 min(self, vec4 o) { vec4 r; r.x = Math::min(self.x, o.x); r.y = Math::min(self.y, o.y); r.z = Math::min(self.z, o.z); r.w = Math::min(self.w, o.w); return r; }
+    vec4 max(self, vec4 o) { vec4 r; r.x = Math::max(self.x, o.x); r.y = Math::max(self.y, o.y); r.z = Math::max(self.z, o.z); r.w = Math::max(self.w, o.w); return r; }
+    vec4 abs(self) { vec4 r; r.x = Math::abs(self.x); r.y = Math::abs(self.y); r.z = Math::abs(self.z); r.w = Math::abs(self.w); return r; }
     vec4 reflect(self, vec4 n) { return self.sub(n.mul(2.0 * self.dot(n))); }
     operator bool eq(self, vec4 o) { return self.x == o.x && self.y == o.y && self.z == o.z && self.w == o.w; }
 }

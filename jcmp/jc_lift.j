@@ -1391,6 +1391,8 @@ void ir_run() {
                     int cnt0 = 0;
                     if (ir_opt & 64) == 0 { cnt0 = op_count(); }
                     int bt0 = bt_changes;
+                    int ci0 = ci_changes;
+                    if (ir_opt & 4096) != 0 { op_copy_inline(); }
                     if (ir_opt & 128) != 0 { op_thread(); }
                     if (ir_opt & 8) != 0 { op_cse_run(); }
                     if (ir_opt & 4) != 0 { op_clean_run(); }
@@ -1398,7 +1400,7 @@ void ir_run() {
                     if (ir_opt & 32) != 0 { op_bits_run(); }
                     if (ir_opt & 1) != 0 { op_run(); }
                     if (ir_opt & 2) != 0 { op_ra_run(); }
-                    if op_hoisted == h0 && op_ra_changes == c0 && (vn_cellhits == vh0 || (ir_opt & 64) != 0 || op_count() >= cnt0) && bt_changes == bt0 && (ir_opt & 64) == 0 { op_changed = 0; }
+                    if op_hoisted == h0 && op_ra_changes == c0 && (vn_cellhits == vh0 || (ir_opt & 64) != 0 || op_count() >= cnt0) && bt_changes == bt0 && ci_changes == ci0 && (ir_opt & 64) == 0 { op_changed = 0; }
                 }
                 if ir_mode == 3 {
                     ir_print();

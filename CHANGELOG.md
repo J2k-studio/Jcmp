@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.74
+* **Small copies of structs are loads and stores** (IR pass `op_copy_inline`): `bl j2k_copy` with a size that is known and at most 128 bytes becomes pairs of `ldr` / `str` (a `vec3` is three pairs, not a call with a loop). It runs for the copy of a by-value parameter, the copy of the result, assignments of structs.
+* `std/vector.j`: the operators of `vec2 / vec3 / vec4` build the result in place (`vec3 r; r.x = ...; return r;`) instead of calling `vec3::make` (a call with four stores of arguments). `make` stays for users.
+* New benchmarks in `tools/bench` with C twins: `qsort` (1,000,000 numbers, J2K 167 ms / C 157 ms) and `vec3` (operators on `vec3`, 3,000,000 steps: **323 -> 197 ms**, C 59 ms; the rest is the cost of the calls and of the struct temporaries: see the plan in `docs/PLAN.md`). Both are in `perf_check.sh` and `run.sh`.
+
 ## 0.9.73
 * **Three new rules of the text pass** (`jcmp/jc_regs.j`, `pt_rules`), found by reading the inner loop of the n-body benchmark:
   * `fmov dA, dB` followed by lines that read `dA` (at most 4, no write of `dB`): they read `dB`, the `fmov` goes (the same as for `mov xA, xB` since 0.9.72, now also for doubles);

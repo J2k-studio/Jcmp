@@ -1879,3 +1879,73 @@ void op_thread() {
         pass += 1;
     }
 }
+
+// ---------------------------------------------------------------------------------------------- small copies of structs in place
+// bl j2k_copy (x0 = from, x3 = to, x2 = the size in bytes, a multiple of 8) with a size that is known and at most 128: loads and stores
+// instead of a call (a struct of three doubles is three pairs, not a call with a loop).
+int ci_changes;
+
+// the size in bytes of the copy made by the call i, or -1 if it is not a small copy of known size
+int ci_size(int b, int i) {
+    if ir_op[i] != IR_CALL { return 0 - 1; }
+    if !str_eq(@ir_name + ir_k[i] * 64, "j2k_copy") { return 0 - 1; }
+    int j = i - 1;
+    while j >= ir_bs[b] {
+        if ir_d[j] == 3 {
+            if ir_op[j] == IR_CONST && ir_k[j] > 0 && ir_k[j] <= 128 && ir_k[j] % 8 == 0 { return ir_k[j]; }
+            return 0 - 1;
+        }
+        if ir_op[j] == IR_CALL || ir_op[j] == IR_CALLIND || ir_op[j] == IR_SYSCALL { return 0 - 1; }
+        j -= 1;
+    }
+    return 0 - 1;
+}
+
+void op_copy_inline() {
+    op_graph();
+    int nb0 = ir_nb;
+    int b = 0;
+    while b < nb0 {
+        if op_po[b] >= 0 {
+            int need = 0;
+            int i = ir_bs[b];
+            while i < ir_be[b] {
+                int sz = ci_size(b, i);
+                if sz > 0 { need += sz / 4; }
+                i += 1;
+            }
+            if need > 0 && ir_n + (ir_be[b] - ir_bs[b]) + need + 4 < IR_MAXI && ir_nv + need < IR_MAXV - 8 {
+                int ns = ir_n;
+                int e0 = ir_be[b];
+                i = ir_bs[b];
+                while i < e0 {
+                    int sz2 = ci_size(b, i);
+                    if sz2 > 0 {
+                        int off = 0;
+                        while off < sz2 {
+                            int t = ir_vreg(0);
+                            int l = ir_n;
+                            ir_op[l] = IR_LOAD; ir_d[l] = t; ir_a[l] = 1; ir_b[l] = 0; ir_bi[l] = 0; ir_k[l] = off; ir_w[l] = 8;
+                            ir_t1[l] = 0 - 1; ir_t2[l] = 0 - 1; ir_as[l] = 0; ir_ac[l] = 0;
+                            int s = l + 1;
+                            ir_op[s] = IR_STORE; ir_d[s] = 0; ir_a[s] = 4; ir_b[s] = t; ir_bi[s] = 0; ir_k[s] = off; ir_w[s] = 8;
+                            ir_t1[s] = 0 - 1; ir_t2[s] = 0 - 1; ir_as[s] = 0; ir_ac[s] = 0;
+                            ir_n += 2;
+                            off += 8;
+                        }
+                        ci_changes += 1;
+                    } else {
+                        int j2 = ir_n;
+                        ir_op[j2] = ir_op[i]; ir_d[j2] = ir_d[i]; ir_a[j2] = ir_a[i]; ir_b[j2] = ir_b[i]; ir_bi[j2] = ir_bi[i]; ir_k[j2] = ir_k[i]; ir_w[j2] = ir_w[i];
+                        ir_t1[j2] = ir_t1[i]; ir_t2[j2] = ir_t2[i]; ir_as[j2] = ir_as[i]; ir_ac[j2] = ir_ac[i];
+                        ir_n += 1;
+                    }
+                    i += 1;
+                }
+                ir_bs[b] = ns;
+                ir_be[b] = ir_n;
+            }
+        }
+        b += 1;
+    }
+}

@@ -119,7 +119,7 @@ int ir_nnames;
 char ir_fname[128];          // the name of the function
 int op_changed;              // 1: the function is written again from the IR
 int ir_pre = 1;              // the peephole pass runs before the lifting too
-int ir_opt = 236;           // the passes: 1 constants out of loops, 2 allocator, 4 cleaning, 8 value numbering, 32 double round trips, 64 always write back
+int ir_opt = 4332;           // the passes: 1 constants out of loops, 2 allocator, 4 cleaning, 8 value numbering, 32 double round trips, 64 always write back
 int ir_mode = 2;            // 0 off (-noir), 1 -irstat, 2 lift and write back, 3 -irdump
 int lf_hint_n;               // the hint line ";H ..." of the function (kept for the register pass)
 char lf_hint_text[16384];
