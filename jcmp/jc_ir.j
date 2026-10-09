@@ -65,6 +65,7 @@
 #define IR_BSWAP 50          // d = the 8 bytes of a in the other order
 #define IR_ROTR 51           // d = a turned right by b|k places (modulo 64)
 #define IR_POPCNT 52         // d = the number of bits 1 in a
+#define IR_NOP 53            // nothing (an instruction that a pass removed)
 
 // the conditions (cc) of IR_SETCC and IR_BR
 #define IR_EQ 0
@@ -115,6 +116,8 @@ int ir_nslots;
 char ir_name[262144];
 int ir_nnames;
 char ir_fname[128];          // the name of the function
+int lf_hint_n;               // the hint line ";H ..." of the function (kept for the register pass)
+char lf_hint_text[16384];
 
 void ir_reset(char^ name) {
     str_copy(@ir_fname, name, 128);
@@ -256,6 +259,7 @@ char^ ir_opname(int op) {
     if op == IR_BSWAP { return "bswap"; }
     if op == IR_ROTR { return "rotr"; }
     if op == IR_POPCNT { return "popcnt"; }
+    if op == IR_NOP { return "nop"; }
     return "?";
 }
 

@@ -32,8 +32,6 @@ int lf_body_start;                // the first line after the prologue
 int lf_fp;                        // the vreg of the frame pointer (x29)
 int lf_head_n;                    // the lines before the body (the prologue), as text
 char lf_head_text[512];
-int lf_hint_n;                    // the hint line ";H ..." (kept for the register pass)
-char lf_hint_text[16384];
 
 int lf_fail(char^ why) {
     str_copy(@lf_why, why, 100);
@@ -908,6 +906,7 @@ bool lw_instr(int i, int b) {
     if op == IR_PARAM {
         return true;                                     // the arguments are in x0..x7 already
     }
+    if op == IR_NOP { return true; }
     if op == IR_ADDR_SLOT {
         if d == 30 { return true; }                      // the frame pointer is x29 already
         rg_text("add ");
@@ -927,6 +926,7 @@ bool lw_instr(int i, int b) {
         return true;
     }
     if op == IR_COPY {
+        if d == ir_a[i] && d < 64 { return true; }            // a copy to the same register (the allocator made it)
         lw_def(d);
         if ir_vcls[d] == 1 { rg_text("fmov "); } else { rg_text("mov "); }
         lw_reg(d);
@@ -1233,8 +1233,9 @@ void lw_note_cell(int off) {
 int ir_max = 1000000;             // -irmax N: only the first N functions that can be lifted are lowered again (to find a fault)
 int ir_min;                       // -irmin N: not the first N
 int op_changed;                   // 1: the function is written again from the IR (always, unless a pass is on and changed nothing)
-int ir_opt;                       // -irlicm: the passes of jc_opt.j run between lifting and lowering
-int ir_mode;                      // 0 off, 1 -irstat (say which functions can be lifted), 2 -irtrip (lift and lower them again), 3 -irdump (print the IR)
+int ir_pre = 1;                       // -irpre: the peephole pass runs before the lifting too
+int ir_opt = 12;                       // -irlicm: the passes of jc_opt.j run between lifting and lowering
+int ir_mode = 2;                      // 0 off, 1 -irstat (say which functions can be lifted), 2 -irtrip (lift and lower them again), 3 -irdump (print the IR)
 char ir_stat_fn[128];
 
 void ir_say(char^ a, char^ b, char^ c) {
@@ -1292,10 +1293,17 @@ void ir_run() {
             if ok {
                 lf_lifted += 1;
                 op_changed = 1;
+                if ir_mode == 1 { op_webs(); }
                 if ir_opt > 0 {
                     int h0 = op_hoisted;
-                    op_run();
-                    if op_hoisted == h0 { op_changed = 0; }
+                    int c0 = op_ra_changes;
+                    int vh0 = vn_cellhits;
+                    int cnt0 = op_count();
+                    if (ir_opt & 8) != 0 { op_cse_run(); }
+                    if (ir_opt & 4) != 0 { op_clean_run(); }
+                    if (ir_opt & 1) != 0 { op_run(); }
+                    if (ir_opt & 2) != 0 { op_ra_run(); }
+                    if op_hoisted == h0 && op_ra_changes == c0 && (vn_cellhits == vh0 || op_count() >= cnt0) { op_changed = 0; }
                 }
                 if ir_mode == 3 {
                     ir_print();
@@ -1334,6 +1342,11 @@ void ir_run() {
         write_err_int(lf_lifted);
         write_err(", not lifted: ");
         write_err_int(lf_failed);
+        write_err("\n");
+        write_err("definitions of machine registers: ");
+        write_err_int(op_tot_defs);
+        write_err(", webs: ");
+        write_err_int(op_tot_webs);
         write_err("\n");
     }
     if ir_mode == 2 || ir_mode == 3 {

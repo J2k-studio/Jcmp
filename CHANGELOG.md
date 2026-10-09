@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.9.69
+* **The IR optimiser is on by default** (switch it off with the hidden `-noir`). Every function that can be lifted goes through the IR; the result is written back only when it is smaller (fewer instructions) than the text it came from. What the IR does now:
+  * **value numbering inside a block** (`jcmp/jc_opt.j`): the same operation on the same values is one value. A value that a register still holds becomes a copy of that register; a repeated **heavy** value (a multiplication, division, square root, or anything made of them: the address `b + i * 56` of an element of an array of structs) is computed once and read from a new stack cell afterwards (the register pass keeps the cell in a register when it can). Frame cells that are plain 8-byte values are numbered by version, so a store followed by a load is seen. `fmov x, d` + `fmov d, x` round trips are removed. This is the first optimisation that the text passes could not do.
+  * copies are read through, small constants become immediates, dead instructions are removed (liveness over the registers), constants that need two or more instructions are moved out of loops (`-irlicm`), an allocator on webs exists (`-irra`, hidden, off).
+  * `-irtrip` (lift and write back every function, no passes) is kept for tests.
+* Measured (best of 5, this phone): `nbody` 330 -> 257 ms (-22 %); `matmul` 45 -> 41; the other benchmarks and the compiler itself are unchanged within the noise (the compiler compiles itself in 3.9 s instead of 3.2 s: the lifting costs time). The code of the compiler has 178,310 instructions instead of 178,466.
+* Test `t280_cse` (an array of structs, indexes that change between uses, a call that writes into the array, doubles; checked against Python).
+* Performance test: `tools/bench/perf_check.sh` (also `PERF=1 ./run_all_tests.sh`) with a new baseline.
+
 ## 0.9.68
 * **IR: the first pass on the IR** (`jcmp/jc_opt.j`, switch `-irlicm`, hidden, off by default): the graph of blocks (predecessors, post order, immediate dominators), the loops (a back edge goes to a block that dominates its source) and **constants out of loops**: a whole number constant that needs two or more instructions (such as the 64-bit multiplier of a division by a constant) and is made inside a loop is stored once in a stack cell by a new block in front of the OUTERMOST loop, and the loop loads the cell (the register pass keeps the cell in a register when one is free). Only the functions that the pass changed are written again from the IR.
 * The lowering (IR -> text) is better: `mul` + `add`/`sub` of a temporary is one `madd` / `msub`, the block with the exit of `main` is written last (the hint line for the register pass is in the range of `main` now, so the locals of `main` stay in registers after a round trip), and the frame stays a multiple of 16 bytes when extra stack cells are added (it was possible to get a bus error).
