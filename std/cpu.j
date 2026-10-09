@@ -50,6 +50,7 @@ struct Thread {
         cb[2] = size;
         cb[3] = 0;
         int block = base + size - 1024;                        // the thread's own block (try/catch state) at the top
+        std_mt = 1;                                            // from now on the heap is locked
         int tid = __thread_start(f, arg, block, (int)cb, block);
         if tid < 0 {
             syscall(215, base, size);

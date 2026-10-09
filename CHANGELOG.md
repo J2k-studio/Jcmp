@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.61
+* **A new heap allocator** (`std/prelude.j`, `struct Mem`; design: `docs/design/04-memory.md`, option M2): blocks of up to 2048 bytes have **size classes** (a list of free blocks for each size: `alloc` and `free` take a few instructions); bigger blocks are on one list ordered by address, a block is **split** when the rest is at least 64 bytes and a freed block is **joined** with the free blocks next to it. Before: one list, first fit, no splitting and no joining (a program with many frees got slower and slower). A benchmark of 3 million mixed `alloc` / `free` (`tools/bench/alloc.jk`): 0.18 s -> 0.11 s; with many live blocks of different sizes the difference is much bigger.
+* **No lock before the first thread:** the heap is locked only after `Thread::create` or a `#multithread` loop started a thread (the lock was the biggest part of the cost of one `alloc`).
+* **A literal index is an offset:** `p[1]`, `a[3]` is one load with a constant offset (`ldr x0, [x0, #8]`); before it was calculated at run time.
+* Tests: `t270` (40000 random allocations of all sizes, every block checked for overlap); `t140` asks for the same size class when it expects the block to be reused.
+
 ## 0.9.60
 * **`Mem::copy` and `Mem::set` work 8 bytes at a time** (they worked one byte at a time): copies and fills of `String`, `T[]` and everything built on them are faster. Test `t269` (every length 0..40 from every alignment).
 

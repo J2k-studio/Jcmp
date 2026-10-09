@@ -4,8 +4,13 @@ int std_heap_cur;
 int std_heap_end;
 int std_free_list;
 int std_mem_lock;                 // 0 free, 1 taken (threads share the heap)
+int std_mt;                       // 1 once a thread was started: only then the heap is locked
 int std_alloc_n;                  // blocks given out / given back (the -d build reports the difference at the end)
 int std_free_n;
+int std_cls[24] = {32, 48, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 384, 448, 512, 640, 768, 896, 1024, 1280, 1536, 1792, 2048, 2048};   // the size classes (with the header)
+int std_cls_of[129] = {0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 11, 11, 12, 12, 12, 12, 13, 13, 13, 13, 14, 14, 14, 14, 15, 15, 15, 15, 15, 15, 15, 15, 16, 16, 16, 16, 16, 16, 16, 16, 17, 17, 17, 17, 17, 17, 17, 17, 18, 18, 18, 18, 18, 18, 18, 18, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 22, 22, 22, 22, 22, 22, 22, 22, 22, 22, 22, 22, 22, 22, 22, 22};     // by need / 16: the class of a block (-1: bigger than the biggest class)
+int std_cls_exact[129] = {-1, -1, 0, 1, 2, 3, 4, 5, 6, -1, 7, -1, 8, -1, 9, -1, 10, -1, -1, -1, 11, -1, -1, -1, 12, -1, -1, -1, 13, -1, -1, -1, 14, -1, -1, -1, -1, -1, -1, -1, 15, -1, -1, -1, -1, -1, -1, -1, 16, -1, -1, -1, -1, -1, -1, -1, 17, -1, -1, -1, -1, -1, -1, -1, 18, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 19, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 20, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 21, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 22};  // by size / 16: the class whose size is exactly this, or -1
+int std_free_cls[24];              // the free blocks of each class
 
 // a bug in the program (a null array, a position out of range, ...): say so and stop; try/catch cannot catch it
 void __panic(char^ msg) {
@@ -48,34 +53,91 @@ void __panic(char^ msg) {
 }
 
 struct Mem {
-    static void lock_heap() {
-        while __cas(@std_mem_lock, 0, 1) != 0 {
-            syscall(124);                  // sched_yield: let the thread that holds the heap finish
-        }
+    // the size class of a block of `need` bytes (header included, a multiple of 16): the smallest class that is big enough, or -1 if the
+    // block is bigger than the biggest class
+    static int class_of(int need) {
+        return std_cls_of[need / 16];
     }
-    static void unlock_heap() {
-        __xchg(@std_mem_lock, 0);
+    // the class whose size is exactly `size`, or -1
+    static int exact_class(int size) {
+        if size > 2048 { return 0 - 1; }
+        return std_cls_exact[size / 16];
     }
     // n bytes, not cleared (null if the system has no memory left)
     static void^ alloc(int n) {
-        Mem::lock_heap();
+        if std_mt == 0 { return Mem::alloc_raw(n); }          // one thread only: no lock
+        while __cas(@std_mem_lock, 0, 1) != 0 {
+            syscall(124);                  // sched_yield: let the thread that holds the heap finish
+        }
         void^ r = Mem::alloc_raw(n);
-        Mem::unlock_heap();
+        __xchg(@std_mem_lock, 0);
         return r;
     }
+    // the next `need` bytes of the chunk that is in use (a new chunk from the system when it is full)
+    static int bump(int need) {
+        if std_heap_cur + need > std_heap_end {
+            int chunk = 1048576;
+            if need > chunk { chunk = (need + 4095) / 4096 * 4096; }
+            int base = syscall(222, 0, chunk, 3, 34, -1, 0);      // mmap: anonymous, read + write
+            if base < 0 { return 0; }
+            std_heap_cur = base;
+            std_heap_end = base + chunk;
+        }
+        int blk = std_heap_cur;
+        std_heap_cur = std_heap_cur + need;
+        return blk;
+    }
+    // Small blocks (up to 2048 bytes with the header) have size classes: a list of free blocks for each size, so that alloc and free
+    // take a few instructions. Bigger blocks are on one list, ordered by address: first fit, a block is split when the rest is at
+    // least 64 bytes, and a freed block is joined with the free blocks next to it.
     static void^ alloc_raw(int n) {
         if n <= 0 { return null; }
-        int need = (n + 15) / 16 * 16 + 16;
+        int need = ((n + 15) >> 4) * 16 + 16;
+        if need > 2048 { return Mem::alloc_big(need); }
+        int c = std_cls_of[need >> 4];
+        int h = std_free_cls[c];
+        if h != 0 {
+            int^ hd = (int^)h;
+            std_free_cls[c] = hd[1];
+            std_alloc_n += 1;
+            return (void^)(h + 16);
+        }
+        return Mem::alloc_new(std_cls[c]);
+    }
+    // a new small block from the chunk
+    static void^ alloc_new(int csize) {
+        int blk = Mem::bump(csize);
+        if blk == 0 { return null; }
+        std_alloc_n += 1;
+        int^ head = (int^)blk;
+        head[0] = csize;
+        return (void^)(blk + 16);
+    }
+    // a block of `need` bytes (more than 2048) from the list of big blocks, or from the chunk
+    static void^ alloc_big(int need) {
         int prev = 0;
         int cur = std_free_list;
         while cur != 0 {
             int^ hdr = (int^)cur;
             if hdr[0] >= need {
-                if prev == 0 {
+                if hdr[0] - need >= 64 {
+                    // split: the rest stays on the list in the place of this block
+                    int rest = cur + need;
+                    int^ rh = (int^)rest;
+                    rh[0] = hdr[0] - need;
+                    rh[1] = hdr[1];
+                    hdr[0] = need;
+                    if prev == 0 {
+                        std_free_list = rest;
+                    } else {
+                        int^ before = (int^)prev;
+                        before[1] = rest;
+                    }
+                } else if prev == 0 {
                     std_free_list = hdr[1];
                 } else {
-                    int^ before = (int^)prev;
-                    before[1] = hdr[1];
+                    int^ before2 = (int^)prev;
+                    before2[1] = hdr[1];
                 }
                 std_alloc_n += 1;
                 return (void^)(cur + 16);
@@ -83,34 +145,68 @@ struct Mem {
             prev = cur;
             cur = hdr[1];
         }
-        if std_heap_cur + need > std_heap_end {
-            int chunk = 1048576;
-            if need > chunk { chunk = (need + 4095) / 4096 * 4096; }
-            int base = syscall(222, 0, chunk, 3, 34, -1, 0);      // mmap: anonymous, read + write
-            if base < 0 { return null; }
-            std_heap_cur = base;
-            std_heap_end = base + chunk;
-        }
-        int blk = std_heap_cur;
-        std_heap_cur = std_heap_cur + need;
+        int nb = Mem::bump(need);
+        if nb == 0 { return null; }
         std_alloc_n += 1;
-        int^ head = (int^)blk;
-        head[0] = need;
-        return (void^)(blk + 16);
+        int^ nh = (int^)nb;
+        nh[0] = need;
+        return (void^)(nb + 16);
     }
     // give a block from alloc back (null is ignored)
     static void free(void^ p) {
-        Mem::lock_heap();
+        if std_mt == 0 {
+            Mem::free_raw(p);
+            return;
+        }
+        while __cas(@std_mem_lock, 0, 1) != 0 {
+            syscall(124);
+        }
         Mem::free_raw(p);
-        Mem::unlock_heap();
+        __xchg(@std_mem_lock, 0);
     }
     static void free_raw(void^ p) {
         if (int)p == 0 { return; }
         int blk = (int)p - 16;
         int^ head = (int^)blk;
-        head[1] = std_free_list;
-        std_free_list = blk;
         std_free_n += 1;
+        int size = head[0];
+        if size <= 2048 {
+            int c = std_cls_exact[size >> 4];
+            if c >= 0 {
+                head[1] = std_free_cls[c];
+                std_free_cls[c] = blk;
+                return;
+            }
+        }
+        Mem::free_big(blk);
+    }
+    // a big block: into the list in the order of the addresses, joined with the neighbours that are free
+    static void free_big(int blk) {
+        int^ head = (int^)blk;
+        int prev = 0;
+        int cur = std_free_list;
+        while cur != 0 && cur < blk {
+            prev = cur;
+            int^ ch = (int^)cur;
+            cur = ch[1];
+        }
+        head[1] = cur;
+        if cur != 0 && blk + head[0] == cur {
+            int^ nx = (int^)cur;
+            head[0] = head[0] + nx[0];
+            head[1] = nx[1];
+        }
+        if prev == 0 {
+            std_free_list = blk;
+        } else {
+            int^ pv = (int^)prev;
+            if prev + pv[0] == blk {
+                pv[0] = pv[0] + head[0];
+                pv[1] = head[1];
+            } else {
+                pv[1] = blk;
+            }
+        }
     }
     // -d : at the end of main, say how many blocks were never given back
     static void report() {
@@ -1382,6 +1478,7 @@ struct __Mt {
             if base < 0 { throw "cannot start the threads of the #multithread loop"; }
             blk[p * 8 + 4] = base;
             int top = base + size - 1024;
+            std_mt = 1;
             int tid = __thread_start(worker, (int)blk + p * 64, top, (int)blk + p * 64 + 24, top);
             if tid < 0 { throw "cannot start the threads of the #multithread loop"; }
         }

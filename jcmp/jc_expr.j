@@ -1766,58 +1766,82 @@ void lvalue_loop() {
                 s_tid = pointee_tid(s_ptr);
                 s_ptr = 0;
             }
-            // the base address waits on the stack, unless it is a fixed address or a plain pointer variable and the index is made
-            // of plain things: then it is written again after the index (the index is worked out first)
-            int bkind = 0;
-            int bnum = 0;
-            int bbase = 29;
-            if pure_raw_ahead(100) {
-                int tn = tail_add_base();
-                if tn >= 0 && tn < 16777216 {
-                    bkind = 1;
-                    bnum = tn;
-                    bbase = tail_base;
-                    out_len = tail_start;
-                } else {
-                    int ln = tail_ldr_base();
-                    if ln >= 0 {
-                        bkind = 2;
-                        bnum = ln;
+            // a literal index (p[1], a[3]): the offset is a number, nothing is calculated at run time
+            bool lit_idx = false;
+            int lit_val = 0;
+            if opt_debug == 0 && v_nd == 1 && tok_is("[") {
+                // the text after the [ : digits, then ]
+                int lq = 0;
+                while is_space(lc(lq)) { lq += 1; }
+                int ld = 0;
+                while is_digit(lc(lq)) {
+                    lq += 1;
+                    ld += 1;
+                }
+                while is_space(lc(lq)) { lq += 1; }
+                if ld > 0 && ld < 10 && lc(lq) == ']' && lc(lq + 1) != '[' { lit_idx = true; }
+            }
+            if lit_idx {
+                next();                                  // the number
+                lit_val = tok_num;
+                next();                                  // the ]
+                expect("]");
+                int lit_off = lit_val * size_of(s_code);
+                if lit_off != 0 { ins_n("add x0, x0, #", lit_off); }
+            } else {
+                // the base address waits on the stack, unless it is a fixed address or a plain pointer variable and the index is made
+                // of plain things: then it is written again after the index (the index is worked out first)
+                int bkind = 0;
+                int bnum = 0;
+                int bbase = 29;
+                if pure_raw_ahead(100) {
+                    int tn = tail_add_base();
+                    if tn >= 0 && tn < 16777216 {
+                        bkind = 1;
+                        bnum = tn;
                         bbase = tail_base;
                         out_len = tail_start;
+                    } else {
+                        int ln = tail_ldr_base();
+                        if ln >= 0 {
+                            bkind = 2;
+                            bnum = ln;
+                            bbase = tail_base;
+                            out_len = tail_start;
+                        }
                     }
                 }
-            }
-            if bkind == 0 { push_x0(); }       // the base address
-            parse_index_chain();
-            int es = size_of(s_code);
-            if es == 1 {
-                // nothing to multiply
-            } else if es == 2 || es == 4 || es == 8 || es == 16 {
-                int sk = 1;
-                if es == 4 { sk = 2; }
-                if es == 8 { sk = 3; }
-                if es == 16 { sk = 4; }
-                ins_n("lsl x0, x0, #", sk);
-            } else {
-                ins_n("mov x1, ", es);
-                emit_line("mul x0, x0, x1");
-            }
-            if bkind == 0 {
-                pop_x1();
-                emit_line("add x0, x0, x1");
-            } else if bkind == 1 {
-                emit_str("add x0, x");
-                emit_int(bbase);
-                emit_line(", x0");
-                if bnum != 0 { ins_n("add x0, x0, #", bnum); }
-            } else {
-                emit_str("ldr x1, [x");
-                emit_int(bbase);
-                emit_str(", #");
-                emit_int(bnum);
-                emit_line("]");
-                emit_line("add x0, x0, x1");
+                if bkind == 0 { push_x0(); }       // the base address
+                parse_index_chain();
+                int es = size_of(s_code);
+                if es == 1 {
+                    // nothing to multiply
+                } else if es == 2 || es == 4 || es == 8 || es == 16 {
+                    int sk = 1;
+                    if es == 4 { sk = 2; }
+                    if es == 8 { sk = 3; }
+                    if es == 16 { sk = 4; }
+                    ins_n("lsl x0, x0, #", sk);
+                } else {
+                    ins_n("mov x1, ", es);
+                    emit_line("mul x0, x0, x1");
+                }
+                if bkind == 0 {
+                    pop_x1();
+                    emit_line("add x0, x0, x1");
+                } else if bkind == 1 {
+                    emit_str("add x0, x");
+                    emit_int(bbase);
+                    emit_line(", x0");
+                    if bnum != 0 { ins_n("add x0, x0, #", bnum); }
+                } else {
+                    emit_str("ldr x1, [x");
+                    emit_int(bbase);
+                    emit_str(", #");
+                    emit_int(bnum);
+                    emit_line("]");
+                    emit_line("add x0, x0, x1");
+                }
             }
             if s_code >= 400 {
                 // an element that is itself a pointer (T^^ p; p[i])
