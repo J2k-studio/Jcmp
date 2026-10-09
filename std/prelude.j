@@ -127,18 +127,42 @@ struct Mem {
         syscall(64, 2, "debug: memory blocks never freed: ", 34);
         syscall(64, 2, @d + k, 24 - k);
     }
+    // n bytes of p are set to value (8 bytes at a time while it goes, then the rest)
     static void set(void^ p, int value, int n) {
         char^ q = (char^)p;
         int i = 0;
+        if n >= 8 {
+            int^ w = (int^)p;
+            int pat = (value & 255) * 72340172838076673;
+            int words = n / 8;
+            int j = 0;
+            while j < words {
+                w[j] = pat;
+                j += 1;
+            }
+            i = words * 8;
+        }
         while i < n {
             q[i] = value;
             i += 1;
         }
     }
+    // n bytes from src to dst, forward (8 bytes at a time while it goes, then the rest); the two areas may overlap only if dst is before src
     static void copy(void^ dst, void^ src, int n) {
         char^ d = (char^)dst;
         char^ s = (char^)src;
         int i = 0;
+        if n >= 8 {
+            int^ dw = (int^)dst;
+            int^ sw = (int^)src;
+            int words = n / 8;
+            int j = 0;
+            while j < words {
+                dw[j] = sw[j];
+                j += 1;
+            }
+            i = words * 8;
+        }
         while i < n {
             d[i] = s[i];
             i += 1;

@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9.60
+* **`Mem::copy` and `Mem::set` work 8 bytes at a time** (they worked one byte at a time): copies and fills of `String`, `T[]` and everything built on them are faster. Test `t269` (every length 0..40 from every alignment).
+
 ## 0.9.59
 * **Calls with two to four arguments do not use the stack for the arguments** when the code that makes them is plain (no call, no stack): the earlier values wait in `x10`..`x14` (or `x5`..`x7`) and are moved into `x0`, `x1`, ... just before the call, and the optimiser then often leaves only the moves that are needed (`mov x1, x22 / mov x0, x20 / bl gcd`). Before: every argument was pushed and loaded again. Test `t268`.
 * **Functions that own memory** (a `String`, `alloc`, a struct that frees itself) can now keep their other locals in registers too; only a function with `defer` (and a program with `try`/`catch`) is left alone.
