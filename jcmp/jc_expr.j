@@ -265,6 +265,8 @@ void f32_to_f64(int r) {
     emit_nl();
 }
 
+int fp_in_d;                 // 1: the two operands of the next float operation are in d0 and d1 already (set by take_operands_s)
+
 // x0 = left, x1 = right, types lt / rt: both must be floats (a literal adapts);
 // returns 90 when the operation is done in f32, else 91; the operands are ready
 int fp_prepare(int lt, int rt) {
@@ -295,8 +297,11 @@ int fp_binop(char^ op, int lt, int rt) {
         emit_line("fmov w0, s0");
         return 90;
     }
-    emit_line("fmov d0, x0");
-    emit_line("fmov d1, x1");
+    if fp_in_d == 0 {
+        emit_line("fmov d0, x0");
+        emit_line("fmov d1, x1");
+    }
+    fp_in_d = 0;
     emit_str(@ins);
     emit_line(" d0, d0, d1");
     emit_line("fmov x0, d0");
@@ -312,8 +317,11 @@ void fp_compare(char^ cond, int lt, int rt) {
         emit_line("fmov s1, w1");
         emit_line("fcmp s0, s1");
     } else {
-        emit_line("fmov d0, x0");
-        emit_line("fmov d1, x1");
+        if fp_in_d == 0 {
+            emit_line("fmov d0, x0");
+            emit_line("fmov d1, x1");
+        }
+        fp_in_d = 0;
         emit_line("fcmp d0, d1");
     }
     // after fcmp, "lt" and "le" would be true for NaN; mi / ls are not
@@ -1618,7 +1626,20 @@ bool lv_len_next() {
     if lc(0) != 'l' || lc(1) != 'e' || lc(2) != 'n' { return false; }
     if is_alnum(lc(3)) { return false; }
     if lv_kind == 1 { return true; }
-    return lv_fresh == 1 && lv_kind == 0 && lv_ptr != 0 && lv_ptr < 16 && lv_code < 16;
+    if lv_fresh == 1 && lv_kind == 0 && lv_ptr != 0 && lv_ptr < 16 && lv_code < 16 { return true; }
+    if lv_fresh == 1 && lv_kind == 0 && lv_ptr >= 16 && lv_ptr < 400 && lv_code < 16 {
+        // a parameter  Body b[]  (an array of structs): there is a hidden length; a pointer to a struct has none (then .len is a field)
+        char hn[300];
+        str_copy(@hn, @lv_base, 256);
+        str_copy(@hn + str_len(@hn), "__len", 8);
+        int sv_off = v_off;
+        int sv_loc = v_local;
+        bool has = lookup_var(@hn);
+        v_off = sv_off;
+        v_local = sv_loc;
+        return has;
+    }
+    return false;
 }
 
 // the struct named base + n  (vec2, vec3, vec4), or -1
@@ -3728,32 +3749,93 @@ bool pure_group_ok(int o) {
     return true;
 }
 
+// the raw text at offset o is the rest of a path  [index].field.field  that starts in the struct st: does it end in a plain number field?
+bool pure_chain_ok(int st, int o) {
+    int depth = 0;
+    while is_space(lc(o)) { o += 1; }
+    if lc(o) == '[' {
+        depth = 1;
+        o += 1;
+        while depth > 0 && lc(o) != 0 && lc(o) != ';' {
+            if lc(o) == '[' { depth += 1; }
+            if lc(o) == ']' { depth -= 1; }
+            o += 1;
+        }
+        if depth != 0 { return false; }
+    }
+    if lc(o) == '^' { o += 1; }
+    int guard = 0;
+    while guard < 6 {
+        guard += 1;
+        if lc(o) != '.' || !is_letter(lc(o + 1)) { return false; }
+        o += 1;
+        char fnm[64];
+        int n = 0;
+        while (is_letter(lc(o)) || is_digit(lc(o)) || lc(o) == '_') && n < 62 {
+            fnm[n] = lc(o);
+            n += 1;
+            o += 1;
+        }
+        fnm[n] = 0;
+        int f = find_field(st, @fnm);
+        if f < 0 { return false; }
+        while is_space(lc(o)) { o += 1; }
+        if lc(o) == '(' || lc(o) == '[' { return false; }
+        if fldkind[f] != 0 || fldptr[f] != 0 || flddyn[f] != 0 { return false; }
+        if fldcode[f] < 16 {
+            if fldtid[f] >= 98 || fldtid[f] < 0 { return false; }
+            if lc(o) == '.' && lc(o + 1) != '.' { return false; }
+            return true;
+        }
+        if fldcode[f] >= 400 { return false; }
+        st = fldcode[f] - 16;
+    }
+    return false;
+}
+
 bool pure_right_ahead(int lvl) {
     int pd0 = 0;
-    if tok_kind == T_NUM {
+    int start0 = 0;
+    if tok_kind == T_IDENT && (str_eq(@tok_text, "__fsqrt") || str_eq(@tok_text, "__ffloor") || str_eq(@tok_text, "__fceil") || str_eq(@tok_text, "__ftrunc")) && !lookup_var(@tok_text) {
+        // an intrinsic that is one instruction: its argument is looked at like a group
+        int q0 = 0;
+        while is_space(lc(q0)) { q0 += 1; }
+        if lc(q0) != '(' || !pure_group_ok(q0 + 1) { return false; }
+        pd0 = 1;
+        start0 = q0 + 1;
+    } else if tok_kind == T_NUM {
         // a number (a float is a constant now)
     } else if tok_kind == T_IDENT {
         if !lookup_var(@tok_text) { return false; }
-        if (v_kind != 0 && v_kind != 1) || v_elem >= 16 || v_tid < 0 || v_ptr >= 16 { return false; }
-        if v_tid >= 98 { return false; }
+        int cst = 0 - 1;
+        if v_kind == 1 && v_elem >= 16 && v_elem < 400 { cst = v_elem - 16; }
+        else if v_kind == 0 && v_ptr >= 16 && v_ptr < 400 && v_tid >= 0 && v_tid < 98 { cst = v_ptr - 16; }
+        else if v_kind == 0 && v_tid >= 100 && v_tid < 400 && v_ptr == 0 { cst = v_tid - 100; }
+        if cst >= 0 {
+            // a struct, an array of structs or a pointer to a struct: only a path that ends in a plain number field (b[j].x, p.pos.y)
+            if !pure_chain_ok(cst, 0) { return false; }
+        } else {
+            if (v_kind != 0 && v_kind != 1) || v_elem >= 16 || v_tid < 0 || v_ptr >= 16 { return false; }
+            if v_tid >= 98 { return false; }
+        }
     } else if tok_is("(") {
         if !pure_group_ok(0) { return false; }
         pd0 = 1;                                           // a group or a cast: looked at as a part of the text that follows
     } else {
         return false;
     }
-    return pure_raw_ahead2(lvl, pd0);
+    return pure_raw_ahead2(lvl, pd0, start0);
 }
 
 bool pure_raw_ahead(int lvl) {
-    return pure_raw_ahead2(lvl, 0);
+    return pure_raw_ahead2(lvl, 0, 0);
 }
 
 // the same for the raw text that follows the current token (nothing of it is read yet): is it free of calls, parentheses, strings
 // and anything else that could change a variable or use the registers of the stash, up to the end of the operand that the
 // parser of level lvl reads (or up to ; ) , { } or an unmatched ] )?
-bool pure_raw_ahead2(int lvl, int pd) {
-    int o = 0;
+bool pure_raw_ahead2(int lvl, int pd, int o0) {
+    int o = o0;
     int bd = 0;
     while o < 240 {
         while is_space(lc(o)) { o += 1; }
@@ -3765,7 +3847,21 @@ bool pure_raw_ahead2(int lvl, int pd) {
             int pc = o - 1;
             while pc > 0 && is_space(lc(pc)) { pc -= 1; }
             int pch = lc(pc);
-            if is_letter(pch) || is_digit(pch) || pch == '_' || pch == ']' { return false; }
+            if pch == ']' { return false; }
+            if is_letter(pch) || is_digit(pch) || pch == '_' {
+                // a call, except the intrinsics that are one instruction (their argument is looked at like a group)
+                int ws = pc;
+                while ws > 0 && (is_letter(lc(ws - 1)) || is_digit(lc(ws - 1)) || lc(ws - 1) == '_') { ws -= 1; }
+                char wd[16];
+                int wn = 0;
+                while ws <= pc && wn < 15 {
+                    wd[wn] = lc(ws);
+                    wn += 1;
+                    ws += 1;
+                }
+                wd[wn] = 0;
+                if !(str_eq(@wd, "__fsqrt") || str_eq(@wd, "__ffloor") || str_eq(@wd, "__fceil") || str_eq(@wd, "__ftrunc")) { return false; }
+            }
             if !pure_group_ok(o + 1) { return false; }
             pd += 1;
             o += 1;
@@ -3827,6 +3923,13 @@ int stash_left(int lt, int lvl) {
     if lt >= 0 && lt != 80 && lt != 99 && lt < 98 && stash_depth < 5 && pure_right_ahead(lvl) {
         int r = 10 + stash_depth;
         stash_depth += 1;
+        if lt == 91 {
+            // a double waits in a floating point register (d16, d17, ...): no trip through memory, and the optimiser can use it
+            emit_str("fmov d");
+            emit_int(r + 6);
+            emit_line(", x0");
+            return r + 90;
+        }
         emit_str("mov x");
         emit_int(r);
         emit_line(", x0");
@@ -3838,7 +3941,16 @@ int stash_left(int lt, int lvl) {
 
 // x0 = the right operand, the left one is in the register st (or on the stack if st == 0): leaves x0 = left, x1 = right
 void take_operands_s(int st) {
-    if st >= 10 {
+    if st >= 100 {
+        // a double on the left (in d16 ..): the two operands go to d0 and d1 straight (fp_binop and fp_compare see fp_in_d)
+        rv_valid = 0;
+        stash_depth -= 1;
+        emit_line("fmov d1, x0");
+        emit_str("fmov d0, d");
+        emit_int(st - 100 + 16);
+        emit_nl();
+        fp_in_d = 1;
+    } else if st >= 10 {
         rv_valid = 0;
         stash_depth -= 1;
         // the right operand was one instruction that put its value in x0 (a number or a variable): put it in x1 straight

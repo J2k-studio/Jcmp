@@ -378,7 +378,16 @@ void as_h_rrr(int base) {
 // ldr/str family: op = the instruction's high 16 bits, shift = log2(size)
 void as_h_mem(int op, int shift) {
     as_skip_spaces();
-    int rt = as_parse_reg();
+    int rt = 0;
+    if as_cur() == 'd' && as_is_digit(as_peek(1)) {
+        // ldr dN, [..] / str dN, [..]  (a double)
+        rt = as_parse_freg();
+        if op == 0xF940 { op = 0xFD40; }
+        else if op == 0xF900 { op = 0xFD00; }
+        else { as_fail(); }
+    } else {
+        rt = as_parse_reg();
+    }
     as_expect_comma();
     if as_cur() != '[' { as_fail(); }
     as_ci += 1;
@@ -514,7 +523,11 @@ void as_h_fmov() {
         int rd = as_parse_freg();
         int kind = as_fp_kind;
         as_expect_comma();
-        if kind == 1 {
+        if kind == 1 && as_at_freg() {
+            int rf = as_parse_freg();                  // fmov dN, dM
+            if as_fp_kind != 1 { as_fail(); }
+            as_put32(0x1E604000 | (rf << 5) | rd);
+        } else if kind == 1 {
             int rn = as_parse_reg();
             as_put32(0x9E670000 | (rn << 5) | rd);
         } else {
