@@ -816,18 +816,26 @@ void lg_run(int frames, int speed) {
                             // the Moon may hide the Sun (an eclipse of the Sun)
                             if lam > 0.0 {
                                 double ts2 = lg_ball(hx, hy, hz, lx, ly, lz, mx, my, mz, rm);
-                                if ts2 < 999.0 {
-                                    // the shadow has the shape of what casts it: a round Moon a round shadow, a Moon that is the letter J
-                                    // a J-shaped shadow (the place where the ray meets the Moon is looked up in the letter, as it faces us)
-                                    double sx = hx + lx * ts2 - mx;
-                                    double sy = hy + ly * ts2 - my;
-                                    double sz = hz + lz * ts2 - mz;
-                                    double jsx = (sx * lg_rx + sy * lg_ry + sz * lg_rz) / rm;
-                                    double jsy = (sx * lg_ux + sy * lg_uy + sz * lg_uz) / rm;
-                                    double jcov = lg_clamp(lg_j(jsx * 1.15, 0.0 - jsy * 1.15 + 0.06) * 1.6, 0.0, 1.0);
-                                    double blocked = (1.0 - j_bill) + j_bill * jcov;
-                                    lam = lam * (1.0 - 0.88 * blocked);
+                                // the shadow has the shape of what casts it: a round Moon a round shadow; a Moon that is the letter J (a flat
+                                // letter that faces us) a shadow in the shape of the J: the ray to the Sun is followed to the plane of the
+                                // letter and the place where it meets the plane is looked up in the letter
+                                double sphere_block = 0.0;
+                                if ts2 < 999.0 { sphere_block = 1.0; }
+                                double jcov = 0.0;
+                                double ldf = lx * lg_fx + ly * lg_fy + lz * lg_fz;
+                                if j_bill > 0.0 && lg_abs(ldf) > 0.05 {
+                                    double tt = ((mx - hx) * lg_fx + (my - hy) * lg_fy + (mz - hz) * lg_fz) / ldf;
+                                    if tt > 0.0 {
+                                        double sx = hx + lx * tt - mx;
+                                        double sy = hy + ly * tt - my;
+                                        double sz = hz + lz * tt - mz;
+                                        double jsx = (sx * lg_rx + sy * lg_ry + sz * lg_rz) / rm;
+                                        double jsy = (sx * lg_ux + sy * lg_uy + sz * lg_uz) / rm;
+                                        jcov = lg_clamp(lg_j(jsx * 1.15, 0.0 - jsy * 1.15 + 0.06) * 1.6, 0.0, 1.0);
+                                    }
                                 }
+                                double blocked = (1.0 - j_bill) * sphere_block + j_bill * jcov;
+                                lam = lam * (1.0 - 0.88 * blocked);
                             }
                             lg_ax = 0.0;
                             lg_ay = lg_cos(tilt);
