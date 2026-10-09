@@ -1267,7 +1267,7 @@ int vn_reg(int r) {
     if v < 0 { return v; }
     vr_vn[r] = v;
     vr_st[r] = vr_cur;
-    vn_holder[v] = r;
+    if r < 64 { vn_holder[v] = r; }
     return v;
 }
 
@@ -1279,7 +1279,7 @@ void vn_set(int r, int v) {
     }
     vr_vn[r] = v;
     vr_st[r] = vr_cur;
-    vn_holder[v] = r;
+    if r < 64 { vn_holder[v] = r; }                  // a temporary (vreg >= 64) lives inside one block only
 }
 
 bool vn_commutes(int op) {
@@ -1295,10 +1295,45 @@ bool vn_holds(int r, int v) {
     return r >= 1 && r < ir_nv && vr_st[r] == vr_cur && vr_vn[r] == v;
 }
 
-void vn_block(int b) {
-    vn_n = 0;
-    vn_hcur += 1;
-    vr_cur += 1;
+// what is known about a value on the way into the block (from the branches that led here): value, condition, number, 1 = the condition holds
+int vf_vn[16];
+int vf_cc[16];
+int vf_imm[16];
+int vf_t[16];
+int vf_n;
+int vn_folded;                  // branches that were decided
+
+// does the branch  cc v, imm  go the true way (1), the false way (0), or is it not known (-1)?
+int vf_decide(int cc, int v, int imm) {
+    if v < 0 { return 0 - 1; }
+    if vn_k[v] == 1001 { if tj_holds(cc, vn_x[v], imm) { return 1; } return 0; }
+    int f = 0;
+    while f < vf_n {
+        if vf_vn[f] == v {
+            bool known_eq = (vf_cc[f] == IR_EQ && vf_t[f] == 1) || (vf_cc[f] == IR_NE && vf_t[f] == 0);
+            bool known_ne = (vf_cc[f] == IR_NE && vf_t[f] == 1) || (vf_cc[f] == IR_EQ && vf_t[f] == 0);
+            if known_eq {
+                if tj_holds(cc, vf_imm[f], imm) { return 1; }
+                return 0;
+            }
+            if known_ne && vf_imm[f] == imm {
+                if cc == IR_EQ { return 0; }
+                if cc == IR_NE { return 1; }
+            }
+        }
+        f += 1;
+    }
+    return 0 - 1;
+}
+
+// cont = 1: the block is entered from the block processed before it only, so what is known stays
+void vn_block(int b, int cont) {
+    if cont == 0 {
+        vn_n = 0;
+        vn_hcur += 1;
+        vr_cur += 1;
+        vf_n = 0;
+    }
     int i = ir_bs[b];
     while i < ir_be[b] {
         int op = ir_op[i];
@@ -1409,6 +1444,21 @@ void vn_block(int b) {
                 continue;
             }
         }
+        // a branch on a number: decided when the way in tells the answer
+        if op == IR_BR && ir_bi[i] == 1 && vn_n < VN_MAX - 8 {
+            int vq = vn_reg(ir_a[i]);
+            int dec = vf_decide(ir_k[i], vq, ir_b[i]);
+            if dec >= 0 && (ir_opt & 2048) == 0 {
+                int tgt = ir_t2[i];
+                if dec == 1 { tgt = ir_t1[i]; }
+                ir_op[i] = IR_JMP;
+                ir_t1[i] = tgt;
+                ir_t2[i] = 0 - 1;
+                ir_a[i] = 0;
+                vn_folded += 1;
+                vn_changes += 1;
+            }
+        }
         // anything else
         if op == IR_STORE {
             int sl2 = vn_slot(i);
@@ -1495,6 +1545,9 @@ bool vn_emit(int b) {
     return true;
 }
 
+int vn_done[IR_MAXB];
+int vn_pc[IR_MAXB];             // the number of predecessors (that the flow can reach)
+
 void op_cse_run() {
     op_graph();
     vn_hints();
@@ -1502,10 +1555,66 @@ void op_cse_run() {
     int b = 0;
     int nb0 = ir_nb;
     while b < nb0 {
+        vn_done[b] = 0;
+        vn_pc[b] = 0;
+        b += 1;
+    }
+    b = 0;
+    while b < nb0 {
         if op_po[b] >= 0 {
-            vn_block(b);
-            vn_emit(b);
+            int k = 0;
+            while k < 2 {
+                int sc = op_succ(b, k);
+                if sc >= 0 && !(k == 1 && op_succ(b, 0) == sc) { vn_pc[sc] += 1; }
+                k += 1;
+            }
         }
+        b += 1;
+    }
+    // the blocks in reverse post order; after a block comes the successor that only it leads to (what is known stays)
+    int ri = 0;
+    while ri < op_nrpo {
+        int start = op_rpo[ri];
+        ri += 1;
+        if vn_done[start] == 0 && start < nb0 {
+            int cur = start;
+            int cont = 0;
+            while cur >= 0 {
+                vn_done[cur] = 1;
+                vn_block(cur, cont);
+                // the way on: the false side of a branch first (the fall through), else the true side, else the target of a jump
+                int term = ir_be[cur] - 1;
+                int nxt = 0 - 1;
+                int tk = ir_op[term];
+                int cand1 = 0 - 1;
+                int cand2 = 0 - 1;
+                if tk == IR_JMP { cand1 = ir_t1[term]; }
+                if tk == IR_BR || tk == IR_FBR { cand1 = ir_t2[term]; cand2 = ir_t1[term]; }
+                int which = 0;
+                if cand1 >= 0 && cand1 < nb0 && vn_pc[cand1] == 1 && vn_done[cand1] == 0 && cand1 != cur { nxt = cand1; which = 2; }
+                else if cand2 >= 0 && cand2 < nb0 && vn_pc[cand2] == 1 && vn_done[cand2] == 0 && cand2 != cur && cand1 != cand2 { nxt = cand2; which = 1; }
+                if (ir_opt & 256) != 0 { nxt = 0 - 1; }
+                if nxt >= 0 && tk == IR_BR && ir_bi[term] == 1 {
+                    // what the branch tells about its value on the way to nxt
+                    int vq = vn_reg(ir_a[term]);
+                    if vq >= 0 && vf_n < 16 {
+                        vf_vn[vf_n] = vq;
+                        vf_cc[vf_n] = ir_k[term];
+                        vf_imm[vf_n] = ir_b[term];
+                        vf_t[vf_n] = 0;
+                        if which == 1 { vf_t[vf_n] = 1; }
+                        vf_n += 1;
+                    }
+                }
+                if tk == IR_JMP && nxt < 0 { }
+                cur = nxt;
+                cont = 1;
+            }
+        }
+    }
+    b = 0;
+    while b < nb0 {
+        if op_po[b] >= 0 { vn_emit(b); }
         b += 1;
     }
 }

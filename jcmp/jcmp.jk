@@ -2,7 +2,7 @@
 // Build:  bin/jcmp jcmp/jcmp.jk -o jcmp1        (see bootstrap.sh)
 // Use:    jcmp1 input.jk -o program
 // the version of the compiler (also in the file VERSION; release.sh checks that they agree)
-#define JCMP_VERSION "0.9.71"
+#define JCMP_VERSION "0.9.72"
 
 #import "jc_base"
 #import "jc_asm"
@@ -156,6 +156,16 @@ void main() {
             ir_mode = 2;
             ir_opt = ir_opt | 44;
             ir_pre = 1;
+        } else if str_eq(a, "-irdbg") {
+            ai += 1;
+            char^ dv = arg(ai);
+            int dk = 0;
+            int dn = 0;
+            while dv[dk] >= '0' && dv[dk] <= '9' {
+                dn = dn * 10 + (dv[dk] - '0');
+                dk += 1;
+            }
+            ir_opt = ir_opt | dn;
         } else if str_eq(a, "-iralways") {
             ir_opt = ir_opt | 64;
         } else if str_eq(a, "-irpre") {

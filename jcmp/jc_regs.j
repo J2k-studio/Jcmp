@@ -1358,7 +1358,65 @@ bool pt_mirror() {
 }
 
 // one try of all the rules at the line i: true if something was changed
+// b.cc LA / b LB / (labels) LA:   ->   b.!cc LB / (labels) LA:
+bool pt_branch_over(int i) {
+    int bi = i * 64;
+    if pt_txt[bi] != 'b' || pt_txt[bi + 1] != '.' || pt_txt[bi + 4] != ' ' || pt_txt[bi + 5] != 'L' { return false; }
+    int j = pt_next(i);
+    if j < 0 { return false; }
+    int bj = j * 64;
+    if pt_txt[bj] != 'b' || pt_txt[bj + 1] != ' ' || pt_txt[bj + 2] != 'L' { return false; }
+    // the target of the first jump must be one of the labels that follow the second
+    int k = pt_next(j);
+    bool found = false;
+    int guard = 0;
+    while k >= 0 && guard < 8 && !found {
+        int bk = k * 64;
+        int e = bk;
+        while pt_txt[e] != 0 { e += 1; }
+        if pt_txt[e - 1] != ':' { break; }
+        // compare "L<num>:" with the operand of the first jump
+        int c = 0;
+        bool same = true;
+        while c < e - bk - 1 {
+            if pt_txt[bk + c] != pt_txt[bi + 5 + c] { same = false; }
+            c += 1;
+        }
+        if same && (pt_txt[bi + 5 + c] == 0) { found = true; }
+        k = pt_next(k);
+        guard += 1;
+    }
+    if !found { return false; }
+    char c0 = pt_txt[bi + 2];
+    char c1 = pt_txt[bi + 3];
+    char n0 = ' ';
+    char n1 = ' ';
+    if c0 == 'e' && c1 == 'q' { n0 = 'n'; n1 = 'e'; }
+    else if c0 == 'n' && c1 == 'e' { n0 = 'e'; n1 = 'q'; }
+    else if c0 == 'l' && c1 == 't' { n0 = 'g'; n1 = 'e'; }
+    else if c0 == 'g' && c1 == 'e' { n0 = 'l'; n1 = 't'; }
+    else if c0 == 'g' && c1 == 't' { n0 = 'l'; n1 = 'e'; }
+    else if c0 == 'l' && c1 == 'e' { n0 = 'g'; n1 = 't'; }
+    else if c0 == 'l' && c1 == 'o' { n0 = 'h'; n1 = 's'; }
+    else if c0 == 'h' && c1 == 's' { n0 = 'l'; n1 = 'o'; }
+    else if c0 == 'h' && c1 == 'i' { n0 = 'l'; n1 = 's'; }
+    else if c0 == 'l' && c1 == 's' { n0 = 'h'; n1 = 'i'; }
+    else if c0 == 'm' && c1 == 'i' { n0 = 'p'; n1 = 'l'; }
+    else if c0 == 'p' && c1 == 'l' { n0 = 'm'; n1 = 'i'; }
+    else { return false; }
+    char nl[64];
+    nl[0] = 'b'; nl[1] = '.'; nl[2] = n0; nl[3] = n1; nl[4] = ' ';
+    int n = 5;
+    int c2 = 2;
+    while pt_txt[bj + c2] != 0 { nl[n] = pt_txt[bj + c2]; n += 1; c2 += 1; }
+    nl[n] = 0;
+    pt_set(i, @nl);
+    pt_set(j, "");
+    return true;
+}
+
 bool pt_rules(int i) {
+    if pt_branch_over(i) { return true; }
     int j = pt_next(i);
     if j < 0 { return false; }
     if !pt_parse(0, i) { return false; }
@@ -1407,6 +1465,73 @@ bool pt_rules(int i) {
                 tries += 1;
             }
             // the rules below use the lines i and j again
+            pt_parse(0, i);
+            pt_parse(1, j);
+        }
+    }
+    // mov xA, xB / <up to 4 lines that read xA (and not write xB)>  ->  the same lines with xB in place of xA, and no mov: when xA is
+    // written by the last of them or is not needed afterwards
+    if pt_mn(0, "mov") && pt_no[0] == 2 && pt_isreg(0, 0) && pt_isreg(0, 1) && (pt_regno(0, 0, 'x') <= 7 || (pt_regno(0, 0, 'x') >= 10 && pt_regno(0, 0, 'x') <= 14)) && pt_regno(0, 1, 'x') >= 0 {
+        int ra = pt_regno(0, 0, 'x');
+        int rb = pt_regno(0, 1, 'x');
+        if ra != rb && rb != 31 {
+            char sx2[40];
+            int o0b = (0 * 4 + 1) * 40;
+            int cb = 0;
+            while pt_o[o0b + cb] != 0 { sx2[cb] = pt_o[o0b + cb]; cb += 1; }
+            sx2[cb] = 0;
+            char pend[320];
+            int pend_at[5];
+            int npend = 0;
+            int jj2 = j;
+            bool ok2 = false;
+            bool fail2 = false;
+            int steps2 = 0;
+            while jj2 >= 0 && steps2 < 5 && !ok2 && !fail2 {
+                if !pt_parse(1, jj2) { fail2 = true; break; }
+                bool ment = false;
+                int kq2 = 0;
+                while kq2 < pt_no[1] {
+                    if pt_has_reg(1, kq2, ra) { ment = true; }
+                    kq2 += 1;
+                }
+                bool wr_b = pt_writes_first(1) && pt_no[1] > 0 && pt_has_reg(1, 0, rb);
+                if pt_mn(1, "b") || pt_mn(1, "bl") || pt_mn(1, "blr") || pt_mn(1, "ret") || pt_mn(1, "svc") || pt_mn(1, "cbz") || pt_mn(1, "cbnz") || (pt_m[16] == 'b' && pt_m[17] == '.') { fail2 = true; break; }
+                if ment {
+                    if !pt_copy_ok(1) { fail2 = true; break; }
+                    bool dest_a = pt_writes_first(1) && pt_isreg(1, 0) && pt_has_reg(1, 0, ra);
+                    pt_sub_prefix = 'x';
+                    int cnt2 = pt_subst(1, ra, @sx2, pt_writes_first(1));
+                    if cnt2 == 0 && !dest_a { fail2 = true; break; }
+                    int q2 = 0;
+                    while pt_line[q2] != 0 { pend[npend * 64 + q2] = pt_line[q2]; q2 += 1; }
+                    pend[npend * 64 + q2] = 0;
+                    pend_at[npend] = jj2;
+                    npend += 1;
+                    if dest_a { ok2 = true; }
+                    else if pt_dead(pt_next(jj2), ra, 40) { ok2 = true; }
+                    else if wr_b { fail2 = true; }
+                } else if wr_b {
+                    fail2 = true;
+                } else if !(pt_writes_first(1) && (pt_isreg(1, 0) || pt_o[(1 * 4) * 40] == 'd') && !pt_mn(1, "ldr") && !pt_mn(1, "ldrb")) && !pt_mn(1, "cmp") && !pt_mn(1, "str") {
+                    fail2 = true;
+                }
+                if !ok2 && !fail2 { jj2 = pt_next(jj2); }
+                steps2 += 1;
+            }
+            if ok2 && npend >= 2 {
+                int pi2 = 0;
+                while pi2 < npend {
+                    char nl2[64];
+                    int q3 = 0;
+                    while pend[pi2 * 64 + q3] != 0 { nl2[q3] = pend[pi2 * 64 + q3]; q3 += 1; }
+                    nl2[q3] = 0;
+                    pt_set(pend_at[pi2], @nl2);
+                    pi2 += 1;
+                }
+                pt_set(i, "");
+                return true;
+            }
             pt_parse(0, i);
             pt_parse(1, j);
         }

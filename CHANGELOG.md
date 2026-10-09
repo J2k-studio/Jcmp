@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.9.72
+* **What is known on the way into a block stays** (value numbering over chains of blocks: a block that only one block leads to goes on with the numbers, the stack cells and the facts of the block before it). Two results: (1) **a check that is already known is not made again** (`while b != 0 { a % b }` does not test `b` against 0 for the division by zero a second time; a branch on a value that an earlier branch decided is a plain jump), (2) values and cells are shared over a whole `if` chain.
+* **`mul` + `sub` / `add` of a register is one `msub` / `madd`** when nobody reads the product afterwards (before: only for temporaries). The inner loop of `gcd` is 7 instructions now: `cmp`, `b.eq`, `sdiv`, `msub`, `mov`, `mov`, `b`.
+* Labels are written only for blocks that a jump goes to (so the text passes see longer runs of plain code: `mov x0, x19` / `mov x1, x20` / `sdiv x2, x0, x1` / `msub x21, x2, x1, x0` becomes `sdiv x2, x19, x20` / `msub x21, x2, x20, x19`). New text rule: `mov xA, xB` is replaced in up to four following lines that read it.
+* `b.cc L1` / `b L2` / `L1:` becomes `b.!cc L2` (also when more labels stand between). Without it `fib` was 23 % slower after the other changes (two jumps in a row).
+* Hidden: `-irdbg N` ORs bits into the pass mask (256: no chains, 512: no `msub` of registers, 1024: all labels, 2048: no decided branches) to find which part broke something.
+* Tests: `t282_facts` (the check of a divisor that is changed between the check and the use, `if` chains on the same value, collatz, nested comparisons; checked against Python).
+* Measured (best of 7, 0.9.71 -> 0.9.72): gcd 374 -> 314 (-16 %), fib 73 -> 70, matmul 35 -> 36, mandel 52 -> 53, nbody 284 -> 283, loop 846 -> 850; the compiler has 167,000 instructions instead of 171,600 and compiles itself in 2.9 s.
+
 ## 0.9.71
 * **Jump threading on the IR:** the boolean that `&&` and `||` make with `mov x0, 1` / `mov x0, 0` and then test again (`cmp x0, 0` / `b.eq`) is gone: a jump goes straight to the right target when the block before it has just set the register to a constant. Blocks that only jump are skipped, and blocks that nobody reaches are not written. `fib` 88 -> 70 ms (-20 %).
 * **Double constants in one instruction:** `fmov dN, #imm` for the constants that the instruction can make (2.0, 0.5, 3.5, 31.0 ... eight bits: sign, four bits of fraction, exponent from -3 to 4). In the assembler it is written `fmovi dN, imm8`. New IR operation `fconst`.

@@ -771,6 +771,7 @@ int lf_function(char^ name) {
 int lw_lab[IR_MAXB];              // the label number of each block in the new text
 int lw_tmp_i;                     // the temporaries (vregs from 64 on) get the scratch registers x15, x16 / d30, d31 in turn
 int lw_tmp_reg[IR_MAXV];
+int lw_need[IR_MAXB];             // 1: some jump goes to the block, so it needs a label
 int lw_maxq;                      // the deepest stack cell that the function used (bytes below the frame pointer)
 int lw_cells[512];                // the frame offsets that the stack cells got (for the hint line)
 int lw_ncells;
@@ -874,8 +875,9 @@ bool lw_reads(int j, int v) {
 
 // a product in a temporary that the next instruction adds or subtracts (and nobody reads again) is one madd / msub
 bool lw_fuse(int k, int b) {
-    if ir_op[k] != IR_MUL || ir_bi[k] == 1 || ir_d[k] < 64 || ir_vcls[ir_d[k]] != 0 || k + 1 >= ir_be[b] { return false; }
+    if ir_op[k] != IR_MUL || ir_bi[k] == 1 || k + 1 >= ir_be[b] { return false; }
     int t = ir_d[k];
+    if t < 1 || ir_vcls[t] != 0 || (t >= 16 && t < 64) { return false; }
     int n = k + 1;
     int op = ir_op[n];
     if ir_bi[n] == 1 || ir_vcls[ir_d[n]] != 0 { return false; }
@@ -885,12 +887,18 @@ bool lw_fuse(int k, int b) {
     else if op == IR_ADD && ir_a[n] == t && ir_b[n] != t { nm = "madd"; other = ir_b[n]; }
     else if op == IR_ADD && ir_b[n] == t && ir_a[n] != t { nm = "madd"; other = ir_a[n]; }
     if nm == null { return false; }
-    if ir_a[k] == t || ir_b[k] == t { return false; }
+    // nobody reads the product afterwards
+    bool gone = ir_d[n] == t;
     int j = n + 1;
-    while j < ir_be[b] {
+    while j < ir_be[b] && !gone {
         if lw_reads(j, t) { return false; }
-        if ir_d[j] == t { j = ir_be[b]; } else { j += 1; }
+        if ir_d[j] == t { gone = true; }
+        if t < 20 && (ir_op[j] == IR_CALL || ir_op[j] == IR_CALLIND) { gone = true; }
+        j += 1;
     }
+    if t < 64 && (ir_opt & 512) != 0 { return false; }
+    if t < 64 && !gone && ir_opt != 0 && (op_lo[b] & (1 << t)) != 0 { return false; }
+    if t < 64 && !gone && ir_opt == 0 { return false; }
     int d = ir_d[n];
     lw_def(d);
     rg_text(nm);
@@ -1225,7 +1233,30 @@ bool lw_function() {
         if (ir_op[i] == IR_LOAD || ir_op[i] == IR_STORE) && ir_a[i] == 30 && ir_k[i] < 0 { lw_note_cell(lf_frame + lw_maxq + ir_k[i]); }
         i += 1;
     }
-    if ir_opt != 0 { op_graph(); }
+    if ir_opt != 0 { op_webs(); }
+    // the blocks that a jump goes to get a label; the others do not
+    b = 0;
+    while b < ir_nb {
+        lw_need[b] = 0;
+        b += 1;
+    }
+    b = 0;
+    while b < ir_nb {
+        if ir_opt == 0 || op_po[b] >= 0 || b == ir_lastb {
+            int tm = ir_be[b] - 1;
+            int tk = ir_op[tm];
+            int nx = lw_next(b);
+            if tk == IR_JMP && ir_t1[tm] != nx { lw_need[ir_t1[tm]] = 1; }
+            if tk == IR_BR || tk == IR_FBR {
+                if ir_t1[tm] == nx && ir_t2[tm] != nx { lw_need[ir_t2[tm]] = 1; }
+                else {
+                    lw_need[ir_t1[tm]] = 1;
+                    if ir_t2[tm] != nx { lw_need[ir_t2[tm]] = 1; }
+                }
+            }
+        }
+        b += 1;
+    }
     int ord = 0;
     while ord <= ir_nb {
         // the blocks in order, except that the last block of the function (the one with the exit) is written at the end
@@ -1235,9 +1266,11 @@ bool lw_function() {
         ord += 1;
         if ir_opt != 0 && b != ir_lastb && op_po[b] < 0 { continue; }
         if b == ir_lastb && lf_epi_line < 0 { lw_hint(); }
-        rg_text("L");
-        rg_int(lw_lab[b]);
-        rg_text(":\n");
+        if lw_need[b] == 1 || ir_opt == 0 || (ir_opt & 1024) != 0 {
+            rg_text("L");
+            rg_int(lw_lab[b]);
+            rg_text(":\n");
+        }
         int k = ir_bs[b];
         while k < ir_be[b] {
             if lw_fuse(k, b) {
