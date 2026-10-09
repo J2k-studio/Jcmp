@@ -1463,6 +1463,35 @@ void gen_call() {
             str_copy(@callee, @bit_name, 256);
         }
     }
+    // Cpu::, Mem::barrier*, Cache::, Atomic:: : one instruction (or a short loop) of the CPU where the call is
+    if callee[0] == 'C' && callee[1] == 'p' && callee[2] == 'u' && callee[3] == '_' && callee[4] == '_' {
+        char gn[64];
+        str_copy(@gn, "__cpu_", 8);
+        append_text(@gn, @callee + 5);
+        str_copy(@callee, @gn, 256);
+    } else if callee[0] == 'C' && callee[1] == 'a' && callee[2] == 'c' && callee[3] == 'h' && callee[4] == 'e' && callee[5] == '_' && callee[6] == '_' {
+        char gn2[64];
+        str_copy(@gn2, "__cache_", 10);
+        append_text(@gn2, @callee + 7);
+        str_copy(@callee, @gn2, 256);
+    } else if callee[0] == 'M' && callee[1] == 'e' && callee[2] == 'm' && callee[3] == '_' && callee[4] == '_' && callee[5] == 'b' && callee[6] == 'a' && callee[7] == 'r' && callee[8] == 'r' {
+        char gn3[64];
+        str_copy(@gn3, "__mem_", 8);
+        append_text(@gn3, @callee + 5);
+        str_copy(@callee, @gn3, 256);
+    } else if callee[0] == 'A' && callee[1] == 't' && callee[2] == 'o' && callee[3] == 'm' && callee[4] == 'i' && callee[5] == 'c' && callee[6] == '_' && callee[7] == '_' {
+        char gn4[64];
+        str_copy(@gn4, "__atomic_", 12);
+        append_text(@gn4, @callee + 8);
+        str_copy(@callee, @gn4, 256);
+        if str_eq(@callee, "__atomic_add") { str_copy(@callee, "__fetch_add", 256); }
+        else if str_eq(@callee, "__atomic_sub") { str_copy(@callee, "__fetch_sub", 256); }
+        else if str_eq(@callee, "__atomic_swap") { str_copy(@callee, "__xchg", 256); }
+        else if str_eq(@callee, "__atomic_cas") { str_copy(@callee, "__cas", 256); }
+        else if str_eq(@callee, "__atomic_bit_and") { str_copy(@callee, "__fetch_and", 256); }
+        else if str_eq(@callee, "__atomic_bit_or") { str_copy(@callee, "__fetch_or", 256); }
+        else if str_eq(@callee, "__atomic_bit_xor") { str_copy(@callee, "__fetch_xor", 256); }
+    }
     note_call(@callee);
     int pre = call_pre;
     call_pre = 0;
@@ -1481,7 +1510,7 @@ void gen_call() {
     if fi >= 0 { res_ty = fret[fi]; }
     if str_eq(@callee, "__fsqrt") || str_eq(@callee, "__ffloor") || str_eq(@callee, "__fceil") || str_eq(@callee, "__ftrunc") { res_ty = 91; }
     int is_atomic = 0;
-    if str_eq(@callee, "__cas") || str_eq(@callee, "__xchg") || str_eq(@callee, "__fetch_add") { is_atomic = 1; }
+    if str_eq(@callee, "__cas") || str_eq(@callee, "__xchg") || str_eq(@callee, "__fetch_add") || str_eq(@callee, "__fetch_sub") || str_eq(@callee, "__fetch_and") || str_eq(@callee, "__fetch_or") || str_eq(@callee, "__fetch_xor") { is_atomic = 1; }
     if fi >= 0 && farr[fi] != 0 { arr_call_mask = farr[fi] >> is_method; }
     last_call_struct = 0;
     alias_src = 0;
@@ -1552,6 +1581,44 @@ void gen_call() {
         }
         if str_eq(@callee, "__popcount") { emit_line("popcnt x0, x0"); }
         if str_eq(@callee, "__bswap") { emit_line("rev x0, x0"); }
+    } else if str_eq(@callee, "__atomic_load") {
+        if n != 1 { die("Atomic::load takes one argument (the address)"); }
+        emit_line("ldar x0, [x0]");
+    } else if str_eq(@callee, "__atomic_store") {
+        if n != 2 { die("Atomic::store takes two arguments (the address and the value)"); }
+        emit_line("stlr x1, [x0]");
+    } else if callee[0] == '_' && callee[1] == '_' && callee[2] == 'c' && callee[3] == 'p' && callee[4] == 'u' && callee[5] == '_' {
+        if str_eq(@callee, "__cpu_wait") { emit_line("wfi"); }
+        else if str_eq(@callee, "__cpu_pause") { emit_line("yield"); }
+        else if str_eq(@callee, "__cpu_event") { emit_line("wfe"); }
+        else if str_eq(@callee, "__cpu_send_event") { emit_line("sev"); }
+        else if str_eq(@callee, "__cpu_nop") { emit_line("nop"); }
+        else if str_eq(@callee, "__cpu_isb") { emit_line("isb"); }
+        else if str_eq(@callee, "__cpu_counter") { emit_line("mrs x0, cntvct_el0"); }
+        else if str_eq(@callee, "__cpu_frequency") { emit_line("mrs x0, cntfrq_el0"); }
+        else if str_eq(@callee, "__cpu_id") {
+            emit_line("mrs x0, mpidr_el1");
+            emit_line("mov x1, 255");
+            emit_line("and x0, x0, x1");
+        }
+        else { die_name("this is not a Cpu:: function (wait pause event send_event nop isb counter frequency id)", @callee + 6); }
+        if n != 0 { die("this Cpu:: function takes no argument"); }
+    } else if callee[0] == '_' && callee[1] == '_' && callee[2] == 'm' && callee[3] == 'e' && callee[4] == 'm' && callee[5] == '_' {
+        if str_eq(@callee, "__mem_barrier") { emit_line("dmb ish"); }
+        else if str_eq(@callee, "__mem_barrier_read") { emit_line("dmb ishld"); }
+        else if str_eq(@callee, "__mem_barrier_write") { emit_line("dmb ishst"); }
+        else if str_eq(@callee, "__mem_barrier_full") { emit_line("dsb sy"); }
+        else { die_name("this is not a Mem::barrier function (barrier barrier_read barrier_write barrier_full)", @callee + 6); }
+        if n != 0 { die("a barrier takes no argument"); }
+    } else if callee[0] == '_' && callee[1] == '_' && callee[2] == 'c' && callee[3] == 'a' && callee[4] == 'c' && callee[5] == 'h' && callee[6] == 'e' && callee[7] == '_' {
+        if n != 1 { die("a Cache:: function takes one argument (an address)"); }
+        if str_eq(@callee, "__cache_clean") { emit_line("dc cvac, x0"); }
+        else if str_eq(@callee, "__cache_invalidate") { emit_line("dc ivac, x0"); }
+        else if str_eq(@callee, "__cache_clean_invalidate") { emit_line("dc civac, x0"); }
+        else if str_eq(@callee, "__cache_zero") { emit_line("dc zva, x0"); }
+        else if str_eq(@callee, "__cache_clean_code") { emit_line("dc cvau, x0"); }
+        else if str_eq(@callee, "__cache_invalidate_code") { emit_line("ic ivau, x0"); }
+        else { die_name("this is not a Cache:: function (clean invalidate clean_invalidate zero clean_code invalidate_code)", @callee + 8); }
     } else if str_eq(@callee, "__rotl") || str_eq(@callee, "__rotr") {
         // x0 = the number, x1 = how many places (taken modulo 64)
         if n != 2 { die("this function takes two arguments (the number and the places)"); }
@@ -1573,8 +1640,12 @@ void gen_call() {
             if n != 2 { die("__xchg(address, value) takes two arguments"); }
             emit_line("stlxr w4, x1, [x0]");
         } else {
-            if n != 2 { die("__fetch_add(address, value) takes two arguments"); }
-            emit_line("add x5, x3, x1");
+            if n != 2 { die("this atomic operation takes two arguments (the address and the value)"); }
+            if str_eq(@callee, "__fetch_sub") { emit_line("sub x5, x3, x1"); }
+            else if str_eq(@callee, "__fetch_and") { emit_line("and x5, x3, x1"); }
+            else if str_eq(@callee, "__fetch_or") { emit_line("orr x5, x3, x1"); }
+            else if str_eq(@callee, "__fetch_xor") { emit_line("eor x5, x3, x1"); }
+            else { emit_line("add x5, x3, x1"); }
             emit_line("stlxr w4, x5, [x0]");
         }
         emit_line("cmp x4, 0");

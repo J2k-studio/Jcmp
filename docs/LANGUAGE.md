@@ -344,6 +344,22 @@ free[b];                       // only b goes back (a still works, and the next 
 ```
 If a variable is called `alloc`, `alloc0`, `free`, `grow` or `arr`, a `[` after it is an index as always.
 
+### The CPU by name: `Cpu::`, `Atomic::`, `Cache::`, `Mem::barrier` (0.9.78)
+
+Each is one instruction (or a short loop) where the call is, no call is made; they work in every function.
+
+```jk
+Cpu::wait();                       // wfi       Cpu::event();  Cpu::send_event();  Cpu::pause();  Cpu::nop();  Cpu::isb();
+int t = Cpu::counter();            // the system counter (ticks since boot, no system call);  Cpu::frequency() = ticks per second;  Cpu::id() = the core
+
+Atomic::add(@n, 1);                // returns the value it had before; sub, swap, bit_and, bit_or, bit_xor the same way
+Atomic::cas(@lock, 0, 1);          // compare and swap: returns the value it had; it was changed if that is the old one you gave
+int v = Atomic::load(@n);          // ldar            Atomic::store(@n, 5);   // stlr
+
+Mem::barrier();  Mem::barrier_read();  Mem::barrier_write();  Mem::barrier_full();       // dmb ish / ishld / ishst, dsb sy
+Cache::clean(p);  Cache::invalidate(p);  Cache::clean_invalidate(p);  Cache::zero(p);     // dc cvac / ivac / civac / zva
+```
+
 ### The low level: `naked` functions (0.9.77)
 
 A `naked` function has no prologue, no epilogue and no saves: its body is all there is, written with register statements, one statement for one instruction. Nothing is added by the compiler and the optimiser does not touch it.

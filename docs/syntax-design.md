@@ -1773,3 +1773,6 @@ int sum(int^ p, int n) { int acc @ x9 = 0; for i in 0..n { acc += p[i]; } return
 
 ### 63.7 Status (0.9.77)
 Done: step 1 (`naked`; `noreturn` is read and has no effect yet) and step 2 (`Reg::` / bare names / roles in naked functions, statements as in `docs/LANGUAGE.md`), `Cpu::` (a first group), `Sys::` read and write (`mrs` / `msr`), `Cpu::inst`. `leaf` / `noframe` is not a keyword: the compiler will drop the frame of a leaf function by itself (to do, an optimisation). `register { }` blocks inside normal functions, `abi`, `device`, `#reserve`, pinned variables `int n @ x19`, `interrupt`, `frame` and `@no_reorder` are the next steps.
+
+### 63.8 Status (0.9.78)
+Step 4 done: `Cpu::`, `Mem::barrier*`, `Cache::`, `Atomic::` (the memory order is not an argument yet: all are sequentially consistent; `Order::` variants and the LSE forms `swpal` / `ldaddal` are to do).

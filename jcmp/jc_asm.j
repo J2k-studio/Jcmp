@@ -1087,8 +1087,39 @@ void as_h_msr() {
     as_put32(0xD5100000 | sr | rt);
 }
 
+// dc <op>, xt   ic <op>, xt   (cache maintenance by address)
+void as_h_cache(bool data) {
+    as_skip_spaces();
+    as_read_label_name();
+    int enc = 0;
+    bool needs_reg = true;
+    if data {
+        if as_seq(@as_nbuf, "cvac") { enc = 0xD50B7A20; }
+        else if as_seq(@as_nbuf, "cvau") { enc = 0xD50B7B20; }
+        else if as_seq(@as_nbuf, "civac") { enc = 0xD50B7E20; }
+        else if as_seq(@as_nbuf, "ivac") { enc = 0xD5087620; }
+        else if as_seq(@as_nbuf, "zva") { enc = 0xD50B7420; }
+        else if as_seq(@as_nbuf, "cvap") { enc = 0xD50B7C20; }
+        else { as_fail(); }
+    } else {
+        if as_seq(@as_nbuf, "ivau") { enc = 0xD50B7520; }
+        else if as_seq(@as_nbuf, "iallu") { enc = 0xD508751F; needs_reg = false; }
+        else if as_seq(@as_nbuf, "ialluis") { enc = 0xD508711F; needs_reg = false; }
+        else { as_fail(); }
+    }
+    if needs_reg {
+        as_expect_comma();
+        int rt = as_parse_reg();
+        as_put32(enc | rt);
+    } else {
+        as_put32(enc);
+    }
+}
+
 // a mnemonic of the last group; true if it was one
 bool as_more() {
+    if as_mn_is("dc") { as_h_cache(true); return true; }
+    if as_mn_is("ic") { as_h_cache(false); return true; }
     if as_mn_is("nop") { as_put32(0xD503201F); return true; }
     if as_mn_is("wfi") { as_put32(0xD503207F); return true; }
     if as_mn_is("wfe") { as_put32(0xD503205F); return true; }
