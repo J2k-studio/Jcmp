@@ -344,6 +344,15 @@ free[b];                       // only b goes back (a still works, and the next 
 ```
 If a variable is called `alloc`, `alloc0`, `free`, `grow` or `arr`, a `[` after it is an index as always.
 
+### `abi`: your own calling convention for system calls (0.9.79)
+
+```jk
+abi Syscall { number: x8; args: x0..x5; result: x0; via: svc 0; }
+
+int write(int fd, char^ buf, int n) { return Syscall::call(64, fd, buf, n); }     // mov x8, 64 / svc 0
+```
+`number:` (optional) is the register of the first value, `args:` the registers of the others (`x0..x5` or `x1, x0, x2`), `result:` where the answer is (it ends in `x0`), `via:` the instruction: `svc N`, `hvc N`, `smc N` or `bl function`. The same text works for a hypervisor call or for a function with an unusual convention.
+
 ### The CPU by name: `Cpu::`, `Atomic::`, `Cache::`, `Mem::barrier` (0.9.78)
 
 Each is one instruction (or a short loop) where the call is, no call is made; they work in every function.

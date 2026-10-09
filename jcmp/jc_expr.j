@@ -1445,6 +1445,7 @@ void compute_reach() {
     }
 }
 
+int cur_abi;                 // the abi of the call being compiled (Name::call)
 int call_bare;               // 1: the next gen_call is a call without ( ) (a data enum member)
 int bare_call;
 int call_pre;                // arguments already pushed (self of a method call)
@@ -1581,6 +1582,8 @@ void gen_call() {
         }
         if str_eq(@callee, "__popcount") { emit_line("popcnt x0, x0"); }
         if str_eq(@callee, "__bswap") { emit_line("rev x0, x0"); }
+    } else if str_eq(@callee, "__abi_call") {
+        emit_abi_call(cur_abi, n);
     } else if str_eq(@callee, "__atomic_load") {
         if n != 1 { die("Atomic::load takes one argument (the address)"); }
         emit_line("ldar x0, [x0]");
@@ -2118,6 +2121,17 @@ void lvalue_loop() {
 
 // Struct::function(args) or Enum::Member: the name is in id_name, the token is "::"
 void gen_scope() {
+    int abx = find_abi(@id_name);
+    if abx >= 0 {
+        // Syscall::call(number, args ...): the values go to the registers that the abi names
+        next();
+        if tok_kind != T_IDENT || !str_eq(@tok_text, "call") { die("an abi has one function: call"); }
+        next();
+        cur_abi = abx;
+        str_copy(@id_name, "__abi_call", 256);
+        gen_call();
+        return;
+    }
     int en = find_enum(@id_name);
     int sd = find_struct(@id_name);
     if en < 0 && sd < 0 { die_name("unknown name", @id_name); }

@@ -777,3 +777,196 @@ void parse_naked_function(int f_idx) {
     fnpar[f_idx] = np;
     parse_naked_block();
 }
+
+// ---------------------------------------------------------------------------------------------- abi: a calling convention for a trap instruction
+//   abi Syscall { number: x8; args: x0..x5; result: x0; via: svc 0; }
+//   int n = Syscall::call(64, 1, buf, 6);        // the first value goes to the number register (if there is one), the others to the argument registers
+// The values are computed like the arguments of any call; then they are moved into place (a cycle is broken with x17), the instruction `via` follows,
+// and the result register is x0 afterwards.
+
+char abi_name[1024];             // 16 names of 64 characters
+int abi_num[16];                 // the register of the number, or -1
+int abi_args[128];               // 8 argument registers for each
+int abi_nargs[16];
+int abi_res[16];
+char abi_via[1024];              // the text of the instruction
+int abi_count;
+
+int find_abi(char^ name) {
+    int i = 0;
+    while i < abi_count {
+        if str_eq(@abi_name + i * 64, name) { return i; }
+        i += 1;
+    }
+    return 0 - 1;
+}
+
+int abi_reg() {
+    if tok_kind != T_IDENT { die("a register (x0 .. x30) was expected"); }
+    int r = nk_xnum(@tok_text);
+    if r < 0 { die_name("this is not a register (x0 .. x30)", @tok_text); }
+    next();
+    return r;
+}
+
+void parse_abi() {
+    next();                                  // abi
+    if tok_kind != T_IDENT { die("a name for the abi was expected"); }
+    int ab = find_abi(@tok_text);
+    bool fresh = false;
+    if pass_no == 1 {
+        if ab >= 0 { die_name("this abi exists already", @tok_text); }
+        if abi_count >= 16 { die("too many abi declarations (16 at most)"); }
+        ab = abi_count;
+        abi_count += 1;
+        str_copy(@abi_name + ab * 64, @tok_text, 64);
+        abi_num[ab] = 0 - 1;
+        abi_nargs[ab] = 0;
+        abi_res[ab] = 0;
+        str_copy(@abi_via + ab * 64, "svc 0", 64);
+        fresh = true;
+    }
+    next();
+    expect("{");
+    while !tok_is("}") {
+        if tok_kind != T_IDENT { die("number: args: result: or via: was expected"); }
+        char field[32];
+        str_copy(@field, @tok_text, 32);
+        next();
+        expect(":");
+        if str_eq(@field, "number") {
+            int r = abi_reg();
+            if fresh { abi_num[ab] = r; }
+        } else if str_eq(@field, "result") {
+            int r2 = abi_reg();
+            if fresh { abi_res[ab] = r2; }
+        } else if str_eq(@field, "args") {
+            int first = abi_reg();
+            int cnt = 0;
+            if tok_is(".") {
+                next();
+                expect(".");                 // a range is written with two dots
+                int last = abi_reg();
+                if last < first || last - first > 7 { die("a range of at most 8 registers was expected (x0..x5)"); }
+                while first + cnt <= last {
+                    if fresh { abi_args[ab * 8 + cnt] = first + cnt; }
+                    cnt += 1;
+                }
+            } else {
+                if fresh { abi_args[ab * 8] = first; }
+                cnt = 1;
+                while accept(",") {
+                    if cnt >= 8 { die("at most 8 argument registers"); }
+                    int rn = abi_reg();
+                    if fresh { abi_args[ab * 8 + cnt] = rn; }
+                    cnt += 1;
+                }
+            }
+            if fresh { abi_nargs[ab] = cnt; }
+        } else if str_eq(@field, "via") {
+            // svc N, hvc N, smc N, or a call:  bl name
+            if tok_kind != T_IDENT { die("svc, hvc, smc or bl was expected"); }
+            char vtext[64];
+            str_copy(@vtext, @tok_text, 64);
+            bool isbl = str_eq(@vtext, "bl");
+            if !isbl && !str_eq(@vtext, "svc") && !str_eq(@vtext, "hvc") && !str_eq(@vtext, "smc") { die_name("via: takes svc, hvc, smc (with a number) or bl (with a function)", @vtext); }
+            next();
+            append_text(@vtext, " ");
+            if isbl {
+                if tok_kind != T_IDENT { die("the name of a function was expected after bl"); }
+                append_text(@vtext, @tok_text);
+                next();
+            } else {
+                append_int(@vtext, nk_num());
+            }
+            if fresh { str_copy(@abi_via + ab * 64, @vtext, 64); }
+        } else {
+            die_name("this is not a field of an abi (number args result via)", @field);
+        }
+        expect(";");
+    }
+    expect("}");
+    accept(";");
+    if fresh && abi_nargs[ab] == 0 { die("an abi needs args: (the registers of the arguments)"); }
+}
+
+// the call: the values are in x0 .. x(n-1) in the order they were written
+void emit_abi_call(int ab, int n) {
+    int total = abi_nargs[ab];
+    int first = 0;
+    int dst[16];
+    if abi_num[ab] >= 0 {
+        total += 1;
+        dst[0] = abi_num[ab];
+        first = 1;
+    }
+    if n > total { die("more values than the abi has registers"); }
+    if n < first + 0 { die("the first value of this abi is the number of the call"); }
+    int i = 0;
+    while i < abi_nargs[ab] {
+        dst[first + i] = abi_args[ab * 8 + i];
+        i += 1;
+    }
+    // the parallel move  x[i] -> x[dst[i]]
+    int src[16];
+    bool done[16];
+    i = 0;
+    while i < n {
+        src[i] = i;
+        done[i] = dst[i] == i;
+        i += 1;
+    }
+    int left = 0;
+    i = 0;
+    while i < n {
+        if !done[i] { left += 1; }
+        i += 1;
+    }
+    while left > 0 {
+        bool moved = false;
+        i = 0;
+        while i < n && !moved {
+            if !done[i] {
+                // the destination may be written when no other move still needs it as a source
+                bool free = true;
+                int j = 0;
+                while j < n {
+                    if !done[j] && j != i && src[j] == dst[i] { free = false; }
+                    j += 1;
+                }
+                if free {
+                    str_copy(@nk_line, "mov x", 256);
+                    append_int(@nk_line, dst[i]);
+                    append_text(@nk_line, ", x");
+                    append_int(@nk_line, src[i]);
+                    emit_line(@nk_line);
+                    done[i] = true;
+                    left -= 1;
+                    moved = true;
+                }
+            }
+            i += 1;
+        }
+        if !moved {
+            // only cycles are left: park one source in x17
+            i = 0;
+            while i < n && done[i] { i += 1; }
+            str_copy(@nk_line, "mov x17, x", 256);
+            append_int(@nk_line, src[i]);
+            emit_line(@nk_line);
+            int s0 = src[i];
+            int j2 = 0;
+            while j2 < n {
+                if !done[j2] && src[j2] == s0 { src[j2] = 17; }
+                j2 += 1;
+            }
+        }
+    }
+    if abi_via[ab * 64] == 'b' && abi_via[ab * 64 + 1] == 'l' { note_call(@abi_via + ab * 64 + 3); }
+    emit_line(@abi_via + ab * 64);
+    if abi_res[ab] != 0 {
+        str_copy(@nk_line, "mov x0, x", 256);
+        append_int(@nk_line, abi_res[ab]);
+        emit_line(@nk_line);
+    }
+}

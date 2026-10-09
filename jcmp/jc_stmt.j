@@ -2970,6 +2970,8 @@ void parse_one_item() {
         parse_struct();
     } else if tok_is("using") {
         parse_using();
+    } else if tok_is("abi") {
+        parse_abi();
     } else {
         parse_top_item();
     }

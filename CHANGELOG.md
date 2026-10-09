@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.79
+* **`abi`: a calling convention for a trap instruction** (plan step 3): `abi Syscall { number: x8; args: x0..x5; result: x0; via: svc 0; }` declares where the values go; `Syscall::call(64, 1, buf, n)` computes the values like the arguments of any call, moves them into the registers (a cycle of moves is broken with `x17`), writes the instruction `via` (`svc N`, `hvc N`, `smc N`, or `bl function`) and leaves the result in `x0`. The first value is the number when the abi has a `number:`. Error messages for a register that is not one, an unknown field, more values than registers.
+* Tests: `t290_abi` (a system call write + getpid, an abi whose moves make a cycle, an abi with a number and a call to a naked function), `t291_fail_abi_too_many`.
+
 ## 0.9.78
 * **The groups of the CPU** (plan step 4): `Cpu::` (`wait` = wfi, `event` = wfe, `send_event`, `pause` = yield, `nop`, `isb`, `counter` = the system counter with no system call, `frequency`, `id` = the number of the core), `Mem::barrier()` / `barrier_read()` / `barrier_write()` / `barrier_full()` (dmb ish / ishld / ishst, dsb sy), `Cache::` (`clean invalidate clean_invalidate zero clean_code invalidate_code` = dc cvac / ivac / civac / zva / cvau, ic ivau), and `Atomic::` (`load` = ldar, `store` = stlr, `add sub swap cas bit_and bit_or bit_xor`; they return the value the word had before; sequentially consistent). Each one is the instruction where the call is, no call is made. They work in every function (not only naked ones).
 * The assembler knows `dc` and `ic` (checked against llvm-mc: 104 instructions, 0 differences).
