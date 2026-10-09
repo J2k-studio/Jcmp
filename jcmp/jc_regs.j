@@ -224,7 +224,7 @@ void rg_allocate(int epi, int is_main) {
         rg_cidx[w] = 0 - 1;
         w += 1;
     }
-    int thr = 3;
+    int thr = 2;
     int rounds = 0;
     while rounds < 300 {
         // the busiest slot that is not taken yet

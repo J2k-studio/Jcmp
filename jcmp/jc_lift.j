@@ -921,14 +921,52 @@ bool lw_fuse(int k, int b) {
 }
 
 // the block that is written after the block b (the last block of the function is written at the end)
+int lw_ord[IR_MAXB];              // the order in which the blocks are written
+int lw_pos[IR_MAXB];
+int lw_nord;
+
 int lw_next(int b) {
-    if b == ir_lastb { return 0 - 1; }
-    int n = b + 1;
-    while n < ir_nb && (n == ir_lastb || (ir_opt != 0 && op_po[n] < 0)) { n += 1; }
-    if n >= ir_nb { n = ir_lastb; }
-    return n;
+    int p = lw_pos[b];
+    if p < 0 || p + 1 >= lw_nord { return 0 - 1; }
+    return lw_ord[p + 1];
 }
 
+// the order of the blocks: a block is followed by the block it goes to when that has not been written yet (the false side of a branch
+// first), the last block of the function (the exit) is written at the end
+void lw_layout() {
+    int b = 0;
+    while b < ir_nb {
+        lw_pos[b] = 0 - 1;
+        b += 1;
+    }
+    lw_nord = 0;
+    b = 0;
+    while b < ir_nb {
+        if b != ir_lastb && lw_pos[b] < 0 && (ir_opt == 0 || op_po[b] >= 0) {
+            int cur = b;
+            while cur >= 0 && cur != ir_lastb && lw_pos[cur] < 0 {
+                lw_pos[cur] = lw_nord;
+                lw_ord[lw_nord] = cur;
+                lw_nord += 1;
+                int t = ir_be[cur] - 1;
+                int tk = ir_op[t];
+                int nx = 0 - 1;
+                if ir_opt != 0 {
+                    if tk == IR_JMP { nx = ir_t1[t]; }
+                    else if tk == IR_BR || tk == IR_FBR {
+                        nx = ir_t2[t];
+                        if nx == ir_lastb || lw_pos[nx] >= 0 { nx = ir_t1[t]; }
+                    }
+                }
+                cur = nx;
+            }
+        }
+        b += 1;
+    }
+    lw_pos[ir_lastb] = lw_nord;
+    lw_ord[lw_nord] = ir_lastb;
+    lw_nord += 1;
+}
 // the 8-bit number of a double that "fmov dN, #imm" can make (sign, 4 bits of fraction, exponent from -3 to 4), or -1
 int lw_fpimm(int bits) {
     int low = bits & 281474976710655;                  // the lower 48 bits of the fraction must be 0
@@ -1240,6 +1278,7 @@ bool lw_function() {
         i += 1;
     }
     if ir_opt != 0 { op_webs(); }
+    lw_layout();
     // the blocks that a jump goes to get a label; the others do not
     b = 0;
     while b < ir_nb {
@@ -1264,13 +1303,9 @@ bool lw_function() {
         b += 1;
     }
     int ord = 0;
-    while ord <= ir_nb {
-        // the blocks in order, except that the last block of the function (the one with the exit) is written at the end
-        b = ord;
-        if ord == ir_lastb { ord += 1; continue; }
-        if ord == ir_nb { b = ir_lastb; }
+    while ord < lw_nord {
+        b = lw_ord[ord];
         ord += 1;
-        if ir_opt != 0 && b != ir_lastb && op_po[b] < 0 { continue; }
         if b == ir_lastb && lf_epi_line < 0 { lw_hint(); }
         if lw_need[b] == 1 || ir_opt == 0 || (ir_opt & 1024) != 0 {
             rg_text("L");
@@ -1345,7 +1380,9 @@ void ir_say(char^ a, char^ b, char^ c) {
 void ir_passes_basic() {
     if (ir_opt & 4096) != 0 { op_copy_inline(); }
     if (ir_opt & 128) != 0 { op_thread(); }
+    if (ir_opt & 32768) != 0 { op_sroa(); }
     if (ir_opt & 8) != 0 { op_cse_run(); }
+    if (ir_opt & 8) != 0 { op_dead_cells(); }
     if (ir_opt & 4) != 0 { op_clean_run(); }
     if (ir_opt & 128) != 0 { op_thread(); }
     if (ir_opt & 32) != 0 { op_bits_run(); }
@@ -1473,7 +1510,7 @@ void ir_run() {
                     if (ir_opt & 2) != 0 { op_ra_run(); }
                     if op_hoisted == h0 && op_ra_changes == c0 && (vn_cellhits == vh0 || (ir_opt & 64) != 0 || op_count() >= cnt0) && bt_changes == bt0 && ci_changes == ci0 && (ir_opt & 64) == 0 { op_changed = 0; }
                 }
-                if ir_mode == 3 {
+                if ir_mode == 3 || (ir_opt & 2097152) != 0 {
                     ir_print();
                     syscall(64, 2, @ir_pbuf, ir_plen);
                 }

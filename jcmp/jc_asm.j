@@ -774,6 +774,14 @@ void as_instruction() {
             as_put32((lo >> 32) & 4294967295);
             return;
         }
+        if as_mn_is("align") {
+            // pad with nops until the address (where the program is loaded: 0x4000B0 + as_pos) is a multiple of N bytes
+            as_skip_spaces();
+            int an = as_parse_number();
+            if an < 4 || an > 4096 { as_fail(); }
+            while (as_pos + 176) % an != 0 { as_put32(0xD503201F); }
+            return;
+        }
         if as_mn_is("asciz") {
             // a text between double quotes (no escapes), a 0 byte after it, padded to a multiple of 4
             as_skip_spaces();

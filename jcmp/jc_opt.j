@@ -1354,6 +1354,7 @@ void vn_block(int b, int cont) {
             }
         }
         int V = 0 - 1;
+        bool fwd = false;
         bool valuable = false;
         if d != 0 && vn_n < VN_MAX - 8 {
             if op == IR_CONST {
@@ -1367,7 +1368,7 @@ void vn_block(int b, int cont) {
                     if vn_ver_st[sl] != vn_hcur { vn_ver_st[sl] = vn_hcur; vn_ver[sl] = 0; vn_cellvn[sl] = 0 - 1; }
                     V = vn_find(1002, sl, vn_ver[sl], 0);
                     if V < 0 { V = vn_new(1002, sl, vn_ver[sl], 0); vn_enter(V); }
-                    if V >= 0 && vn_al[V] >= 0 { V = vn_al[V]; }
+                    if V >= 0 && vn_al[V] >= 0 { V = vn_al[V]; fwd = true; }
                 }
             } else if op == IR_COPY {
                 int va = vn_reg(ir_a[i]);
@@ -1410,7 +1411,7 @@ void vn_block(int b, int cont) {
                 // a register that holds the value already: a copy
                 bool done = false;
                 int h = vn_holder[V];
-                if op != IR_LOAD && (op != IR_CONST || (ir_k[i] != 0 && op_costly(ir_k[i]))) && h >= 1 && vn_holds(h, V) && ir_vcls[h] == ir_vcls[d] && vn_def[V] != i {
+                if (op != IR_LOAD || (fwd && (ir_opt & 1048576) == 0)) && (op != IR_CONST || (ir_k[i] != 0 && op_costly(ir_k[i]))) && h >= 1 && vn_holds(h, V) && ir_vcls[h] == ir_vcls[d] && vn_def[V] != i {
                     if h == d {
                         ir_op[i] = IR_NOP;
                         ir_d[i] = 0;
@@ -1442,6 +1443,16 @@ void vn_block(int b, int cont) {
                 vn_set(d, V);
                 i += 1;
                 continue;
+            }
+        }
+        // a second operand that is a known small number is an immediate (the text pass would take "mov x1, N" into "cmp x0, N" without
+        // asking whether x1 is needed later: with an immediate there is no such pair)
+        if (op == IR_BR || op == IR_ADD || op == IR_SUB || op == IR_SETCC) && ir_bi[i] == 0 && vn_n < VN_MAX - 8 && ir_vcls[ir_a[i]] == 0 {
+            int vb5 = vn_reg(ir_b[i]);
+            if vb5 >= 0 && vn_k[vb5] == 1001 && vn_x[vb5] >= 0 && vn_x[vb5] <= 4095 {
+                ir_bi[i] = 1;
+                ir_b[i] = vn_x[vb5];
+                vn_changes += 1;
             }
         }
         // a branch on a number: decided when the way in tells the answer
@@ -1548,7 +1559,7 @@ bool vn_emit(int b) {
 int vn_done[IR_MAXB];
 int vn_pc[IR_MAXB];             // the number of predecessors (that the flow can reach)
 
-void op_cse_run() {
+void op_walk(int kind) {
     op_graph();
     vn_hints();
     vn_q = op_maxq();
@@ -1581,7 +1592,7 @@ void op_cse_run() {
             int cont = 0;
             while cur >= 0 {
                 vn_done[cur] = 1;
-                vn_block(cur, cont);
+                if kind == 0 { vn_block(cur, cont); } else { fa_block(cur, cont); }
                 // the way on: the false side of a branch first (the fall through), else the true side, else the target of a jump
                 int term = ir_be[cur] - 1;
                 int nxt = 0 - 1;
@@ -1612,11 +1623,17 @@ void op_cse_run() {
             }
         }
     }
-    b = 0;
-    while b < nb0 {
-        if op_po[b] >= 0 { vn_emit(b); }
-        b += 1;
+    if kind == 0 {
+        b = 0;
+        while b < nb0 {
+            if op_po[b] >= 0 { vn_emit(b); }
+            b += 1;
+        }
     }
+}
+
+void op_cse_run() {
+    op_walk(0);
 }
 
 // the number of instructions that do something, in the blocks the flow can reach (to see whether the passes made the function smaller)
@@ -2378,4 +2395,318 @@ void op_inline(char^ self) {
             b += 1;
         }
     }
+}
+
+
+// ---------------------------------------------------------------------------------------------- stores to stack cells that nobody reads
+int dc_read[16384];
+int dc_changes;
+
+void op_dead_cells() {
+    if (ir_opt & 524288) != 0 { return; }
+    int i = 0;
+    while i < 16384 {
+        dc_read[i] = 0;
+        i += 1;
+    }
+    int b = 0;
+    while b < ir_nb {
+        if op_po[b] >= 0 {
+            int j = ir_bs[b];
+            while j < ir_be[b] {
+                if ir_op[j] == IR_LOAD && ir_a[j] == 30 {
+                    int k = ir_k[j];
+                    int w = ir_w[j];
+                    if w < 0 { w = 0 - w; }
+                    if w == 0 { w = 8; }
+                    if k < 0 {
+                        dc_read[8192 + (0 - k) / 8] = 1;
+                        dc_read[8192 + (0 - k + 7) / 8] = 1;
+                    } else if k / 8 < 8192 {
+                        dc_read[k / 8] = 1;
+                        if (k + w - 1) / 8 < 8192 { dc_read[(k + w - 1) / 8] = 1; }
+                    }
+                }
+                j += 1;
+            }
+        }
+        b += 1;
+    }
+    b = 0;
+    while b < ir_nb {
+        if op_po[b] >= 0 {
+            int j2 = ir_bs[b];
+            while j2 < ir_be[b] {
+                if ir_op[j2] == IR_STORE && ir_a[j2] == 30 && ir_w[j2] == 8 {
+                    int k2 = ir_k[j2];
+                    int sl = 0 - 1;
+                    if k2 < 0 && (0 - k2) % 8 == 0 && (0 - k2) / 8 < 8192 { sl = 8192 + (0 - k2) / 8; }
+                    else if k2 >= 0 && k2 % 8 == 0 && k2 / 8 < 8192 && op_plain[k2 / 8] == 1 { sl = k2 / 8; }
+                    if sl >= 0 && dc_read[sl] == 0 {
+                        ir_op[j2] = IR_NOP;
+                        ir_d[j2] = 0;
+                        ir_a[j2] = 0;
+                        ir_bi[j2] = 1;
+                        dc_changes += 1;
+                    }
+                }
+                j2 += 1;
+            }
+        }
+        b += 1;
+    }
+}
+
+
+// ---------------------------------------------------------------------------------------------- struct temporaries in the frame (SROA)
+// A pointer that is the frame pointer plus a number (ADDR_SLOT, add x, x29, #N, and copies and sums of them, also when they went through a
+// stack cell) is followed through each chain of blocks; a load or store through such a pointer becomes a load or store at the offset
+// from the frame pointer. The address computations are dead after that; a frame object whose address is still used somewhere else (a call
+// argument, ...) is not touched. Frame objects that are only accessed by whole 8-byte words after that are written to the hint line as plain
+// slots, so the passes that know the plain slots (value numbering, dead stores) and the register pass treat each word as a variable.
+
+int fa_reg[IR_MAXV];
+int fa_st[IR_MAXV];
+int fa_cur;
+int fa_cell[16384];
+int fa_cst[16384];
+int fa_changes;
+
+int fa_get(int r) {
+    if r == 30 { return 0; }
+    if r < 1 || r >= ir_nv || fa_st[r] != fa_cur { return 0 - 1000000; }
+    return fa_reg[r];
+}
+
+void fa_set(int r, int off) {
+    if r < 1 || r >= ir_nv { return; }
+    fa_reg[r] = off;
+    fa_st[r] = fa_cur;
+}
+
+void fa_clear(int r) {
+    if r >= 1 && r < ir_nv { fa_st[r] = 0; }
+}
+
+void fa_block(int b, int cont) {
+    if cont == 0 { fa_cur += 1; }
+    int i = ir_bs[b];
+    while i < ir_be[b] {
+        int op = ir_op[i];
+        int d = ir_d[i];
+        // a load or a store through a frame pointer plus a number
+        if (op == IR_LOAD || op == IR_STORE) && ir_a[i] != 30 {
+            int fo = fa_get(ir_a[i]);
+            int wq = ir_w[i];
+            if wq < 0 { wq = 0 - wq; }
+            if wq == 0 { wq = 1; }
+            if fo > 0 - 1000000 && fo + ir_k[i] >= 16 && fo + ir_k[i] < 30000 && (fo + ir_k[i]) % wq == 0 {
+                ir_k[i] = fo + ir_k[i];
+                ir_a[i] = 30;
+                fa_changes += 1;
+            }
+        }
+        if op == IR_CALL || op == IR_CALLIND || op == IR_SYSCALL {
+            fa_cur += 1;                                  // the registers are not known after a call (the cells stay, but they are looked up by version)
+            fa_clear(d);
+        } else if op == IR_ADDR_SLOT && d != 30 {
+            fa_set(d, ir_k[i]);
+        } else if op == IR_ADD && ir_bi[i] == 1 && fa_get(ir_a[i]) > 0 - 1000000 {
+            fa_set(d, fa_get(ir_a[i]) + ir_b[i]);
+        } else if op == IR_COPY && fa_get(ir_a[i]) > 0 - 1000000 && ir_a[i] != 30 {
+            fa_set(d, fa_get(ir_a[i]));
+        } else if op == IR_LOAD && ir_a[i] == 30 && ir_w[i] == 8 {
+            // a pointer that was stored in a stack cell
+            int sl = 0 - 1;
+            if ir_k[i] < 0 && (0 - ir_k[i]) % 8 == 0 && (0 - ir_k[i]) / 8 < 8192 { sl = 8192 + (0 - ir_k[i]) / 8; }
+            else if ir_k[i] >= 0 && ir_k[i] % 8 == 0 && ir_k[i] / 8 < 8192 && op_plain[ir_k[i] / 8] == 1 { sl = ir_k[i] / 8; }
+            if sl >= 0 && fa_cst[sl] == fa_cur { fa_set(d, fa_cell[sl]); } else { fa_clear(d); }
+        } else if op == IR_STORE && ir_a[i] == 30 && ir_w[i] == 8 {
+            int sl2 = 0 - 1;
+            if ir_k[i] < 0 && (0 - ir_k[i]) % 8 == 0 && (0 - ir_k[i]) / 8 < 8192 { sl2 = 8192 + (0 - ir_k[i]) / 8; }
+            else if ir_k[i] >= 0 && ir_k[i] % 8 == 0 && ir_k[i] / 8 < 8192 && op_plain[ir_k[i] / 8] == 1 { sl2 = ir_k[i] / 8; }
+            if sl2 >= 0 {
+                int vo = fa_get(ir_b[i]);
+                if vo > 0 - 1000000 && ir_b[i] != 30 { fa_cell[sl2] = vo; fa_cst[sl2] = fa_cur; } else { fa_cst[sl2] = 0; }
+            }
+        } else if d != 0 {
+            fa_clear(d);
+        }
+        i += 1;
+    }
+}
+
+// the objects of the frame from the hint line
+int ob_off[2048];
+int ob_size[2048];
+int ob_flag[2048];
+int ob_esc[2048];
+int ob_n;
+
+void fa_objects() {
+    ob_n = 0;
+    int n = lf_hint_n;
+    int p = 2;
+    while p < n && ob_n < 2048 {
+        while p < n && lf_hint_text[p] == ' ' { p += 1; }
+        if p < n {
+            int off = 0;
+            while p < n && lf_hint_text[p] >= '0' && lf_hint_text[p] <= '9' { off = off * 10 + (lf_hint_text[p] - '0'); p += 1; }
+            p += 1;
+            int size = 0;
+            while p < n && lf_hint_text[p] >= '0' && lf_hint_text[p] <= '9' { size = size * 10 + (lf_hint_text[p] - '0'); p += 1; }
+            p += 1;
+            int flag = 0;
+            while p < n && lf_hint_text[p] >= '0' && lf_hint_text[p] <= '9' { flag = flag * 10 + (lf_hint_text[p] - '0'); p += 1; }
+            ob_off[ob_n] = off;
+            ob_size[ob_n] = size;
+            ob_flag[ob_n] = flag;
+            ob_esc[ob_n] = 0;
+            ob_n += 1;
+        }
+    }
+}
+
+int fa_object_of(int k) {
+    int j = 0;
+    while j < ob_n {
+        if k >= ob_off[j] && k < ob_off[j] + ob_size[j] { return j; }
+        j += 1;
+    }
+    return 0 - 1;
+}
+
+void op_sroa_finish() {
+    fa_objects();
+    bool all_esc = false;
+    int b = 0;
+    while b < ir_nb {
+        if op_po[b] >= 0 {
+            int i = ir_bs[b];
+            while i < ir_be[b] {
+                int op = ir_op[i];
+                int k = ir_k[i];
+                // the frame pointer in any other use (plus a register, a copy ...): any object may be reached
+                if (ir_a[i] == 30 && op != IR_LOAD && op != IR_STORE && !(op == IR_ADD && ir_bi[i] == 1) && op != IR_ADDR_SLOT) { all_esc = true; }
+                if ((ir_uses_b(op) && ir_bi[i] == 0 && ir_b[i] == 30) && !(op == IR_STORE && false)) { all_esc = true; }
+                if (op == IR_CALL || op == IR_CALLIND || op == IR_SYSCALL) {
+                    int g = 0;
+                    while g < ir_ac[i] {
+                        if ir_args[ir_as[i] + g] == 30 { all_esc = true; }
+                        g += 1;
+                    }
+                }
+                if (op == IR_ADDR_SLOT && ir_d[i] != 30) || (op == IR_ADD && ir_a[i] == 30 && ir_bi[i] == 1) {
+                    int off = k;
+                    if op == IR_ADD { off = ir_b[i]; }
+                    int o = fa_object_of(off);
+                    if o >= 0 { ob_esc[o] = 1; }
+                    if (ir_opt & 262144) != 0 { write_err("  address of "); write_err_int(off); write_err(" by instruction "); write_err_int(i); write_err(" op "); write_err_int(op); write_err("\n"); }
+                } else if (op == IR_LOAD || op == IR_STORE) && ir_a[i] == 30 && k >= 16 {
+                    int o2 = fa_object_of(k);
+                    if o2 >= 0 && ob_flag[o2] == 0 {
+                        int w = ir_w[i];
+                        if w < 0 { w = 0 - w; }
+                        if !(w == 8 && k % 8 == 0 && k % 8 == 0 && ob_off[o2] % 8 == 0 && k + 8 <= ob_off[o2] + ob_size[o2]) { ob_esc[o2] = 1; }
+                    }
+                }
+                i += 1;
+            }
+        }
+        b += 1;
+    }
+    if (ir_opt & 262144) != 0 { write_err("function "); write_err(@ir_fname); if all_esc { write_err(" (all objects reached)"); } write_err("\n"); }
+    if all_esc {
+        int jj = 0;
+        while jj < ob_n {
+            ob_esc[jj] = 1;
+            jj += 1;
+        }
+    }
+    // the hint line again: an object that was not plain, is not used by its address any more and is made of whole words, is plain words now
+    char nt[16384];
+    int nn = 0;
+    nt[0] = ';';
+    nt[1] = 'H';
+    nn = 2;
+    int j = 0;
+    bool changed = false;
+    while j < ob_n && nn < 15000 {
+        bool conv = ob_flag[j] == 0 && ob_esc[j] == 0 && ob_size[j] % 8 == 0 && ob_off[j] % 8 == 0 && ob_size[j] <= 128;
+        int words = 1;
+        int osz = ob_size[j];
+        if conv { words = ob_size[j] / 8; osz = 8; changed = true; }
+        if (ir_opt & 262144) != 0 {
+            write_err("object "); write_err_int(ob_off[j]); write_err(":"); write_err_int(ob_size[j]); write_err(":"); write_err_int(ob_flag[j]);
+            if ob_esc[j] == 1 { write_err(" escaped"); }
+            if conv { write_err(" -> words"); }
+            write_err("\n");
+        }
+        int w = 0;
+        while w < words {
+            int vals[3];
+            vals[0] = ob_off[j] + w * 8;
+            vals[1] = osz;
+            vals[2] = ob_flag[j];
+            if conv { vals[2] = 1; }
+            if ob_esc[j] == 1 && ob_flag[j] == 1 { vals[2] = 0; changed = true; }
+            nt[nn] = ' ';
+            nn += 1;
+            int q = 0;
+            while q < 3 {
+                char dg[12];
+                int dn = 0;
+                int dv = vals[q];
+                if dv == 0 { dg[0] = '0'; dn = 1; }
+                while dv > 0 { dg[dn] = '0' + dv % 10; dv = dv / 10; dn += 1; }
+                while dn > 0 { dn -= 1; nt[nn] = dg[dn]; nn += 1; }
+                if q < 2 { nt[nn] = ':'; nn += 1; }
+                q += 1;
+            }
+            w += 1;
+        }
+        j += 1;
+    }
+    if changed && j == ob_n && (ir_opt & 65536) == 0 {
+        int t = 0;
+        while t < nn {
+            lf_hint_text[t] = nt[t];
+            t += 1;
+        }
+        lf_hint_n = nn;
+    }
+}
+
+void op_sroa() {
+    if (ir_opt & 131072) == 0 { op_walk(1); }
+    op_clean_run();                               // the address computations that nobody uses any more must not count as uses
+    op_graph();
+    op_sroa_finish();
+}
+
+// ---------------------------------------------------------------------------------------------- function alignment
+// Every function starts at an address that is a multiple of al_to bytes (".align N" in the assembler text). Measured on the Cortex-A55: the
+// speed of `fib` changed between 68 and 83 ms only by moving the function by a few instructions; at 32 bytes it is always the fast one.
+int al_to = 32;
+
+void al_run() {
+    if al_to == 0 { return; }
+    regs_len = 0;
+    int i = 0;
+    while i < out_len {
+        int en = rg_end(i);
+        if rg_is_func(i) {
+            rg_text(".align ");
+            rg_int(al_to);
+            rg_put(10);
+        }
+        rg_copy(i, en);
+        i = en + 1;
+    }
+    int t = 0;
+    while t < regs_len {
+        out_buf[t] = regs_buf[t];
+        t += 1;
+    }
+    out_len = regs_len;
 }
