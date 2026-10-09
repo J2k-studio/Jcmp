@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.63
+* **The bracket forms of memory** (chosen by the owner, `docs/syntax-design.md` 57): `alloc[int^ p = 32];` (a pointer declaration with its number of elements), `alloc0[int^ p = 32];` (zeroed), `free[p];` / `free[p = 32];`, `grow[p = 64];` (a bigger block with the old content), `arr[n]` (= `arr(n)`), and **pools**: `alloc[int^ pool = 32];` then `alloc[pool[12] >> int^ a];` takes 12 elements from the pool into `a`; `free[a];` gives back only that piece; `free[pool];` everything. The forms with parentheses stay. Test `t271`.
+* `Mem::alloc0`, `Mem::take`, `Mem::grow_slot`, `Mem::free_checked` in the prelude.
+
 ## 0.9.62
 * **The mascot:** the shadow of the Moon on the Earth is the shape of the letter J when the Moon is the letter J (before: a round spot). The ray to the Sun is followed to the plane of the flat letter and the place where it meets the plane is looked up in the letter; a full Moon still gives a round shadow.
 

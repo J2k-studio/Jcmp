@@ -325,6 +325,25 @@ Limits: a `throw` that leaves a block does not free that block's memory, and mem
 assigned after its declaration is not tracked (use a declaration, or free it yourself).
 A `-d` build reports at the end of `main` how many blocks were never freed.
 
+### The bracket forms of memory
+
+A shorter way to write the same things (the forms with parentheses, `alloc(bytes)`, `free(p)`, `arr(n)`, stay). `n` is a number of **elements**:
+
+```jk
+alloc[int^ p = 32];            // int^ p, 32 ints (not cleared); p owns them, the compiler frees them at the end of the block
+alloc0[int^ z = 32];           // the same, every byte 0
+int[] x = arr[n];              // a dynamic array that can hold n (same as arr(n))
+free[p];                       // gives the block back (p is null from now on)
+free[p = 32];                  // the same; a -d build checks that the block can hold 32 elements
+grow[p = 64];                  // p becomes a block of 64 elements with the old content (p is the same if there is no memory)
+
+alloc[int^ pool = 32];         // a pool of 32 ints ...
+alloc[pool[12] >> int^ a];     // ... 12 of them go to a (null if the pool has not that much room)
+alloc[pool[12] >> int^ b];
+free[b];                       // only b goes back (a still works); free[pool] frees everything
+```
+If a variable is called `alloc`, `alloc0`, `free`, `grow` or `arr`, a `[` after it is an index as always.
+
 ## Pointers
 
 ```jk

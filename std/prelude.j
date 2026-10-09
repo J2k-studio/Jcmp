@@ -99,6 +99,7 @@ struct Mem {
         if h != 0 {
             int^ hd = (int^)h;
             std_free_cls[c] = hd[1];
+            hd[1] = 0;
             std_alloc_n += 1;
             return (void^)(h + 16);
         }
@@ -111,6 +112,7 @@ struct Mem {
         std_alloc_n += 1;
         int^ head = (int^)blk;
         head[0] = csize;
+        head[1] = 0;
         return (void^)(blk + 16);
     }
     // a block of `need` bytes (more than 2048) from the list of big blocks, or from the chunk
@@ -139,6 +141,7 @@ struct Mem {
                     int^ before2 = (int^)prev;
                     before2[1] = hdr[1];
                 }
+                hdr[1] = 0;
                 std_alloc_n += 1;
                 return (void^)(cur + 16);
             }
@@ -150,6 +153,7 @@ struct Mem {
         std_alloc_n += 1;
         int^ nh = (int^)nb;
         nh[0] = need;
+        nh[1] = 0;
         return (void^)(nb + 16);
     }
     // give a block from alloc back (null is ignored)
@@ -168,8 +172,12 @@ struct Mem {
         if (int)p == 0 { return; }
         int blk = (int)p - 16;
         int^ head = (int^)blk;
-        std_free_n += 1;
         int size = head[0];
+        if (size & 1) != 0 {
+            Mem::free_piece(blk);
+            return;
+        }
+        std_free_n += 1;
         if size <= 2048 {
             int c = std_cls_exact[size >> 4];
             if c >= 0 {
@@ -207,6 +215,62 @@ struct Mem {
                 pv[1] = blk;
             }
         }
+    }
+    // like alloc, and every byte is 0
+    static void^ alloc0(int n) {
+        void^ r = Mem::alloc(n);
+        if (int)r != 0 { Mem::set(r, 0, n); }
+        return r;
+    }
+    // A block can be a pool (alloc[int^ a = 32]): pieces are taken from it with alloc[a[12] >> int^ p]. The piece has a header of its own
+    // [size + 1 (a piece) (+ 2 once it is given back), the pool]; the word `next` of the header of the pool is how many bytes are
+    // taken. Freeing a piece frees only that piece (it is given back for good when it is the last one taken); freeing the pool frees
+    // everything. null if the pool has not that much room.
+    static void^ take(void^ pool, int bytes) {
+        if (int)pool == 0 { return null; }
+        int^ ph = (int^)((int)pool - 16);
+        int need = ((bytes + 15) >> 4) * 16 + 16;
+        if ph[1] + need > ph[0] - 16 { return null; }
+        int at = (int)pool + ph[1];
+        int^ piece = (int^)at;
+        piece[0] = need + 1;
+        piece[1] = (int)pool;
+        ph[1] = ph[1] + need;
+        return (void^)(at + 16);
+    }
+    static void free_piece(int blk) {
+        int^ piece = (int^)blk;
+        if (piece[0] & 2) != 0 { return; }                // given back already
+        piece[0] = piece[0] | 2;
+        int size = piece[0] - 3;
+        int pool = piece[1];
+        int^ ph = (int^)(pool - 16);
+        if blk + size == pool + ph[1] { ph[1] = blk - pool; }     // the last piece: the room is free again
+    }
+    // p = a block of `bytes` bytes with the old content; slot is the address of p (grow[p = n])
+    static void grow_slot(int^ slot, int bytes) {
+        int old = slot[0];
+        if old == 0 {
+            slot[0] = (int)Mem::alloc(bytes);
+            return;
+        }
+        int^ oh = (int^)(old - 16);
+        int have = (oh[0] & -4) - 16;
+        void^ nb = Mem::alloc(bytes);
+        if (int)nb == 0 { return; }
+        int n = have;
+        if bytes < n { n = bytes; }
+        Mem::copy(nb, (void^)old, n);
+        Mem::free((void^)old);
+        slot[0] = (int)nb;
+    }
+    // free[p = n] in a -d build: the block must be able to hold n bytes
+    static void free_checked(void^ p, int bytes) {
+        if (int)p != 0 {
+            int^ h = (int^)((int)p - 16);
+            if bytes > (h[0] & -4) - 16 { __panic("free[p = n]: the block is smaller than n"); }
+        }
+        Mem::free(p);
     }
     // -d : at the end of main, say how many blocks were never given back
     static void report() {

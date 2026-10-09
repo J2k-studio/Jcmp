@@ -2131,6 +2131,7 @@ void parse_defer() {
 }
 
 void parse_statement_inner() {
+    sg_statement();                      // alloc[..] free[..] grow[..] become their usual form
     if tok_is("defer") && in_func_stmt_ok() {
         parse_defer();
         return;

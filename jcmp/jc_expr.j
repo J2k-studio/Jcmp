@@ -2095,6 +2095,262 @@ void call_postfix() {
     }
 }
 
+// ---------------------------------------------------------------- the bracket forms of memory
+//   alloc[int^ p = n]          int^ p = (int^)Mem::alloc((n) * sizeof(int))      (n is a number of elements; the bytes are not garbage-free)
+//   alloc0[int^ p = n]         the same, every byte 0
+//   alloc[a[n] >> int^ p]      n elements taken from the pool a (a block made with alloc[..])
+//   free[p]                    Mem::free(p)             free[p = n]   Mem::free(p) (a -d build checks that the block holds n elements)
+//   grow[p = n]                p becomes a block of n elements with the old content
+//   arr[n]                     arr(n)
+// The text between the brackets is read from the source, a text with the usual form is made, and the compiler goes on reading it.
+char sg_in[300];
+char sg_out[400];
+char sg_tn[64];
+char sg_ty[128];
+char sg_pt[128];
+char sg_cnt[200];
+char sg_pool[64];
+
+// the text that follows the current token is  [ ... ]  : copy what is between the brackets to sg_in (false if there is no [ ); after_open:
+// 1 if the current token is already the [
+bool sg_read(int after_open) {
+    int k = 0;
+    if after_open == 0 {
+        while is_space(lc(k)) { k += 1; }
+        if lc(k) != '[' { return false; }
+        k += 1;
+    }
+    int depth = 1;
+    int n = 0;
+    while true {
+        int c = lc(k);
+        if c == 0 { return false; }
+        if c == '[' { depth += 1; }
+        if c == ']' {
+            depth -= 1;
+            if depth == 0 { break; }
+        }
+        if n >= 280 { die("this [ ] form is too long"); }
+        sg_in[n] = c;
+        n += 1;
+        k += 1;
+    }
+    sg_in[n] = 0;
+    return true;
+}
+
+// is the first thing after the current token a [ ?
+bool sg_bracket_next() {
+    int k = 0;
+    while is_space(lc(k)) { k += 1; }
+    return lc(k) == '[';
+}
+
+// skip the tokens from the current one (the word, or the [ if after_open is 1) up to the matching ]: the current token is that ]
+// (the text that is pushed next goes in front of what follows it)
+void sg_skip(int after_open) {
+    if after_open == 0 { next(); }                  // the [
+    int depth = 0;
+    while true {
+        if tok_kind == T_EOF { die("a ] was expected"); }
+        if tok_is("[") { depth += 1; }
+        if tok_is("]") {
+            depth -= 1;
+            if depth == 0 { break; }
+        }
+        next();
+    }
+}
+
+// the part sg_in[from .. to) without the spaces at both ends, copied to dst
+void sg_part(char^ dst, int from, int to, int cap) {
+    while from < to && is_space(sg_in[from]) { from += 1; }
+    while to > from && is_space(sg_in[to - 1]) { to -= 1; }
+    int n = 0;
+    while from < to && n < cap - 1 {
+        dst[n] = sg_in[from];
+        n += 1;
+        from += 1;
+    }
+    dst[n] = 0;
+}
+
+// the place of the first  =  (not part of ==, <=, >=, !=) or  >>  that is not inside brackets or parentheses; -1 if none
+int sg_find(int want_shift) {
+    int depth = 0;
+    int i = 0;
+    while sg_in[i] != 0 {
+        int c = sg_in[i];
+        if c == '(' || c == '[' { depth += 1; }
+        if c == ')' || c == ']' { depth -= 1; }
+        if depth == 0 {
+            if want_shift == 0 && c == '=' && sg_in[i + 1] != '=' && (i == 0 || (sg_in[i - 1] != '=' && sg_in[i - 1] != '<' && sg_in[i - 1] != '>' && sg_in[i - 1] != '!')) { return i; }
+            if want_shift == 1 && c == '>' && sg_in[i + 1] == '>' { return i; }
+        }
+        i += 1;
+    }
+    return 0 - 1;
+}
+
+// "int^ p"  ->  the name in sg_tn and the type in sg_ty (the pointee, without the last ^, in sg_pt); false if it has no name or the type is not a pointer
+bool sg_decl(char^ text) {
+    int n = str_len(text);
+    int e = n;
+    while e > 0 && (is_letter(text[e - 1]) || is_digit(text[e - 1]) || text[e - 1] == '_') { e -= 1; }
+    if e == n { return false; }
+    int k = 0;
+    while e + k < n && k < 60 {
+        sg_tn[k] = text[e + k];
+        k += 1;
+    }
+    sg_tn[k] = 0;
+    int te = e;
+    while te > 0 && is_space(text[te - 1]) { te -= 1; }
+    if te == 0 || text[te - 1] != '^' { return false; }
+    k = 0;
+    while k < te && k < 120 {
+        sg_ty[k] = text[k];
+        k += 1;
+    }
+    sg_ty[k] = 0;
+    k = 0;
+    while k < te - 1 && k < 120 {
+        sg_pt[k] = text[k];
+        k += 1;
+    }
+    while k > 0 && is_space(sg_pt[k - 1]) { k -= 1; }
+    sg_pt[k] = 0;
+    return true;
+}
+
+// the bracket form of the word `kind` (0 alloc, 1 alloc0, 2 free, 3 grow, 4 arr) is in sg_in: make the new text in sg_out
+void sg_make(int kind) {
+    sg_out[0] = 0;
+    char left[200];
+    if kind == 4 {
+        append_text(@sg_out, "(");
+        append_text(@sg_out, @sg_in);
+        append_text(@sg_out, ")");
+        return;
+    }
+    if kind == 2 {
+        int eq = sg_find(0);
+        if eq < 0 {
+            append_text(@sg_out, "Mem::free(");
+            append_text(@sg_out, @sg_in);
+            append_text(@sg_out, ")");
+        } else {
+            char nm[100];
+            char cn[200];
+            sg_part(@nm, 0, eq, 100);
+            sg_part(@cn, eq + 1, str_len(@sg_in), 200);
+            if opt_debug == 1 { append_text(@sg_out, "Mem::free_checked("); } else { append_text(@sg_out, "Mem::free("); }
+            append_text(@sg_out, @nm);
+            if opt_debug == 1 {
+                append_text(@sg_out, ", (");
+                append_text(@sg_out, @cn);
+                append_text(@sg_out, ") * sizeof(");
+                append_text(@sg_out, @nm);
+                append_text(@sg_out, "^)");
+            }
+            append_text(@sg_out, ")");
+        }
+        return;
+    }
+    if kind == 3 {
+        int eq3 = sg_find(0);
+        if eq3 < 0 { die("grow[p = n] : the new size was expected after ="); }
+        char nm3[100];
+        char cn3[200];
+        sg_part(@nm3, 0, eq3, 100);
+        sg_part(@cn3, eq3 + 1, str_len(@sg_in), 200);
+        append_text(@sg_out, "Mem::grow_slot((int^)@");
+        append_text(@sg_out, @nm3);
+        append_text(@sg_out, ", (");
+        append_text(@sg_out, @cn3);
+        append_text(@sg_out, ") * sizeof(");
+        append_text(@sg_out, @nm3);
+        append_text(@sg_out, "^))");
+        return;
+    }
+    // alloc / alloc0: a declaration with a size, or a piece of a pool
+    int sh = sg_find(1);
+    if sh >= 0 {
+        if kind != 0 { die("alloc0[..] has no pool form: take the piece with alloc[a[n] >> int^ p]"); }
+        char src[100];
+        char dst[100];
+        sg_part(@src, 0, sh, 100);
+        sg_part(@dst, sh + 2, str_len(@sg_in), 100);
+        // src = pool[count]
+        int ob = 0;
+        while src[ob] != 0 && src[ob] != '[' { ob += 1; }
+        int cl = str_len(@src);
+        if src[ob] != '[' || cl == 0 || src[cl - 1] != ']' { die("alloc[a[n] >> int^ p] : the part before >> must be pool[count]"); }
+        int k = 0;
+        while k < ob && k < 60 {
+            sg_pool[k] = src[k];
+            k += 1;
+        }
+        sg_pool[k] = 0;
+        k = 0;
+        while ob + 1 + k < cl - 1 && k < 190 {
+            sg_cnt[k] = src[ob + 1 + k];
+            k += 1;
+        }
+        sg_cnt[k] = 0;
+        if !sg_decl(@dst) { die("alloc[a[n] >> int^ p] : the part after >> must be a pointer declaration like  int^ p"); }
+        append_text(@sg_out, @sg_ty);
+        append_text(@sg_out, " ");
+        append_text(@sg_out, @sg_tn);
+        append_text(@sg_out, " = (");
+        append_text(@sg_out, @sg_ty);
+        append_text(@sg_out, ")Mem::take((void^)");
+        append_text(@sg_out, @sg_pool);
+        append_text(@sg_out, ", (");
+        append_text(@sg_out, @sg_cnt);
+        append_text(@sg_out, ") * sizeof(");
+        append_text(@sg_out, @sg_pt);
+        append_text(@sg_out, "))");
+        return;
+    }
+    int eq2 = sg_find(0);
+    if eq2 < 0 { die("alloc[int^ p = n] : the number of elements was expected after ="); }
+    sg_part(@left, 0, eq2, 200);
+    sg_part(@sg_cnt, eq2 + 1, str_len(@sg_in), 200);
+    if !sg_decl(@left) { die("alloc[int^ p = n] : a pointer declaration like  int^ p  was expected before ="); }
+    append_text(@sg_out, @sg_ty);
+    append_text(@sg_out, " ");
+    append_text(@sg_out, @sg_tn);
+    append_text(@sg_out, " = (");
+    append_text(@sg_out, @sg_ty);
+    if kind == 1 { append_text(@sg_out, ")Mem::alloc0(("); } else { append_text(@sg_out, ")Mem::alloc(("); }
+    append_text(@sg_out, @sg_cnt);
+    append_text(@sg_out, ") * sizeof(");
+    append_text(@sg_out, @sg_pt);
+    append_text(@sg_out, "))");
+}
+
+// the current token is alloc, alloc0, free or grow at the start of a statement, followed by [ : the statement is replaced by its usual
+// form (without the ; that follows)
+bool sg_statement() {
+    if tok_kind != T_IDENT { return false; }
+    int kind = 0 - 1;
+    if str_eq(@tok_text, "alloc") { kind = 0; }
+    else if str_eq(@tok_text, "alloc0") { kind = 1; }
+    else if str_eq(@tok_text, "free") { kind = 2; }
+    else if str_eq(@tok_text, "grow") { kind = 3; }
+    if kind < 0 { return false; }
+    if lookup_var(@tok_text) { return false; }               // a variable of that name: p[i] stays an index
+    if !sg_bracket_next() { return false; }
+    if !sg_read(0) { return false; }
+    sg_skip(0);
+    sg_make(kind);
+    if str_len(@sg_out) > 290 { die("this [ ] form is too long"); }
+    push_macro(@sg_out);
+    next();
+    return true;
+}
+
 // an identifier in an expression: a variable, an element, a deref or a call
 void gen_identifier() {
     str_copy(@id_name, @tok_text, 256);
@@ -2191,6 +2447,15 @@ void gen_identifier() {
         }
         str_temp();
         return;
+    }
+    if tok_is("[") && str_eq(@id_name, "arr") && !lookup_var(@id_name) && find_func(@id_name) < 0 {
+        // arr[n] is arr(n)
+        if sg_read(1) {
+            sg_skip(1);
+            sg_make(4);
+            push_macro(@sg_out);
+            next();
+        }
     }
     if tok_is("(") && str_eq(@id_name, "arr") && !lookup_var(@id_name) && find_func(@id_name) < 0 {
         // arr(n) : a new dynamic array with room for n elements
