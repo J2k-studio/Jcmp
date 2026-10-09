@@ -1421,6 +1421,226 @@ bool pt_rules(int i) {
     if j < 0 { return false; }
     if !pt_parse(0, i) { return false; }
     if !pt_parse(1, j) { return false; }
+    // <op> d0, ... / fmov dK, d0   ->   <op> dK, ...      (d0 is not needed afterwards)
+    if pt_mn(1, "fmov") && pt_no[1] == 2 && pt_op(1, 1, "d0") && pt_regno(1, 0, 'd') > 0 && pt_no[0] >= 1 && pt_op(0, 0, "d0") && (pt_mn(0, "fadd") || pt_mn(0, "fsub") || pt_mn(0, "fmul") || pt_mn(0, "fdiv") || pt_mn(0, "fsqrt") || pt_mn(0, "fneg") || pt_mn(0, "fabs") || pt_mn(0, "fmov") || pt_mn(0, "ldr") || pt_mn(0, "scvtf") || pt_mn(0, "frintm") || pt_mn(0, "frintp") || pt_mn(0, "frintz")) {
+        int kreg = pt_regno(1, 0, 'd');
+        if pt_dead(pt_next(j), 32, 40) {
+            char nl0[64];
+            int n0 = 0;
+            int m0 = 0 * 16;
+            int c0 = 0;
+            while pt_m[m0 + c0] != 0 { nl0[n0] = pt_m[m0 + c0]; n0 += 1; c0 += 1; }
+            nl0[n0] = ' '; n0 += 1;
+            nl0[n0] = 'd'; n0 += 1;
+            int kv = kreg;
+            if kv >= 10 { nl0[n0] = '0' + kv / 10; n0 += 1; }
+            nl0[n0] = '0' + kv % 10; n0 += 1;
+            int oi = 1;
+            while oi < pt_no[0] {
+                nl0[n0] = ','; nl0[n0 + 1] = ' '; n0 += 2;
+                int oo = (0 * 4 + oi) * 40;
+                c0 = 0;
+                while pt_o[oo + c0] != 0 { nl0[n0] = pt_o[oo + c0]; n0 += 1; c0 += 1; }
+                oi += 1;
+            }
+            nl0[n0] = 0;
+            pt_set(i, @nl0);
+            pt_set(j, "");
+            return true;
+        }
+        pt_parse(0, i);
+        pt_parse(1, j);
+    }
+    // fmov dA, dB / <up to 4 lines that read dA (and do not write dB)>  ->  the same lines with dB in place of dA, and no fmov
+    if pt_mn(0, "fmov") && pt_no[0] == 2 && pt_regno(0, 0, 'd') >= 0 && pt_regno(0, 1, 'd') >= 0 && !(pt_regno(0, 0, 'd') >= 8 && pt_regno(0, 0, 'd') <= 15) {
+        int da = pt_regno(0, 0, 'd');
+        int db = pt_regno(0, 1, 'd');
+        if da != db {
+            char sd[40];
+            int od = (0 * 4 + 1) * 40;
+            int cd = 0;
+            while pt_o[od + cd] != 0 { sd[cd] = pt_o[od + cd]; cd += 1; }
+            sd[cd] = 0;
+            char pendd[320];
+            int pend_d[5];
+            int npd = 0;
+            int jd = j;
+            bool okd = false;
+            bool faild = false;
+            int stepsd = 0;
+            while jd >= 0 && stepsd < 5 && !okd && !faild {
+                if !pt_parse(1, jd) { faild = true; break; }
+                bool mentd = false;
+                int kd = 0;
+                while kd < pt_no[1] {
+                    if pt_has_dreg(1, kd, da) { mentd = true; }
+                    kd += 1;
+                }
+                bool wrb = pt_writes_first(1) && pt_no[1] > 0 && pt_has_dreg(1, 0, db);
+                if pt_mn(1, "b") || pt_mn(1, "bl") || pt_mn(1, "blr") || pt_mn(1, "ret") || pt_mn(1, "svc") || pt_mn(1, "cbz") || pt_mn(1, "cbnz") || (pt_m[16] == 'b' && pt_m[17] == '.') { faild = true; break; }
+                if mentd {
+                    bool okm = pt_mn(1, "fadd") || pt_mn(1, "fsub") || pt_mn(1, "fmul") || pt_mn(1, "fdiv") || pt_mn(1, "fsqrt") || pt_mn(1, "fneg") || pt_mn(1, "fabs") || pt_mn(1, "fmov") || pt_mn(1, "fcmp") || pt_mn(1, "str") || pt_mn(1, "fcvtzs") || pt_mn(1, "frintm") || pt_mn(1, "frintp") || pt_mn(1, "frintz");
+                    if !okm { faild = true; break; }
+                    bool dest_ad = pt_writes_first(1) && pt_regno(1, 0, 'd') == da;
+                    pt_sub_prefix = 'd';
+                    int cntd = pt_subst(1, da, @sd, pt_writes_first(1));
+                    if cntd == 0 && !dest_ad { faild = true; break; }
+                    int qd = 0;
+                    while pt_line[qd] != 0 { pendd[npd * 64 + qd] = pt_line[qd]; qd += 1; }
+                    pendd[npd * 64 + qd] = 0;
+                    pend_d[npd] = jd;
+                    npd += 1;
+                    if dest_ad { okd = true; }
+                    else if pt_dead(pt_next(jd), 32 + da, 40) { okd = true; }
+                    else if wrb { faild = true; }
+                } else if wrb {
+                    faild = true;
+                } else if !(pt_writes_first(1) && (pt_isreg(1, 0) || pt_o[(1 * 4) * 40] == 'd')) && !pt_mn(1, "str") && !pt_mn(1, "fcmp") {
+                    faild = true;
+                }
+                if !okd && !faild { jd = pt_next(jd); }
+                stepsd += 1;
+            }
+            if okd && npd >= 1 {
+                int pid = 0;
+                while pid < npd {
+                    char nld[64];
+                    int qd2 = 0;
+                    while pendd[pid * 64 + qd2] != 0 { nld[qd2] = pendd[pid * 64 + qd2]; qd2 += 1; }
+                    nld[qd2] = 0;
+                    pt_set(pend_d[pid], @nld);
+                    pid += 1;
+                }
+                pt_set(i, "");
+                return true;
+            }
+            pt_parse(0, i);
+            pt_parse(1, j);
+        }
+    }
+    // add xD, xS, #N / ldr or str with the address [xD, #0] (several of them)  ->  the address [xS, #N] in each, and no add
+    if pt_mn(0, "add") && pt_no[0] == 3 && pt_isreg(0, 0) && pt_isreg(0, 1) && pt_isnum(0, 2) && pt_regno(0, 0, 'x') != pt_regno(0, 1, 'x') && (pt_regno(0, 0, 'x') <= 7 || (pt_regno(0, 0, 'x') >= 10 && pt_regno(0, 0, 'x') <= 14)) && pt_regno(0, 1, 'x') >= 0 && pt_regno(0, 1, 'x') <= 30 {
+        int xd = pt_regno(0, 0, 'x');
+        int xs = pt_regno(0, 1, 'x');
+        int o2n = (0 * 4 + 2) * 40;
+        int immn = 0;
+        int c2n = 0;
+        if pt_o[o2n] == '#' { c2n = 1; }
+        while pt_o[o2n + c2n] >= '0' && pt_o[o2n + c2n] <= '9' {
+            immn = immn * 10 + (pt_o[o2n + c2n] - '0');
+            c2n += 1;
+        }
+        if immn % 8 == 0 && immn <= 32760 {
+            char want[24];
+            int wn = 0;
+            want[wn] = '['; wn += 1;
+            want[wn] = 'x'; wn += 1;
+            if xd >= 10 { want[wn] = '0' + xd / 10; wn += 1; }
+            want[wn] = '0' + xd % 10; wn += 1;
+            want[wn] = ','; want[wn + 1] = ' '; want[wn + 2] = '#'; want[wn + 3] = '0'; want[wn + 4] = ']'; want[wn + 5] = 0;
+            char pendm[640];
+            int pend_m[10];
+            int npm = 0;
+            int jm = j;
+            bool okm2 = false;
+            bool failm = false;
+            int stepsm = 0;
+            while jm >= 0 && stepsm < 10 && !okm2 && !failm {
+                if !pt_parse(1, jm) { failm = true; break; }
+                bool mentm = false;
+                int km = 0;
+                while km < pt_no[1] {
+                    if pt_has_reg(1, km, xd) { mentm = true; }
+                    km += 1;
+                }
+                if pt_mn(1, "b") || pt_mn(1, "bl") || pt_mn(1, "blr") || pt_mn(1, "ret") || pt_mn(1, "svc") || pt_mn(1, "cbz") || pt_mn(1, "cbnz") || (pt_m[16] == 'b' && pt_m[17] == '.') { failm = true; break; }
+                if mentm {
+                    // only as the address "[xD, #0]" of a load or store, and not as the register that is loaded or stored
+                    if !((pt_mn(1, "ldr") || pt_mn(1, "str")) && pt_no[1] == 2 && pt_op(1, 1, @want) && !pt_has_reg(1, 0, xd)) { 
+                        // "ldr xD, [xD, #0]" : the address is read, then xD is written
+                        if (pt_mn(1, "ldr") && pt_no[1] == 2 && pt_op(1, 1, @want) && pt_op(1, 0, "x0") == false && pt_regno(1, 0, 'x') == xd) {
+                            char nlx[64];
+                            int nx = 0;
+                            nlx[0] = 'l'; nlx[1] = 'd'; nlx[2] = 'r'; nlx[3] = ' '; nx = 4;
+                            nlx[nx] = 'x'; nx += 1;
+                            if xd >= 10 { nlx[nx] = '0' + xd / 10; nx += 1; }
+                            nlx[nx] = '0' + xd % 10; nx += 1;
+                            nlx[nx] = ','; nlx[nx + 1] = ' '; nlx[nx + 2] = '['; nlx[nx + 3] = 'x'; nx += 4;
+                            if xs >= 10 { nlx[nx] = '0' + xs / 10; nx += 1; }
+                            nlx[nx] = '0' + xs % 10; nx += 1;
+                            nlx[nx] = ','; nlx[nx + 1] = ' '; nlx[nx + 2] = '#'; nx += 3;
+                            char dgx[8];
+                            int dnx = 0;
+                            int dvx = immn;
+                            if dvx == 0 { dgx[0] = '0'; dnx = 1; }
+                            while dvx > 0 { dgx[dnx] = '0' + dvx % 10; dvx = dvx / 10; dnx += 1; }
+                            while dnx > 0 { dnx -= 1; nlx[nx] = dgx[dnx]; nx += 1; }
+                            nlx[nx] = ']'; nlx[nx + 1] = 0;
+                            int qx = 0;
+                            while nlx[qx] != 0 { pendm[npm * 64 + qx] = nlx[qx]; qx += 1; }
+                            pendm[npm * 64 + qx] = 0;
+                            pend_m[npm] = jm;
+                            npm += 1;
+                            okm2 = true;
+                        } else {
+                            failm = true;
+                        }
+                    } else {
+                        char nlm[64];
+                        int nm = 0;
+                        int mm = 1 * 16;
+                        int cm = 0;
+                        while pt_m[mm + cm] != 0 { nlm[nm] = pt_m[mm + cm]; nm += 1; cm += 1; }
+                        nlm[nm] = ' '; nm += 1;
+                        int oo1 = (1 * 4 + 0) * 40;
+                        cm = 0;
+                        while pt_o[oo1 + cm] != 0 { nlm[nm] = pt_o[oo1 + cm]; nm += 1; cm += 1; }
+                        nlm[nm] = ','; nlm[nm + 1] = ' '; nlm[nm + 2] = '['; nlm[nm + 3] = 'x'; nm += 4;
+                        if xs >= 10 { nlm[nm] = '0' + xs / 10; nm += 1; }
+                        nlm[nm] = '0' + xs % 10; nm += 1;
+                        nlm[nm] = ','; nlm[nm + 1] = ' '; nlm[nm + 2] = '#'; nm += 3;
+                        char dgm[8];
+                        int dnm = 0;
+                        int dvm = immn;
+                        if dvm == 0 { dgm[0] = '0'; dnm = 1; }
+                        while dvm > 0 { dgm[dnm] = '0' + dvm % 10; dvm = dvm / 10; dnm += 1; }
+                        while dnm > 0 { dnm -= 1; nlm[nm] = dgm[dnm]; nm += 1; }
+                        nlm[nm] = ']'; nlm[nm + 1] = 0;
+                        int qm = 0;
+                        while nlm[qm] != 0 { pendm[npm * 64 + qm] = nlm[qm]; qm += 1; }
+                        pendm[npm * 64 + qm] = 0;
+                        pend_m[npm] = jm;
+                        npm += 1;
+                        if pt_dead(pt_next(jm), xd, 40) { okm2 = true; }
+                        else if pt_mn(1, "ldr") && pt_isreg(1, 0) && pt_has_reg(1, 0, xs) { failm = true; }
+                    }
+                } else {
+                    // a line that writes the source of the add ends the search; one that writes xD ends it with success
+                    if pt_writes_first(1) && pt_no[1] > 0 && pt_isreg(1, 0) && pt_has_reg(1, 0, xs) { failm = true; }
+                    else if pt_writes_first(1) && pt_no[1] > 0 && pt_isreg(1, 0) && pt_has_reg(1, 0, xd) { okm2 = true; }
+                    else if pt_mn(1, "str") || pt_mn(1, "ldr") || pt_mn(1, "cmp") || pt_writes_first(1) || pt_mn(1, "fcmp") { }
+                    else { failm = true; }
+                }
+                if !okm2 && !failm { jm = pt_next(jm); }
+                stepsm += 1;
+            }
+            if okm2 && npm >= 1 {
+                int pim = 0;
+                while pim < npm {
+                    char nlq[64];
+                    int qq = 0;
+                    while pendm[pim * 64 + qq] != 0 { nlq[qq] = pendm[pim * 64 + qq]; qq += 1; }
+                    nlq[qq] = 0;
+                    pt_set(pend_m[pim], @nlq);
+                    pim += 1;
+                }
+                pt_set(i, "");
+                return true;
+            }
+            pt_parse(0, i);
+            pt_parse(1, j);
+        }
+    }
     // mov x0, S / (a line that does not touch x0 and S) / I  ->  I with S in place of x0   (and the same for x1): when I writes
     // x0 itself, or x0 is not needed afterwards
     if pt_mn(0, "mov") && pt_no[0] == 2 && pt_isreg(0, 0) && pt_isreg(0, 1) && (pt_regno(0, 0, 'x') <= 7 || (pt_regno(0, 0, 'x') >= 10 && pt_regno(0, 0, 'x') <= 14)) {

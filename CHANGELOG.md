@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.9.73
+* **Three new rules of the text pass** (`jcmp/jc_regs.j`, `pt_rules`), found by reading the inner loop of the n-body benchmark:
+  * `fmov dA, dB` followed by lines that read `dA` (at most 4, no write of `dB`): they read `dB`, the `fmov` goes (the same as for `mov xA, xB` since 0.9.72, now also for doubles);
+  * an operation that writes `d0` followed by `fmov dK, d0` (and `d0` not needed afterwards): it writes `dK` directly;
+  * `add xD, xS, #N` followed by loads and stores through `[xD, #0]` (up to 10 lines, `xS` not written): they use `[xS, #N]`, the `add` goes. (A load that overwrites `xS` itself is the last use.)
+* The inner loop of `nbody` went from 100 to 79 instructions.
+* Test `t283_copies` (an array of structs of doubles, pairs, compound assignments on fields; checked against Python).
+* Measured (best of 7, 0.9.72 -> 0.9.73): **nbody 287 -> 199 ms (-31 %)**, **mandel 56 -> 47 (-16 %)**, fib 72 -> 70, sieve 79 -> 76, matmul 38 -> 41 (noise), gcd 309 -> 311, loop 845 -> 849, alloc 139 -> 138.
+
 ## 0.9.72
 * **What is known on the way into a block stays** (value numbering over chains of blocks: a block that only one block leads to goes on with the numbers, the stack cells and the facts of the block before it). Two results: (1) **a check that is already known is not made again** (`while b != 0 { a % b }` does not test `b` against 0 for the division by zero a second time; a branch on a value that an earlier branch decided is a plain jump), (2) values and cells are shared over a whole `if` chain.
 * **`mul` + `sub` / `add` of a register is one `msub` / `madd`** when nobody reads the product afterwards (before: only for temporaries). The inner loop of `gcd` is 7 instructions now: `cmp`, `b.eq`, `sdiv`, `msub`, `mov`, `mov`, `b`.
