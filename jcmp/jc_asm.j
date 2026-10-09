@@ -343,6 +343,8 @@ void as_h_shift(int regbase, int kind) {
             as_put32(0xD3400000 | (((64 - imm) & 63) << 16) | ((63 - imm) << 10) | (rn << 5) | rd);
         } else if kind == 1 {
             as_put32(0xD340FC00 | (imm << 16) | (rn << 5) | rd);
+        } else if kind == 3 {
+            as_put32(0x93C00000 | (rn << 16) | (imm << 10) | (rn << 5) | rd);          // ror xd, xn, #imm  =  extr xd, xn, xn, #imm
         } else {
             as_put32(0x9340FC00 | (imm << 16) | (rn << 5) | rd);
         }
@@ -353,6 +355,27 @@ void as_h_shift(int regbase, int kind) {
 }
 
 // msub / madd: four registers: xd = xa - xn * xm  (msub), xd = xa + xn * xm (madd)
+// popcnt xd, xn : the number of bits that are 1 in xn (four instructions with the vector register v27: fmov, cnt, addv, fmov)
+void as_h_popcnt() {
+    as_skip_spaces();
+    int rd = as_parse_reg();
+    as_expect_comma();
+    int rn = as_parse_reg();
+    as_put32(0x9E670000 | (rn << 5) | 27);                 // fmov d27, xn
+    as_put32(0x0E205800 | (27 << 5) | 27);                 // cnt v27.8b, v27.8b
+    as_put32(0x0E31B800 | (27 << 5) | 27);                 // addv b27, v27.8b
+    as_put32(0x9E660000 | (27 << 5) | rd);                 // fmov xd, d27
+}
+
+// neg xd, xm : xd = 0 - xm   (sub xd, xzr, xm)
+void as_h_neg() {
+    as_skip_spaces();
+    int rd = as_parse_reg();
+    as_expect_comma();
+    int rm = as_parse_reg();
+    as_put32(0xCB0003E0 | (rm << 16) | rd);
+}
+
 void as_h_rrrr(int base) {
     as_skip_spaces();
     int rd = as_parse_reg();
@@ -753,6 +776,12 @@ void as_instruction() {
     if as_mn_is("msub") { as_h_rrrr(0x9B008000); return; }
     if as_mn_is("madd") { as_h_rrrr(0x9B000000); return; }
     if as_mn_is("smulh") { as_h_rrr(0x9B407C00); return; }
+    if as_mn_is("ror") { as_h_shift(0x9AC02C00, 3); return; }
+    if as_mn_is("neg") { as_h_neg(); return; }
+    if as_mn_is("clz") { as_h_sxt(0xDAC0, 0x1000); return; }
+    if as_mn_is("rbit") { as_h_sxt(0xDAC0, 0x0000); return; }
+    if as_mn_is("rev") { as_h_sxt(0xDAC0, 0x0C00); return; }
+    if as_mn_is("popcnt") { as_h_popcnt(); return; }
     if as_mn_is("ldr") { as_h_mem(0xF940, 3); return; }
     if as_mn_is("str") { as_h_mem(0xF900, 3); return; }
     if as_mn_is("ldrb") { as_h_mem(0x3940, 0); return; }

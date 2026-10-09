@@ -320,6 +320,7 @@ int lf_line(int idx) {
     else if pt_mn(0, "lsr") { op = IR_LSHR; }
     else if pt_mn(0, "asr") { op = IR_ASHR; }
     else if pt_mn(0, "smulh") { op = IR_MULHS; }
+    else if pt_mn(0, "ror") { op = IR_ROTR; }
     if op != 0 {
         if pt_no[0] != 3 || !pt_isreg(0, 0) || !pt_isreg(0, 1) { return lf_fail("arithmetic with an operand that is not understood"); }
         int dd = lf_x(pt_regno(0, 0, 'x'));
@@ -343,6 +344,14 @@ int lf_line(int idx) {
         } else {
             lf_emit(IR_ADD, lf_x(pt_regno(0, 0, 'x')), lf_x(pt_regno(0, 3, 'x')), t, 0, 0);
         }
+        return 1;
+    }
+    if (pt_mn(0, "clz") || pt_mn(0, "rbit") || pt_mn(0, "rev") || pt_mn(0, "popcnt")) && pt_no[0] == 2 && pt_isreg(0, 0) && pt_isreg(0, 1) {
+        int opb = IR_CLZ;
+        if pt_mn(0, "rbit") { opb = IR_RBIT; }
+        if pt_mn(0, "rev") { opb = IR_BSWAP; }
+        if pt_mn(0, "popcnt") { opb = IR_POPCNT; }
+        lf_emit(opb, lf_x(pt_regno(0, 0, 'x')), lf_x(pt_regno(0, 1, 'x')), 0, 0, 0);
         return 1;
     }
     if (pt_mn(0, "neg") || pt_mn(0, "mvn")) && pt_no[0] == 2 && pt_isreg(0, 0) && pt_isreg(0, 1) {
@@ -881,6 +890,7 @@ bool lw_instr(int i, int b) {
     else if op == IR_LSHR { nm = "lsr"; }
     else if op == IR_ASHR { nm = "asr"; }
     else if op == IR_MULHS { nm = "smulh"; }
+    else if op == IR_ROTR { nm = "ror"; }
     else if op == IR_FADD { nm = "fadd"; }
     else if op == IR_FSUB { nm = "fsub"; }
     else if op == IR_FMUL { nm = "fmul"; }
@@ -899,6 +909,10 @@ bool lw_instr(int i, int b) {
     }
     char^ n1 = null;
     if op == IR_NEG { n1 = "neg"; }
+    else if op == IR_CLZ { n1 = "clz"; }
+    else if op == IR_RBIT { n1 = "rbit"; }
+    else if op == IR_BSWAP { n1 = "rev"; }
+    else if op == IR_POPCNT { n1 = "popcnt"; }
     else if op == IR_NOT { n1 = "mvn"; }
     else if op == IR_FSQRT { n1 = "fsqrt"; }
     else if op == IR_FNEG { n1 = "fneg"; }

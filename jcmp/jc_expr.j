@@ -1454,6 +1454,15 @@ int call_method;             // 1 for a method call: arguments are counted after
 void gen_call() {
     char callee[256];
     str_copy(@callee, @id_name, 256);
+    // Bit::clz(x) and the others of the group Bit are one instruction of the CPU: no call is made
+    if callee[0] == 'B' && callee[1] == 'i' && callee[2] == 't' && callee[3] == '_' && callee[4] == '_' {
+        if str_eq(@callee + 5, "clz") || str_eq(@callee + 5, "ctz") || str_eq(@callee + 5, "popcount") || str_eq(@callee + 5, "rotl") || str_eq(@callee + 5, "rotr") || str_eq(@callee + 5, "bswap") {
+            char bit_name[32];
+            str_copy(@bit_name, "__", 8);
+            append_text(@bit_name, @callee + 5);
+            str_copy(@callee, @bit_name, 256);
+        }
+    }
     note_call(@callee);
     int pre = call_pre;
     call_pre = 0;
@@ -1533,6 +1542,21 @@ void gen_call() {
         if str_eq(@callee, "__fceil") { emit_line("frintp d0, d0"); }
         if str_eq(@callee, "__ftrunc") { emit_line("frintz d0, d0"); }
         emit_line("fmov x0, d0");
+    } else if str_eq(@callee, "__clz") || str_eq(@callee, "__ctz") || str_eq(@callee, "__popcount") || str_eq(@callee, "__bswap") {
+        // one whole number in x0 -> one whole number in x0 (one instruction of the CPU, or two)
+        if n != 1 { die("this function takes one argument"); }
+        if str_eq(@callee, "__clz") { emit_line("clz x0, x0"); }
+        if str_eq(@callee, "__ctz") {
+            emit_line("rbit x0, x0");
+            emit_line("clz x0, x0");
+        }
+        if str_eq(@callee, "__popcount") { emit_line("popcnt x0, x0"); }
+        if str_eq(@callee, "__bswap") { emit_line("rev x0, x0"); }
+    } else if str_eq(@callee, "__rotl") || str_eq(@callee, "__rotr") {
+        // x0 = the number, x1 = how many places (taken modulo 64)
+        if n != 2 { die("this function takes two arguments (the number and the places)"); }
+        if str_eq(@callee, "__rotl") { emit_line("neg x1, x1"); }
+        emit_line("ror x0, x0, x1");
     } else if is_atomic == 1 {
         // atomic operations on an 8-byte word at the address in x0 (x1, x2 = the other arguments);
         // the result is the value the word had before. Built from load-exclusive / store-exclusive.

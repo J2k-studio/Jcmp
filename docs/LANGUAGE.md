@@ -344,6 +344,18 @@ free[b];                       // only b goes back (a still works, and the next 
 ```
 If a variable is called `alloc`, `alloc0`, `free`, `grow` or `arr`, a `[` after it is an index as always.
 
+### Bits: `Bit::`
+
+The work on the bits of a whole number is done by one instruction of the CPU each (the compiler puts the instruction at the call):
+
+```jk
+Bit::clz(x)          // bits 0 in front of the first bit 1 (64 for 0):   Bit::clz(1000) = 54
+Bit::ctz(x)          // bits 0 after the last bit 1 (64 for 0)
+Bit::popcount(x)     // how many bits are 1
+Bit::rotl(x, k)      // the bits turned left by k places (k is taken modulo 64); Bit::rotr turns right
+Bit::bswap(x)        // the 8 bytes in the other order
+```
+
 ## Pointers
 
 ```jk

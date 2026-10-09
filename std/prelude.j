@@ -58,6 +58,21 @@ void __panic(char^ msg) {
     syscall(94, 134);
 }
 
+// Bit: the work on the bits of a whole number, each is one instruction of the CPU (the compiler puts the instruction where the call is)
+struct Bit {
+    // how many bits 0 there are in front of the first bit 1 (64 for 0)
+    static int clz(int x) { return __clz(x); }
+    // how many bits 0 there are after the last bit 1 (64 for 0)
+    static int ctz(int x) { return __ctz(x); }
+    // how many bits are 1
+    static int popcount(int x) { return __popcount(x); }
+    // the bits turned left / right by k places (the bits that fall out come in on the other side; k is taken modulo 64)
+    static int rotl(int x, int k) { return __rotl(x, k); }
+    static int rotr(int x, int k) { return __rotr(x, k); }
+    // the 8 bytes in the other order
+    static int bswap(int x) { return __bswap(x); }
+}
+
 struct Mem {
     // the size class of a block of `need` bytes (header included, a multiple of 16): the smallest class that is big enough, or -1 if the
     // block is bigger than the biggest class
