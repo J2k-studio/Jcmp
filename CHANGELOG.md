@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.59
+* **Calls with two to four arguments do not use the stack for the arguments** when the code that makes them is plain (no call, no stack): the earlier values wait in `x10`..`x14` (or `x5`..`x7`) and are moved into `x0`, `x1`, ... just before the call, and the optimiser then often leaves only the moves that are needed (`mov x1, x22 / mov x0, x20 / bl gcd`). Before: every argument was pushed and loaded again. Test `t268`.
+* **Functions that own memory** (a `String`, `alloc`, a struct that frees itself) can now keep their other locals in registers too; only a function with `defer` (and a program with `try`/`catch`) is left alone.
+* The search for "this register is not needed afterwards" knows that a call does not read `x8`..`x15` and does not touch `d8`..`d15`.
+
 ## 0.9.58
 * **A real register allocator** (`jcmp/jc_regs.j`): a live variable analysis (a backward dataflow over the lines and jumps of a function), the live interval of every local, and a **linear scan** over the intervals. Locals whose lives do not meet share a register, so more than seven locals can live in registers over a function; if the registers are all taken, the local that is used least stays in memory. Whole numbers and pointers go to `x19`..`x25`, doubles to `d8`..`d15`.
 * **Doubles stay in floating point registers:** the left operand of a float operation waits in `d16`, `d17`, ... (before: in an x register or on the stack), the operands of an operation go to `d0` and `d1` without a trip through x0, and the optimiser (value numbering of registers, copy forwarding, removing moves that nothing reads, `ldr dN, [..]` / `str dN, [..]` instead of a load and a move) removes most of the moves between x and d registers. The assembler knows `fmov dN, dM`, `ldr dN, [..]` and `str dN, [..]`.

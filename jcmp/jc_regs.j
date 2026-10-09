@@ -6,7 +6,8 @@
 //
 // A slot may move into a register only if (1) the compiler said (with a line ";H off:size:flag ..." at the end of the body) that
 // it is a plain 8-byte value, (2) every use of it is exactly one of the two forms above (no address is taken, no byte or word
-// access) and (3) the function does not use the frame in a way that needs the memory: no cleanup chain (x27 + 784: owners, defer),
+// access) and (3) the function does not use the frame in a way that needs the memory: no defer (a piece of code that is called from
+// other places of the function),
 // no worker of a #multithread loop (x26), no copy of x29. The registers are saved at the start and given back at the end of the
 // function (callee-saved: x19..x25 are not used by anything else). A program with try/catch is left alone (a throw jumps over the
 // frames without giving the registers back). Lines ";H" are always removed. -noregs switches the pass off.
@@ -528,7 +529,7 @@ void rg_function(int is_main) {
             i += 1;
             continue;
         }
-        if rg_in(st, en, "x26") || rg_in(st, en, "j2k_try_enter") || (rg_in(st, en, "x27") && rg_in(st, en, "#784")) {
+        if rg_in(st, en, "x26") || rg_in(st, en, "j2k_try_enter") || rg_has(st, "str x30, [sp, #0]") {
             ok = 0;
         }
         if rg_has(st, "mov x29,") { ok = 0; }
@@ -948,6 +949,7 @@ bool pt_dead(int idx, int r, int budget) {
         }
         if pt_mn(3, "ret") { return r != 0; }                // only x0 carries the result
         if pt_mn(3, "mov") && pt_op(3, 0, "x8") && (pt_op(3, 1, "94") || pt_op(3, 1, "93")) { return r != 0; }       // the program ends: only x0 (the exit code) is read
+        if r >= 8 && r <= 15 && (pt_mn(3, "bl") || pt_mn(3, "blr")) { return true; }       // not an argument register: a call does not read it, and clobbers it
         if pt_mn(3, "bl") || pt_mn(3, "blr") || pt_mn(3, "svc") || pt_mn(3, "br") {
             return false;
         }
@@ -1318,18 +1320,9 @@ bool pt_rules(int i) {
     if !pt_parse(1, j) { return false; }
     // mov x0, S / (a line that does not touch x0 and S) / I  ->  I with S in place of x0   (and the same for x1): when I writes
     // x0 itself, or x0 is not needed afterwards
-    if pt_mn(0, "mov") && pt_no[0] == 2 && pt_isreg(0, 0) && pt_isreg(0, 1) && (pt_op(0, 0, "x0") || pt_op(0, 0, "x1")) {
-        int rr = 0;
-        if pt_op(0, 0, "x1") { rr = 1; }
-        int sreg = 0;
-        {
-            int o0s = (0 * 4 + 1) * 40;
-            int cs = 1;
-            while pt_o[o0s + cs] >= '0' && pt_o[o0s + cs] <= '9' {
-                sreg = sreg * 10 + (pt_o[o0s + cs] - '0');
-                cs += 1;
-            }
-        }
+    if pt_mn(0, "mov") && pt_no[0] == 2 && pt_isreg(0, 0) && pt_isreg(0, 1) && (pt_regno(0, 0, 'x') <= 7 || (pt_regno(0, 0, 'x') >= 10 && pt_regno(0, 0, 'x') <= 14)) {
+        int rr = pt_regno(0, 0, 'x');
+        int sreg = pt_regno(0, 1, 'x');
         if sreg != rr {
             char sx[40];
             int o0 = (0 * 4 + 1) * 40;
@@ -1347,7 +1340,7 @@ bool pt_rules(int i) {
                     kq += 1;
                 }
                 if mentions {
-                    if pt_copy_ok(1) && !pt_mn(1, "mov") {
+                    if pt_copy_ok(1) {
                         bool dest_r = pt_writes_first(1) && pt_isreg(1, 0) && pt_has_reg(1, 0, rr);
                         pt_sub_prefix = 'x';
             int cnt = pt_subst(1, rr, @sx, pt_writes_first(1));
@@ -1702,6 +1695,196 @@ bool pt_rules(int i) {
     return false;
 }
 
+// the text "mov xA, xB" written to t
+void pt_regline(char^ t, int a, int b) {
+    int n = 0;
+    t[0] = 'm'; t[1] = 'o'; t[2] = 'v'; t[3] = ' '; t[4] = 'x';
+    n = 5;
+    if a >= 10 { t[n] = '1'; t[n + 1] = '0' + a - 10; n += 2; } else { t[n] = '0' + a; n += 1; }
+    t[n] = ','; t[n + 1] = ' '; t[n + 2] = 'x';
+    n += 3;
+    if b >= 10 { t[n] = '1'; t[n + 1] = '0' + b - 10; n += 2; } else { t[n] = '0' + b; n += 1; }
+    t[n] = 0;
+}
+
+// the previous live line before idx, or -1
+int pt_prev(int idx) {
+    idx -= 1;
+    while idx >= 0 && pt_txt[idx * 64] == 0 { idx -= 1; }
+    return idx;
+}
+
+// is the line idx exactly the text t?
+bool pt_is(int idx, char^ t) {
+    int b = idx * 64;
+    int i = 0;
+    while t[i] != 0 {
+        if pt_txt[b + i] != t[i] { return false; }
+        i += 1;
+    }
+    return pt_txt[b + i] == 0;
+}
+
+// the arguments of a call that are pushed one by one and then loaded into x0, x1, ... :
+//     <code> / sub sp, sp, #16 / str x0, [sp, #0] / <code> / sub sp, sp, #16 / str x0, [sp, #0] / ldr x1, [sp, #0] / ldr x0, [sp, #16] / add sp, sp, #32
+// become: the earlier values wait in x5, x6, x7, the last one stays in x0, and the moves into x0, x1, ... are made at the end. Only if
+// the code between the pushes is made of plain instructions (no stack, no call, no x5..x7), at most 4 values.
+bool pt_pushpop() {
+    bool changed = false;
+    int i = 0;
+    while i < pt_n {
+        if pt_txt[i * 64] != 0 && pt_parse(0, i) && pt_mn(0, "ldr") && pt_no[0] == 2 && pt_op(0, 1, "[sp, #0]") && pt_regno(0, 0, 'x') >= 1 && pt_regno(0, 0, 'x') <= 3 {
+            int nn = pt_regno(0, 0, 'x') + 1;
+            int ldr_at[4];
+            ldr_at[0] = i;
+            bool ok = true;
+            int k = 1;
+            int cur = i;
+            while k < nn && ok {
+                cur = pt_next(cur);
+                if cur < 0 || !pt_parse(0, cur) || !pt_mn(0, "ldr") || pt_no[0] != 2 || pt_regno(0, 0, 'x') != nn - 1 - k { ok = false; }
+                else {
+                    // the address: [sp, #16k]
+                    char want[24];
+                    want[0] = '['; want[1] = 's'; want[2] = 'p'; want[3] = ','; want[4] = ' '; want[5] = '#';
+                    int w = 6;
+                    int dv = 16 * k;
+                    char dg[8];
+                    int dn = 0;
+                    while dv > 0 { dg[dn] = '0' + dv % 10; dv = dv / 10; dn += 1; }
+                    while dn > 0 { dn -= 1; want[w] = dg[dn]; w += 1; }
+                    want[w] = ']';
+                    want[w + 1] = 0;
+                    if !pt_op(0, 1, @want) { ok = false; }
+                    ldr_at[k] = cur;
+                }
+                k += 1;
+            }
+            int add_at = 0 - 1;
+            if ok {
+                add_at = pt_next(cur);
+                char wadd[24];
+                wadd[0] = 'a'; wadd[1] = 'd'; wadd[2] = 'd'; wadd[3] = ' '; wadd[4] = 's'; wadd[5] = 'p'; wadd[6] = ','; wadd[7] = ' '; wadd[8] = 's'; wadd[9] = 'p'; wadd[10] = ','; wadd[11] = ' '; wadd[12] = '#';
+                int w2 = 13;
+                int dv2 = 16 * nn;
+                char dg2[8];
+                int dn2 = 0;
+                while dv2 > 0 { dg2[dn2] = '0' + dv2 % 10; dv2 = dv2 / 10; dn2 += 1; }
+                while dn2 > 0 { dn2 -= 1; wadd[w2] = dg2[dn2]; w2 += 1; }
+                wadd[w2] = 0;
+                if add_at < 0 || !pt_is(add_at, @wadd) { ok = false; }
+            }
+            // the pushes, from the last one backwards
+            int sub_at[4];
+            int str_at[4];
+            int used[16];
+            int u0 = 0;
+            while u0 < 16 {
+                used[u0] = 0;
+                u0 += 1;
+            }
+            if ok {
+                int p = pt_prev(i);
+                int pi = nn - 1;
+                int guard = 0;
+                while pi >= 0 && ok {
+                    // p must be "str x0, [sp, #0]" and the line before it "sub sp, sp, #16"
+                    if p < 0 || !pt_is(p, "str x0, [sp, #0]") { ok = false; }
+                    else {
+                        int q = pt_prev(p);
+                        if q < 0 || !pt_is(q, "sub sp, sp, #16") { ok = false; }
+                        else {
+                            str_at[pi] = p;
+                            sub_at[pi] = q;
+                            pi -= 1;
+                            // the code before this push (up to the previous push): plain instructions only
+                            if pi >= 0 {
+                                int r = pt_prev(q);
+                                guard = 0;
+                                bool found = false;
+                                while r >= 0 && !found && ok && guard < 80 {
+                                    guard += 1;
+                                    if pt_is(r, "str x0, [sp, #0]") {
+                                        int r2 = pt_prev(r);
+                                        if r2 >= 0 && pt_is(r2, "sub sp, sp, #16") { found = true; }
+                                        else { ok = false; }
+                                    } else if pt_parse(1, r) {
+                                        int kk = 0;
+                                        while kk < pt_no[1] {
+                                            int ur = 5;
+                                            while ur < 15 {
+                                                if pt_has_reg(1, kk, ur) { used[ur] = 1; }
+                                                ur += 1;
+                                            }
+                                            if pt_o[(1 * 4 + kk) * 40] == 's' && pt_o[(1 * 4 + kk) * 40 + 1] == 'p' { ok = false; }
+                                            if pt_o[(1 * 4 + kk) * 40] == '[' && pt_o[(1 * 4 + kk) * 40 + 1] == 's' && pt_o[(1 * 4 + kk) * 40 + 2] == 'p' { ok = false; }
+                                            kk += 1;
+                                        }
+                                        if pt_mn(1, "bl") && !(pt_op(1, 0, "j2k_divzero") || pt_op(1, 0, "j2k_oob")) { ok = false; }
+                                        if pt_mn(1, "blr") || pt_mn(1, "svc") || pt_mn(1, "ret") || pt_mn(1, "br") { ok = false; }
+                                        if pt_mn(1, "sub") && pt_op(1, 0, "sp") { ok = false; }
+                                        if !found { r = pt_prev(r); }
+                                    } else {
+                                        // a label inside the code of an argument: fine
+                                        r = pt_prev(r);
+                                    }
+                                }
+                                if !found { ok = false; }
+                                else { p = r; }
+                            }
+                        }
+                    }
+                }
+            }
+            // the registers that hold the earlier values: x10..x14 if the code of the arguments does not use them (a call does not
+            // read them), else x5..x7
+            int hold[4];
+            if ok {
+                int nh = 0;
+                int cand = 10;
+                while cand <= 14 && nh < nn - 1 {
+                    if used[cand] == 0 && !(cand >= 5 && cand <= 7) { hold[nh] = cand; nh += 1; }
+                    cand += 1;
+                }
+                cand = 5;
+                while cand <= 7 && nh < nn - 1 {
+                    if used[cand] == 0 { hold[nh] = cand; nh += 1; }
+                    cand += 1;
+                }
+                if nh < nn - 1 { ok = false; }
+            }
+            if ok {
+                int pj = 0;
+                while pj < nn {
+                    if pj < nn - 1 {
+                        char mv[24];
+                        pt_regline(@mv, hold[pj], 0);
+                        pt_set(sub_at[pj], @mv);
+                    } else {
+                        pt_set(sub_at[pj], "");
+                    }
+                    pt_set(str_at[pj], "");
+                    pj += 1;
+                }
+                int kq = 0;
+                while kq < nn {
+                    char mv2[24];
+                    int tgt = nn - 1 - kq;
+                    int srcr = 0;
+                    if kq != 0 { srcr = hold[tgt]; }
+                    pt_regline(@mv2, tgt, srcr);
+                    pt_set(ldr_at[kq], @mv2);
+                    kq += 1;
+                }
+                pt_set(add_at, "");
+                changed = true;
+            }
+        }
+        i += 1;
+    }
+    return changed;
+}
+
 // shorten the function that was just written to regs_buf[start ..]
 void regs_post(int start) {
     // the lines, and the labels
@@ -1738,6 +1921,7 @@ void regs_post(int start) {
     }
     if !fits { return; }
     pt_n = n;
+    pt_pushpop();
     int changed = 1;
     int rounds = 0;
     while changed == 1 && rounds < 8 {

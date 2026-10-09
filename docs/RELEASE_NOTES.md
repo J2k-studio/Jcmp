@@ -1,6 +1,8 @@
-# J2K / Jcmp 0.9.58
+# J2K / Jcmp 0.9.59
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
+
+**0.9.59:** call arguments in registers instead of the stack (2 to 4 plain arguments); functions that own memory can use registers too.
 
 **0.9.58:** a register allocator (live variable analysis + linear scan; doubles in d8..d15), floats stay in floating point registers (n-body 593 -> 321 ms, Mandelbrot 72 -> 49 ms); `b.len` on arrays of structs; the J-shaped shadow of the mascot's Moon.
 
@@ -156,11 +158,11 @@ end of the block, `cin` / `cin`, function pointers, unsigned types, `sizeof`, `t
 (unused library functions are left out). Full list: CHANGELOG.md.
 
 **Install:** `curl -fsSL https://raw.githubusercontent.com/J2k-studio/Jcmp/main/install.sh | sh`
-(options: `--dir ../bin`, `--version 0.9.58`, `--with-assembler`), or download `jcmp` below, check it
+(options: `--dir ../bin`, `--version 0.9.59`, `--with-assembler`), or download `jcmp` below, check it
 against `SHA256SUMS` and `chmod +x` it. See the README.
 
 **Use:** `jcmp hello.jk && ./hello`
 
 Files: `jcmp` (the compiler), `j2k_asm` (stand-alone assembler),
-`jcmp-0.9.58-linux-arm64.tar.gz` (both + README + LICENSE + examples + docs), `SHA256SUMS`.
+`jcmp-0.9.59-linux-arm64.tar.gz` (both + README + LICENSE + examples + docs), `SHA256SUMS`.
 Linux ARM64 only. See LICENSE for the terms of use.
