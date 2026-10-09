@@ -323,7 +323,7 @@ free by hand (`free(p)`) becomes `null` too, so nothing is freed twice.
 Warnings: `-Wleak` (the result of `alloc` is thrown away), `-Wmoved` (a moved variable is used again).
 Limits: a `throw` that leaves a block does not free that block's memory, and memory kept by a pointer that is
 assigned after its declaration is not tracked (use a declaration, or free it yourself).
-A `-d` build reports at the end of `main` how many blocks were never freed.
+A `-d` build reports at the end of `main` how many blocks were never freed (and in which function each one was made), stops at a block freed twice, and finds a block that was written after it was freed.
 
 ### The bracket forms of memory
 
@@ -340,7 +340,7 @@ grow[p = 64];                  // p becomes a block of 64 elements with the old 
 alloc[int^ pool = 32];         // a pool of 32 ints ...
 alloc[pool[12] >> int^ a];     // ... 12 of them go to a (null if the pool has not that much room)
 alloc[pool[12] >> int^ b];
-free[b];                       // only b goes back (a still works); free[pool] frees everything
+free[b];                       // only b goes back (a still works, and the next piece may use b's room); free[pool] frees everything
 ```
 If a variable is called `alloc`, `alloc0`, `free`, `grow` or `arr`, a `[` after it is an index as always.
 

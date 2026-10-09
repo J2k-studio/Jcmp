@@ -2004,8 +2004,13 @@ void parse_local_decl_core() {
         ins_mem("str", "x0", "x29", loff[lcount - 1]);
         if dd_start == 1 {
             int dk = 1;
+            int dax = 0;
             if is_strarr_dyn(d_dyn) { dk = 3; }
-            own_add(loff[lcount - 1], dk, 0);
+            if dyn_code(d_dyn) >= 16 && dyn_code(d_dyn) < 400 && dyn_ptr(d_dyn) == 0 && struct_has_free(dyn_code(d_dyn) - 16) {
+                dk = 10;                        // the elements free themselves: they are freed first
+                dax = dyn_code(d_dyn) - 16;
+            }
+            own_add(loff[lcount - 1], dk, dax);
         }
         return;
     }
@@ -2553,6 +2558,7 @@ void parse_function() {
     fn_col = err_col;
     fn_base = err_base;
     fn_ls = err_ls;
+    if cur_is_main == 1 && opt_debug == 1 { rt_call("Mem__debug_on"); }       // the checks of the heap are on
     parse_block();
     own_free_from(0, 1);                 // what the parameters own (the body's own variables were given back at its end)
     if hint_len > 0 && hint_len < 16383 {

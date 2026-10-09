@@ -11,6 +11,12 @@ int std_cls[24] = {32, 48, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 384, 4
 int std_cls_of[129] = {0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 11, 11, 12, 12, 12, 12, 13, 13, 13, 13, 14, 14, 14, 14, 15, 15, 15, 15, 15, 15, 15, 15, 16, 16, 16, 16, 16, 16, 16, 16, 17, 17, 17, 17, 17, 17, 17, 17, 18, 18, 18, 18, 18, 18, 18, 18, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 22, 22, 22, 22, 22, 22, 22, 22, 22, 22, 22, 22, 22, 22, 22, 22};     // by need / 16: the class of a block (-1: bigger than the biggest class)
 int std_cls_exact[129] = {-1, -1, 0, 1, 2, 3, 4, 5, 6, -1, 7, -1, 8, -1, 9, -1, 10, -1, -1, -1, 11, -1, -1, -1, 12, -1, -1, -1, 13, -1, -1, -1, 14, -1, -1, -1, -1, -1, -1, -1, 15, -1, -1, -1, -1, -1, -1, -1, 16, -1, -1, -1, -1, -1, -1, -1, 17, -1, -1, -1, -1, -1, -1, -1, 18, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 19, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 20, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 21, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 22};  // by size / 16: the class whose size is exactly this, or -1
 int std_free_cls[24];              // the free blocks of each class
+int std_debug;                     // 1 in a -d build: the checks of Mem (a block freed twice, written after it was freed, the places of the leaks)
+int std_dbg_tab[98304];            // the live blocks in a -d build: [address, size, the function that made it], 32768 places (open addressing)
+int std_dbg_n;                     // how many live blocks the table holds
+int std_dbg_full;                  // 1: the table was full once (the checks that need it are off)
+int std_dbg_quar[64];              // the last blocks that were freed (a -d build keeps them filled with 221 for a while)
+int std_dbg_qi;
 
 // a bug in the program (a null array, a position out of range, ...): say so and stop; try/catch cannot catch it
 void __panic(char^ msg) {
@@ -65,6 +71,7 @@ struct Mem {
     }
     // n bytes, not cleared (null if the system has no memory left)
     static void^ alloc(int n) {
+        if std_debug != 0 { return Mem::dbg_alloc(n); }
         if std_mt == 0 { return Mem::alloc_raw(n); }          // one thread only: no lock
         while __cas(@std_mem_lock, 0, 1) != 0 {
             syscall(124);                  // sched_yield: let the thread that holds the heap finish
@@ -158,6 +165,13 @@ struct Mem {
     }
     // give a block from alloc back (null is ignored)
     static void free(void^ p) {
+        if std_debug != 0 {
+            Mem::dbg_free(p);
+            return;
+        }
+        Mem::free_now(p);
+    }
+    static void free_now(void^ p) {
         if std_mt == 0 {
             Mem::free_raw(p);
             return;
@@ -222,20 +236,38 @@ struct Mem {
         if (int)r != 0 { Mem::set(r, 0, n); }
         return r;
     }
-    // A block can be a pool (alloc[int^ a = 32]): pieces are taken from it with alloc[a[12] >> int^ p]. The piece has a header of its own
-    // [size + 1 (a piece) (+ 2 once it is given back), the pool]; the word `next` of the header of the pool is how many bytes are
-    // taken. Freeing a piece frees only that piece (it is given back for good when it is the last one taken); freeing the pool frees
-    // everything. null if the pool has not that much room.
+    // A block can be a pool (alloc[int^ a = 32]): pieces are taken from it with alloc[a[12] >> int^ p]. A piece has a header of its own
+    // [size + 1 (a piece) (+ 2 once it is given back), the pool]. The word `next` of the header of the pool holds, in its low 32 bits, how
+    // many bytes are taken and, in its high 32 bits, the first piece that was given back (its place in the pool + 1; 0 = none; the
+    // pieces are linked by the first word of their room). Freeing a piece gives back only that piece (the last one taken gives the room
+    // back at once); freeing the pool frees everything. null if the pool has not that much room.
     static void^ take(void^ pool, int bytes) {
         if (int)pool == 0 { return null; }
         int^ ph = (int^)((int)pool - 16);
         int need = ((bytes + 15) >> 4) * 16 + 16;
-        if ph[1] + need > ph[0] - 16 { return null; }
-        int at = (int)pool + ph[1];
+        int used = ph[1] & 4294967295;
+        int first = ph[1] >> 32;
+        int prev = 0;
+        int cur = first;
+        while cur != 0 {
+            int at0 = (int)pool + cur - 1;
+            int^ cp = (int^)at0;
+            int^ room = (int^)(at0 + 16);
+            if (cp[0] & -4) >= need {
+                if prev == 0 { first = room[0]; } else { int^ pr = (int^)((int)pool + prev - 1 + 16); pr[0] = room[0]; }
+                cp[0] = cp[0] - 2;                             // a piece in use again
+                ph[1] = used + first * 4294967296;
+                return (void^)(at0 + 16);
+            }
+            prev = cur;
+            cur = room[0];
+        }
+        if used + need > ph[0] - 16 { return null; }
+        int at = (int)pool + used;
         int^ piece = (int^)at;
         piece[0] = need + 1;
         piece[1] = (int)pool;
-        ph[1] = ph[1] + need;
+        ph[1] = used + need + first * 4294967296;
         return (void^)(at + 16);
     }
     static void free_piece(int blk) {
@@ -245,7 +277,15 @@ struct Mem {
         int size = piece[0] - 3;
         int pool = piece[1];
         int^ ph = (int^)(pool - 16);
-        if blk + size == pool + ph[1] { ph[1] = blk - pool; }     // the last piece: the room is free again
+        int used = ph[1] & 4294967295;
+        int first = ph[1] >> 32;
+        if blk + size == pool + used {
+            ph[1] = (blk - pool) + first * 4294967296;     // the last piece: the room is free again
+        } else {
+            int^ room = (int^)(blk + 16);
+            room[0] = first;
+            ph[1] = used + ((blk - pool) + 1) * 4294967296;
+        }
     }
     // p = a block of `bytes` bytes with the old content; slot is the address of p (grow[p = n])
     static void grow_slot(int^ slot, int bytes) {
@@ -256,36 +296,194 @@ struct Mem {
         }
         int^ oh = (int^)(old - 16);
         int have = (oh[0] & -4) - 16;
-        void^ nb = Mem::alloc(bytes);
-        if (int)nb == 0 { return; }
+        int nb = (int)Mem::alloc(bytes);                       // an int, not a pointer variable: this function does not own the new block
+        if nb == 0 { return; }
         int n = have;
         if bytes < n { n = bytes; }
-        Mem::copy(nb, (void^)old, n);
+        Mem::copy((void^)nb, (void^)old, n);
         Mem::free((void^)old);
-        slot[0] = (int)nb;
+        slot[0] = nb;
     }
     // free[p = n] in a -d build: the block must be able to hold n bytes
-    static void free_checked(void^ p, int bytes) {
+    static void check_size(void^ p, int bytes) {
         if (int)p != 0 {
             int^ h = (int^)((int)p - 16);
             if bytes > (h[0] & -4) - 16 { __panic("free[p = n]: the block is smaller than n"); }
         }
-        Mem::free(p);
     }
-    // -d : at the end of main, say how many blocks were never given back
-    static void report() {
-        int n = std_alloc_n - std_free_n;
-        if n <= 0 { return; }
+    // ---- the checks of a -d build (the program calls debug_on first)
+    static void debug_on() {
+        std_debug = 1;
+    }
+    static void dbg_text(char^ t) {
+        int n = 0;
+        while t[n] != 0 { n += 1; }
+        syscall(64, 2, t, n);
+    }
+    static void dbg_num(int v) {
         char d[24];
         int k = 23;
-        d[k] = 10;
-        while n > 0 {
+        d[k] = 32;
+        if v == 0 {
             k -= 1;
-            d[k] = '0' + n % 10;
-            n = n / 10;
+            d[k] = '0';
         }
-        syscall(64, 2, "debug: memory blocks never freed: ", 34);
-        syscall(64, 2, @d + k, 24 - k);
+        while v > 0 {
+            k -= 1;
+            d[k] = '0' + v % 10;
+            v = v / 10;
+        }
+        syscall(64, 2, @d + k, 24 - k - 1);
+    }
+    // the name of the first function in the chain of the callers that is not a function of the library
+    static char^ dbg_where() {
+        int^ fp = (int^)__fp();
+        int^ tab = (int^)__fntab();
+        int depth = 0;
+        while (int)fp > 4096 && depth < 12 {
+            int ret = fp[1];
+            int best = 0 - 1;
+            int k = 0;
+            while tab[k * 2] != 0 {
+                if tab[k * 2] < ret { best = k; }
+                k += 1;
+            }
+            if best < 0 { return "?"; }
+            char^ name = (char^)tab[best * 2 + 1];
+            bool lib = name[0] == '_' && name[1] == '_';
+            if name[0] == 'M' && name[1] == 'e' && name[2] == 'm' && name[3] == '_' && name[4] == '_' { lib = true; }
+            if !lib { return name; }
+            fp = (int^)fp[0];
+            depth += 1;
+        }
+        return "?";
+    }
+    // the place of the block `addr` in the table, or -1 if it is not there
+    static int dbg_find(int addr) {
+        int h = (addr >> 4) & 32767;
+        int tries = 0;
+        while tries < 32768 {
+            int a = std_dbg_tab[h * 3];
+            if a == addr { return h; }
+            if a == 0 { return 0 - 1; }
+            h = (h + 1) & 32767;
+            tries += 1;
+        }
+        return 0 - 1;
+    }
+    // a place for the block `addr`: the first one that is free (never used, or a block that was freed), -1 if there is none
+    static int dbg_free_place(int addr) {
+        int h = (addr >> 4) & 32767;
+        int tries = 0;
+        while tries < 32768 {
+            int a = std_dbg_tab[h * 3];
+            if a == 0 || a == 0 - 1 { return h; }
+            h = (h + 1) & 32767;
+            tries += 1;
+        }
+        return 0 - 1;
+    }
+    static void^ dbg_alloc(int n) {
+        void^ r = Mem::alloc_locked(n);
+        if (int)r != 0 {
+            char^ where = Mem::dbg_where();
+            int^ hh = (int^)((int)r - 16);
+            int sl = Mem::dbg_free_place((int)r);
+            if sl < 0 {
+                std_dbg_full = 1;
+            } else {
+                std_dbg_n += 1;
+                std_dbg_tab[sl * 3] = (int)r;
+                std_dbg_tab[sl * 3 + 1] = hh[0] - 16;
+                std_dbg_tab[sl * 3 + 2] = (int)where;
+            }
+        }
+        return r;
+    }
+    static void^ alloc_locked(int n) {
+        if std_mt == 0 { return Mem::alloc_raw(n); }
+        while __cas(@std_mem_lock, 0, 1) != 0 {
+            syscall(124);
+        }
+        void^ r = Mem::alloc_raw(n);
+        __xchg(@std_mem_lock, 0);
+        return r;
+    }
+    // are the 221 that a freed block was filled with all there?
+    static bool dbg_intact(int blk) {
+        int^ hh = (int^)(blk - 16);
+        int words = ((hh[0] & -4) - 16) / 8;
+        int^ w = (int^)blk;
+        int i = 0;
+        while i < words {
+            if w[i] != -2459565876494606883 { return false; }
+            i += 1;
+        }
+        return true;
+    }
+    static void dbg_free(void^ p) {
+        if (int)p == 0 { return; }
+        int^ hh = (int^)((int)p - 16);
+        if (hh[0] & 1) != 0 {
+            Mem::free_piece((int)p - 16);
+            return;
+        }
+        int sl = Mem::dbg_find((int)p);
+        if sl >= 0 {
+            std_dbg_tab[sl * 3] = 0 - 1;                  // a place that held a block (the places after it stay reachable)
+            std_dbg_n -= 1;
+        } else if std_dbg_full == 0 {
+            __panic("free of a block that is not alive: freed twice, or it did not come from alloc");
+        }
+        // filled with 221 and kept for a while: a write into it is found when it leaves
+        int words = ((hh[0] & -4) - 16) / 8;
+        int^ w = (int^)p;
+        int i = 0;
+        while i < words {
+            w[i] = -2459565876494606883;
+            i += 1;
+        }
+        int q = std_dbg_qi & 63;
+        std_dbg_qi += 1;
+        int old = std_dbg_quar[q];
+        std_dbg_quar[q] = (int)p;
+        std_free_n += 1;
+        if old != 0 {
+            if !Mem::dbg_intact(old) { __panic("a block was written after it was freed"); }
+            std_free_n -= 1;                               // free_raw counts it
+            Mem::free_now((void^)old);
+        }
+    }
+    // -d : at the end of main, say which blocks were never given back
+    static void report() {
+        int q = 0;
+        int quarantined = 0;
+        while q < 64 {
+            if std_dbg_quar[q] != 0 {
+                if !Mem::dbg_intact(std_dbg_quar[q]) { __panic("a block was written after it was freed"); }
+                quarantined += 1;
+            }
+            q += 1;
+        }
+        int n = std_alloc_n - std_free_n;
+        if n <= 0 { return; }
+        Mem::dbg_text("debug: memory blocks never freed: ");
+        Mem::dbg_num(n);
+        Mem::dbg_text("\n");
+        int shown = 0;
+        int i = 0;
+        while i < 32768 && shown < 20 {
+            int a = std_dbg_tab[i * 3];
+            if a > 0 {
+                Mem::dbg_text("  leak: ");
+                Mem::dbg_num(std_dbg_tab[i * 3 + 1]);
+                Mem::dbg_text(" bytes made in ");
+                Mem::dbg_text((char^)std_dbg_tab[i * 3 + 2]);
+                Mem::dbg_text("\n");
+                shown += 1;
+            }
+            i += 1;
+        }
     }
     // n bytes of p are set to value (8 bytes at a time while it goes, then the rest)
     static void set(void^ p, int value, int n) {
@@ -504,6 +702,24 @@ struct __Arr {
         Mem::copy((void^)r[2], (void^)h[2], h[0] * h[3]);
         r[0] = h[0];
         return (void^)r;
+    }
+    // a copy of an array whose elements own memory: the elements move to the copy, the old array is empty afterwards
+    static void^ clone_move(void^ hv) {
+        void^ r = __Arr::clone(hv);
+        int^ h = (int^)hv;
+        h[0] = 0;
+        return r;
+    }
+    // every element is freed with f (a struct that frees itself), then the array
+    static void free_each(void^ hv, void(void^)^ f) {
+        int^ h = (int^)hv;
+        if (int)h == 0 { return; }
+        int i = 0;
+        while i < h[0] {
+            f((void^)(h[2] + i * h[3]));
+            i += 1;
+        }
+        __Arr::free(hv);
     }
     // give the elements and the header back (null is ignored)
     static void free(void^ hv) {

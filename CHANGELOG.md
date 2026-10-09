@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.64
+* **`-d` finds more:** a block that is **freed twice** (or a pointer that did not come from `alloc`) stops the program with a stack trace; a block that is **written after it was freed** is found (freed blocks are filled with 221 and kept for a while: a changed byte is reported when the block leaves); the **leak report names the function** that made each block (`leak: 64 bytes made in leak`). Tests `t273`, `t274`.
+* **`-Wmoved` also for `p[i]` and `p^` after `move(p)`** (before: only when the variable itself was read). Test `t272` (with `-st`).
+* **Pools reuse the pieces that were given back:** `free[b]` of a piece in the middle makes its room available to the next `alloc[pool[n] >> int^ q]` (first fit). Test `t275`.
+* **Fixed (found by the new checks):** `ks.push(Node::Name("x"))` — a struct that frees itself, made by a call and pushed into an array — copied the struct and then freed the temporary, so the array held freed memory; it moves now. An array of structs that free themselves (`Node[] ks`) frees every element when it is freed (before: only the array, the elements' memory leaked); the copy that a data enum makes of such an array moves the elements.
+* A `-d` program checks the size of `free[p = n]` with a separate call (the variable is made null as before).
+
 ## 0.9.63
 * **The bracket forms of memory** (chosen by the owner, `docs/syntax-design.md` 57): `alloc[int^ p = 32];` (a pointer declaration with its number of elements), `alloc0[int^ p = 32];` (zeroed), `free[p];` / `free[p = 32];`, `grow[p = 64];` (a bigger block with the old content), `arr[n]` (= `arr(n)`), and **pools**: `alloc[int^ pool = 32];` then `alloc[pool[12] >> int^ a];` takes 12 elements from the pool into `a`; `free[a];` gives back only that piece; `free[pool];` everything. The forms with parentheses stay. Test `t271`.
 * `Mem::alloc0`, `Mem::take`, `Mem::grow_slot`, `Mem::free_checked` in the prelude.

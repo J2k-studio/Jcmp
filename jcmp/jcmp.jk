@@ -2,7 +2,7 @@
 // Build:  bin/jcmp jcmp/jcmp.jk -o jcmp1        (see bootstrap.sh)
 // Use:    jcmp1 input.jk -o program
 // the version of the compiler (also in the file VERSION; release.sh checks that they agree)
-#define JCMP_VERSION "0.9.63"
+#define JCMP_VERSION "0.9.64"
 
 #import "jc_base"
 #import "jc_asm"
@@ -238,6 +238,7 @@ void main() {
     emit_print_helpers();
     emit_copy_helper();
     parse_program();
+    emit_free_thunks();
     if used_fprint == 1 { emit_fprint_helper(); }
     if used_oob == 1 { emit_oob_helper(); }
     if used_uprint == 1 { emit_uprint_helper(); }

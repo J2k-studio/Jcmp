@@ -1285,6 +1285,19 @@ int own_find(int off) {
 // chain is walked and everything that was not freed yet is freed (mode 0: the routine gets the value in the
 // slot, mode 1: it gets the address of the slot, a struct with free(self)). Leaving a block takes the
 // records out again (own_unlink).
+// an array of structs that free themselves is freed by a small routine made for the struct: S__free_arr (x0 = the array)
+int thunk_need[1024];
+void free_thunk_name(char^ fn, int sidx) {
+    str_copy(fn, @sname + sidx * 64, 64);
+    append_text(fn, "__free_arr");
+    thunk_need[sidx] = 1;
+    char sf[128];
+    str_copy(@sf, @sname + sidx * 64, 64);
+    append_text(@sf, "__free");
+    note_call(@sf);
+    note_call("__Arr__free_each");
+}
+
 void own_add(int off, int kind, int aux) {
     if own_count >= 256 { die("too many owning variables in one function"); }
     if kind != 2 && kind != 6 && kind != 7 && kind != 9 { str_flush(stmt_t0, 1); }       // Strings made by this statement go first: the records must be in order
@@ -1307,6 +1320,9 @@ void own_add(int off, int kind, int aux) {
         str_copy(@fn, @sname + aux * 64, 64);
         append_text(@fn, "__free");
         mode = 1;
+    } else if kind == 10 {
+        // an array of structs that free themselves: every element is freed, then the array (see free_thunk)
+        free_thunk_name(@fn, aux);
     } else {
         str_copy(@fn, "__Arr__free", 128);
     }
@@ -1355,7 +1371,11 @@ void emit_owner_free(int i) {
         return;
     }
     ins_mem("ldr", "x0", "x29", own_off[i]);
-    if own_kind[i] == 3 || own_kind[i] == 9 {
+    if own_kind[i] == 10 {
+        char tn[128];
+        free_thunk_name(@tn, own_aux[i]);
+        rt_call(@tn);
+    } else if own_kind[i] == 3 || own_kind[i] == 9 {
         rt_call("__Str__free_all");
     } else if own_kind[i] >= 1 {
         rt_call("__Arr__free");
@@ -1722,6 +1742,14 @@ void parse_lvalue() {
     lvalue_loop();
 }
 
+// the variable that this lvalue starts with was moved (it is null now) and is used again: p[i], p^, p.f
+void check_moved_use() {
+    if lv_fresh == 1 && lv_base_local == 1 && lv_kind != 1 {
+        int oi = own_find(lv_base_off);
+        if oi >= 0 && own_moved[oi] == 1 { warn("this variable was moved and is used afterwards (it is null now)", "moved"); }
+    }
+}
+
 // the object whose address is in x0 is described by lv_*: follow [index], ^, .field, .method(...)
 void lvalue_loop() {
     while true {
@@ -1732,6 +1760,7 @@ void lvalue_loop() {
             dyn_member();
             if lv_done == 1 { return; }
         } else if tok_is("[") {
+            check_moved_use();
             int s_code = lv_code;
             int s_ptr = lv_ptr;
             int s_tid = lv_tid;
@@ -1858,6 +1887,7 @@ void lvalue_loop() {
             lv_kind = 0;
             lv_nd = 1;
         } else if tok_is("^") {
+            check_moved_use();
             if lv_ptr == 0 || lv_kind == 1 { die("not a pointer"); }
             if lv_ptr == 10 { die("a void^ cannot be dereferenced (cast it to a typed pointer first)"); }
             next();
@@ -2244,15 +2274,18 @@ void sg_make(int kind) {
             char cn[200];
             sg_part(@nm, 0, eq, 100);
             sg_part(@cn, eq + 1, str_len(@sg_in), 200);
-            if opt_debug == 1 { append_text(@sg_out, "Mem::free_checked("); } else { append_text(@sg_out, "Mem::free("); }
-            append_text(@sg_out, @nm);
             if opt_debug == 1 {
+                // a -d build also checks the size (then the usual free, which makes the variable null)
+                append_text(@sg_out, "Mem::check_size(");
+                append_text(@sg_out, @nm);
                 append_text(@sg_out, ", (");
                 append_text(@sg_out, @cn);
                 append_text(@sg_out, ") * sizeof(");
                 append_text(@sg_out, @nm);
-                append_text(@sg_out, "^)");
+                append_text(@sg_out, "^)); ");
             }
+            append_text(@sg_out, "Mem::free(");
+            append_text(@sg_out, @nm);
             append_text(@sg_out, ")");
         }
         return;
@@ -3276,7 +3309,13 @@ void dyn_member() {
         expect("(");
         expect(")");
         load_through(8);
-        if is_strarr_dyn(info) { rt_call("__Str__aclone"); } else { rt_call("__Arr__clone"); }
+        if is_strarr_dyn(info) {
+            rt_call("__Str__aclone");
+        } else if code >= 16 && code < 400 && eptr == 0 && struct_has_free(code - 16) {
+            rt_call("__Arr__clone_move");           // the elements free themselves: they move to the copy, the old array is emptied
+        } else {
+            rt_call("__Arr__clone");
+        }
         ex_w = 8;
         ex_ty = 99;
         ex_dyn = info;
@@ -3303,6 +3342,15 @@ void dyn_member() {
         expect(")");
         int push_owner = 0 - 1;
         if rv_valid == 1 { push_owner = own_find(rv_off); }
+        // a struct that frees itself (Node::Name("x")) that was just made: it moves into the array, the temporary is emptied below
+        int push_src = 0 - 1;
+        if code >= 16 && code < 400 && eptr == 0 && struct_has_free(code - 16) {
+            if last_call_struct == 1 && last_call_struct_off != 0 {
+                push_src = last_call_struct_off;
+            } else if push_owner >= 0 && own_kind[push_owner] == 4 {
+                push_src = rv_off;
+            }
+        }
         push_x0();                       // the value (the address of a struct)
         emit_line("ldr x0, [sp, #16]");
         rt_call("__Arr__slot");          // x0 = the place of the new element
@@ -3313,10 +3361,15 @@ void dyn_member() {
             emit_line("mov x0, x1");
             ins_n("mov x2, ", ssize[code - 16]);
             emit_line("bl j2k_copy");
+            if push_src >= 0 {
+                emit_zero_local(push_src, ssize[code - 16]);          // the array owns what the struct owned
+                int psi = own_find(push_src);
+                if psi >= 0 && own_blk[psi] == cur_blk { own_moved[psi] = 1; }
+            }
         } else {
             store_through(code);
         }
-        if push_owner >= 0 {
+        if push_owner >= 0 && push_src < 0 {
             emit_owner_null(push_owner);       // the array owns the pointer now
             if own_blk[push_owner] == cur_blk { own_moved[push_owner] = 1; }
         }
@@ -3376,7 +3429,13 @@ void dyn_member() {
         expect(")");
         push_x0();                       // the variable's address
         load_through(8);
-        rt_call("__Arr__free");
+        if code >= 16 && code < 400 && eptr == 0 && struct_has_free(code - 16) {
+            char tn2[128];
+            free_thunk_name(@tn2, code - 16);
+            rt_call(@tn2);
+        } else {
+            rt_call("__Arr__free");
+        }
         emit_line("ldr x3, [sp, #0]");
         emit_line("add sp, sp, #16");
         emit_line("mov x1, 0");
@@ -4686,4 +4745,25 @@ void parse_expr() {
         ex_ty = 1;
     }
     in_cout = saved_cout;
+}
+
+// the routines S__free_arr of the structs that need one
+void emit_free_thunks() {
+    int i = 0;
+    while i < scount {
+        if thunk_need[i] == 1 {
+            char tn[128];
+            char sf[128];
+            str_copy(@tn, @sname + i * 64, 64);
+            append_text(@tn, "__free_arr");
+            str_copy(@sf, @sname + i * 64, 64);
+            append_text(@sf, "__free");
+            emit_str(@tn);
+            emit_line(":");
+            emit_str("adr x1, ");
+            emit_line(@sf);
+            emit_line("b __Arr__free_each");
+        }
+        i += 1;
+    }
 }
