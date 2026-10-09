@@ -129,6 +129,14 @@ void rg_text(char^ s) {
 }
 
 void rg_int(int v) {
+    if v < 0 {
+        rg_put('-');
+        if v == 0 - 9223372036854775807 - 1 {
+            rg_text("9223372036854775808");
+            return;
+        }
+        v = 0 - v;
+    }
     if v >= 10 { rg_int(v / 10); }
     rg_put('0' + v % 10);
 }

@@ -58,6 +58,8 @@
 #define IR_RET 43            // return a (a = 0: no value)
 #define IR_TRAP 44           // the program cannot get here (a call that never returns)
 #define IR_PARAM 45          // d = the argument number k of the function (made at the start of the first block)
+#define IR_FTRUNC 46         // d = a rounded towards 0 (a double)
+#define IR_FCEIL 47          // d = a rounded up (a double)
 
 // the conditions (cc) of IR_SETCC and IR_BR
 #define IR_EQ 0
@@ -241,6 +243,8 @@ char^ ir_opname(int op) {
     if op == IR_RET { return "ret"; }
     if op == IR_TRAP { return "trap"; }
     if op == IR_PARAM { return "param"; }
+    if op == IR_FTRUNC { return "ftrunc"; }
+    if op == IR_FCEIL { return "fceil"; }
     return "?";
 }
 
@@ -319,7 +323,7 @@ void ir_print_instr(int i) {
     if op == IR_CONST || op == IR_PARAM {
         ir_pc(' ');
         ir_pn(ir_k[i]);
-    } else if op == IR_COPY || op == IR_NEG || op == IR_NOT || op == IR_FSQRT || op == IR_FNEG || op == IR_FABS || op == IR_FFLOOR || op == IR_I2F || op == IR_F2I || op == IR_BITS2F || op == IR_F2BITS {
+    } else if op == IR_COPY || op == IR_NEG || op == IR_NOT || op == IR_FSQRT || op == IR_FNEG || op == IR_FABS || op == IR_FFLOOR || op == IR_FTRUNC || op == IR_FCEIL || op == IR_I2F || op == IR_F2I || op == IR_BITS2F || op == IR_F2BITS {
         ir_pc(' ');
         ir_pv(ir_a[i]);
     } else if op == IR_EXT {
@@ -501,7 +505,7 @@ int ir_check() {
             // the class of the operands: a double operation works on doubles, a whole number operation on whole numbers
             int ca = ir_vcls[ir_a[i]];
             if ir_a[i] != 0 {
-                if (op >= IR_FADD && op <= IR_FFLOOR && ca != 1) || (op >= IR_ADD && op <= IR_MULHS && ca != 0) {
+                if ((op >= IR_FADD && op <= IR_FFLOOR || op == IR_FTRUNC || op == IR_FCEIL) && ca != 1) || (op >= IR_ADD && op <= IR_MULHS && ca != 0) {
                     str_copy(@ir_err, "an operand of the wrong class", 200);
                     return 0;
                 }

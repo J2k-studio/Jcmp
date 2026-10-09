@@ -1706,6 +1706,22 @@ void struct_owner(int s) {
     }
 }
 
+// does a local variable of this struct have to start as zeros? A struct that frees itself, and a struct with a String or a dynamic array in it
+// (assigning to such a field frees the old value, so the old value must be null, not what the stack held before)
+bool struct_needs_zero(int s) {
+    if struct_has_free(s) { return true; }
+    int f = sfirst[s];
+    int last = sfirst[s] + snf[s];
+    while f < last {
+        if flddyn[f] != 0 { return true; }
+        if fldcode[f] >= 16 && fldcode[f] < 400 && fldptr[f] == 0 && fldcode[f] - 16 != s {
+            if struct_needs_zero(fldcode[f] - 16) { return true; }
+        }
+        f += 1;
+    }
+    return false;
+}
+
 bool struct_has_init(int s) {
     char hn[64];
     str_copy(@hn, @sname + s * 64, 64);
@@ -1936,7 +1952,7 @@ void parse_local_decl_core() {
             }
             expect(";");
         }
-        if d_elem >= 16 && d_str == 0 && d_list == 0 && d_ptr == 0 && struct_has_free(d_elem - 16) {
+        if d_elem >= 16 && d_str == 0 && d_list == 0 && d_ptr == 0 && struct_needs_zero(d_elem - 16) {
             // elements that free themselves start empty (zeros), so that free(self) and an assignment are always safe
             int z_words = d_count * ssize[d_elem - 16] / 8;
             int z_lab = new_label();
@@ -2055,8 +2071,8 @@ void parse_local_decl_core() {
         expect(";");
         ty_tid = d_tid;
         add_local(@d_name, 0, d_width, ssize[d_sidx], 0);
-        if struct_has_free(d_sidx) {
-            // it will be freed at the end of the block: start from zeros so that free(self) is always safe
+        if struct_needs_zero(d_sidx) {
+            // it will be freed at the end of the block (or a field is freed when it is assigned): start from zeros so that free(self) is always safe
             int zk = 0;
             emit_line("mov x1, 0");
             while zk < ssize[d_sidx] {
@@ -2954,11 +2970,63 @@ void emit_divzero_helper() {
 
 // SIGSEGV (a null pointer, or a stack that ran out): say so and stop (the handler runs on its own stack)
 char segv_text[80];
+// writes  text  and the value that the line `load` puts in x5, as 16 hexadecimal digits and a newline, to the standard error
+void emit_segv_hex(char^ text, int n, char^ load, int k) {
+    emit_text_chunks(text, n);
+    emit_line("mov x0, 2");
+    emit_line("add x1, sp, #0");
+    ins_n("mov x2, ", n);
+    emit_line("mov x8, 64");
+    emit_line("svc 0");
+    emit_line(load);
+    emit_line("add x6, sp, #64");
+    emit_line("mov x7, 15");
+    emit_str("j2k_sh");
+    emit_int(k);
+    emit_line("a:");
+    emit_line("mov x11, 15");
+    emit_line("and x10, x5, x11");
+    emit_line("cmp x10, 10");
+    emit_str("b.lt j2k_sh");
+    emit_int(k);
+    emit_line("b");
+    emit_line("add x10, x10, #87");
+    emit_str("b j2k_sh");
+    emit_int(k);
+    emit_line("c");
+    emit_str("j2k_sh");
+    emit_int(k);
+    emit_line("b:");
+    emit_line("add x10, x10, #48");
+    emit_str("j2k_sh");
+    emit_int(k);
+    emit_line("c:");
+    emit_line("add x12, x6, x7");
+    emit_line("strb x10, [x12, #0]");
+    emit_line("lsr x5, x5, #4");
+    emit_line("sub x7, x7, #1");
+    emit_line("cmp x7, 0");
+    emit_str("b.ge j2k_sh");
+    emit_int(k);
+    emit_line("a");
+    emit_line("mov x10, 10");
+    emit_line("strb x10, [x6, #16]");
+    emit_line("mov x0, 2");
+    emit_line("add x1, sp, #64");
+    emit_line("mov x2, 17");
+    emit_line("mov x8, 64");
+    emit_line("svc 0");
+}
+
 void emit_segv_handler() {
     str_copy(@segv_text, "runtime error: segmentation fault (null pointer or stack overflow)\n", 80);
     int n = str_len(@segv_text);
     emit_line("j2k_segv:");
     emit_line("sub sp, sp, #128");
+    if opt_debug == 1 {
+        emit_line("mov x20, x1");              // the siginfo and the saved state (a -d build asks for them: SA_SIGINFO)
+        emit_line("mov x21, x2");
+    }
     emit_text_chunks(@segv_text, n);
     emit_line("mov x0, 2");
     emit_line("add x1, sp, #0");
@@ -2967,6 +3035,12 @@ void emit_segv_handler() {
     emit_nl();
     emit_line("mov x8, 64");
     emit_line("svc 0");
+    if opt_debug == 1 {
+        // where it happened: "  pc 0x..." and "  address 0x..." (16 hexadecimal digits each)
+        emit_segv_hex("  pc 0x", 7, "ldr x5, [x21, #440]", 1);
+        emit_segv_hex("  address 0x", 12, "ldr x5, [x20, #16]", 2);
+        emit_segv_hex("  caller (x30) 0x", 17, "ldr x5, [x21, #424]", 3);
+    }
     emit_line("mov x0, 139");
     emit_line("mov x8, 94");
     emit_line("svc 0");
@@ -2984,7 +3058,7 @@ void emit_start_stub() {
     emit_line("sub sp, sp, #64");
     emit_line("adr x0, j2k_segv");
     emit_line("str x0, [sp, #0]");
-    emit_line("mov x0, 134217728");
+    if opt_debug == 1 { emit_line("mov x0, 134217732"); } else { emit_line("mov x0, 134217728"); }     // SA_ONSTACK (and SA_SIGINFO in a -d build)
     emit_line("str x0, [sp, #8]");
     emit_line("mov x0, 0");
     emit_line("str x0, [sp, #16]");

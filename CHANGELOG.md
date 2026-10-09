@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.66
+* **The IR is made from the compiler's own code (`jcmp/jc_lift.j`, design: `docs/design/03-ir.md` section 8):** a function that the compiler wrote as assembler text is read into the IR (blocks, three-address instructions, stack temporaries as fixed cells of the frame, a compare and its jump as one jump) and can be written back (`-irtrip`, hidden; `-irstat` says which functions can be lifted, `-irdump` prints the IR). 64 of 67 functions of a typical program can be lifted (the rest: atomics, 32-bit floats, `defer`, calls with more than 8 arguments). With `-irtrip` the whole test suite and the compiler itself work (the compiler built this way passes all tests). Nothing changes in the normal code yet: this is the base for the passes that follow.
+* **Fixed (an old fault found by this work):** a local struct that has a `String` or a dynamic array in it (`P p; p.name = "bob";`) did not start as zeros, so assigning a field freed what the stack held before (a crash when the stack was dirty); it starts as zeros now (also arrays of such structs and structs inside them). Test `t277`.
+* `./run_all_tests.sh` uses the newest compiler (`bin/jcmp`) when `JCMP` is not given (it used the frozen assembly compiler, of which only the first tests work); `SEED=1` still runs the old one.
+* A `-d` program that stops with a segmentation fault now also says the address, the place of the instruction (`pc`) and the caller.
+* Fixed: a negative number in the output of the register pass (`rg_int`).
+
 ## 0.9.65
 * **The IR (first step, `docs/design/03-ir.md`):** `jcmp/jc_ir.j` holds the intermediate representation of the compiler's second generation of passes: functions as basic blocks of three-address instructions on virtual registers (whole numbers and doubles), explicit `load` / `store` with a width, slots for the frame, calls with their arguments, jumps with conditions; a printer and a checker (every block ends with exactly one jump or return, every operand exists, double and whole-number operations get the right class). A hidden `jcmp -irtest` builds two functions, checks and prints them (test `t276`). Nothing in the generated code changes yet.
 
