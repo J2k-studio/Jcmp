@@ -2,13 +2,14 @@
 // Build:  bin/jcmp jcmp/jcmp.jk -o jcmp1        (see bootstrap.sh)
 // Use:    jcmp1 input.jk -o program
 // the version of the compiler (also in the file VERSION; release.sh checks that they agree)
-#define JCMP_VERSION "0.9.76"
+#define JCMP_VERSION "0.9.77"
 
 #import "jc_base"
 #import "jc_asm"
 #import "jc_lex"
 #import "jc_std"
 #import "jc_expr"
+#import "jc_low"
 #import "jc_stmt"
 #import "jc_gen"
 #import "jc_regs"

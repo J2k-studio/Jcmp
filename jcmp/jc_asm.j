@@ -101,15 +101,46 @@ bool as_is_name_char(int c) {
 }
 
 int as_parse_number() {
+    if as_cur() == '#' { as_ci += 1; }
     int v = 0;
+    int digits = 0;
+    if as_cur() == '0' && (as_peek(1) == 'x' || as_peek(1) == 'X') {
+        // hexadecimal:  0x7FF0_0000
+        as_ci += 2;
+        while as_ci < as_src_len {
+            int c = as_src[as_ci];
+            int d = 0 - 1;
+            if c >= '0' && c <= '9' { d = c - '0'; }
+            else if c >= 'a' && c <= 'f' { d = c - 'a' + 10; }
+            else if c >= 'A' && c <= 'F' { d = c - 'A' + 10; }
+            else if c == '_' { as_ci += 1; continue; }
+            if d < 0 { break; }
+            v = v * 16 + d;
+            digits += 1;
+            as_ci += 1;
+        }
+        if digits == 0 { as_fail(); }
+        return v;
+    }
+    if as_cur() == '0' && (as_peek(1) == 'b' || as_peek(1) == 'B') && (as_peek(2) == '0' || as_peek(2) == '1') {
+        as_ci += 2;
+        while as_ci < as_src_len && (as_src[as_ci] == '0' || as_src[as_ci] == '1' || as_src[as_ci] == '_') {
+            if as_src[as_ci] != '_' { v = v * 2 + (as_src[as_ci] - '0'); }
+            as_ci += 1;
+        }
+        return v;
+    }
     while as_ci < as_src_len && as_is_digit(as_src[as_ci]) {
         v = v * 10 + (as_src[as_ci] - '0');
+        digits += 1;
         as_ci += 1;
     }
+    if digits == 0 { as_fail(); }
     return v;
 }
 
 int as_parse_signed() {
+    if as_cur() == '#' { as_ci += 1; }
     if as_cur() == '-' {
         as_ci += 1;
         return 0 - as_parse_number();
@@ -118,9 +149,16 @@ int as_parse_signed() {
 }
 
 int as_parse_reg() {
+    if as_cur() == 'l' && as_peek(1) == 'r' { as_ci += 2; return 30; }
     if as_cur() != 'x' { as_fail(); }
+    if as_peek(1) == 'z' && as_peek(2) == 'r' {
+        as_ci += 3;
+        return 31;
+    }
     as_ci += 1;
-    return as_parse_number();
+    int r = as_parse_number();
+    if r > 30 { as_fail(); }
+    return r;
 }
 
 // "xN" or "sp" (-> 31, last_is_sp = 1). "sp" must be followed by a delimiter.
@@ -280,7 +318,7 @@ void as_h_mov() {
     as_skip_spaces();
     int rd = as_parse_reg();
     as_expect_comma();
-    if as_cur() == 'x' {
+    if as_cur() == 'x' || (as_cur() == 'l' && as_peek(1) == 'r') {
         int rm = as_parse_reg();
         as_put32(0xAA000000 | (rm << 16) | (31 << 5) | rd);
     } else {
@@ -581,13 +619,60 @@ void as_h_fcmp() {
 }
 
 // fmov dN, xN | fmov xN, dN | fmov sN, wN | fmov wN, sN
+// a decimal number with a fraction that "fmov dN, #x" can make: the 8 bits (sign, 3 bits of exponent, 4 of fraction)
+int as_fpimm8() {
+    if as_cur() == '#' { as_ci += 1; }
+    int neg = 0;
+    if as_cur() == '-' {
+        neg = 1;
+        as_ci += 1;
+    }
+    int ip = 0;
+    while as_is_digit(as_cur()) {
+        ip = ip * 10 + (as_cur() - '0');
+        as_ci += 1;
+    }
+    int fp = 0;
+    int scale = 1;
+    if as_cur() == '.' {
+        as_ci += 1;
+        while as_is_digit(as_cur()) {
+            if scale < 100000000 {
+                fp = fp * 10 + (as_cur() - '0');
+                scale = scale * 10;
+            }
+            as_ci += 1;
+        }
+    }
+    // value * 128 must be a whole number m = (16 + f) * 2^e with f in 0..15 and e in 0..7
+    int num = (ip * scale + fp) * 128;
+    if num % scale != 0 { as_fail(); }
+    int m = num / scale;
+    int e = 0;
+    while e < 8 {
+        int top = m >> e;
+        if top >= 16 && top <= 31 && (m & ((1 << e) - 1)) == 0 {
+            int exp = e - 3;                               // -3 .. 4
+            int bb = 0;
+            int cd = 0;
+            if exp >= 1 { bb = 0; cd = exp - 1; } else { bb = 1; cd = exp + 3; }
+            return (neg << 7) | (bb << 6) | (cd << 4) | (top - 16);
+        }
+        e += 1;
+    }
+    as_fail();
+    return 0;
+}
+
 void as_h_fmov() {
     as_skip_spaces();
     if as_at_freg() {
         int rd = as_parse_freg();
         int kind = as_fp_kind;
         as_expect_comma();
-        if kind == 1 && as_at_freg() {
+        if kind == 1 && (as_cur() == '#' || as_cur() == '-' || as_is_digit(as_cur())) {
+            as_put32(0x1E601000 | (as_fpimm8() << 13) | rd);       // fmov dN, #2.0
+        } else if kind == 1 && as_at_freg() {
             int rf = as_parse_freg();                  // fmov dN, dM
             if as_fp_kind != 1 { as_fail(); }
             as_put32(0x1E604000 | (rf << 5) | rd);
@@ -755,6 +840,313 @@ void as_read_mnemonic() {
     }
 }
 
+// ------------------------------------------------- more of the instruction set (system, barriers, atomics, flags)
+
+// two texts equal (this file also builds alone, without the library)
+bool as_seq(char^ a, char^ b) {
+    int i = 0;
+    while a[i] != 0 && b[i] != 0 {
+        if a[i] != b[i] { return false; }
+        i += 1;
+    }
+    return a[i] == b[i];
+}
+
+// cbz / cbnz xN, label
+void as_h_cbz(int base) {
+    as_skip_spaces();
+    int rt = as_parse_reg();
+    as_expect_comma();
+    as_skip_spaces();
+    as_read_label_name();
+    if as_pass == 1 { as_put32(0); return; }
+    int delta = (as_find_label() - as_pos) >> 2;
+    as_put32(base | ((delta & 0x7FFFF) << 5) | rt);
+}
+
+// tbz / tbnz xN, #bit, label
+void as_h_tbz(int base) {
+    as_skip_spaces();
+    int rt = as_parse_reg();
+    as_expect_comma();
+    as_skip_spaces();
+    if as_cur() == '#' { as_ci += 1; }
+    int bit = as_parse_number();
+    if bit > 63 { as_fail(); }
+    as_expect_comma();
+    as_skip_spaces();
+    as_read_label_name();
+    if as_pass == 1 { as_put32(0); return; }
+    int delta = (as_find_label() - as_pos) >> 2;
+    as_put32(base | ((bit >> 5) << 31) | ((bit & 31) << 19) | ((delta & 0x3FFF) << 5) | rt);
+}
+
+// br xN
+void as_h_br() {
+    as_skip_spaces();
+    int rn = as_parse_reg();
+    as_put32(0xD61F0000 | (rn << 5));
+}
+
+// mvn xd, xm    tst xn, xm   (two registers)
+void as_h_mvn() {
+    as_skip_spaces();
+    int rd = as_parse_reg();
+    as_expect_comma();
+    int rm = as_parse_reg();
+    as_put32(0xAA2003E0 | (rm << 16) | rd);
+}
+
+void as_h_tst() {
+    as_skip_spaces();
+    int rn = as_parse_reg();
+    as_expect_comma();
+    int rm = as_parse_reg();
+    as_put32(0xEA00001F | (rm << 16) | (rn << 5));
+}
+
+// the option of a barrier: sy, st, ld, ish, ishst, ishld, nsh ..., or nothing (sy for isb / dsb, ish for dmb)
+int as_barrier_option(int dflt) {
+    as_skip_spaces();
+    if !as_is_letter(as_cur()) { return dflt; }
+    as_read_label_name();
+    if as_seq(@as_nbuf, "sy") { return 15; }
+    if as_seq(@as_nbuf, "st") { return 14; }
+    if as_seq(@as_nbuf, "ld") { return 13; }
+    if as_seq(@as_nbuf, "ish") { return 11; }
+    if as_seq(@as_nbuf, "ishst") { return 10; }
+    if as_seq(@as_nbuf, "ishld") { return 9; }
+    if as_seq(@as_nbuf, "nsh") { return 7; }
+    if as_seq(@as_nbuf, "nshst") { return 6; }
+    if as_seq(@as_nbuf, "nshld") { return 5; }
+    if as_seq(@as_nbuf, "osh") { return 3; }
+    if as_seq(@as_nbuf, "oshst") { return 2; }
+    if as_seq(@as_nbuf, "oshld") { return 1; }
+    as_fail();
+    return 0;
+}
+
+// csel xd, xn, xm, cond      cset xd, cond
+void as_h_csel() {
+    as_skip_spaces();
+    int rd = as_parse_reg();
+    as_expect_comma();
+    int rn = as_parse_reg();
+    as_expect_comma();
+    int rm = as_parse_reg();
+    as_expect_comma();
+    as_skip_spaces();
+    int cond = as_parse_cond();
+    as_put32(0x9A800000 | (rm << 16) | (cond << 12) | (rn << 5) | rd);
+}
+
+void as_h_cset() {
+    as_skip_spaces();
+    int rd = as_parse_reg();
+    as_expect_comma();
+    as_skip_spaces();
+    int cond = as_parse_cond();
+    as_put32(0x9A9F07E0 | ((cond xor 1) << 12) | rd);
+}
+
+// ldar / stlr / ldarb / stlrb ...   xt, [xn]
+void as_h_acq(int base) {
+    as_skip_spaces();
+    int rt = as_parse_reg();
+    as_expect_comma();
+    if as_cur() != '[' { as_fail(); }
+    as_ci += 1;
+    as_skip_spaces();
+    int rn = as_parse_reg_or_sp();
+    as_skip_spaces();
+    if as_cur() != ']' { as_fail(); }
+    as_ci += 1;
+    as_put32(base | (rn << 5) | rt);
+}
+
+// swp / ldadd / ldclr / ldset / ldeor and the a / l / al forms:  xs, xt, [xn]
+void as_h_lse(int base) {
+    as_skip_spaces();
+    int rs = as_parse_reg();
+    as_expect_comma();
+    int rt = as_parse_reg();
+    as_expect_comma();
+    if as_cur() != '[' { as_fail(); }
+    as_ci += 1;
+    as_skip_spaces();
+    int rn = as_parse_reg_or_sp();
+    as_skip_spaces();
+    if as_cur() != ']' { as_fail(); }
+    as_ci += 1;
+    as_put32(base | (rs << 16) | (rn << 5) | rt);
+}
+
+// brk / hvc / smc #imm16
+void as_h_imm16(int base) {
+    as_skip_spaces();
+    if as_cur() == '#' { as_ci += 1; }
+    int v = as_parse_number();
+    as_put32(base | ((v & 65535) << 5));
+}
+
+// system register: the 15 bits o0:op1:CRn:CRm:op2 in place
+int as_sr(int op0, int op1, int crn, int crm, int op2) {
+    return ((op0 & 1) << 19) | (op1 << 16) | (crn << 12) | (crm << 8) | (op2 << 5);
+}
+
+int as_sysreg() {
+    as_skip_spaces();
+    as_read_label_name();
+    char^ n = @as_nbuf;
+    if as_seq(n, "sctlr_el1") { return as_sr(3, 0, 1, 0, 0); }
+    if as_seq(n, "actlr_el1") { return as_sr(3, 0, 1, 0, 1); }
+    if as_seq(n, "cpacr_el1") { return as_sr(3, 0, 1, 0, 2); }
+    if as_seq(n, "ttbr0_el1") { return as_sr(3, 0, 2, 0, 0); }
+    if as_seq(n, "ttbr1_el1") { return as_sr(3, 0, 2, 0, 1); }
+    if as_seq(n, "tcr_el1") { return as_sr(3, 0, 2, 0, 2); }
+    if as_seq(n, "spsr_el1") { return as_sr(3, 0, 4, 0, 0); }
+    if as_seq(n, "elr_el1") { return as_sr(3, 0, 4, 0, 1); }
+    if as_seq(n, "sp_el0") { return as_sr(3, 0, 4, 1, 0); }
+    if as_seq(n, "currentel") { return as_sr(3, 0, 4, 2, 2); }
+    if as_seq(n, "nzcv") { return as_sr(3, 3, 4, 2, 0); }
+    if as_seq(n, "daif") { return as_sr(3, 3, 4, 2, 1); }
+    if as_seq(n, "fpcr") { return as_sr(3, 3, 4, 4, 0); }
+    if as_seq(n, "fpsr") { return as_sr(3, 3, 4, 4, 1); }
+    if as_seq(n, "esr_el1") { return as_sr(3, 0, 5, 2, 0); }
+    if as_seq(n, "far_el1") { return as_sr(3, 0, 6, 0, 0); }
+    if as_seq(n, "mair_el1") { return as_sr(3, 0, 10, 2, 0); }
+    if as_seq(n, "vbar_el1") { return as_sr(3, 0, 12, 0, 0); }
+    if as_seq(n, "tpidr_el1") { return as_sr(3, 0, 13, 0, 4); }
+    if as_seq(n, "tpidr_el0") { return as_sr(3, 3, 13, 0, 2); }
+    if as_seq(n, "tpidrro_el0") { return as_sr(3, 3, 13, 0, 3); }
+    if as_seq(n, "cntkctl_el1") { return as_sr(3, 0, 14, 1, 0); }
+    if as_seq(n, "cntfrq_el0") { return as_sr(3, 3, 14, 0, 0); }
+    if as_seq(n, "cntvct_el0") { return as_sr(3, 3, 14, 0, 2); }
+    if as_seq(n, "cntpct_el0") { return as_sr(3, 3, 14, 0, 1); }
+    if as_seq(n, "cntp_tval_el0") { return as_sr(3, 3, 14, 2, 0); }
+    if as_seq(n, "cntp_ctl_el0") { return as_sr(3, 3, 14, 2, 1); }
+    if as_seq(n, "cntv_tval_el0") { return as_sr(3, 3, 14, 3, 0); }
+    if as_seq(n, "cntv_ctl_el0") { return as_sr(3, 3, 14, 3, 1); }
+    if as_seq(n, "midr_el1") { return as_sr(3, 0, 0, 0, 0); }
+    if as_seq(n, "mpidr_el1") { return as_sr(3, 0, 0, 0, 5); }
+    if as_seq(n, "id_aa64pfr0_el1") { return as_sr(3, 0, 0, 4, 0); }
+    if as_seq(n, "id_aa64isar0_el1") { return as_sr(3, 0, 0, 6, 0); }
+    if as_seq(n, "id_aa64mmfr0_el1") { return as_sr(3, 0, 0, 7, 0); }
+    // the general form  s3_0_c12_c0_0  (op0 _ op1 _ cCRn _ cCRm _ op2)
+    if n[0] == 's' && n[1] >= '0' && n[1] <= '9' {
+        int i = 1;
+        int vals[5];
+        int k = 0;
+        while k < 5 {
+            if k == 2 || k == 3 {
+                if n[i] != 'c' { as_fail(); }
+                i += 1;
+            }
+            int v = 0;
+            while n[i] >= '0' && n[i] <= '9' { v = v * 10 + (n[i] - '0'); i += 1; }
+            vals[k] = v;
+            if k < 4 {
+                if n[i] != '_' { as_fail(); }
+                i += 1;
+            }
+            k += 1;
+        }
+        return as_sr(vals[0], vals[1], vals[2], vals[3], vals[4]);
+    }
+    as_fail();
+    return 0;
+}
+
+void as_h_mrs() {
+    as_skip_spaces();
+    int rt = as_parse_reg();
+    as_expect_comma();
+    int sr = as_sysreg();
+    as_put32(0xD5300000 | sr | rt);
+}
+
+void as_h_msr() {
+    as_skip_spaces();
+    // the fields of PSTATE with a number:  msr daifset, #3
+    if as_cur() == 'd' && as_peek(1) == 'a' && as_peek(2) == 'i' && as_peek(3) == 'f' && (as_peek(4) == 's' || as_peek(4) == 'c') {
+        int set = 0;
+        if as_peek(4) == 's' { set = 1; }
+        as_ci += 7;                                  // daifset / daifclr
+        as_expect_comma();
+        as_skip_spaces();
+        if as_cur() == '#' { as_ci += 1; }
+        int v = as_parse_number() & 15;
+        int op2 = 7;
+        if set == 1 { op2 = 6; }
+        as_put32(0xD500401F | (3 << 16) | (v << 8) | (op2 << 5));
+        return;
+    }
+    int sr = as_sysreg();
+    as_expect_comma();
+    int rt = as_parse_reg();
+    as_put32(0xD5100000 | sr | rt);
+}
+
+// a mnemonic of the last group; true if it was one
+bool as_more() {
+    if as_mn_is("nop") { as_put32(0xD503201F); return true; }
+    if as_mn_is("wfi") { as_put32(0xD503207F); return true; }
+    if as_mn_is("wfe") { as_put32(0xD503205F); return true; }
+    if as_mn_is("sev") { as_put32(0xD503209F); return true; }
+    if as_mn_is("sevl") { as_put32(0xD50320BF); return true; }
+    if as_mn_is("yield") { as_put32(0xD503203F); return true; }
+    if as_mn_is("eret") { as_put32(0xD69F03E0); return true; }
+    if as_mn_is("isb") { int o = as_barrier_option(15); as_put32(0xD50330DF | (o << 8)); return true; }
+    if as_mn_is("dsb") { int o2 = as_barrier_option(15); as_put32(0xD503309F | (o2 << 8)); return true; }
+    if as_mn_is("br") { as_h_br(); return true; }
+    if as_mn_is("cbz") { as_h_cbz(0xB4000000); return true; }
+    if as_mn_is("cbnz") { as_h_cbz(0xB5000000); return true; }
+    if as_mn_is("tbz") { as_h_tbz(0x36000000); return true; }
+    if as_mn_is("tbnz") { as_h_tbz(0x37000000); return true; }
+    if as_mn_is("mvn") { as_h_mvn(); return true; }
+    if as_mn_is("tst") { as_h_tst(); return true; }
+    if as_mn_is("bic") { as_h_rrr(0x8A200000); return true; }
+    if as_mn_is("orn") { as_h_rrr(0xAA200000); return true; }
+    if as_mn_is("eon") { as_h_rrr(0xCA200000); return true; }
+    if as_mn_is("ands") { as_h_rrr(0xEA000000); return true; }
+    if as_mn_is("adds") { as_h_rrr(0xAB000000); return true; }
+    if as_mn_is("subs") { as_h_rrr(0xEB000000); return true; }
+    if as_mn_is("adc") { as_h_rrr(0x9A000000); return true; }
+    if as_mn_is("adcs") { as_h_rrr(0xBA000000); return true; }
+    if as_mn_is("sbc") { as_h_rrr(0xDA000000); return true; }
+    if as_mn_is("sbcs") { as_h_rrr(0xFA000000); return true; }
+    if as_mn_is("umulh") { as_h_rrr(0x9BC07C00); return true; }
+    if as_mn_is("csel") { as_h_csel(); return true; }
+    if as_mn_is("cset") { as_h_cset(); return true; }
+    if as_mn_is("ldrh") { as_h_mem(0x7940, 1); return true; }
+    if as_mn_is("strh") { as_h_mem(0x7900, 1); return true; }
+    if as_mn_is("ldrsh") { as_h_mem(0x7980, 1); return true; }
+    if as_mn_is("ldar") { as_h_acq(0xC8DFFC00); return true; }
+    if as_mn_is("stlr") { as_h_acq(0xC89FFC00); return true; }
+    if as_mn_is("ldarb") { as_h_acq(0x08DFFC00); return true; }
+    if as_mn_is("stlrb") { as_h_acq(0x089FFC00); return true; }
+    if as_mn_is("swp") { as_h_lse(0xF8208000); return true; }
+    if as_mn_is("swpa") { as_h_lse(0xF8A08000); return true; }
+    if as_mn_is("swpl") { as_h_lse(0xF8608000); return true; }
+    if as_mn_is("swpal") { as_h_lse(0xF8E08000); return true; }
+    if as_mn_is("ldadd") { as_h_lse(0xF8200000); return true; }
+    if as_mn_is("ldadda") { as_h_lse(0xF8A00000); return true; }
+    if as_mn_is("ldaddl") { as_h_lse(0xF8600000); return true; }
+    if as_mn_is("ldaddal") { as_h_lse(0xF8E00000); return true; }
+    if as_mn_is("ldclr") { as_h_lse(0xF8201000); return true; }
+    if as_mn_is("ldclral") { as_h_lse(0xF8E01000); return true; }
+    if as_mn_is("ldset") { as_h_lse(0xF8203000); return true; }
+    if as_mn_is("ldsetal") { as_h_lse(0xF8E03000); return true; }
+    if as_mn_is("ldeor") { as_h_lse(0xF8202000); return true; }
+    if as_mn_is("ldeoral") { as_h_lse(0xF8E02000); return true; }
+    if as_mn_is("brk") { as_h_imm16(0xD4200000); return true; }
+    if as_mn_is("hvc") { as_h_imm16(0xD4000002); return true; }
+    if as_mn_is("smc") { as_h_imm16(0xD4000003); return true; }
+    if as_mn_is("mrs") { as_h_mrs(); return true; }
+    if as_mn_is("msr") { as_h_msr(); return true; }
+    return false;
+}
+
 void as_instruction() {
     if as_cur() == '.' {                    // ".bss N"  ".quad label|number"  ".asciz "text""
         as_ci += 1;
@@ -852,7 +1244,7 @@ void as_instruction() {
     if as_mn_is("ldxr") { as_h_ldex(0xC85F7C00); return; }
     if as_mn_is("stlxr") { as_h_stex(0xC800FC00); return; }
     if as_mn_is("stxr") { as_h_stex(0xC8007C00); return; }
-    if as_mn_is("dmb") { as_put32(0xD5033BBF); return; }               // dmb ish
+    if as_mn_is("dmb") { int dob = as_barrier_option(11); as_put32(0xD50330BF | (dob << 8)); return; }       // dmb ish by default
     if as_mn_is("clrex") { as_put32(0xD5033F5F); return; }
     if as_mn_is("adr") { as_h_adr(); return; }
     if as_mn_is("blr") { as_h_blr(); return; }
@@ -882,6 +1274,7 @@ void as_instruction() {
     if as_mn_is("scvtf") { as_h_scvtf(); return; }
     if as_mn_is("fcvtzs") { as_h_fcvtzs(); return; }
     if as_mn_is("fcvt") { as_h_fcvt(); return; }
+    if as_more() { return; }
     as_fail();
 }
 

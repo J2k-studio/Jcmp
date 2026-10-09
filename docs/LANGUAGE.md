@@ -344,6 +344,34 @@ free[b];                       // only b goes back (a still works, and the next 
 ```
 If a variable is called `alloc`, `alloc0`, `free`, `grow` or `arr`, a `[` after it is an index as always.
 
+### The low level: `naked` functions (0.9.77)
+
+A `naked` function has no prologue, no epilogue and no saves: its body is all there is, written with register statements, one statement for one instruction. Nothing is added by the compiler and the optimiser does not touch it.
+
+```jk
+naked int sys_write(int fd, char^ buf, int n) {     // the arguments are in x0, x1, x2 as for any function
+    Reg::x8 = 64;                                    // write
+    svc(0);
+    ret;
+}
+
+naked int sum_to(int n) {
+    x1 = 0;
+  again:
+    if x0 == 0 goto done;
+    x1 += x0;
+    x0 -= 1;
+    goto again;
+  done:
+    x0 = x1;
+    ret;
+}
+```
+
+Statements: `R = number;` `R = R2;` `R = R2 op R3;` `R = R2 op number;` `R op= R2;` (op: `+ - * / & | xor << >> >>>`, `>>` keeps the sign, `>>>` does not), `R = ~R2;`, loads and stores `R = [B + off];` `R = u8[B + off];` (`u8 u16 u32 i8 i16 i32`) `[B + off] = R;`, `R = Bit::clz(R2);` (`clz ctz popcount bswap rbit`), `ret;` `goto label;` `label:` `call name;` `tail name;` `svc(n);` `if R == R2 goto label;` (`== != < <= > >=`, a number is allowed on the right) `if R.bit(n) goto label;` `if !R.bit(n) goto label;` `R = Sys::name;` and `Sys::name = R;` (system registers: `mrs` and `msr`), `Cpu::wait();` `Cpu::event();` `Cpu::send_event();` `Cpu::yield();` `Cpu::nop();` `Cpu::isb();` `Cpu::dsb();` `Cpu::dmb();` `Cpu::eret();` `Cpu::brk(n);` and `Cpu::inst("name", a, b)` for any instruction the assembler knows, with registers, numbers and labels as operands.
+
+Registers are written `Reg::x0` .. `Reg::x30`, `Reg::sp`, `Reg::lr`, `Reg::fp`, `Reg::zero`, or by role `Reg::arg0` .. `Reg::arg7`, `Reg::ret`; inside a naked function the bare names `x0` .. `x30`, `sp`, `lr`, `fp` are allowed too. A number that does not fit an instruction is loaded into `x17` first. The parameters of a naked function are only counted; the caller passes them in `x0 .. x7` as always. Design: `docs/syntax-design.md` 63, `docs/design/08-asm-replacement.md`.
+
 ### Bits: `Bit::`
 
 The work on the bits of a whole number is done by one instruction of the CPU each (the compiler puts the instruction at the call):

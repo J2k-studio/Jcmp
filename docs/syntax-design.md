@@ -1565,3 +1565,211 @@ naked void start() { asm { ldr x0, =stack_top;  mov sp, x0;  bl main;  loop: wfe
 | ง | ฟังก์ชันในตัว (intrinsic) | `Simd::add_f64x2(a, b)` | C `arm_neon.h` | ง่ายสุดสำหรับ compiler; อ่านยากที่สุด |
 
 **ข้อเสนอของผม:** ทาง 1 แบบ ก (ชื่อชนิด `f64x2 f64x4 i32x4 i64x2 ...` + operator เดิม + เมธอด `sum() min() max() load() store()`) เพราะ `vec2/3/4` ที่คุณออกแบบไว้ใช้ operator อยู่แล้ว เรียนรู้ง่าย และ NEON ใช้ได้ตรง ๆ · ขั้นตอน: (1) `f64x2`/`i32x4` ใน register q พร้อม `+ - *` และ load/store จาก array (2) `f64x4` = สอง q-register (3) ให้ `vec2` ใช้ `f64x2` ภายใน (4) ค่อยพิจารณา vectorize อัตโนมัติ (ทาง 2) เมื่อมี IR ที่ครบ
+
+## 60. The "super low" level: write the instructions themselves, with no import and no runtime (owner, 2026-10-09; the example is only an example)
+
+Owner's words: for people who work at the very bottom, something like `_main; mov x0 #10` and so on, with no import; "that deep", but the lines are only a supposition. Rule of three below; **nothing is decided**.
+
+Idea: a ladder of levels in ONE language and ONE tool, so that nobody has to leave it:
+
+| level | what you write | runtime / import |
+|---|---|---|
+| 0 bare | the instructions of the CPU as lines of the language | none: nothing is added, the file is the program |
+| 1 low | J2K with registers, `naked`, `Bit::` / `Atomic::` / `Cpu::` groups, `volatile` | none unless named |
+| 2 normal | J2K as today (structs, strings, memory, `-d`) | prelude as needed |
+
+### 60.1 The look of level 0 (options)
+
+| | A: a file in bare mode | B: a block inside a function | C: typed calls |
+|---|---|---|---|
+| example | `_main:` / `mov x0 10` / `svc 0` (the whole file is instructions; first line or the extension says "bare") | `bare { add x0 x0 x1 }` with the variables bound to registers: `bare(a -> x0, b -> x1) -> x0 { add x0 x0 x1 }` | `Cpu::mov(x0, 10)` (an instruction is a call) |
+| borrowed from | assemblers (GNU as, NASM, flat assembler: `fasm` needs no setup either) | Rust `asm!`, GCC inline asm, Zig `asm volatile` | Zig builtins, intrinsics of C (`arm_neon.h`) |
+| easy for people | the most direct: what you know from assembly, no extra syntax | needed to mix with normal code | every instruction is a name with typed operands: autocomplete, checked |
+| easy for machine | simple: lines go to the encoder that the compiler has already (`jc_asm.j`) | the compiler must know which registers the block changes (a `clobbers` list or it reads the block) | needs a table of all instructions (the table of `design/08`) |
+| cost | low | medium | high (the table) |
+
+A and B can share one reader (the same lines), so the work is once. C comes from the table of design 08 and can later be the checked form of A / B.
+
+### 60.2 Small things that make level 0 easy (all optional, each can be decided alone)
+* commas optional (`mov x0 10` and `mov x0, 10` are the same); `#` before a number optional (`mov x0, #10` is the same as `mov x0, 10`); the instruction name is case insensitive;
+* an entry name without declaration (`_main` or `_start`), or none (the first instruction is the entry);
+* **errors that explain**: "`add x0, x1, #5000`: the number must be 0 - 4095 (12 bits); use `mov x2, 5000` first, or `add x0, x1, #5000 >> 12, lsl #12`" instead of "parse error";
+* names for numbers, strings and data (`MSG: "hello"`, `LEN = 5`), and local labels; the constants and the offsets of structs of level 2 can be used (`mov x0, Point::y_offset`);
+* a call between the levels: a bare function can be called from J2K and the other way (the register convention is written in one line at the top of the function);
+* `-emit-asm` and a listing with the bytes, so that the result can be read;
+* no hidden code: a bare file produces exactly its own bytes (plus the ELF header).
+
+### 60.3 Questions for the owner
+1. A (a whole file), B (a block inside a function), or both? (Recommended: both, one reader.)
+2. Should commas and `#` be optional (a looser look than an assembler) or exactly as in the manual of the CPU?
+3. File mode: first line `#bare`, a file extension (`.jb`?), or an option `jcmp -bare file`?
+4. Does a bare file need `_main` / `_start` written, or is the first instruction the entry?
+5. How much checking in a bare block: only the encoding (what the CPU can do), or also the conventions (a callee-saved register that is changed and not saved gets a warning)?
+
+## 61. Other ways to work at the bottom without writing assembly lines (owner, 2026-10-09: "other people do not want to write like 60")
+
+Nothing is decided. The ideas can be used together; they serve different people.
+
+| # | idea | example | borrowed from | for whom | cost |
+|---|---|---|---|---|---|
+| 1 | **Named operations** (intrinsics) | `Bit::clz(x)`, `Simd::add(a, b)`, `Atomic::add(p, 1, Order::acquire)` | C intrinsics, Zig builtins | everybody who needs one instruction | low (started: `Bit::`) |
+| 2 | **Hardware described as data** | `device Uart @ 0x0900_0000 { data: u32 @ 0x00; flags: u32 @ 0x18 }` then `Uart.data = 'A';` is one `str`, `if Uart.flags.bit(5) == 0 {}` is a read and a test; fields with bit ranges | Rust `svd2rust`, Ada representation clauses, Zig `packed struct`, C bit fields | embedded, drivers, kernels | medium |
+| 3 | **Attributes on normal functions** | `naked`, `interrupt`, `section("boot")`, `align(64)`, `noreturn`, `cold`, `inline(always)` | C / Rust attributes | kernels, boot code | low-medium |
+| 4 | **The compiler knows the idioms** | `(x << k) \| (x >> (64 - k))` becomes `ror`; a loop that counts bits becomes `popcnt`; `a * 7` becomes shifts | LLVM, GCC | everybody: they write plain code | medium (each idiom is a pass) |
+| 5 | **Hints on loops and data** | `@unroll(4)`, `@simd`, `@prefetch(p + 64)`, `@align(16)`, `@likely` | OpenMP, Julia `@simd`, Rust `#[inline]` | numeric code | medium |
+| 6 | **Bit layouts as declarations** | `packet Header { version: u4; length: u12; flags: u16 }` gives read and write code, with the byte order | Erlang bit syntax, Kaitai, P4 | protocols, file formats | medium |
+| 7 | **Experts write the bottom once, everybody calls it** | `Mem::copy`, `Str::find`, `Crc::crc32` written with idea 1 or level 0 inside the library; the user sees a function | libc / glibc (assembly inside, C outside) | most users never see assembly | the work is in the library |
+| 8 | **Tools that show the bottom** | `jcmp explain f` (the instructions of `f` next to its lines, with the cost), `jcmp inst clz` (what the instruction does, the encoding), a listing with bytes, a debugger with registers | Compiler Explorer, `objdump -S`, `llvm-mca` | learning and tuning, no need to write it | medium |
+| 9 | **Registers that look like variables (C-like, one statement = one instruction)** | `x0 = 10;` `x0 += x1;` `x2 = [x3 + 8];` `if x0 == 0 goto done;` | "portable assembly": C--, QBE, PL/360, the options R1 / R2 / R3 of 58.6 | people who want the bottom but dislike mnemonics | medium |
+| 10 | **Assembly lines (level 0 of 60)** | `mov x0 10` | assemblers | the small group that wants exactly this | low |
+
+Rule of three (human-easy, machine-easy, borrowed): 1, 3, 4, 7 and 8 score highest for "easy to reach"; 2 and 6 score highest for "easy to use at the bottom" because they describe hardware instead of operating it; 9 and 10 give the deepest control and are for the few. A proposal: **the main road is 1 + 3 + 4 + 7 + 8; 2 and 6 come with the freestanding mode; 9 / 10 stay as the expert level**, and the owner chooses the order.
+
+## 62. More ideas for working at the bottom (owner, 2026-10-09: "propose more"). Nothing decided; numbers continue from 61.
+
+| # | idea | example | borrowed from | for whom | cost |
+|---|---|---|---|---|---|
+| 11 | **Promises about the machine, checked by the compiler** | `ensure stack <= 256;` `ensure no_branch_on(secret);` `ensure cycles <= 40;` `ensure no_alloc;` | SPARK / Ada, Rust `#[no_panic]`, Jasmin and Vale (crypto), WCET tools | kernels, interrupt handlers, crypto, real time | medium-high (stack and call-depth analysis first: cheap) |
+| 12 | **The algorithm and its schedule apart** | `kernel blur(img) = (img[x-1] + img[x] + img[x+1]) / 3;` `schedule blur: vectorize(x, 8), unroll(y, 4), tile(64);` | Halide, TVM, Futhark | numeric and image code | high |
+| 13 | **Ask for the shortest instruction sequence** | `jcmp superopt f` searches the shortest and fastest sequence of instructions for a small function and proposes it (or keeps it as a rule) | STOKE, Souper | compiler authors, library experts | high, optional |
+| 14 | **Run the instructions anywhere (a built-in emulator)** | `jcmp emulate kernel.bin` runs the ARM64 code on any machine with a trace and a time-travel debugger; the tests of boot code and drivers need no hardware | QEMU, Unicorn, rr | OS and driver work, the owner's phone-only setting | high (but the instruction table of `design/08` is the model) |
+| 15 | **Instruction selection as rules (data)** | `rule rotl(x, k) -> ror(x, neg(k));` `rule add(mul(a, b), c) -> madd(a, b, c);` in a file per CPU | Cranelift ISLE, LLVM TableGen | whoever adds a CPU (ARM32, x86_64, RISC-V, a custom extension) | high once, then every target is a table |
+| 16 | **Calling conventions and frames as declarations** | `abi Syscall { number: x8; args: x0..x5; result: x0 }` then `Syscall::call(64, 1, buf, n)`; `frame Context { x19..x30; sp }` then `Context::save(@c)` / `Context::restore(@c)` | LLVM `callingconv`, Rust `extern "C"`, Zig `callconv` | OS, context switches, FFI | medium |
+| 17 | **Carry, overflow and widths as part of the language** | `u12`, `i5`; `a +% b` (wraps), `a +\| b` (saturates); `r, carry = Int::add_carry(a, b, carry)`; `hi, lo = Int::mul_wide(a, b)` | Zig, Rust, Swift (`&+`), Ada ranges | big numbers, crypto, fixed point, codecs | low-medium (adc / sbc / umulh exist) |
+| 18 | **The compiler runs your code at compile time** | `const table = comptime { for i in 0..256 { crc(i) } };` unroll by a loop over `x0..x7`; a lookup table, a state machine or a specialised copy built while compiling | Zig `comptime`, D CTFE, Rust `const fn` | everybody who builds tables by hand today | high |
+| 19 | **A simulated device in tests** | `mock Uart { flags = 0x20 }` then run the driver code in a test and check what it wrote | embedded test frameworks | drivers | medium (needs 2) |
+| 20 | **A live monitor (peek and poke) for a board or the emulator** | `jcmp monitor` : type `Uart.data = 'A'` or `mem[0x4000_0000..+16]` and see it at once; save what worked as a function | Forth, U-Boot console, GDB | the first hour with a new board; teaching | medium (needs 2 and 14) |
+| 21 | **Generate the other languages' view of a device** | `jcmp export Uart --c` gives a C header, `--svd` an SVD file, `--doc` a register table | svd2rust in reverse, CMSIS | teams that mix languages | low (needs 2) |
+
+### Reading the table with the rule of three
+* **Easy to reach (the owner's goal 1):** 14, 19, 20 (nobody needs the hardware to start), 18 (no hand-made tables), 17 (no carry tricks).
+* **Deep (goal 2):** 11, 15, 16, 17, 12.
+* **Easy to use (goal 3):** 11 (a promise is read and checked, not hoped), 16 (the convention is written once), 18, 21.
+
+### Proposed order if the owner likes them
+1. **17** (widths, wrap, carry: small and useful at once), then **16** and **11**'s cheap half (`ensure stack`, `ensure no_alloc`).
+2. **18** (`comptime`) : it also helps the compiler's own tables.
+3. **14** (the emulator) together with **2** (devices): after these two, 19, 20 and 21 are nearly free.
+4. **15** with the second target (ARM32): the rules replace the hand-made instruction selector.
+5. 12 and 13 only if numeric code asks for them.
+
+## 63. Instructions close to the CPU and control of registers (owner, 2026-10-09: "and the things close to the CPU, or controlling registers?"). Proposal, nothing decided. Builds on 58.6 (R1 / R2 / R3), 60 and 62 (16, 17).
+
+What the compiler does today: it keeps whole numbers in `x19..x25` and doubles in `d8..d15` by itself (register pass) and uses `x0..x17` for the work in between; the program cannot ask for any of it. The instruction groups (`Bit::`) exist; the registers are closed.
+
+### 63.1 What "control" can mean (six kinds; each can be decided alone)
+
+| kind | question it answers | example need |
+|---|---|---|
+| A. where a value lives | "this variable stays in x19", "never use x27" | a per-CPU pointer in a register, a hot loop |
+| B. registers at a call | "the arguments are in x8 and x0..x5, the result in x0 and x1" | system calls, quotient and remainder, a custom convention |
+| C. read and write a register | "put this in x0, then read x1" | boot code, context switch, syscall stub |
+| D. special registers | `sp`, `lr`, `pc`, flags, system registers (`mrs`/`msr`), vector registers | stack switch, interrupt vectors, SIMD |
+| E. instruction and order | "this exact instruction", "do not move this", "barrier" | drivers, locks, cache maintenance |
+| F. what the compiler may touch | "this region is kept as written", "this function has no frame" | constant-time code, interrupt entry |
+
+### 63.2 Options for each kind
+
+**A. where a value lives**
+
+| | A1 a hint | A2 pinned | A3 reserved for the whole program |
+|---|---|---|---|
+| example | `register int n = 0;` | `int n @ x19 = 0;` (compile error if impossible) | `#reserve x27, x28` (the compiler never uses them; you do) |
+| from | C `register` | GCC `register int x asm("x19")`, Zig | GCC `-ffixed-reg`, Linux (x18 is the per-CPU pointer) |
+| human-easy | the most familiar | clear, the name tells everything | one line at the top |
+| machine-easy | trivial (a weight) | the register pass must treat the register as taken for that range | easy (remove the register from the pool) |
+
+**B. registers at a call**
+
+| | B1 a declared convention | B2 at the call | B3 attribute on the function |
+|---|---|---|---|
+| example | `abi Syscall { number: x8; args: x0..x5; result: x0 }` then `Syscall::call(64, 1, buf, n)` | `call write(x8 = 64, x0 = 1, x1 = buf, x2 = n) -> x0` | `callconv(x0 = a, x1 = b) -> (x0, x1) int divmod(int a, int b)` |
+| from | LLVM `callingconv`, Zig `callconv` | assembly + C mix | Rust `extern "C"`, Zig `callconv` |
+| good for | system calls, interrupts, the same convention used many times | a single odd call | functions that return two values |
+| note | the one I would build first: a table, checked, reusable | | |
+
+**C and D. read and write a register, special registers** (the three forms R1 / R2 / R3 of 58.6, now with the roles added)
+
+| | R1 bare names | R2 `Reg::` | R3 names bound to variables |
+|---|---|---|---|
+| example | `x0 = x1; x2 = x0 + 5;` | `Reg::x0 = Reg::x1;` | `int^ p @ x3 = q;` |
+| problem | a variable named `x1` clashes; only allowed inside `naked` or `register { }` blocks | longer | needs the binding sign |
+| roles (same on every CPU) | | `Reg::arg0 .. arg7`, `Reg::ret`, `Reg::sp`, `Reg::lr`, `Reg::pc`, `Reg::zero`, `Reg::flags` | |
+| system | `Sys::VBAR_EL1 = handler;` , `v = Sys::SCTLR_EL1;` , `Sys::SCTLR_EL1 \|= 1;` — names, types and access rights from the table of `design/08` | | |
+| SIMD | `Vec::v0.lane(1)` or the typed `f64x2` of 59 | | |
+
+Proposal: **R2 with roles** inside `naked` functions and `register { }` blocks (so that normal code can never be broken by a register write), R1 allowed in the same places as a shorter alias if the owner wants it.
+
+**E. instruction and order**
+
+| name | what it does |
+|---|---|
+| `Mem::barrier(Order::full / acquire / release)` | `dmb` |
+| `Cpu::isb()`, `Cpu::dsb()`, `Cpu::wait()`, `Cpu::yield()`, `Cpu::halt()` | `isb`, `dsb`, `wfi`, `yield` |
+| `Cache::clean(p)`, `Cache::invalidate(p)`, `Cache::zero(p)` | `dc cvac`, `dc ivac`, `dc zva` |
+| `Cpu::inst("name", a, b)` | the last resort: any instruction of the table, operands typed and checked (not text) |
+| `@keep` on a statement or a read of a device | the optimiser may not remove or merge it (`volatile` for a whole variable) |
+
+**F. what the compiler may touch**
+
+| form | meaning |
+|---|---|
+| `naked` function | no prologue, no epilogue, no saves: the body is all there is |
+| `leaf` / `noframe` function | no frame when nothing needs the stack (the compiler checks) |
+| `@no_reorder { ... }` | the instructions of the block are in this order and none is removed (constant-time code, device sequences) |
+| `register { ... }` block | inside it R1 names work and the compiler keeps its hands off the registers that are written; at the end it checks that the callee-saved ones are as they were (or says which are not) |
+
+### 63.3 Real uses written in the options above (pictures)
+
+```
+// 1. system call stub (B1 + C)
+abi Syscall { number: x8; args: x0..x5; result: x0 }
+int write(int fd, char^ buf, int n) { return Syscall::call(64, fd, buf, n); }       // mov x8,64 / svc 0
+
+// 2. context switch (C + D, naked): save the callee-saved registers and the stack pointer of 'from', load those of 'to'
+frame Context { x19..x30; sp }
+naked void switch_to(Context^ from, Context^ to) {
+    Context::save(from);          // stp x19,x20,[x0] ... ; mov x9,sp ; str x9,[x0,#96]
+    Context::restore(to);         // ldp ... ; mov sp,x9
+    ret;
+}
+
+// 3. a per-CPU pointer that lives in x18 for the whole program (A3)
+#reserve x18
+Cpu^ this_cpu() { return (Cpu^)Reg::x18; }
+
+// 4. an interrupt handler (F + D): the entry saves what the handler may change
+interrupt void on_timer() { Timer.ack(); ticks += 1; }                    // the compiler saves and restores, ends with eret
+
+// 5. division with two results (B3)
+callconv(x0 = a, x1 = b) -> (x0, x1) int divmod(int a, int b) { return (a / b, a % b); }
+
+// 6. a hot loop with a value kept in a chosen register (A2, rare)
+int sum(int^ p, int n) { int acc @ x9 = 0; for i in 0..n { acc += p[i]; } return acc; }
+```
+
+### 63.4 Order (proposal; each step is a release and has a test)
+1. **`naked` and `leaf` functions** (F): easy, the base for the rest.
+2. **`Reg::` read and write inside `naked` / `register { }`** (C), with the roles; a test that is an exact copy of a syscall stub.
+3. **`abi` declarations and `Syscall::call`** (B1).
+4. **`Cpu::`, `Mem::barrier`, `Cache::`, `Atomic::`** (E) — the names are the usual ones; the table of `design/08` later replaces the hand-written part.
+5. **`Sys::` system registers and `volatile` / `device`** (D).
+6. **`#reserve` and pinned variables `@ x19`** (A): needs the register pass to know pinned ranges.
+7. **`interrupt` functions** (F + D) and `frame` / `Context::save`.
+8. **`@no_reorder`** (F), the last one: the optimiser must learn to leave a region alone.
+
+### 63.5 Questions for the owner
+1. Roles (`Reg::arg0`, `Reg::ret`, `Reg::sp`) next to the CPU names (`Reg::x0`): yes?
+2. Are bare names (R1) allowed in `naked` / `register { }`, or only `Reg::`?
+3. Pinned variable: `int n @ x19` , `register(x19) int n`, or another look?
+4. Is `Cpu::inst("name", ...)` accepted as the last resort?
+5. Should a `register { }` block warn when a callee-saved register is left changed?
+
+### 63.6 Answers of the owner and decisions taken for him (2026-10-09, night; he went to sleep and said "follow the plan")
+* A pinned variable is written `int n @ x19` (owner's choice).
+* `Cpu::inst("name", ...)` as a last resort: accepted ("any way is fine").
+* Not answered, decided by delegation (the owner can change them): the roles (`Reg::arg0 .. arg7`, `Reg::ret`, `Reg::sp`, `Reg::lr`, `Reg::zero`) are allowed next to the CPU names; bare names (`x0`) are allowed **inside `naked` functions and `register { }` blocks only**, as a short alias of `Reg::x0`; a `register { }` block warns when it leaves a callee-saved register changed.
+* Work order: the steps of 63.4, each one a release with tests; then a round of bug hunting; then a summary for the owner; then more optimisation.
+
+### 63.7 Status (0.9.77)
+Done: step 1 (`naked`; `noreturn` is read and has no effect yet) and step 2 (`Reg::` / bare names / roles in naked functions, statements as in `docs/LANGUAGE.md`), `Cpu::` (a first group), `Sys::` read and write (`mrs` / `msr`), `Cpu::inst`. `leaf` / `noframe` is not a keyword: the compiler will drop the frame of a leaf function by itself (to do, an optimisation). `register { }` blocks inside normal functions, `abi`, `device`, `#reserve`, pinned variables `int n @ x19`, `interrupt`, `frame` and `@no_reorder` are the next steps.

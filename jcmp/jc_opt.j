@@ -2690,12 +2690,15 @@ void op_sroa() {
 int al_to = 32;
 
 void al_run() {
-    if al_to == 0 { return; }
     regs_len = 0;
     int i = 0;
     while i < out_len {
         int en = rg_end(i);
-        if rg_is_func(i) {
+        if rg_has(i, ";N\n") {
+            i = en + 1;                                   // the marker of a naked function: its job was to keep the passes away
+            continue;
+        }
+        if al_to != 0 && rg_is_func(i) {
             rg_text(".align ");
             rg_int(al_to);
             rg_put(10);

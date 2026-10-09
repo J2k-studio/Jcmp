@@ -2358,6 +2358,8 @@ void parse_function() {
     if f_idx >= 0 && pass_no == 1 { die_name("this function is defined twice (a name can be used for one function only)", @d_fname); }
     int f_oper = op_pending;
     op_pending = 0;
+    int f_naked = fn_naked;
+    fn_naked = 0;
     if f_idx < 0 {
         if fcount >= 16384 { die("too many functions"); }
         fop[fcount] = 0;
@@ -2434,6 +2436,26 @@ void parse_function() {
     if pass_no == 3 && f_skip == 0 && ft_count < 4096 {
         str_copy(@ft_names + ft_count * 64, @d_fname, 64);
         ft_count += 1;
+    }
+    if f_naked == 1 {
+        // no prologue, no epilogue: the body (jc_low.j) is all there is
+        expect("(");
+        parse_naked_function(f_idx);
+        cur_in_func = 0;
+        cur_fidx = 0 - 1;
+        if f_skip == 1 {
+            out_len = sv_out;
+            gl_bytes = sv_gl;
+            ginit_count = sv_ginit;
+            used_fprint = sv_fp;
+            used_oob = sv_oob;
+            used_divz = sv_dz;
+            used_noret = sv_nr;
+            used_try = sv_try;
+            used_uprint = sv_up;
+            used_thread = sv_thr;
+        }
+        return;
     }
     emit_str("sub sp, sp, #");
     emit_patch_digits();
@@ -2917,6 +2939,12 @@ void parse_struct() {
 }
 
 void parse_top_item() {
+    fn_naked = 0;
+    fn_noreturn = 0;
+    while tok_is("naked") || tok_is("noreturn") {
+        if tok_is("naked") { fn_naked = 1; } else { fn_noreturn = 1; }
+        next();
+    }
     parse_type();
     if tok_kind != T_IDENT { die("a name was expected"); }
     str_copy(@d_fname, @tok_text, 256);
@@ -2925,6 +2953,7 @@ void parse_top_item() {
         parse_function();
         return;
     }
+    if fn_naked == 1 || fn_noreturn == 1 { die("naked and noreturn are for functions"); }
     if ty_void == 1 && ty_ptr == 0 { die("a variable cannot be void"); }
     parse_global(@d_fname);
 }
