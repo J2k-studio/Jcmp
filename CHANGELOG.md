@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.56
+* **Faster code, third step: a register pass** (`jcmp/jc_regs.j`, `-noregs` switches it off). In a function, the whole-number locals that are used most (weighted by how deep in loops they are used, at most seven) live in the registers `x19`..`x25` instead of the stack frame; the registers are saved at the start and given back at the end of the function. The compiler tells the pass which locals are plain 8-byte values; a local whose address is taken, a function with owners/`defer` (the cleanup chain), with a `#multithread` loop, and every program with `try`/`catch` are left alone. A second part removes the moves that are left (`mov x0, x19 / mov x10, x0` becomes `mov x10, x19`, `cmp` on registers, `add x20, x10, x0`) after finding out that the register is not needed afterwards by following the code. Test `t265`.
+* Measured (ms, `clang -O2` in brackets): `fib(35)` 105 -> 99 (65), 300 million `s = s + i % 7` 881 -> 767 (200), a sieve of 5 million 143 -> 98 (79), a 200 x 200 matrix product 85 -> 62 (28).
+
 ## 0.9.55
 * **`jcmp -space` is the pixel picture now** (colour, half-block pixels). The compiler looks at the terminal (`COLORTERM=truecolor` or `24bit`) and, if there is no 24-bit colour, shows the ASCII picture instead. `jcmp -space ascii` forces the characters, `jcmp -space pxg` gives white, grey and black pixels; a speed number can follow.
 * The J is a little smaller and has the colour of the Moon; the orbit line is gone: only the Earth and the Moon (and the stars) are left.

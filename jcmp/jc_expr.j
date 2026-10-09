@@ -633,8 +633,28 @@ void add_local(char^ name, int kind, int elem, int bytes, int ptr) {
     lst1[lcount] = 0;
     lst2[lcount] = 0;
     loff[lcount] = frame_bytes;
+    int hint_flag = 0;
+    if kind == 0 && bytes == 8 && ty_tid < 99 { hint_flag = 1; }
+    hint_add(frame_bytes, bytes, hint_flag);
     frame_bytes += (bytes + 7) / 8 * 8;
     lcount += 1;
+}
+
+// the hints for the register pass: "offset:size:flag " for every local (flag 1: a plain 8-byte value); the line ";H ..." is written
+// at the end of the function (see jc_regs.j)
+char hint_buf[16384];
+int hint_len;
+void hint_add(int off, int size, int flag) {
+    if hint_len > 16300 { hint_len = 16383; return; }
+    if hint_len == 16383 { return; }
+    hint_buf[hint_len] = 0;
+    append_int(@hint_buf, off);
+    str_copy(@hint_buf + str_len(@hint_buf), ":", 2);
+    append_int(@hint_buf, size);
+    str_copy(@hint_buf + str_len(@hint_buf), ":", 2);
+    append_int(@hint_buf, flag);
+    str_copy(@hint_buf + str_len(@hint_buf), " ", 2);
+    hint_len = str_len(@hint_buf);
 }
 
 void add_global(char^ name, int kind, int elem, int bytes, int ptr) {

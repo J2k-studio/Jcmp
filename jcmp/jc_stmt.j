@@ -2389,6 +2389,8 @@ void parse_function() {
     dv_clear_local();
     lcount = 0;
     frame_bytes = 16;
+    hint_len = 0;
+    hint_buf[0] = 0;
     loop_depth = 0;
     try_depth = 0;
     own_count = 0;
@@ -2552,6 +2554,11 @@ void parse_function() {
     fn_ls = err_ls;
     parse_block();
     own_free_from(0, 1);                 // what the parameters own (the body's own variables were given back at its end)
+    if hint_len > 0 && hint_len < 16383 {
+        emit_str(";H ");
+        emit_str(@hint_buf);
+        emit_nl();
+    }
     if fvoid[f_idx] == 0 && cur_is_main == 0 && fn_returns == 0 {
         err_line = fn_line;
         err_col = fn_col;
