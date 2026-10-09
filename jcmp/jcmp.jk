@@ -2,7 +2,7 @@
 // Build:  bin/jcmp jcmp/jcmp.jk -o jcmp1        (see bootstrap.sh)
 // Use:    jcmp1 input.jk -o program
 // the version of the compiler (also in the file VERSION; release.sh checks that they agree)
-#define JCMP_VERSION "0.9.67"
+#define JCMP_VERSION "0.9.68"
 
 #import "jc_base"
 #import "jc_asm"
@@ -13,6 +13,7 @@
 #import "jc_gen"
 #import "jc_regs"
 #import "jc_ir"
+#import "jc_opt"
 #import "jc_lift"
 #import "jc_peep"
 #import "jc_logo"
@@ -142,6 +143,9 @@ void main() {
             ir_mode = 1;
         } else if str_eq(a, "-irtrip") {
             ir_mode = 2;
+        } else if str_eq(a, "-irlicm") {
+            ir_mode = 2;
+            ir_opt = 1;
         } else if str_eq(a, "-irmax") {
             ai += 1;
             ir_max = 0;

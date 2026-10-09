@@ -100,6 +100,7 @@ int ir_be[IR_MAXB];          // one after the last one
 int ir_blab[IR_MAXB];        // the number of the label of the block in the assembler text (for the printer; -1 = none)
 int ir_nb;
 int ir_cur;                  // the block that gets the next instruction
+int ir_lastb;                // the block that is written last by the lowering (the one that falls into the epilogue / makes the exit call)
 
 // the vregs: the class (0 whole number / pointer, 1 double)
 int ir_vcls[IR_MAXV];

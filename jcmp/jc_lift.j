@@ -763,6 +763,7 @@ int lf_function(char^ name) {
         if fell { return lf_fail("the function does not end"); }
     }
     if ir_check() == 0 { return lf_fail(@ir_err); }
+    ir_lastb = ir_nb - 1;
     return 1;
 }
 
@@ -841,6 +842,63 @@ char^ lw_cc(int cc, int is_float) {
 void lw_label(int b) {
     rg_text("L");
     rg_int(lw_lab[b]);
+}
+
+// does the instruction j read the vreg v (as its first or second operand or as an argument of a call)?
+bool lw_reads(int j, int v) {
+    if ir_a[j] == v { return true; }
+    if ir_uses_b(ir_op[j]) && ir_bi[j] == 0 && ir_b[j] == v { return true; }
+    if ir_op[j] == IR_CALL || ir_op[j] == IR_CALLIND || ir_op[j] == IR_SYSCALL {
+        int a = 0;
+        while a < ir_ac[j] {
+            if ir_args[ir_as[j] + a] == v { return true; }
+            a += 1;
+        }
+    }
+    return false;
+}
+
+// a product in a temporary that the next instruction adds or subtracts (and nobody reads again) is one madd / msub
+bool lw_fuse(int k, int b) {
+    if ir_op[k] != IR_MUL || ir_bi[k] == 1 || ir_d[k] < 64 || ir_vcls[ir_d[k]] != 0 || k + 1 >= ir_be[b] { return false; }
+    int t = ir_d[k];
+    int n = k + 1;
+    int op = ir_op[n];
+    if ir_bi[n] == 1 || ir_vcls[ir_d[n]] != 0 { return false; }
+    char^ nm = null;
+    int other = 0;
+    if op == IR_SUB && ir_b[n] == t && ir_a[n] != t { nm = "msub"; other = ir_a[n]; }
+    else if op == IR_ADD && ir_a[n] == t && ir_b[n] != t { nm = "madd"; other = ir_b[n]; }
+    else if op == IR_ADD && ir_b[n] == t && ir_a[n] != t { nm = "madd"; other = ir_a[n]; }
+    if nm == null { return false; }
+    if ir_a[k] == t || ir_b[k] == t { return false; }
+    int j = n + 1;
+    while j < ir_be[b] {
+        if lw_reads(j, t) { return false; }
+        if ir_d[j] == t { j = ir_be[b]; } else { j += 1; }
+    }
+    int d = ir_d[n];
+    lw_def(d);
+    rg_text(nm);
+    rg_text(" ");
+    lw_reg(d);
+    rg_text(", ");
+    lw_reg(ir_a[k]);
+    rg_text(", ");
+    lw_reg(ir_b[k]);
+    rg_text(", ");
+    lw_reg(other);
+    rg_put(10);
+    return true;
+}
+
+// the block that is written after the block b (the last block of the function is written at the end)
+int lw_next(int b) {
+    if b == ir_lastb { return 0 - 1; }
+    int n = b + 1;
+    if n == ir_lastb { n += 1; }
+    if n >= ir_nb { n = ir_lastb; }
+    return n;
 }
 
 // one instruction as text; the block b is the one that it is in (for the fall through of jumps)
@@ -997,7 +1055,7 @@ bool lw_instr(int i, int b) {
         return true;
     }
     if op == IR_JMP {
-        if ir_t1[i] != b + 1 {
+        if ir_t1[i] != lw_next(b) {
             rg_text("b ");
             lw_label(ir_t1[i]);
             rg_put(10);
@@ -1019,7 +1077,7 @@ bool lw_instr(int i, int b) {
         rg_text(" ");
         lw_label(ir_t1[i]);
         rg_put(10);
-        if ir_t2[i] != b + 1 {
+        if ir_t2[i] != lw_next(b) {
             rg_text("b ");
             lw_label(ir_t2[i]);
             rg_put(10);
@@ -1036,6 +1094,27 @@ bool lw_instr(int i, int b) {
 }
 
 // the function that was lifted goes to regs_buf as text; the frame is as large as the stack cells need (the head and the epilogue say it)
+// the hint line for the register pass: the old hints and the stack cells (plain 8-byte values)
+void lw_hint() {
+    int hl = 0;
+    if lf_hint_n > 0 {
+        while hl < lf_hint_n {
+            rg_put(lf_hint_text[hl]);
+            hl += 1;
+        }
+    } else {
+        rg_text(";H");
+    }
+    int ci = 0;
+    while ci < lw_ncells {
+        rg_text(" ");
+        rg_int(lw_cells[ci]);
+        rg_text(":8:1");
+        ci += 1;
+    }
+    rg_put(10);
+}
+
 bool lw_function() {
     // the deepest stack cell
     lw_maxq = 0;
@@ -1047,7 +1126,7 @@ bool lw_function() {
         }
         i += 1;
     }
-    int nframe = lf_frame + lw_maxq;
+    int nframe = (lf_frame + lw_maxq + 15) / 16 * 16;     // sp stays a multiple of 16
     // the head: the name, the frame size, the saves of x29 / x30
     char hn[64];
     int c = 0;
@@ -1082,41 +1161,38 @@ bool lw_function() {
         b += 1;
     }
     lw_ncells = 0;
-    b = 0;
-    while b < ir_nb {
+    i = 0;
+    while i < ir_n {
+        if (ir_op[i] == IR_LOAD || ir_op[i] == IR_STORE) && ir_a[i] == 30 && ir_k[i] < 0 { lw_note_cell(lf_frame + lw_maxq + ir_k[i]); }
+        i += 1;
+    }
+    int ord = 0;
+    while ord <= ir_nb {
+        // the blocks in order, except that the last block of the function (the one with the exit) is written at the end
+        b = ord;
+        if ord == ir_lastb { ord += 1; continue; }
+        if ord == ir_nb { b = ir_lastb; }
+        if b == ir_lastb && lf_epi_line < 0 { lw_hint(); }
+        ord += 1;
         rg_text("L");
         rg_int(lw_lab[b]);
         rg_text(":\n");
         int k = ir_bs[b];
         while k < ir_be[b] {
+            if lw_fuse(k, b) {
+                k += 2;
+                continue;
+            }
             if !lw_instr(k, b) { return false; }
-            if ir_op[k] == IR_RET && b != ir_nb - 1 {
+            if ir_op[k] == IR_RET && b != ir_lastb {
                 rg_text("b L");
                 rg_int(epi_label);
                 rg_put(10);
             }
             k += 1;
         }
-        b += 1;
     }
-    // the hint line for the register pass: the old hints and the stack cells (plain 8-byte values)
-    int hl = 0;
-    if lf_hint_n > 0 {
-        while hl < lf_hint_n {
-            rg_put(lf_hint_text[hl]);
-            hl += 1;
-        }
-    } else {
-        rg_text(";H");
-    }
-    int ci = 0;
-    while ci < lw_ncells {
-        rg_text(" ");
-        rg_int(lw_cells[ci]);
-        rg_text(":8:1");
-        ci += 1;
-    }
-    rg_put(10);
+    if lf_epi_line >= 0 { lw_hint(); }
     // the epilogue
     if lf_epi_line >= 0 {
         rg_text("L");
@@ -1156,6 +1232,8 @@ void lw_note_cell(int off) {
 
 int ir_max = 1000000;             // -irmax N: only the first N functions that can be lifted are lowered again (to find a fault)
 int ir_min;                       // -irmin N: not the first N
+int op_changed;                   // 1: the function is written again from the IR (always, unless a pass is on and changed nothing)
+int ir_opt;                       // -irlicm: the passes of jc_opt.j run between lifting and lowering
 int ir_mode;                      // 0 off, 1 -irstat (say which functions can be lifted), 2 -irtrip (lift and lower them again), 3 -irdump (print the IR)
 char ir_stat_fn[128];
 
@@ -1213,11 +1291,17 @@ void ir_run() {
             }
             if ok {
                 lf_lifted += 1;
+                op_changed = 1;
+                if ir_opt > 0 {
+                    int h0 = op_hoisted;
+                    op_run();
+                    if op_hoisted == h0 { op_changed = 0; }
+                }
                 if ir_mode == 3 {
                     ir_print();
                     syscall(64, 2, @ir_pbuf, ir_plen);
                 }
-                if ir_mode == 2 && lf_lifted > ir_min && lf_lifted <= ir_max {
+                if ir_mode == 2 && op_changed == 1 && lf_lifted > ir_min && lf_lifted <= ir_max {
                     if ir_max < 1000000 { ir_say("lowering ", @ir_stat_fn, ""); }
                     int mark = regs_len;
                     if lw_function() {
