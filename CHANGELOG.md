@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9.65
+* **The IR (first step, `docs/design/03-ir.md`):** `jcmp/jc_ir.j` holds the intermediate representation of the compiler's second generation of passes: functions as basic blocks of three-address instructions on virtual registers (whole numbers and doubles), explicit `load` / `store` with a width, slots for the frame, calls with their arguments, jumps with conditions; a printer and a checker (every block ends with exactly one jump or return, every operand exists, double and whole-number operations get the right class). A hidden `jcmp -irtest` builds two functions, checks and prints them (test `t276`). Nothing in the generated code changes yet.
+
 ## 0.9.64
 * **`-d` finds more:** a block that is **freed twice** (or a pointer that did not come from `alloc`) stops the program with a stack trace; a block that is **written after it was freed** is found (freed blocks are filled with 221 and kept for a while: a changed byte is reported when the block leaves); the **leak report names the function** that made each block (`leak: 64 bytes made in leak`). Tests `t273`, `t274`.
 * **`-Wmoved` also for `p[i]` and `p^` after `move(p)`** (before: only when the variable itself was read). Test `t272` (with `-st`).
