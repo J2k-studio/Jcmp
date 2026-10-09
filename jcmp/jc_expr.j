@@ -2121,6 +2121,10 @@ void lvalue_loop() {
 
 // Struct::function(args) or Enum::Member: the name is in id_name, the token is "::"
 void gen_scope() {
+    if str_eq(@id_name, "Sys") {
+        gen_sys_read();
+        return;
+    }
     int abx = find_abi(@id_name);
     if abx >= 0 {
         // Syscall::call(number, args ...): the values go to the registers that the abi names
@@ -2497,6 +2501,10 @@ bool sg_statement() {
 void gen_identifier() {
     str_copy(@id_name, @tok_text, 256);
     next();
+    if tok_is(".") && find_device(@id_name) >= 0 && !lookup_var(@id_name) {
+        gen_device_read();                  // Uart.flags.bit(5)
+        return;
+    }
     if tok_is("(") && str_eq(@id_name, "move") && !lookup_var(@id_name) && find_func(@id_name) < 0 {
         // move(p) : p gives its memory away (the value is used, p becomes null)
         next();

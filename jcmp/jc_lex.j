@@ -912,7 +912,11 @@ void next() {
             adv();
             adv();
             if hex_value(lc(0)) < 0 { die("bad hex number"); }
-            while hex_value(lc(0)) >= 0 {
+            while hex_value(lc(0)) >= 0 || (lc(0) == '_' && hex_value(lc(1)) >= 0) {
+                if lc(0) == '_' {
+                    adv();                                   // 0x0900_0000 : a _ between digits is ignored
+                    continue;
+                }
                 tok_num = tok_num * 16 + hex_value(lc(0));
                 adv();
             }
@@ -920,12 +924,20 @@ void next() {
             adv();
             adv();
             if lc(0) != '0' && lc(0) != '1' { die("bad binary number"); }
-            while lc(0) == '0' || lc(0) == '1' {
+            while lc(0) == '0' || lc(0) == '1' || (lc(0) == '_' && (lc(1) == '0' || lc(1) == '1')) {
+                if lc(0) == '_' {
+                    adv();
+                    continue;
+                }
                 tok_num = tok_num * 2 + (lc(0) - '0');
                 adv();
             }
         } else {
-            while is_digit(lc(0)) {
+            while is_digit(lc(0)) || (lc(0) == '_' && is_digit(lc(1))) {
+                if lc(0) == '_' {
+                    adv();                                   // 1_000_000
+                    continue;
+                }
                 tok_num = tok_num * 10 + (lc(0) - '0');
                 adv();
             }

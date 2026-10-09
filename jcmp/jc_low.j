@@ -970,3 +970,377 @@ void emit_abi_call(int ab, int n) {
         emit_line(@nk_line);
     }
 }
+
+// ---------------------------------------------------------------------------------------------- Sys:: in every function
+//   int t = Sys::cntvct_el0;          // mrs x0, cntvct_el0
+//   Sys::tpidr_el0 = p;               // msr tpidr_el0, x0
+//   Sys::daifset = 2;                 // msr daifset, #2   (the fields of PSTATE take a number: daifset daifclr)
+// The names are the ones of the manual (lower or upper case). Most of them are for the kernel: a program that runs under Linux can read a few
+// (cntvct_el0, cntfrq_el0, tpidr_el0, nzcv, fpcr, fpsr ...); the others stop it with an illegal instruction.
+
+// the name after Sys:: (the token is "::" at the start); lower case in dst
+void sys_name(char^ dst) {
+    next();                                  // ::
+    if tok_kind != T_IDENT { die("a system register name was expected after Sys::"); }
+    int i = 0;
+    while tok_text[i] != 0 && i < 62 {
+        char c = tok_text[i];
+        if c >= 'A' && c <= 'Z' { c = c + 32; }
+        dst[i] = c;
+        i += 1;
+    }
+    dst[i] = 0;
+    next();
+}
+
+void gen_sys_read() {
+    char sn[64];
+    sys_name(@sn);
+    if as_sysreg_code(@sn) < 0 { die_name("this is not a system register that jcmp knows (see docs/LANGUAGE.md; the general form is s3_0_c12_c0_0)", @sn); }
+    str_copy(@nk_line, "mrs x0, ", 256);
+    append_text(@nk_line, @sn);
+    emit_line(@nk_line);
+    ex_w = 8;
+    ex_ty = 0;
+    rv_valid = 0;
+}
+
+// Sys::name = expression;   (the token is "::")
+void parse_sys_assign() {
+    char sn[64];
+    sys_name(@sn);
+    bool pstate = str_eq(@sn, "daifset") || str_eq(@sn, "daifclr");
+    if !pstate && as_sysreg_code(@sn) < 0 { die_name("this is not a system register that jcmp knows (see docs/LANGUAGE.md; the general form is s3_0_c12_c0_0)", @sn); }
+    expect("=");
+    if pstate {
+        if tok_kind != T_NUM { die("daifset and daifclr take a number 0 .. 15"); }
+        str_copy(@nk_line, "msr ", 256);
+        append_text(@nk_line, @sn);
+        append_text(@nk_line, ", ");
+        append_int(@nk_line, tok_num & 15);
+        emit_line(@nk_line);
+        next();
+        expect(";");
+        return;
+    }
+    parse_expr();
+    str_copy(@nk_line, "msr ", 256);
+    append_text(@nk_line, @sn);
+    append_text(@nk_line, ", x0");
+    emit_line(@nk_line);
+    expect(";");
+}
+
+// ---------------------------------------------------------------------------------------------- device: hardware registers as data
+//   device Uart @ 0x0900_0000 {
+//       data:  u32 @ 0x00;
+//       flags: u32 @ 0x18 { txfull: 5; rxempty: 4; mode: 8..10; }       // names for bits (a number) or for a field of bits (hi..lo)
+//   }
+//   Uart.data = 'A';                    // one store of 32 bits (a store of the size of the register)
+//   if Uart.flags.txfull { }            // a read of the device each time, a bool;  Uart.flags.bit(5) the same for a number of a bit
+//   int m = Uart.flags.mode;            // the bits 8..10 as a number
+//   Uart.flags.mode = 3;                // reads the register, changes those bits, writes it
+//   Uart.ctrl |= 1;                     // | & + - with a number: read, change, write
+// Every access is made where it is written, as often as it is written (the optimiser does not merge or remove accesses to a device).
+// u8 u16 u32 u64: the size of the register; the value read is not signed.
+
+char dev_name[1024];              // 16 devices
+int dev_base[16];
+int dev_nf[16];                   // how many fields
+int dev_f0[16];                   // the first field
+int dev_count;
+char devf_name[8192];             // 128 fields of 64 characters
+int devf_off[128];
+int devf_size[128];
+int devf_nb[128];                 // how many named bit fields
+int devf_b0[128];                 // the first of them
+int devf_count;
+char devb_name[8192];             // 128 bit fields
+int devb_hi[128];
+int devb_lo[128];
+int devb_count;
+
+int find_device(char^ name) {
+    int i = 0;
+    while i < dev_count {
+        if str_eq(@dev_name + i * 64, name) { return i; }
+        i += 1;
+    }
+    return 0 - 1;
+}
+
+void parse_device() {
+    next();                                  // device
+    if tok_kind != T_IDENT { die("a name for the device was expected"); }
+    int d = find_device(@tok_text);
+    bool fresh = false;
+    if pass_no == 1 {
+        if d >= 0 { die_name("this device exists already", @tok_text); }
+        if dev_count >= 16 { die("too many devices (16 at most)"); }
+        d = dev_count;
+        dev_count += 1;
+        str_copy(@dev_name + d * 64, @tok_text, 64);
+        dev_nf[d] = 0;
+        dev_f0[d] = devf_count;
+        fresh = true;
+    }
+    next();
+    expect("@");
+    if tok_kind != T_NUM { die("the address of the device (a number) was expected after @"); }
+    if fresh { dev_base[d] = tok_num; }
+    next();
+    expect("{");
+    while !tok_is("}") {
+        if tok_kind != T_IDENT { die("the name of a register was expected"); }
+        char fname_[64];
+        str_copy(@fname_, @tok_text, 64);
+        next();
+        expect(":");
+        if tok_kind != T_IDENT { die("u8, u16, u32 or u64 was expected"); }
+        int size = 0;
+        if str_eq(@tok_text, "u8") { size = 1; }
+        else if str_eq(@tok_text, "u16") { size = 2; }
+        else if str_eq(@tok_text, "u32") { size = 4; }
+        else if str_eq(@tok_text, "u64") { size = 8; }
+        else { die_name("the size of a register is u8, u16, u32 or u64", @tok_text); }
+        next();
+        expect("@");
+        if tok_kind != T_NUM { die("the offset of the register (a number) was expected after @"); }
+        int off = tok_num;
+        next();
+        int fidx = 0 - 1;
+        if fresh {
+            if devf_count >= 128 { die("too many device registers (128 at most)"); }
+            fidx = devf_count;
+            devf_count += 1;
+            dev_nf[d] += 1;
+            str_copy(@devf_name + fidx * 64, @fname_, 64);
+            devf_off[fidx] = off;
+            devf_size[fidx] = size;
+            devf_nb[fidx] = 0;
+            devf_b0[fidx] = devb_count;
+        }
+        if tok_is("{") {
+            next();
+            while !tok_is("}") {
+                if tok_kind != T_IDENT { die("the name of a bit field was expected"); }
+                char bname[64];
+                str_copy(@bname, @tok_text, 64);
+                next();
+                expect(":");
+                if tok_kind != T_NUM { die("a bit number was expected"); }
+                int lo = tok_num;
+                int hi = tok_num;
+                next();
+                if tok_is(".") {
+                    next();
+                    expect(".");
+                    if tok_kind != T_NUM { die("the upper bit number was expected"); }
+                    hi = tok_num;
+                    next();
+                    if hi < lo { die("a bit field is written low..high (8..10)"); }
+                }
+                if hi >= size * 8 { die("this bit is outside the register"); }
+                expect(";");
+                if fresh {
+                    if devb_count >= 128 { die("too many bit fields (128 at most)"); }
+                    str_copy(@devb_name + devb_count * 64, @bname, 64);
+                    devb_hi[devb_count] = hi;
+                    devb_lo[devb_count] = lo;
+                    devb_count += 1;
+                    devf_nb[fidx] += 1;
+                }
+            }
+            next();
+            accept(";");
+        } else {
+            expect(";");
+        }
+    }
+    expect("}");
+    accept(";");
+}
+
+// the register of the device d named name (the index), or -1
+int dev_field(int d, char^ name) {
+    int i = 0;
+    while i < dev_nf[d] {
+        if str_eq(@devf_name + (dev_f0[d] + i) * 64, name) { return dev_f0[d] + i; }
+        i += 1;
+    }
+    return 0 - 1;
+}
+
+int dev_bitfield(int f, char^ name) {
+    int i = 0;
+    while i < devf_nb[f] {
+        if str_eq(@devb_name + (devf_b0[f] + i) * 64, name) { return devf_b0[f] + i; }
+        i += 1;
+    }
+    return 0 - 1;
+}
+
+// the address of the register into x9
+void dev_addr(int d, int f) {
+    str_copy(@nk_line, "mov x9, ", 256);
+    append_int(@nk_line, dev_base[d] + devf_off[f]);
+    emit_line(@nk_line);
+}
+
+// the load of the register at x9 into dst
+void dev_load(int f, char^ dst) {
+    int sz = devf_size[f];
+    char^ mn = "ldr";
+    if sz == 1 { mn = "ldrb"; }
+    else if sz == 2 { mn = "ldrh"; }
+    else if sz == 4 { mn = "ldrw"; }
+    str_copy(@nk_line, mn, 256);
+    append_text(@nk_line, " ");
+    append_text(@nk_line, dst);
+    append_text(@nk_line, ", [x9]");
+    emit_line(@nk_line);
+}
+
+void dev_store(int f, char^ src) {
+    int sz = devf_size[f];
+    char^ mn = "str";
+    if sz == 1 { mn = "strb"; }
+    else if sz == 2 { mn = "strh"; }
+    else if sz == 4 { mn = "strw"; }
+    str_copy(@nk_line, mn, 256);
+    append_text(@nk_line, " ");
+    append_text(@nk_line, src);
+    append_text(@nk_line, ", [x9]");
+    emit_line(@nk_line);
+}
+
+void dev_mov(char^ reg, int v) {
+    str_copy(@nk_line, "mov ", 256);
+    append_text(@nk_line, reg);
+    append_text(@nk_line, ", ");
+    if v < 0 {
+        append_text(@nk_line, "-");
+        append_int(@nk_line, 0 - v);
+    } else {
+        append_int(@nk_line, v);
+    }
+    emit_line(@nk_line);
+}
+
+int dev_mask(int hi, int lo) {
+    int w = hi - lo + 1;
+    if w >= 63 { return 0 - 1; }
+    return (1 << w) - 1;
+}
+
+// Device.reg  /  Device.reg.bit(n)  /  Device.reg.field   in an expression (the token is "." after the device name, which is in id_name)
+void gen_device_read() {
+    int d = find_device(@id_name);
+    next();                                  // .
+    if tok_kind != T_IDENT { die("the name of a register was expected after the device name"); }
+    int f = dev_field(d, @tok_text);
+    if f < 0 { die_name("this device has no such register", @tok_text); }
+    next();
+    dev_addr(d, f);
+    dev_load(f, "x0");
+    ex_w = 8;
+    ex_ty = 0;
+    rv_valid = 0;
+    if tok_is(".") {
+        next();
+        if tok_kind != T_IDENT { die("bit(n) or the name of a bit field was expected"); }
+        if str_eq(@tok_text, "bit") {
+            next();
+            expect("(");
+            if tok_kind != T_NUM { die("bit(n) takes a number"); }
+            int bn = tok_num;
+            next();
+            expect(")");
+            if bn < 0 || bn >= devf_size[f] * 8 { die("this bit is outside the register"); }
+            if bn > 0 {
+                str_copy(@nk_line, "lsr x0, x0, #", 256);
+                append_int(@nk_line, bn);
+                emit_line(@nk_line);
+            }
+            emit_line("mov x1, 1");
+            emit_line("and x0, x0, x1");
+            ex_ty = 1;                       // a bool
+            return;
+        }
+        int b = dev_bitfield(f, @tok_text);
+        if b < 0 { die_name("this register has no such bit field", @tok_text); }
+        next();
+        if devb_lo[b] > 0 {
+            str_copy(@nk_line, "lsr x0, x0, #", 256);
+            append_int(@nk_line, devb_lo[b]);
+            emit_line(@nk_line);
+        }
+        int mask = dev_mask(devb_hi[b], devb_lo[b]);
+        if devb_hi[b] - devb_lo[b] + 1 < 64 {
+            dev_mov("x1", mask);
+            emit_line("and x0, x0, x1");
+        }
+        if devb_hi[b] == devb_lo[b] { ex_ty = 1; }          // one bit: a bool
+    }
+}
+
+// a statement  Device.reg = value;  Device.reg.field = value;  Device.reg |= value;  (the name of the device was read, the token is ".")
+void parse_device_assign(char^ dname) {
+    int d = find_device(dname);
+    next();                                  // .
+    if tok_kind != T_IDENT { die("the name of a register was expected after the device name"); }
+    int f = dev_field(d, @tok_text);
+    if f < 0 { die_name("this device has no such register", @tok_text); }
+    next();
+    int b = 0 - 1;
+    if tok_is(".") {
+        next();
+        if tok_kind != T_IDENT { die("the name of a bit field was expected"); }
+        if str_eq(@tok_text, "bit") { die("a single bit is written with its name: declare it in the braces of the register, then Device.reg.name = 1;"); }
+        b = dev_bitfield(f, @tok_text);
+        if b < 0 { die_name("this register has no such bit field", @tok_text); }
+        next();
+    }
+    if tok_kind != T_OP { die("= or an operator with = (|= &= += -=) was expected"); }
+    char op[8];
+    str_copy(@op, @tok_text, 8);
+    next();
+    parse_expr();                            // the value is in x0
+    expect(";");
+    if b >= 0 {
+        // the bits: read, clear, put the new bits in, write
+        int mask = dev_mask(devb_hi[b], devb_lo[b]);
+        int lo = devb_lo[b];
+        dev_addr(d, f);
+        dev_load(f, "x1");
+        if !str_eq(@op, "=") { die("a bit field takes = only"); }
+        dev_mov("x2", mask);
+        emit_line("and x0, x0, x2");
+        if lo > 0 {
+            str_copy(@nk_line, "lsl x0, x0, #", 256);
+            append_int(@nk_line, lo);
+            emit_line(@nk_line);
+            str_copy(@nk_line, "lsl x2, x2, #", 256);
+            append_int(@nk_line, lo);
+            emit_line(@nk_line);
+        }
+        emit_line("mvn x2, x2");
+        emit_line("and x1, x1, x2");
+        emit_line("orr x1, x1, x0");
+        dev_store(f, "x1");
+        return;
+    }
+    if str_eq(@op, "=") {
+        dev_addr(d, f);
+        dev_store(f, "x0");
+        return;
+    }
+    dev_addr(d, f);
+    dev_load(f, "x1");
+    if str_eq(@op, "|=") { emit_line("orr x1, x1, x0"); }
+    else if str_eq(@op, "&=") { emit_line("and x1, x1, x0"); }
+    else if str_eq(@op, "+=") { emit_line("add x1, x1, x0"); }
+    else if str_eq(@op, "-=") { emit_line("sub x1, x1, x0"); }
+    else { die_name("this operator cannot change a device register (= |= &= += -=)", @op); }
+    dev_store(f, "x1");
+}

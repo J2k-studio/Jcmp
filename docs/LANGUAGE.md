@@ -344,6 +344,26 @@ free[b];                       // only b goes back (a still works, and the next 
 ```
 If a variable is called `alloc`, `alloc0`, `free`, `grow` or `arr`, a `[` after it is an index as always.
 
+### `device`: hardware registers as data, and `Sys::` (0.9.80)
+
+```jk
+device Uart @ 0x0900_0000 {
+    data:  u32 @ 0x00;
+    flags: u32 @ 0x18 { txfull: 5; rxempty: 4; mode: 8..10; }     // names for a bit (a number) or a field of bits (high..low)
+}
+
+void put(char c) {
+    while Uart.flags.txfull { }        // a read of the device each turn (a bool)
+    Uart.data = c;                     // one store of 32 bits
+}
+Uart.flags.mode = 3;                   // read, change those bits, write
+Uart.ctrl |= 1;                        // | & + - : read, change, write
+int m = Uart.flags.mode;               // the bits as a number (not signed)     Uart.flags.bit(5): one bit by its number (a bool)
+```
+Registers are `u8 u16 u32 u64`; every access is made where it is written, as often as it is written (the optimiser does not merge or remove it).
+
+`Sys::name` reads (`mrs`) and writes (`msr`) a system register by its name in every function: `int t = Sys::cntvct_el0;` `Sys::tpidr_el0 = p;` `Sys::daifset = 2;`. Most of them are for kernels (a program under Linux can read `cntvct_el0 cntfrq_el0 tpidr_el0 nzcv fpcr fpsr ...`); the general form `Sys::s3_0_c12_c0_0` names any register by its numbers. Numbers may have `_` between the digits: `0x0900_0000`, `1_000_000`.
+
 ### `abi`: your own calling convention for system calls (0.9.79)
 
 ```jk

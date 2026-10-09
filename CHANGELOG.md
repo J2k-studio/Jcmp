@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.80
+* **`device`: hardware registers as data** (plan step 5): `device Uart @ 0x0900_0000 { data: u32 @ 0x00; flags: u32 @ 0x18 { txfull: 5; mode: 8..10; } }`; then `Uart.data = 'A';` is one store of the size of the register, `Uart.flags` a load (not signed), `Uart.flags.bit(5)` and `Uart.flags.txfull` are bools, `Uart.flags.mode` the bits 8..10 as a number, `Uart.flags.mode = 3;` reads, changes those bits and writes, `Uart.ctrl |= 1;` (`|= &= += -=`) reads, changes, writes. Every access is made where it is written, as often as it is written. Registers of 8, 16, 32 and 64 bits.
+* **`Sys::name` in every function**: `int t = Sys::cntvct_el0;` is `mrs`, `Sys::tpidr_el0 = p;` is `msr`, `Sys::daifset = 2;` the PSTATE form. 35 names (lower or upper case) and the general form `s3_0_c12_c0_0`. An unknown name is an error with a hint.
+* **Digit separators in numbers**: `0x0900_0000`, `1_000_000`, `0b1010_0101`.
+* Tests: `t292_device` (a page mapped at the address of the device: all four sizes, bit fields, read-modify-write, a loop that reads the device each turn), `t293_sys`, `t294_fail_sys_name`, `t295_fail_device_field`.
+
 ## 0.9.79
 * **`abi`: a calling convention for a trap instruction** (plan step 3): `abi Syscall { number: x8; args: x0..x5; result: x0; via: svc 0; }` declares where the values go; `Syscall::call(64, 1, buf, n)` computes the values like the arguments of any call, moves them into the registers (a cycle of moves is broken with `x17`), writes the instruction `via` (`svc N`, `hvc N`, `smc N`, or `bl function`) and leaves the result in `x0`. The first value is the number when the abi has a `number:`. Error messages for a register that is not one, an unknown field, more values than registers.
 * Tests: `t290_abi` (a system call write + getpid, an abi whose moves make a cycle, an abi with a number and a call to a naked function), `t291_fail_abi_too_many`.

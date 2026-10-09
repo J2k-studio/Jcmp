@@ -1779,3 +1779,6 @@ Step 4 done: `Cpu::`, `Mem::barrier*`, `Cache::`, `Atomic::` (the memory order i
 
 ### 63.9 Status (0.9.79)
 Step 3 done: `abi` with `number: args: result: via:` and `Name::call(...)`. Not yet: `frame` / `Context::save`, calling conventions per function (`callconv`), returning two values.
+
+### 63.10 Status (0.9.80)
+Step 5 done: `Sys::name` (read and write, in every function) and `device` (idea 2 of section 61) with bit fields. Not yet: `volatile` as a word for a pointer, `mock` devices for tests.

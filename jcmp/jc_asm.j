@@ -994,10 +994,8 @@ int as_sr(int op0, int op1, int crn, int crm, int op2) {
     return ((op0 & 1) << 19) | (op1 << 16) | (crn << 12) | (crm << 8) | (op2 << 5);
 }
 
-int as_sysreg() {
-    as_skip_spaces();
-    as_read_label_name();
-    char^ n = @as_nbuf;
+// the 15 bits of a system register by its name (lower case), or -1
+int as_sysreg_code(char^ n) {
     if as_seq(n, "sctlr_el1") { return as_sr(3, 0, 1, 0, 0); }
     if as_seq(n, "actlr_el1") { return as_sr(3, 0, 1, 0, 1); }
     if as_seq(n, "cpacr_el1") { return as_sr(3, 0, 1, 0, 2); }
@@ -1039,22 +1037,29 @@ int as_sysreg() {
         int k = 0;
         while k < 5 {
             if k == 2 || k == 3 {
-                if n[i] != 'c' { as_fail(); }
+                if n[i] != 'c' { return 0 - 1; }
                 i += 1;
             }
             int v = 0;
             while n[i] >= '0' && n[i] <= '9' { v = v * 10 + (n[i] - '0'); i += 1; }
             vals[k] = v;
             if k < 4 {
-                if n[i] != '_' { as_fail(); }
+                if n[i] != '_' { return 0 - 1; }
                 i += 1;
             }
             k += 1;
         }
         return as_sr(vals[0], vals[1], vals[2], vals[3], vals[4]);
     }
-    as_fail();
-    return 0;
+    return 0 - 1;
+}
+
+int as_sysreg() {
+    as_skip_spaces();
+    as_read_label_name();
+    int c = as_sysreg_code(@as_nbuf);
+    if c < 0 { as_fail(); }
+    return c;
 }
 
 void as_h_mrs() {

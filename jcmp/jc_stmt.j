@@ -2308,6 +2308,14 @@ void parse_statement_inner() {
         expect(";");
         return;
     }
+    if tok_is(".") && find_device(@s_name) >= 0 && !lookup_var(@s_name) {
+        parse_device_assign(@s_name);        // Uart.data = 'A';
+        return;
+    }
+    if tok_is("::") && str_eq(@s_name, "Sys") {
+        parse_sys_assign();              // Sys::name = value;
+        return;
+    }
     if tok_is("::") {                    // Struct::function(...);
         gen_scope();
         if last_call_owning == 1 { warn("the memory returned here is not kept, so it can never be freed", "leak"); }
@@ -2972,6 +2980,8 @@ void parse_one_item() {
         parse_using();
     } else if tok_is("abi") {
         parse_abi();
+    } else if tok_is("device") {
+        parse_device();
     } else {
         parse_top_item();
     }
