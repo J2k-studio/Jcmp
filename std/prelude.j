@@ -3,6 +3,8 @@
 int std_heap_cur;
 int std_heap_end;
 int std_free_list;
+int std_direct[64];                // blocks of 256 KB and more that have pages of their own (given back to the system by free)
+int std_direct_n;
 int std_mem_lock;                 // 0 free, 1 taken (threads share the heap)
 int std_mt;                       // 1 once a thread was started: only then the heap is locked
 int std_alloc_n;                  // blocks given out / given back (the -d build reports the difference at the end)
@@ -181,6 +183,22 @@ struct Mem {
     }
     // a block of `need` bytes (more than 2048) from the list of big blocks, or from the chunk
     static void^ alloc_big(int need) {
+        if need >= 262144 && std_direct_n < 64 {
+            // a big block: pages of its own, returned to the system when it is freed
+            int len = (need + 4095) / 4096 * 4096;
+            int mb = syscall(222, 0, len, 3, 34, -1, 0);
+            if !(mb < 0 && mb > -4096) {
+                int^ mh = (int^)mb;
+                mh[0] = len;
+                mh[1] = 0;
+                int di = 0;
+                while std_direct[di] != 0 { di += 1; }
+                std_direct[di] = mb;
+                std_direct_n += 1;
+                std_alloc_n += 1;
+                return (void^)(mb + 16);
+            }
+        }
         int prev = 0;
         int cur = std_free_list;
         while cur != 0 {
@@ -249,6 +267,18 @@ struct Mem {
             return;
         }
         std_free_n += 1;
+        if size >= 262144 && std_direct_n > 0 {
+            int dj = 0;
+            while dj < 64 {
+                if std_direct[dj] == blk {
+                    std_direct[dj] = 0;
+                    std_direct_n -= 1;
+                    syscall(215, blk, size);
+                    return;
+                }
+                dj += 1;
+            }
+        }
         if size <= 2048 {
             int c = std_cls_exact[size >> 4];
             if c >= 0 {

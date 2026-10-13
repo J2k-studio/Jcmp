@@ -1,6 +1,8 @@
-# J2K / Jcmp 0.9.94
+# J2K / Jcmp 0.9.95
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
+
+**0.9.95:** a block of 256 KB or more is given back to the system by `free`; the compiler is a little faster.
 
 **0.9.94:** constants fold and become immediates (shifts, `& 4294967295`, bitmask immediates); sha256 is 25% faster; new benchmarks sha256, hashmap, strings.
 

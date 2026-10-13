@@ -2102,11 +2102,41 @@ int inl_done;                    // how many calls were replaced by their bodies
 int inl_maxsize = 60;
 int inl_tiny = 8;                // a callee this small is inlined everywhere, a bigger one only inside loops            // the biggest callee (instructions that do something)
 
+int is_ht[4096];                 // the kept functions by name: the index + 1 (open addressing); is_ht_n says how many are in it
+int is_ht_n;
+
+int is_hash(char^ name) {
+    int h = 5381;
+    int k = 0;
+    while name[k] != 0 {
+        h = (h * 33 + name[k]) & 1073741823;
+        k += 1;
+    }
+    return h & 4095;
+}
+
 int is_find(char^ name) {
-    int f = 0;
-    while f < is_count {
+    if is_ht_n != is_count {
+        // the table is made again when the number of kept functions is not the one it knows (a new collection)
+        int z = 0;
+        while z < 4096 {
+            is_ht[z] = 0;
+            z += 1;
+        }
+        int f0 = 0;
+        while f0 < is_count {
+            int h0 = is_hash(@is_fname + f0 * 64);
+            while is_ht[h0] != 0 { h0 = (h0 + 1) & 4095; }
+            is_ht[h0] = f0 + 1;
+            f0 += 1;
+        }
+        is_ht_n = is_count;
+    }
+    int h = is_hash(name);
+    while is_ht[h] != 0 {
+        int f = is_ht[h] - 1;
         if str_eq(@is_fname + f * 64, name) { return f; }
-        f += 1;
+        h = (h + 1) & 4095;
     }
     return 0 - 1;
 }

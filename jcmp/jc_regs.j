@@ -19,6 +19,10 @@ int rg_n;
 int rg_state[8192];          // by 8-byte slot of the frame: 0 unknown, 1 a plain value that may move, 2 not allowed
 int rg_wt[8192];
 int rg_dep[65536];
+int rg_ltgt[65536];          // per line, worked out once before the live analysis: the line a jump goes to (-1: none)
+int rg_lfall[65536];         // 1: the flow goes on to the next line
+int rg_lc[65536];            // the candidate that this line loads or stores (-1: none)
+int rg_lload[65536];         // 1: it is a load
 int rg_skip[65536];
 int rg_labn[8192];
 int rg_labl[8192];
@@ -295,6 +299,43 @@ void rg_allocate(int epi, int is_main) {
         rg_live[i] = 0;
         i += 1;
     }
+    // what each line does for the flow, once (the analysis below goes over the lines several times)
+    i = 0;
+    while i < rg_n {
+        int st0 = rg_ls[i];
+        int en0 = rg_end(st0);
+        bool falls0 = true;
+        if rg_has(st0, "ret\n") { falls0 = false; }
+        int tgt0 = 0 - 1;
+        bool is_b0 = rg_has(st0, "b ");
+        if is_b0 || rg_has(st0, "b.") || rg_has(st0, "cbz ") || rg_has(st0, "cbnz ") || rg_has(st0, "tbz ") || rg_has(st0, "tbnz ") {
+            int q0 = en0 - 1;
+            while q0 > st0 && out_buf[q0] != 'L' && out_buf[q0] != ' ' { q0 -= 1; }
+            if out_buf[q0] == 'L' && out_buf[q0 + 1] >= '0' && out_buf[q0 + 1] <= '9' {
+                int target0 = rg_num(q0 + 1);
+                int li0 = 0;
+                while li0 < rg_nlab {
+                    if rg_labn[li0] == target0 { tgt0 = rg_labl[li0]; }
+                    li0 += 1;
+                }
+            }
+            if is_b0 { falls0 = false; }
+        }
+        rg_ltgt[i] = tgt0;
+        rg_lfall[i] = 0;
+        if falls0 { rg_lfall[i] = 1; }
+        int c0 = 0 - 1;
+        rg_lload[i] = 0;
+        if rg_skip[i] == 0 && rg_in(st0, en0, "x29") {
+            int n0 = rg_slot_use(st0);
+            if n0 >= 0 && n0 % 8 == 0 && n0 / 8 < 8192 {
+                c0 = rg_cidx[n0 / 8];
+                if rg_isload == 1 { rg_lload[i] = 1; }
+            }
+        }
+        rg_lc[i] = c0;
+        i += 1;
+    }
     int pass = 0;
     bool changed = true;
     while changed && pass < 50 {
@@ -302,8 +343,6 @@ void rg_allocate(int epi, int is_main) {
         pass += 1;
         i = rg_n - 1;
         while i >= 0 {
-            int st = rg_ls[i];
-            int en = rg_end(st);
             // the successors: the next line unless this one ends the flow; the target of a jump
             int lo0 = 0;
             int lo1 = 0;
@@ -313,24 +352,8 @@ void rg_allocate(int epi, int is_main) {
             int lo5 = 0;
             int lo6 = 0;
             int lo7 = 0;
-            bool falls = true;
-            bool is_ret = rg_has(st, "ret\n");
-            if is_ret { falls = false; }
-            int tgt = 0 - 1;
-            bool is_b = rg_has(st, "b ");
-            if is_b || rg_has(st, "b.") || rg_has(st, "cbz ") || rg_has(st, "cbnz ") || rg_has(st, "tbz ") || rg_has(st, "tbnz ") {
-                int q = en - 1;
-                while q > st && out_buf[q] != 'L' && out_buf[q] != ' ' { q -= 1; }
-                if out_buf[q] == 'L' && out_buf[q + 1] >= '0' && out_buf[q + 1] <= '9' {
-                    int target = rg_num(q + 1);
-                    int li = 0;
-                    while li < rg_nlab {
-                        if rg_labn[li] == target { tgt = rg_labl[li]; }
-                        li += 1;
-                    }
-                }
-                if is_b { falls = false; }
-            }
+            bool falls = rg_lfall[i] == 1;
+            int tgt = rg_ltgt[i];
             if falls && i + 1 < rg_n {
                 lo0 = rg_live[(i + 1) * 8];
                 lo1 = rg_live[(i + 1) * 8 + 1];
@@ -352,15 +375,8 @@ void rg_allocate(int epi, int is_main) {
                 lo7 = lo7 | rg_live[tgt * 8 + 7];
             }
             // this line: a store kills, a load makes live
-            int c = 0 - 1;
-            bool is_load = false;
-            if rg_skip[i] == 0 && rg_in(st, en, "x29") {
-                int n = rg_slot_use(st);
-                if n >= 0 && n % 8 == 0 && n / 8 < 8192 {
-                    c = rg_cidx[n / 8];
-                    is_load = rg_isload == 1;
-                }
-            }
+            int c = rg_lc[i];
+            bool is_load = rg_lload[i] == 1;
             if c >= 0 {
                 int wd = c / 32;
                 int mk = 1 << (c % 32);

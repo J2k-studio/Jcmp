@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.95
+* **Big blocks go back to the system:** a block of 256 KB or more from `Mem::alloc` has pages of its own (`mmap`) and `Mem::free` gives them back (`munmap`) at once; before, the memory stayed in the heap of the program for ever (a program that made 64 MB blocks 400 times ended with the resident size of the biggest, but the address space of the heap only grew). Smaller blocks are as before (chunks of 1 MB, size classes, free lists, joined neighbours). At most 64 such blocks live at a time; more use the old way. Test `t335_big_block`.
+* The compiler is a little faster: the live analysis of the register pass works out the jumps and the candidates of each line once (before: at every turn of the loop), and the kept functions of the inliner are found through a hash table. Measured where the time of the compiler goes (compiling jcmp itself, 4.3 s on the phone): reading and checking the program 0.95 s, IR passes 1.3 s, register pass 0.9 s, assembler 0.8 s; inlining itself is 20 ms.
+* Tests: the suite (358).
+
 ## 0.9.94
 * **Constants: more of them become immediates.** The pass that follows known numbers now goes on from a block into the single block that follows it (the body of an inlined function is such a block: the arguments of the call are known inside it) and **folds an operation on two known numbers** (`32 - 6` is `26`). A shift by a known number is `lsl x0, x0, #26` (before: the number was made in a register first).
 * **`and` / `orr` / `eor` with a bitmask immediate**: `x & 4294967295`, `x & 255`, `x | 0x8000...` are one instruction (`and x0, x0, #4294967295`); the assembler encodes the bitmask immediates (checked against llvm-mc, 13 more lines in `test/asm_check_core.txt`, 0 differences).
