@@ -1210,7 +1210,10 @@ bool accept(char^ s) {
     return false;
 }
 
+int soft_paren_line;         // the line where a missing ')' or ']' was reported: the ';' that follows is not reported again
+
 void missing_semicolon(int soft) {
+    if soft == 1 && soft_paren_line == prev_tok_line { return; }
     char m[100];
     err_line = prev_end_line;            // the message points just after the last token of the line above
     err_col = prev_end_col;
@@ -1227,6 +1230,30 @@ void expect(char^ s) {
         if str_eq(s, ";") && err_line > prev_tok_line && prev_tok_line > 0 {
             // the ';' is missing at the end of a line: say so, go on as if it was written (the next token is not used up)
             missing_semicolon(1);
+            return;
+        }
+        if (str_eq(s, ")") || str_eq(s, "]")) && err_line > prev_tok_line && prev_tok_line > 0 && pass_no == 1 {
+            // a ')' or ']' missing at the end of a line: the same way
+            char m2[100];
+            int sv_line = err_line;
+            int sv_col = err_col;
+            int sv_base = err_base;
+            int sv_ls = err_ls;
+            err_line = prev_end_line;
+            err_col = prev_end_col;
+            err_base = prev_end_base;
+            err_ls = prev_end_ls;
+            str_copy(@m2, "expected '", 100);
+            append_text(@m2, s);
+            append_text(@m2, "' at the end of line ");
+            append_int(@m2, prev_tok_line);
+            append_text(@m2, " (it is missing there)");
+            soft_error(@m2);
+            err_line = sv_line;
+            err_col = sv_col;
+            err_base = sv_base;
+            err_ls = sv_ls;
+            soft_paren_line = prev_tok_line;
             return;
         }
         die_name("expected", s);

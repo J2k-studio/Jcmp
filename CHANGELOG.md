@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9.90
+* **A missing `)` or `]` at the end of a line is reported with all the others** (like the missing `;` of 0.9.87): `expected ')' at the end of line 9 (it is missing there)`; the parser goes on as if it was written, and the `;` that follows the same line is not reported a second time. Test `t327_fail_missing_paren_lines`.
+
 ## 0.9.89
 * **The raw mode `#!library`** (owner's marker, `docs/syntax-design.md` 66.5): a file with this line gets nothing added - no start code, no helpers, no runtime, no `main` needed; the first instruction of the first function is the entry and every function of the file is written. A system call program is 188 bytes. An unknown `#!name` is an error.
 * Tests: `t325_bare_library`, `t326_fail_unknown_marker`.
