@@ -40,7 +40,7 @@ Every program starts at `main`. `cout <<` prints; `\n` is a new line. Save this 
 
 ```jk
 #import <stdlib>
-using stdlib
+using stdlib;
 
 void main() {
     cout << "Hello, J2K!\n";
@@ -64,7 +64,7 @@ A variable has a type: `int` (whole number, 64 bit), `double` (decimal), `char` 
 
 ```jk
 #import <stdlib>
-using stdlib
+using stdlib;
 
 void main() {
     int apples = 5;
@@ -101,7 +101,7 @@ A `bool` is not a number: `if total` is an error, write `if total != 0`. Likewis
 
 ```jk
 #import <stdlib>
-using stdlib
+using stdlib;
 
 void main() {
     int score = 72;
@@ -133,7 +133,7 @@ passed
 
 ```jk
 #import <stdlib>
-using stdlib
+using stdlib;
 
 void main() {
     int i = 1;
@@ -167,7 +167,7 @@ A function has a result type, a name and parameters. `void` means no result. A f
 
 ```jk
 #import <stdlib>
-using stdlib
+using stdlib;
 
 void main() {
     cout << square(7) << "\n";
@@ -207,7 +207,7 @@ Hello, Ann!
 
 ```jk
 #import <stdlib>
-using stdlib
+using stdlib;
 
 void main() {
     int scores[5];
@@ -248,7 +248,7 @@ a word for a `char` array. `cin` reads decimals too. Words are separated by spac
 
 ```jk
 #import <stdlib>
-using stdlib
+using stdlib;
 
 void main() {
     char name[20];
@@ -274,7 +274,7 @@ A `struct` groups values. Functions inside it are methods; they receive the obje
 
 ```jk
 #import <stdlib>
-using stdlib
+using stdlib;
 
 struct Rect {
     int w;
@@ -315,7 +315,7 @@ An enum is not a number, so you cannot mix them up by accident.
 
 ```jk
 #import <stdlib>
-using stdlib
+using stdlib;
 
 enum class Light { Red, Yellow, Green };
 
@@ -357,7 +357,7 @@ If a `switch` on an enum forgets a member, the compiler warns you (use `-st` to 
 
 ```jk
 #import <stdlib>
-using stdlib
+using stdlib;
 
 void bump(int^ p) {
     p^ = p^ + 1;
@@ -391,7 +391,7 @@ local variable made with `arr` or `alloc` at the end of the block, so you rarely
 ```jk
 #import <stdlib>
 
-using stdlib
+using stdlib;
 int total(int[] list) {
     int s = 0;
     for i in 0..list.len { s += list[i]; }
@@ -428,7 +428,7 @@ A `String` is freed at the end of its block, and `String b = a;` makes a separat
 
 ```jk
 #import <stdlib>
-using stdlib
+using stdlib;
 
 String shout(String s) {
     String r = s + "!";
@@ -467,7 +467,7 @@ A function finds the type from its arguments: `largest(3, 9)`; you can also writ
 
 ```jk
 #import <stdlib>
-using stdlib
+using stdlib;
 
 T largest<T>(T a, T b) {
     if a > b { return a; }
@@ -506,7 +506,7 @@ A list is a dynamic array with more tools: `sort`, `insert`, `remove`, `contains
 
 ```jk
 #import <stdlib>
-using stdlib
+using stdlib;
 
 void main() {
     int[] scores = arr(4);
@@ -549,7 +549,7 @@ pointer, or kept in a variable of type `int(int, int)^`. It cannot use the varia
 
 ```jk
 #import <stdlib>
-using stdlib
+using stdlib;
 
 int apply(int(int, int)^ f, int x, int y) {
     return f(x, y);
@@ -577,7 +577,7 @@ The types are written out, so a lambda reads like a function. If the body needs 
 
 ```jk
 #import <stdlib>
-using stdlib
+using stdlib;
 
 int divide(int a, int b) {
     if b == 0 { throw "cannot divide by zero"; }
@@ -608,7 +608,7 @@ error: cannot divide by zero
 ```jk
 #import <stdlib>
 
-using stdlib
+using stdlib;
 void main() {
     double a = 3.0;
     double b = 4.0;
@@ -639,7 +639,7 @@ The library has `Sys` (system calls), `Mem` (memory), `Str` (text), `Math` and `
 ```jk
 #import <stdlib>
 
-using stdlib
+using stdlib;
 void main() {
     i32 f = File::open("note.txt", FileMode::Write);
     if f < 0 { throw "cannot create note.txt"; }
@@ -678,7 +678,7 @@ int cube(int x) {
 
 ```jk
 #import <stdlib>
-using stdlib
+using stdlib;
 
 #import "mathx"
 
@@ -701,7 +701,7 @@ Putting it together: read words until the input ends (reading past the end throw
 
 ```jk
 #import <stdlib>
-using stdlib
+using stdlib;
 
 int length(char^ s) {
     int n = 0;

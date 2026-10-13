@@ -40,7 +40,7 @@ jcmp hello.jk -o hello      # คอมไพล์
 
 ```jk
 #import <stdlib>
-using stdlib
+using stdlib;
 
 void main() {
     cout << "Hello, J2K!\n";
@@ -63,7 +63,7 @@ Hello, J2K!
 
 ```jk
 #import <stdlib>
-using stdlib
+using stdlib;
 
 void main() {
     int apples = 5;
@@ -99,7 +99,7 @@ enough fruit
 
 ```jk
 #import <stdlib>
-using stdlib
+using stdlib;
 
 void main() {
     int score = 72;
@@ -131,7 +131,7 @@ passed
 
 ```jk
 #import <stdlib>
-using stdlib
+using stdlib;
 
 void main() {
     int i = 1;
@@ -165,7 +165,7 @@ void main() {
 
 ```jk
 #import <stdlib>
-using stdlib
+using stdlib;
 
 void main() {
     cout << square(7) << "\n";
@@ -205,7 +205,7 @@ Hello, Ann!
 
 ```jk
 #import <stdlib>
-using stdlib
+using stdlib;
 
 void main() {
     int scores[5];
@@ -246,7 +246,7 @@ banana has 3 letter a
 
 ```jk
 #import <stdlib>
-using stdlib
+using stdlib;
 
 void main() {
     char name[20];
@@ -272,7 +272,7 @@ Ann will be 31 next year
 
 ```jk
 #import <stdlib>
-using stdlib
+using stdlib;
 
 struct Rect {
     int w;
@@ -312,7 +312,7 @@ enum ไม่ใช่ตัวเลข จึงไม่สับสนโ�
 
 ```jk
 #import <stdlib>
-using stdlib
+using stdlib;
 
 enum class Light { Red, Yellow, Green };
 
@@ -354,7 +354,7 @@ three
 
 ```jk
 #import <stdlib>
-using stdlib
+using stdlib;
 
 void bump(int^ p) {
     p^ = p^ + 1;
@@ -388,7 +388,7 @@ void main() {
 ```jk
 #import <stdlib>
 
-using stdlib
+using stdlib;
 int total(int[] list) {
     int s = 0;
     for i in 0..list.len { s += list[i]; }
@@ -425,7 +425,7 @@ void main() {
 
 ```jk
 #import <stdlib>
-using stdlib
+using stdlib;
 
 String shout(String s) {
     String r = s + "!";
@@ -464,7 +464,7 @@ same
 
 ```jk
 #import <stdlib>
-using stdlib
+using stdlib;
 
 T largest<T>(T a, T b) {
     if a > b { return a; }
@@ -503,7 +503,7 @@ generic ต้องเขียนไว้ก่อนจุดแรกที
 
 ```jk
 #import <stdlib>
-using stdlib
+using stdlib;
 
 void main() {
     int[] scores = arr(4);
@@ -546,7 +546,7 @@ lambda คือฟังก์ชันเล็กๆ ที่เขียน
 
 ```jk
 #import <stdlib>
-using stdlib
+using stdlib;
 
 int apply(int(int, int)^ f, int x, int y) {
     return f(x, y);
@@ -574,7 +574,7 @@ void main() {
 
 ```jk
 #import <stdlib>
-using stdlib
+using stdlib;
 
 int divide(int a, int b) {
     if b == 0 { throw "cannot divide by zero"; }
@@ -605,7 +605,7 @@ error: cannot divide by zero
 ```jk
 #import <stdlib>
 
-using stdlib
+using stdlib;
 void main() {
     double a = 3.0;
     double b = 4.0;
@@ -636,7 +636,7 @@ hypotenuse = 5.000000
 ```jk
 #import <stdlib>
 
-using stdlib
+using stdlib;
 void main() {
     i32 f = File::open("note.txt", FileMode::Write);
     if f < 0 { throw "cannot create note.txt"; }
@@ -675,7 +675,7 @@ int cube(int x) {
 
 ```jk
 #import <stdlib>
-using stdlib
+using stdlib;
 
 #import "mathx"
 
@@ -698,7 +698,7 @@ void main() {
 
 ```jk
 #import <stdlib>
-using stdlib
+using stdlib;
 
 int length(char^ s) {
     int n = 0;

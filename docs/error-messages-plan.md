@@ -44,6 +44,8 @@ error: no main function found in 'file.jk'
 | 8 | index out of range of a constant index (`a[5]` on `a[3]`) | DONE in 0.9.84 | (a constant folded index such as `a[2+3]` or a `-1` is not checked yet) |
 | 9 | assembler errors (`j2k_asm: error at line N`) | DONE in 0.9.84: `internal error: ... This is a bug in jcmp` with the generated line | (a source line cannot be given: the text has no line map) |
 
+| 0.9.87 | Several missing `;` in one file are all shown (`N errors generated.`); `using ...` without `;` is an error |
+
 ## Order of work
 
 1. Anything accepted silently (cases 1, 6, 8) - the language is meant to be safer than C.
@@ -54,6 +56,6 @@ error: no main function found in 'file.jk'
 
 ## Rules
 
-* One mistake, one message; the first error stops the compiler (as now).
+* One mistake, one message. A missing `;` at the end of a line is recoverable (the parser goes on as if it was there, up to 10 are shown, `soft_error` in `jc_lex.j`); any other error stops the compiler at the first one. More recoverable cases (a missing `)` or `}` at the end of a line) can use the same `soft_error`.
 * The text names what is wrong and what to write instead.
 * Never print an error that comes from the assembler or the linker: if it is reached, it is a compiler bug.

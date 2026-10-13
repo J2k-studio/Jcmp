@@ -5,7 +5,7 @@
 #import <stdlib>
 #import <math>
 #import <gfx>
-using stdlib
+using stdlib;
 using math::matrix;
 using gfx::screen;
 

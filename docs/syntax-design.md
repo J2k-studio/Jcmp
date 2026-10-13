@@ -350,7 +350,7 @@ if s == Status::NotFound {
 
 ```c
 import cpu
-using cpu::thread
+using cpu::thread;
 
 void download(void^ arg) {
     char^ u = (char^)arg;
@@ -825,7 +825,7 @@ void main() {
 ### สรุปโค้ดตัวอย่างสุดท้าย (ครบทุก decision)
 ```c
 import std
-using std::fs
+using std::fs;
 
 void main() {
     i32 f = File::open("data.txt", FileMode::Read);
@@ -1791,3 +1791,10 @@ Steps 7 and 8: `frame` with `save` / `restore` / `size`, `interrupt` functions (
 
 ## 64. `cout` / `cin` need no import (owner, 2026-10-13)
 Decided by the owner: `cout`, `cin`, `coutf`, `cinf` stay usable in every program without `import` / `using` ("otherwise there would be no way to show a result"). They stay built into the compiler; this closes question E.1 of `open-questions.md`.
+
+## 65. `using ...` ends with `;` (owner, 2026-10-13)
+
+The owner asked: "`using stdlib;` must be closed". Decision (done in 0.9.87): every `using` statement ends with `;`
+(`using stdlib;`, `using cpu::thread;`, `using enum Color;`). A missing `;` is an error with the usual message.
+Also asked in the same message: the compiler should show several mistakes at once; done for a missing `;` at the end of a line
+(0.9.87, `docs/error-messages-plan.md`).

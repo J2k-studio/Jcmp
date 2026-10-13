@@ -159,11 +159,35 @@ void end_msg() {
     }
 }
 
+// errors that the compiler survived (a missing ';'): counted in pass 1, all of them are shown, then the compiler stops
+int err_count;
+void err_summary() {
+    if err_count == 0 { return; }
+    msg_kind = 1;
+    kind_color();
+    write_err_int(err_count);
+    if err_count == 1 { write_err(" error generated."); } else { write_err(" errors generated."); }
+    color_reset();
+    write_err("\n");
+}
+
 void die(char^ msg) {
     begin_msg("error");
     write_err(msg);
     end_msg();
+    err_count += 1;
+    err_summary();
     syscall(93, 1);
+}
+
+// an error after which the parser can go on (the token that is missing is taken as written): shown once, in pass 1
+void soft_error(char^ msg) {
+    if pass_no != 1 { return; }
+    if err_count >= 10 { die("too many errors, the compiler stops here"); }
+    begin_msg("error");
+    write_err(msg);
+    end_msg();
+    err_count += 1;
 }
 
 // an error with a second line  help: ...  under the source line
@@ -174,6 +198,8 @@ void die_help(char^ msg, char^ help) {
     write_err("  help: ");
     write_err(help);
     write_err("\n");
+    err_count += 1;
+    err_summary();
     syscall(93, 1);
 }
 
@@ -1167,7 +1193,7 @@ bool accept(char^ s) {
     return false;
 }
 
-void missing_semicolon() {
+void missing_semicolon(int soft) {
     char m[100];
     err_line = prev_end_line;            // the message points just after the last token of the line above
     err_col = prev_end_col;
@@ -1176,12 +1202,16 @@ void missing_semicolon() {
     str_copy(@m, "expected ';' at the end of line ", 100);
     append_int(@m, prev_tok_line);
     append_text(@m, " (it is missing there)");
-    die(@m);
+    if soft == 1 { soft_error(@m); } else { die(@m); }
 }
 
 void expect(char^ s) {
     if !tok_is(s) {
-        if str_eq(s, ";") && err_line > prev_tok_line && prev_tok_line > 0 { missing_semicolon(); }
+        if str_eq(s, ";") && err_line > prev_tok_line && prev_tok_line > 0 {
+            // the ';' is missing at the end of a line: say so, go on as if it was written (the next token is not used up)
+            missing_semicolon(1);
+            return;
+        }
         die_name("expected", s);
     }
     next();

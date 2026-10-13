@@ -11,7 +11,7 @@ Files: `.jk` is a program (it has `main`); `.j` is a component that other files 
 
 ```jk
 #import <stdlib>
-using stdlib
+using stdlib;
 
 void main() {
     cout << "hi\n";
@@ -293,7 +293,7 @@ if seen.add(3) { cout << "new\n"; }     // add says whether it was new
 
 ```jk
 #import <stdlib>
-using stdlib
+using stdlib;
 
 struct Node { int value; Node^ next; }
 
@@ -747,8 +747,8 @@ void main() {
 
 ```jk
 #import <cpu>
-using cpu::thread
-using cpu::mutex
+using cpu::thread;
+using cpu::mutex;
 
 int counter;
 Mutex mu;
@@ -824,7 +824,7 @@ Standard library (`stdlib`, source in `std/`):
 
 ```jk
 #import <stdlib>
-using stdlib::str
+using stdlib::str;
 
 void main() {
     char buf[32];
@@ -891,7 +891,7 @@ buffer) or `using gfx::screen;` (colour dots). The standard library has `Term::c
 
 ```jk
 #import <stdlib>
-using stdlib
+using stdlib;
 
 void main() {
     // text and numbers

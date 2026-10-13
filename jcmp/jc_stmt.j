@@ -1061,7 +1061,7 @@ void parse_cout() {
     }
     if c_count == 0 { die("<< expected after cout"); }
     if !tok_is(";") {
-        if err_line > prev_tok_line && prev_tok_line > 0 { missing_semicolon(); }
+        if err_line > prev_tok_line && prev_tok_line > 0 { missing_semicolon(1); return; }
         die("expected ';' or '<<' here (is a '<<' missing between two values?)");
     }
     expect(";");
@@ -1148,7 +1148,7 @@ void parse_cin() {
     }
     if count == 0 { die(">> expected after cin"); }
     if !tok_is(";") {
-        if err_line > prev_tok_line && prev_tok_line > 0 { missing_semicolon(); }
+        if err_line > prev_tok_line && prev_tok_line > 0 { missing_semicolon(1); return; }
         die("expected ';' or '>>' here (is a '>>' missing between two variables?)");
     }
     expect(";");
@@ -1280,7 +1280,7 @@ void parse_using() {
         if dden >= 0 {
             dv_set_using(dden, cur_in_func);        // a data enum: its members can be named without Name::
             next();
-            accept(";");
+            expect(";");
             return;
         }
         if en < 0 { die_name("unknown enum", @tok_text); }
@@ -1290,7 +1290,7 @@ void parse_using() {
             ue_g[en] = 1;
         }
         next();
-        accept(";");
+        expect(";");
         return;
     }
     // using std / using std::fs / using Struct
@@ -1359,7 +1359,7 @@ void parse_using() {
             us_g[us_s] = 1;
         }
     }
-    accept(";");
+    expect(";");
 }
 
 // the value of a case label or global initializer: a number, 'c', -n, an enum

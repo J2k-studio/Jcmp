@@ -1,6 +1,8 @@
-# J2K / Jcmp 0.9.86
+# J2K / Jcmp 0.9.87
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
+
+**0.9.87:** several missing `;` are all reported (`3 errors generated.`); `using stdlib;` must end with `;` (add it to older programs).
 
 **0.9.86:** leaf functions keep variables in more registers; using the value of a `void` call (`int a = f();`) is an error (it was accepted before); `cout` / `cin` need no import and no `using` (no warning).
 

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.87
+* **More than one error at a time:** a `;` missing at the end of a line no longer stops the compiler at the first one. Every such place is shown (up to 10), the parser goes on as if the `;` was written, and the end says `3 errors generated.` Other errors (a wrong type, an unknown name) still stop at the first, as before.
+* **`using ...` must end with `;`** (owner's decision, 2026-10-13): `using stdlib;`, `using std::fs;`, `using cpu::thread;`, `using enum Color;`. Without it: `expected ';' at the end of line N (it is missing there)`. **A program written for 0.9.86 or older that has `using stdlib` without `;` must add it** (tests, examples, docs and tools of the repository are changed).
+* Tests: `t323_fail_many_missing_semicolons`, `t324_fail_using_without_semicolon`.
+
 ## 0.9.86
 * **Leaf functions use more registers:** a function that makes no call that comes back keeps its variables also in the caller-saved registers that its own text does not mention (nothing to save, nothing to restore). The registers for a leaf are taken before `x19 .. x25`.
 * **The value of a `void` call is an error:** `int a = f();` where `f` is `void` was accepted and stored garbage; now `this function returns nothing (it is void), so there is no value to store`. The hint `(use a comparison for a bool, or a cast)` of a type mismatch is only written when a bool was wanted.
