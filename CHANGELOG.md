@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.98
+* **An array index is one instruction less:** `lsl x0, x8, #3` + `add x0, x28, x0` becomes `add x0, x28, x8, lsl #3` (a register pass rule; the register that gets the value is the same). The assembler (the built-in one and `j2k_asm`) reads `add / sub xD, xN, xM, lsl|lsr|asr #n` (checked against llvm-mc: 112 lines, 0 differences).
+* Tests: the suite (358), 550 random programs.
+
 ## 0.9.97
 * **The arrays of a program are near the base of the globals:** the table of the live blocks of a `-d` build (768 KB) is not a global array any more (it comes from `mmap` in `Mem::debug_on`), so the global arrays of a program start at an offset of a few KB instead of 790 KB. A load or a store at such an address is `ldr x0, [x0, #8616]` (the offset is inside the instruction) instead of an extra `add x0, x0, #795040`: one instruction less for every access to an element of one of the first arrays.
 * **A second load of the same element of a global array** (same address, no store and no call in between, inside one chain of blocks) is not made again: `keys[i] != 0 && keys[i] != k` reads once. Only arrays of the program (addresses made from the base of the globals): a read through a pointer is never merged (a device register may change between two reads).

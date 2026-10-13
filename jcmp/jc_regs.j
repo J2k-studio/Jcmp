@@ -1655,6 +1655,49 @@ bool pt_rules(int i) {
     if j < 0 { return false; }
     if !pt_parse(0, i) { return false; }
     if !pt_parse(1, j) { return false; }
+    // lsl xD, xA, #n / add xD, xB, xD   ->   add xD, xB, xA, lsl #n      (also with the operands of the add the other way round):
+    // the register xD gets the same value, the shifted number was only on its way
+    if pt_mn(0, "lsl") && pt_no[0] == 3 && pt_isreg(0, 0) && pt_isreg(0, 1) && pt_isnum(0, 2) && pt_mn(1, "add") && pt_no[1] == 3 && pt_isreg(1, 0) && pt_isreg(1, 1) && pt_isreg(1, 2) {
+        int sd = pt_regno(0, 0, 'x');
+        int sa = pt_regno(0, 1, 'x');
+        int ad = pt_regno(1, 0, 'x');
+        int ab = pt_regno(1, 1, 'x');
+        int ac = pt_regno(1, 2, 'x');
+        int other = 0 - 1;
+        if ad == sd && ac == sd && ab != sd { other = ab; }
+        else if ad == sd && ab == sd && ac != sd { other = ac; }
+        int sn = 0;
+        int so = (0 * 4 + 2) * 40;
+        int si = 0;
+        if pt_o[so] == '#' { si = 1; }
+        while pt_o[so + si] >= '0' && pt_o[so + si] <= '9' && sn < 100 {
+            sn = sn * 10 + (pt_o[so + si] - '0');
+            si += 1;
+        }
+        if other >= 0 && sd >= 0 && sa >= 0 && sd <= 30 && sa <= 30 && other <= 30 && sn >= 1 && sn <= 4 {
+            char sl[48];
+            int q = 0;
+            sl[q] = 'a'; sl[q + 1] = 'd'; sl[q + 2] = 'd'; sl[q + 3] = ' '; q += 4;
+            int parts[3];
+            parts[0] = sd; parts[1] = other; parts[2] = sa;
+            int pi = 0;
+            while pi < 3 {
+                sl[q] = 'x'; q += 1;
+                int rv = parts[pi];
+                if rv >= 10 { sl[q] = '0' + rv / 10; q += 1; }
+                sl[q] = '0' + rv % 10; q += 1;
+                sl[q] = ','; sl[q + 1] = ' '; q += 2;
+                pi += 1;
+            }
+            q -= 2;
+            sl[q] = ','; sl[q + 1] = ' '; sl[q + 2] = 'l'; sl[q + 3] = 's'; sl[q + 4] = 'l'; sl[q + 5] = ' '; sl[q + 6] = '#'; q += 7;
+            sl[q] = '0' + sn; q += 1;
+            sl[q] = 0;
+            pt_set(i, "");
+            pt_set(j, @sl);
+            return true;
+        }
+    }
     // <op> d0, ... / fmov dK, d0   ->   <op> dK, ...      (d0 is not needed afterwards)
     if pt_mn(1, "fmov") && pt_no[1] == 2 && pt_op(1, 1, "d0") && pt_regno(1, 0, 'd') > 0 && pt_no[0] >= 1 && pt_op(0, 0, "d0") && (pt_mn(0, "fadd") || pt_mn(0, "fsub") || pt_mn(0, "fmul") || pt_mn(0, "fdiv") || pt_mn(0, "fsqrt") || pt_mn(0, "fneg") || pt_mn(0, "fabs") || pt_mn(0, "fmov") || pt_mn(0, "ldr") || pt_mn(0, "scvtf") || pt_mn(0, "frintm") || pt_mn(0, "frintp") || pt_mn(0, "frintz")) {
         int kreg = pt_regno(1, 0, 'd');

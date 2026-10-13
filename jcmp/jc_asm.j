@@ -436,7 +436,24 @@ void as_h_addsub(bool isadd) {
         int rm = as_parse_reg();
         int base = 0xCB000000;
         if isadd { base = 0x8B000000; }
-        as_put32(base | (rm << 16) | (rn << 5) | rd);
+        // add xD, xN, xM, lsl #n   (lsl / lsr / asr)
+        int shift = 0;
+        int amount = 0;
+        as_skip_spaces();
+        if as_cur() == ',' {
+            as_ci += 1;
+            as_skip_spaces();
+            if as_cur() == 'l' && as_peek(1) == 's' && as_peek(2) == 'l' { shift = 0; }
+            else if as_cur() == 'l' && as_peek(1) == 's' && as_peek(2) == 'r' { shift = 1; }
+            else if as_cur() == 'a' && as_peek(1) == 's' && as_peek(2) == 'r' { shift = 2; }
+            else { as_fail(); }
+            as_ci += 3;
+            as_skip_spaces();
+            if as_cur() == '#' { as_ci += 1; }
+            amount = as_parse_number();
+            if amount < 0 || amount > 63 { as_fail(); }
+        }
+        as_put32(base | (shift << 22) | (rm << 16) | (amount << 10) | (rn << 5) | rd);
         return;
     }
     if as_cur() == '#' { as_ci += 1; }

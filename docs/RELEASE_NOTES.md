@@ -1,6 +1,8 @@
-# J2K / Jcmp 0.9.97
+# J2K / Jcmp 0.9.98
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
+
+**0.9.98:** `add xD, xN, xM, lsl #n` (shifted register operand): an array index costs one instruction less.
 
 **0.9.97:** elements of the first global arrays are one instruction cheaper to reach; a repeated read of a global array element is made once.
 
