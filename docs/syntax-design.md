@@ -1798,3 +1798,40 @@ The owner asked: "`using stdlib;` must be closed". Decision (done in 0.9.87): ev
 (`using stdlib;`, `using cpu::thread;`, `using enum Color;`). A missing `;` is an error with the usual message.
 Also asked in the same message: the compiler should show several mistakes at once; done for a missing `;` at the end of a line
 (0.9.87, `docs/error-messages-plan.md`).
+
+## 66. A file marker for the bare level: `#!...` and raw hex / bytes (owner, 2026-10-13; a concept, nothing decided)
+
+Owner's idea: when a file has no `#import`, a marker line such as `#!import` could say "this file is raw": assembly, hex and machine code with nothing added.
+Question: what does this look like in other languages, and what does the owner's idea give?
+
+### 66.1 What exists in other languages (the rule of three: borrow)
+| language | form | meaning |
+|---|---|---|
+| Unix scripts (sh, Python, Perl) | `#!/bin/sh` first line | the "shebang": the kernel reads the line and picks the program that runs the file |
+| Rust | `#![no_std]`, `#![no_main]` (inner attribute at the top of the file) | the file declares what it does not use: no standard library, no runtime start code. This is the closest to the idea |
+| C / C++ | `#pragma ...`, `-ffreestanding`, `-nostdlib` | the same, as a pragma or a command line option |
+| D | `-betterC`, `module` with `@nogc` | a subset without the runtime |
+| Zig | `export fn _start()`, `@import("std")` is explicit; `comptime` flags | nothing is imported unless written |
+| assemblers (GNU as, NASM, fasm) | `.text`, `.global _start`, `BITS 64`, `format ELF64` | the file is the program, the first lines say the mode |
+
+### 66.2 Options for the marker (nothing locked)
+| | A: shebang style | B: Rust style | C: option / extension |
+|---|---|---|---|
+| look | `#!bare` first line | `#![bare]` or `#![no_runtime]` | `jcmp -bare file`, or the extension `.jb` |
+| easy for humans | known by everyone who wrote a script | known by Rust users, more to type | nothing to write in the file; a reader of the file does not see the mode |
+| easy for machine | one line test at the start of the lexer | a small attribute parser (needed later for other attributes) | an option flag; the extension is a test of the name |
+| risk | `#!` looks like a command that the OS would run; the OS reads `#!` of an executable only, a `.jk` is not run, so no conflict | none | the mode is hidden from the file |
+
+The existing `#import <x>` already starts with `#`, so a line `#!import` would be read as "import" with a mark, which is confusing: `#!` is better used for modes (`#!bare`, `#!freestanding`) and `#import` kept for libraries.
+
+### 66.3 Raw bytes (hex / machine code)
+| | what is written | note |
+|---|---|---|
+| A: data directives | `.word 0xd503201f` / `.byte 0x1f, 0x20` / `.hex "1f2003d5"` | as in every assembler; the bytes are placed as they are; checked by `-emit-asm` listing |
+| B: one statement | `raw 0xd503201f;` or `raw { 1f 20 03 d5 }` | inside naked / bare functions and at the top level |
+| C: a call | `Cpu::raw(0xd503201f)` | consistent with `Cpu::inst("name", ...)` |
+
+Notes for all of them: the compiler cannot know what a raw word does to registers, so a function that has one is opaque (as `register { }` is, 63.4 step 6) and the passes skip it (the same as `@no_reorder`); a raw word is endian fixed (little endian for ARM64) and four bytes per word; the listing shows both the hex and the decoded text if the assembler knows the encoding.
+
+### 66.4 The assistant's view
+The marker is a good idea: it makes level 0 explicit, costs one line, and lets the rest of the compiler stay silent (no prelude, no helpers, no runtime). `#!bare` (A) is the easiest to read and to implement, and does not take the meaning of `#import`. Raw bytes as a statement `raw` (B) next to the existing instruction lines is enough; A and C can be sugar later. Questions: (1) marker A, B or C? (2) one name or two (`#!bare`, `#!freestanding`)? (3) raw bytes: A, B or C? (4) in bare mode is the ELF entry the first instruction or `_start`?

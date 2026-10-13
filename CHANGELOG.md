@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.88
+* **Leaf functions without a frame:** a function that makes no call and keeps all its variables in caller-saved registers has no prologue and no epilogue any more (no `sub sp`, no save of `x29` / `x30`): `int sq(int a, int b)` is four instructions and `ret`.
+* **More variables in registers in a leaf function:** the caller-saved registers cost nothing there, so a variable that is used twice (one store, one load) takes one too (before: only the ones used three times or more).
+* Tests: the whole suite (347), 600 random programs with `-noir`, `-noinl`, `-d`.
+
 ## 0.9.87
 * **More than one error at a time:** a `;` missing at the end of a line no longer stops the compiler at the first one. Every such place is shown (up to 10), the parser goes on as if the `;` was written, and the end says `3 errors generated.` Other errors (a wrong type, an unknown name) still stop at the first, as before.
 * **`using ...` must end with `;`** (owner's decision, 2026-10-13): `using stdlib;`, `using std::fs;`, `using cpu::thread;`, `using enum Color;`. Without it: `expected ';' at the end of line N (it is missing there)`. **A program written for 0.9.86 or older that has `using stdlib` without `;` must add it** (tests, examples, docs and tools of the repository are changed).

@@ -263,6 +263,31 @@ void rg_allocate(int epi, int is_main) {
             rounds += 1;
         }
     }
+    if rg_leaf == 1 {
+        // the caller-saved registers of a leaf function cost nothing (no save, no restore): they take slots of two uses too
+        int extra_left = rg_nextra;
+        rounds = 0;
+        while extra_left > 0 && rounds < 16 && rg_ncand < 256 {
+            int best2 = 0 - 1;
+            int bw2 = 1;
+            w = 0;
+            while w < 8192 {
+                if rg_state[w] == 1 && rg_cidx[w] < 0 && rg_wt[w] > bw2 && rg_pin[w] == 0 {
+                    bw2 = rg_wt[w];
+                    best2 = w;
+                }
+                w += 1;
+            }
+            if best2 < 0 { rounds = 16; }
+            else {
+                rg_cidx[best2] = rg_ncand;
+                rg_cand[rg_ncand] = best2;
+                rg_ncand += 1;
+                extra_left -= 1;
+                rounds += 1;
+            }
+        }
+    }
     if rg_ncand == 0 { return; }
     // live-in sets: use[i] = a load of the slot, def[i] = a store of it; go backwards until nothing changes
     int i = 0;
@@ -812,6 +837,36 @@ void rg_function(int is_main) {
         }
         pw += 1;
     }
+    // a leaf function whose variables are all in caller-saved registers needs no frame: no stack pointer move, no saves of x29 / x30
+    int elide = 0;
+    if ok == 1 && is_main == 0 && rg_leaf == 1 && opt_debug == 0 {
+        elide = 1;
+        int ew = 0;
+        while ew < 8192 {
+            if (rg_slotreg[ew] >= 19 && rg_slotreg[ew] <= 25) || rg_slotd[ew] != 0 { elide = 0; }
+            ew += 1;
+        }
+        i = 0;
+        while i < rg_n && elide == 1 {
+            int st = rg_ls[i];
+            int en = rg_end(st);
+            if rg_in(st, en, "x29") && !rg_has(st, ";H") && rg_skip[i] == 0 {
+                if rg_has(st, "add x29, sp, #0") || rg_has(st, "str x29, [sp, #0]") || rg_has(st, "ldr x29, [sp, #0]") {
+                    // the frame itself
+                } else {
+                    int n = rg_slot_use(st);
+                    if !(n >= 0 && n % 8 == 0 && n / 8 < 8192 && rg_slotreg[n / 8] != 0) { elide = 0; }
+                }
+            }
+            if rg_has(st, "str x30, [sp, #8]") || rg_has(st, "ldr x30, [sp, #8]") {
+                // saved link register: fine, nothing else may change it
+            } else if rg_in(st, en, "x30") && !rg_has(st, ";H") {
+                elide = 0;
+            }
+            i += 1;
+        }
+    }
+    rg_elide = elide;
     // write it
     i = 0;
     while i < rg_n {
@@ -820,6 +875,12 @@ void rg_function(int is_main) {
         if rg_has(st, ";H") {
             i += 1;
             continue;
+        }
+        if elide == 1 {
+            if rg_has(st, "sub sp, sp, #0000") || rg_has(st, "add sp, sp, #0000") || rg_has(st, "str x29, [sp, #0]") || rg_has(st, "ldr x29, [sp, #0]") || rg_has(st, "str x30, [sp, #8]") || rg_has(st, "ldr x30, [sp, #8]") || rg_has(st, "add x29, sp, #0") {
+                i += 1;
+                continue;
+            }
         }
         if rg_skip[i] == 1 && rg_npick > 0 {
             i += 1;
