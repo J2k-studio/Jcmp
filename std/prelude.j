@@ -14,7 +14,7 @@ int std_cls_of[129] = {0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 
 int std_cls_exact[129] = {-1, -1, 0, 1, 2, 3, 4, 5, 6, -1, 7, -1, 8, -1, 9, -1, 10, -1, -1, -1, 11, -1, -1, -1, 12, -1, -1, -1, 13, -1, -1, -1, 14, -1, -1, -1, -1, -1, -1, -1, 15, -1, -1, -1, -1, -1, -1, -1, 16, -1, -1, -1, -1, -1, -1, -1, 17, -1, -1, -1, -1, -1, -1, -1, 18, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 19, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 20, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 21, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 22};  // by size / 16: the class whose size is exactly this, or -1
 int std_free_cls[24];              // the free blocks of each class
 int std_debug;                     // 1 in a -d build: the checks of Mem (a block freed twice, written after it was freed, the places of the leaks)
-int std_dbg_tab[98304];            // the live blocks in a -d build: [address, size, the function that made it], 32768 places (open addressing)
+int^ std_dbg_tab;                  // the live blocks in a -d build: [address, size, the function that made it], 32768 places (open addressing); 768 KB from mmap in debug_on (a big array here would push the arrays of the program far from the base of the globals)
 int std_dbg_n;                     // how many live blocks the table holds
 int std_dbg_full;                  // 1: the table was full once (the checks that need it are off)
 int std_dbg_quar[64];              // the last blocks that were freed (a -d build keeps them filled with 221 for a while)
@@ -401,6 +401,8 @@ struct Mem {
     // ---- the checks of a -d build (the program calls debug_on first)
     static void debug_on() {
         std_debug = 1;
+        std_dbg_tab = (int^)syscall(222, 0, 786432, 3, 34, -1, 0);
+        if (int)std_dbg_tab < 0 && (int)std_dbg_tab > -4096 { std_dbg_tab = null; std_dbg_full = 1; std_guard_n = 12000; }
     }
     static void dbg_text(char^ t) {
         int n = 0;
@@ -447,6 +449,7 @@ struct Mem {
     }
     // the place of the block `addr` in the table, or -1 if it is not there
     static int dbg_find(int addr) {
+        if (int)std_dbg_tab == 0 { return 0 - 1; }
         int h = (addr >> 4) & 32767;
         int tries = 0;
         while tries < 32768 {
@@ -460,6 +463,7 @@ struct Mem {
     }
     // a place for the block `addr`: the first one that is free (never used, or a block that was freed), -1 if there is none
     static int dbg_free_place(int addr) {
+        if (int)std_dbg_tab == 0 { return 0 - 1; }
         int h = (addr >> 4) & 32767;
         int tries = 0;
         while tries < 32768 {

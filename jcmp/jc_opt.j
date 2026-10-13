@@ -1238,6 +1238,7 @@ int vn_cell_cur;
 int vn_cellvn[16384];
 int vn_q;                       // the deepest stack cell now
 int vn_changes;
+int vn_mem;                     // the memory epoch: every store and every call makes a new one (a load of a global array is the same value inside one epoch)
 int vn_cellhits;                // how many values were read from a cell instead of being computed again
 
 // the numbers of the hint line  ";H off:size:flag ..."  into op_plain
@@ -1405,6 +1406,18 @@ int vf_decide(int cc, int v, int imm) {
 }
 
 // cont = 1: the block is entered from the block processed before it only, so what is known stays
+// does the value v come from the value g (the base of the globals) through additions and shifts?
+bool vn_from(int v, int g, int depth) {
+    if v == g { return true; }
+    if depth <= 0 || v < 0 { return false; }
+    int k = vn_k[v];
+    if k >= IR_ADD && k <= IR_ASHR && k != IR_SDIV && k != IR_UDIV && k != IR_MUL {
+        if vn_from(vn_x[v], g, depth - 1) { return true; }
+        if vn_y[v] < 1000000 && vn_y[v] >= 0 && vn_from(vn_y[v], g, depth - 1) { return true; }
+    }
+    return false;
+}
+
 void vn_block(int b, int cont) {
     if cont == 0 {
         vn_n = 0;
@@ -1433,6 +1446,7 @@ void vn_block(int b, int cont) {
         }
         int V = 0 - 1;
         bool fwd = false;
+        bool memload = false;
         bool valuable = false;
         if d != 0 && vn_n < VN_MAX - 8 {
             if op == IR_CONST {
@@ -1447,6 +1461,24 @@ void vn_block(int b, int cont) {
                     V = vn_find(1002, sl, vn_ver[sl], 0);
                     if V < 0 { V = vn_new(1002, sl, vn_ver[sl], 0); vn_enter(V); }
                     if V >= 0 && vn_al[V] >= 0 { V = vn_al[V]; fwd = true; }
+                } else if ir_a[i] != 30 && ir_a[i] >= 1 && (ir_opt & 4194304) == 0 && ir_vcls[d] == 0 {
+                    // a load from an element of a global array: the same address in the same epoch is the same value
+                    int vg = vn_reg(29);
+                    int vad = vn_reg(ir_a[i]);
+                    if vg >= 0 && vad >= 0 && vn_from(vad, vg, 6) {
+                        valuable = true;
+                        memload = true;
+                        int wq = ir_w[i] + 16;
+                        V = vn_find(1004, vad, ir_k[i], vn_mem * 64 + wq);
+                        if V < 0 {
+                            V = vn_new(1004, vad, ir_k[i], vn_mem * 64 + wq);
+                            if V >= 0 {
+                                vn_enter(V);
+                                vn_def[V] = i;
+                                vn_heavy[V] = 1;          // read again from a cell that the first load writes (the register pass keeps the cell in a register)
+                            }
+                        }
+                    }
                 }
             } else if op == IR_COPY {
                 int va = vn_reg(ir_a[i]);
@@ -1489,7 +1521,7 @@ void vn_block(int b, int cont) {
                 // a register that holds the value already: a copy
                 bool done = false;
                 int h = vn_holder[V];
-                if (op != IR_LOAD || (fwd && (ir_opt & 1048576) == 0)) && (op != IR_CONST || (ir_k[i] != 0 && op_costly(ir_k[i]))) && h >= 1 && vn_holds(h, V) && ir_vcls[h] == ir_vcls[d] && vn_def[V] != i {
+                if (op != IR_LOAD || (fwd && (ir_opt & 1048576) == 0) || memload) && (op != IR_CONST || (ir_k[i] != 0 && op_costly(ir_k[i]))) && h >= 1 && vn_holds(h, V) && ir_vcls[h] == ir_vcls[d] && vn_def[V] != i {
                     if h == d {
                         ir_op[i] = IR_NOP;
                         ir_d[i] = 0;
@@ -1502,7 +1534,24 @@ void vn_block(int b, int cont) {
                     }
                     vn_changes += 1;
                     done = true;
-                } else if op != IR_CONST && op != IR_LOAD && vn_heavy[V] == 1 && vn_def[V] >= 0 && vn_def[V] != i && ir_op[vn_def[V]] == op {
+                } else if op == IR_LOAD && fwd && (ir_opt & 1048576) == 0 && ir_vcls[d] == 0 && vn_k[V] == 1001 && !op_costly(vn_x[V]) {
+                    // the cell holds a small number that no register holds now: make it again (the store may then be dead)
+                    ir_op[i] = IR_CONST;
+                    ir_k[i] = vn_x[V];
+                    ir_a[i] = 0;
+                    ir_bi[i] = 1;
+                    vn_changes += 1;
+                    done = true;
+                } else if op == IR_LOAD && fwd && (ir_opt & 1048576) == 0 && ir_vcls[d] == 0 && vn_k[V] == IR_ADD && vn_y[V] >= 1000000 && vn_y[V] < 1000000 + 4096 && vn_z[V] % 4 == 0 && vn_x[V] == vn_reg(30) && vn_reg(30) >= 0 {
+                    // the cell holds the address of a frame object (the frame pointer plus a number): make it again
+                    ir_op[i] = IR_ADD;
+                    ir_a[i] = 30;
+                    ir_b[i] = vn_y[V] - 1000000;
+                    ir_bi[i] = 1;
+                    ir_k[i] = 0;
+                    vn_changes += 1;
+                    done = true;
+                } else if op != IR_CONST && (op != IR_LOAD || memload) && vn_heavy[V] == 1 && vn_def[V] >= 0 && vn_def[V] != i && ir_op[vn_def[V]] == op {
                     // the value was made earlier and no register holds it now: it is read from a cell that the first computation wrote
                     if vn_cell[V] == 0 {
                         vn_q += 8;
@@ -1549,6 +1598,7 @@ void vn_block(int b, int cont) {
             }
         }
         // anything else
+        if op == IR_STORE || op == IR_CALL || op == IR_CALLIND || op == IR_SYSCALL { vn_mem += 1; }
         if op == IR_STORE {
             int sl2 = vn_slot(i);
             if sl2 >= 0 {

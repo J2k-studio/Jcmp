@@ -1,6 +1,8 @@
-# J2K / Jcmp 0.9.96
+# J2K / Jcmp 0.9.97
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
+
+**0.9.97:** elements of the first global arrays are one instruction cheaper to reach; a repeated read of a global array element is made once.
 
 **0.9.96:** the built-in assembler is 7 times faster (the compiler compiles itself in 3.6 s instead of 4.3 s); same output byte for byte.
 

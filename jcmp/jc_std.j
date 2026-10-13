@@ -3177,7 +3177,7 @@ void push_prelude() {
     put("int std_cls_exact[129] = {-1, -1, 0, 1, 2, 3, 4, 5, 6, -1, 7, -1, 8, -1, 9, -1, 10, -1, -1, -1, 11, -1, -1, -1, 12, -1, -1, -1, 13, -1, -1, -1, 14, -1, -1, -1, -1, -1, -1, -1, 15, -1, -1, -1, -1, -1, -1, -1, 16, -1, -1, -1, -1, -1, -1, -1, 17, -1, -1, -1, -1, -1, -1, -1, 18, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 19, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 20, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 21, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 22};  // by size / 16: the class whose size is exactly this, or -1");
     put("int std_free_cls[24];              // the free blocks of each class");
     put("int std_debug;                     // 1 in a -d build: the checks of Mem (a block freed twice, written after it was freed, the places of the leaks)");
-    put("int std_dbg_tab[98304];            // the live blocks in a -d build: [address, size, the function that made it], 32768 places (open addressing)");
+    put("int^ std_dbg_tab;                  // the live blocks in a -d build: [address, size, the function that made it], 32768 places (open addressing); 768 KB from mmap in debug_on (a big array here would push the arrays of the program far from the base of the globals)");
     put("int std_dbg_n;                     // how many live blocks the table holds");
     put("int std_dbg_full;                  // 1: the table was full once (the checks that need it are off)");
     put("int std_dbg_quar[64];              // the last blocks that were freed (a -d build keeps them filled with 221 for a while)");
@@ -3564,6 +3564,8 @@ void push_prelude() {
     put("    // ---- the checks of a -d build (the program calls debug_on first)");
     put("    static void debug_on() {");
     put("        std_debug = 1;");
+    put("        std_dbg_tab = (int^)syscall(222, 0, 786432, 3, 34, -1, 0);");
+    put("        if (int)std_dbg_tab < 0 && (int)std_dbg_tab > -4096 { std_dbg_tab = null; std_dbg_full = 1; std_guard_n = 12000; }");
     put("    }");
     put("    static void dbg_text(char^ t) {");
     put("        int n = 0;");
@@ -3610,6 +3612,7 @@ void push_prelude() {
     put("    }");
     put("    // the place of the block `addr` in the table, or -1 if it is not there");
     put("    static int dbg_find(int addr) {");
+    put("        if (int)std_dbg_tab == 0 { return 0 - 1; }");
     put("        int h = (addr >> 4) & 32767;");
     put("        int tries = 0;");
     put("        while tries < 32768 {");
@@ -3623,6 +3626,7 @@ void push_prelude() {
     put("    }");
     put("    // a place for the block `addr`: the first one that is free (never used, or a block that was freed), -1 if there is none");
     put("    static int dbg_free_place(int addr) {");
+    put("        if (int)std_dbg_tab == 0 { return 0 - 1; }");
     put("        int h = (addr >> 4) & 32767;");
     put("        int tries = 0;");
     put("        while tries < 32768 {");

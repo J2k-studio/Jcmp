@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.97
+* **The arrays of a program are near the base of the globals:** the table of the live blocks of a `-d` build (768 KB) is not a global array any more (it comes from `mmap` in `Mem::debug_on`), so the global arrays of a program start at an offset of a few KB instead of 790 KB. A load or a store at such an address is `ldr x0, [x0, #8616]` (the offset is inside the instruction) instead of an extra `add x0, x0, #795040`: one instruction less for every access to an element of one of the first arrays.
+* **A second load of the same element of a global array** (same address, no store and no call in between, inside one chain of blocks) is not made again: `keys[i] != 0 && keys[i] != k` reads once. Only arrays of the program (addresses made from the base of the globals): a read through a pointer is never merged (a device register may change between two reads).
+* **A load from a stack cell that held a small number or the address of a frame object** is made again from the number (no memory read) when no register holds it.
+* Tests: the suite (358), 700 random programs with the default options, `-noir`, `-noinl`, `-d`. The instruction count of the benchmarks: hashmap -4 %, vec3 -3 %, strings 0.
+
 ## 0.9.96
 * **The assembler of the compiler is 7 times faster** (0.8 s -> 0.11 s for the compiler itself; the whole compile 4.3 s -> 3.6 s): the text is read once (before: twice), the labels are found through a hash table (before: a linear search through up to 32,768 names for every branch), and a branch to a label that is not defined yet is patched at the end. The bytes it writes are the same: 371 programs (tests, examples, benchmarks) were compared byte by byte with the release before.
 * `-xtime` (hidden): the time of each stage of the compiler on the error output. First step of `docs/design/10-structured-pipeline.md` (the plan to go from text to records).
