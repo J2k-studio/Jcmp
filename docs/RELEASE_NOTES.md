@@ -1,6 +1,8 @@
-# J2K / Jcmp 0.9.90
+# J2K / Jcmp 0.9.91
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
+
+**0.9.91:** a number stored in a pointer (`char^ p = 5;`) and a text passed to an `int` parameter are errors.
 
 **0.9.90:** a missing `)` or `]` at the end of a line is reported together with the other errors.
 

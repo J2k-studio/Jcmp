@@ -507,6 +507,7 @@ void parse_assign_core(char^ target) {
         if op[0] == 0 {
             check_assign(tgt_ty);
             if a_ptr == 0 && a_kind != 3 { no_text_for_int(tgt_ty); }
+            if a_ptr != 0 && a_kind != 3 { no_num_for_ptr(); }
         } else if !is_float(tgt_ty) {
             bin_type(tgt_ty, ex_ty);
         }
@@ -2117,7 +2118,7 @@ void parse_local_decl_core() {
     if tok_is("=") {
         next();
         parse_expr();
-        if d_ptr == 0 { check_assign(d_tid); no_text_for_int(d_tid); }
+        if d_ptr == 0 { check_assign(d_tid); no_text_for_int(d_tid); } else { no_num_for_ptr(); }
         int d_own = 0;
         if d_ptr != 0 && last_call_owning == 1 && own_ok == 1 { d_own = 1; }     // the variable owns what alloc gave
         expect(";");
@@ -2285,7 +2286,7 @@ void parse_statement_inner() {
                 }
             }
             check_assign(cur_ret_tid);
-            if cur_ret_isptr == 0 { no_text_for_int(cur_ret_tid); }
+            if cur_ret_isptr == 0 { no_text_for_int(cur_ret_tid); } else { no_num_for_ptr(); }
             if rv_valid == 1 && cur_ret_isptr == 1 { ret_mv = own_find(rv_off); }
             int rhow = 0;
             int rsrc = 0;
@@ -2584,7 +2585,7 @@ void parse_function() {
             int p_dyn = ty_dyn;
             if ty_ptr != 0 { p_tid = 0; }
             if f_declared < 8 { fptid[f_idx * 8 + f_declared] = p_tid; }
-            if f_declared < 8 { fpstr[f_idx * 8 + f_declared] = 0; if is_str_dyn(p_dyn) { fpstr[f_idx * 8 + f_declared] = 1; } }
+            if f_declared < 8 { fpstr[f_idx * 8 + f_declared] = 0; if ty_ptr != 0 { fpstr[f_idx * 8 + f_declared] = 2; } if is_str_dyn(p_dyn) { fpstr[f_idx * 8 + f_declared] = 1; } }
             next();
             if tok_is("[") {
                 // T name[] : an address and a length (name__len) arrive together

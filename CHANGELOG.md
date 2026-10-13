@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.91
+* **A number stored in a pointer is an error** (it was accepted silently): `char^ p = 5;`, `p = 5;`, `return 5;` in a pointer function and `g(5)` for a `char^` parameter say `a number cannot be stored in a pointer (0 or null is fine; write (char^)n if the number is an address)`. Casts (`(char^)4096`), `0` and `null` are not affected. A number that is a variable (`char^ p = a;`) is still accepted: the compiler does not follow pointer types of expressions yet.
+* **A text passed to an `int` parameter is an error** (`g("hi")` with `void g(int n)`): the same message as for a variable.
+* Tests: `t328`..`t331`.
+
 ## 0.9.90
 * **A missing `)` or `]` at the end of a line is reported with all the others** (like the missing `;` of 0.9.87): `expected ')' at the end of line 9 (it is missing there)`; the parser goes on as if it was written, and the `;` that follows the same line is not reported a second time. Test `t327_fail_missing_paren_lines`.
 

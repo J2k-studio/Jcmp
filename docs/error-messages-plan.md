@@ -46,6 +46,9 @@ error: no main function found in 'file.jk'
 
 | 0.9.87 | Several missing `;` in one file are all shown (`N errors generated.`); `using ...` without `;` is an error |
 
+| 0.9.90 | A missing `)` or `]` at the end of a line is reported with the other errors |
+| 0.9.91 | A number (not 0 / 1) stored in a pointer (declaration, assignment, return, argument), and a text passed to an `int` parameter, are errors |
+
 ## Order of work
 
 1. Anything accepted silently (cases 1, 6, 8) - the language is meant to be safer than C.

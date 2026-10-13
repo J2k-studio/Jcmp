@@ -461,6 +461,12 @@ void no_text_for_int(int want) {
     die("a text cannot be stored in an int (declare the variable as char^ or String)");
 }
 
+// a number written in the program (not 0 and not 1) stored in a pointer is a mistake: 0 / null is fine, an address is written with a cast
+void no_num_for_ptr() {
+    if pass_no < 2 || ex_ty != 96 || ex_w == 9 { return; }
+    die("a number cannot be stored in a pointer (0 or null is fine; write (char^)n if the number is an address)");
+}
+
 // the operand in x0 must be a bool (or the literal 0/1)
 void need_bool() {
     if pass_no < 2 { return; }
@@ -1249,7 +1255,12 @@ int parse_args() {
                 rt_call("__Str__from");      // a text for a String parameter: a temporary String is made
                 str_temp();
             }
-            if pfi >= 0 && argno + pskip < fnpar[pfi] && argno + pskip < 8 { check_assign(fptid[pfi * 8 + argno + pskip]); }
+            if pfi >= 0 && argno + pskip < fnpar[pfi] && argno + pskip < 8 {
+                int pidx = pfi * 8 + argno + pskip;
+                if fpstr[pidx] == 2 { no_num_for_ptr(); }
+                if fpstr[pidx] == 0 && fptid[pidx] == 0 && farr[pfi] == 0 { no_text_for_int(0); }
+                check_assign(fptid[pidx]);
+            }
             if psig >= 0 && argno < sig_n[psig] { check_assign(sig_p[psig * 16 + argno]); }
             if pfi >= 0 && argno + pskip < 8 && fptid[pfi * 8 + argno + pskip] >= 100 && ex_ty >= 100 && struct_has_free(ex_ty - 100) {
                 // a value that frees itself is moved into the call: a fresh value goes as it is, a local variable is
