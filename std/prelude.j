@@ -182,22 +182,39 @@ struct Mem {
         return (void^)(blk + 16);
     }
     // a block of `need` bytes (more than 2048) from the list of big blocks, or from the chunk
+    // a block of 256 KB or more: pages of its own, returned to the system when it is freed (null: the old way is used)
+    static void^ alloc_direct(int need) {
+        int len = (need + 4095) / 4096 * 4096;
+        int mb = syscall(222, 0, len, 3, 34, -1, 0);
+        if mb < 0 && mb > -4096 { return null; }
+        int^ mh = (int^)mb;
+        mh[0] = len;
+        mh[1] = 0;
+        int di = 0;
+        while std_direct[di] != 0 { di += 1; }
+        std_direct[di] = mb;
+        std_direct_n += 1;
+        std_alloc_n += 1;
+        return (void^)(mb + 16);
+    }
+    // the block blk (size bytes with its header) is one of those? then it goes back to the system
+    static bool free_direct(int blk, int size) {
+        int dj = 0;
+        while dj < 64 {
+            if std_direct[dj] == blk {
+                std_direct[dj] = 0;
+                std_direct_n -= 1;
+                syscall(215, blk, size);
+                return true;
+            }
+            dj += 1;
+        }
+        return false;
+    }
     static void^ alloc_big(int need) {
         if need >= 262144 && std_direct_n < 64 {
-            // a big block: pages of its own, returned to the system when it is freed
-            int len = (need + 4095) / 4096 * 4096;
-            int mb = syscall(222, 0, len, 3, 34, -1, 0);
-            if !(mb < 0 && mb > -4096) {
-                int^ mh = (int^)mb;
-                mh[0] = len;
-                mh[1] = 0;
-                int di = 0;
-                while std_direct[di] != 0 { di += 1; }
-                std_direct[di] = mb;
-                std_direct_n += 1;
-                std_alloc_n += 1;
-                return (void^)(mb + 16);
-            }
+            void^ dr = Mem::alloc_direct(need);
+            if (int)dr != 0 { return dr; }
         }
         int prev = 0;
         int cur = std_free_list;
@@ -268,16 +285,7 @@ struct Mem {
         }
         std_free_n += 1;
         if size >= 262144 && std_direct_n > 0 {
-            int dj = 0;
-            while dj < 64 {
-                if std_direct[dj] == blk {
-                    std_direct[dj] = 0;
-                    std_direct_n -= 1;
-                    syscall(215, blk, size);
-                    return;
-                }
-                dj += 1;
-            }
+            if Mem::free_direct(blk, size) { return; }
         }
         if size <= 2048 {
             int c = std_cls_exact[size >> 4];

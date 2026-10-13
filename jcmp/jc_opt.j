@@ -1475,7 +1475,7 @@ void vn_block(int b, int cont) {
                             if V >= 0 {
                                 vn_enter(V);
                                 vn_def[V] = i;
-                                vn_heavy[V] = 1;          // read again from a cell that the first load writes (the register pass keeps the cell in a register)
+                                vn_heavy[V] = 2;          // read again from a cell that the first load writes (the register pass keeps the cell in a register)
                             }
                         }
                     }
@@ -1551,7 +1551,7 @@ void vn_block(int b, int cont) {
                     ir_k[i] = 0;
                     vn_changes += 1;
                     done = true;
-                } else if op != IR_CONST && (op != IR_LOAD || memload) && vn_heavy[V] == 1 && vn_def[V] >= 0 && vn_def[V] != i && ir_op[vn_def[V]] == op {
+                } else if op != IR_CONST && (op != IR_LOAD || memload) && vn_heavy[V] >= 1 && vn_def[V] >= 0 && vn_def[V] != i && ir_op[vn_def[V]] == op {
                     // the value was made earlier and no register holds it now: it is read from a cell that the first computation wrote
                     if vn_cell[V] == 0 {
                         vn_q += 8;

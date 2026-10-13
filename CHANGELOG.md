@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.99
+* **Constants out of loops is on by default** (`-irlicm` was a hidden switch; `-irclr 1` turns it off): a number that is made in every turn of a loop (`mov x4, 5270498306774157605` for `% 7`) is made once before it when a register is free. 600 random programs and the whole suite were run with it before the change. hashmap -8 %, strings -6 %, sha256 -15 %.
+* **Fixed (found by the benchmark `alloc`, 20 % slower since 0.9.97):** the values that the load CSE of 0.9.97 keeps in a cell made everything computed from them "heavy", so the register pass saw extra stores and loads in `Mem::free_raw` (index arithmetic of the size classes). The loaded value is a cell of its own now and the mark is not passed on. `alloc` is back at 125 ms.
+* The blocks of 256 KB and more use two small functions (`alloc_direct`, `free_direct`) so that the hot path of `alloc` / `free` is as short as before 0.9.95.
+* New baseline of `tools/bench/perf_check.sh` (with the three new benchmarks).
+
 ## 0.9.98
 * **An array index is one instruction less:** `lsl x0, x8, #3` + `add x0, x28, x0` becomes `add x0, x28, x8, lsl #3` (a register pass rule; the register that gets the value is the same). The assembler (the built-in one and `j2k_asm`) reads `add / sub xD, xN, xM, lsl|lsr|asr #n` (checked against llvm-mc: 112 lines, 0 differences).
 * Tests: the suite (358), 550 random programs.

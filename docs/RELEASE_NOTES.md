@@ -1,6 +1,8 @@
-# J2K / Jcmp 0.9.98
+# J2K / Jcmp 0.9.99
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
+
+**0.9.99:** constants are made once before a loop (on by default); a slowdown of `Mem::alloc` / `free` found by the benchmarks is fixed.
 
 **0.9.98:** `add xD, xN, xM, lsl #n` (shifted register operand): an array index costs one instruction less.
 
