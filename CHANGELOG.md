@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.92
+* **`import` without `#` is an error** (it was a warning): `import must be written with a # at the start` with the help `write  #import <stdlib>  or  #import "file"`. The tests, examples and sources of the repository are changed. Test `t332_fail_import_without_hash`.
+* `bootstrap.sh` gives the frozen seed compiler a copy of each test with the old spelling (`import`), so the comparison of the two compilers goes on.
+
 ## 0.9.91
 * **A number stored in a pointer is an error** (it was accepted silently): `char^ p = 5;`, `p = 5;`, `return 5;` in a pointer function and `g(5)` for a `char^` parameter say `a number cannot be stored in a pointer (0 or null is fine; write (char^)n if the number is an address)`. Casts (`(char^)4096`), `0` and `null` are not affected. A number that is a variable (`char^ p = a;`) is still accepted: the compiler does not follow pointer types of expressions yet.
 * **A text passed to an `int` parameter is an error** (`g("hi")` with `void g(int n)`): the same message as for a variable.

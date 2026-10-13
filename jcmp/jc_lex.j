@@ -769,9 +769,8 @@ void import_library(char^ name, char^ rel) {
 //   import <stdlib>   a library       import "file"   a file next to this one (or in the -I folder)
 void lex_import() {
     next();
-    if import_hash == 0 && import_bare_warned == 0 {
-        import_bare_warned = 1;
-        warn("write #import (with the #): #import <stdlib>, #import \"file\"", "import");
+    if import_hash == 0 {
+        die_help("import must be written with a # at the start", "write  #import <stdlib>  or  #import \"file\"");
     }
     if tok_is("<") {
         next();

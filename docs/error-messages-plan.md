@@ -38,7 +38,7 @@ error: no main function found in 'file.jk'
 | 2 | `int[3] a;` (C++/Java style array) | DONE in 0.9.84 | `help: write  int a[3];` |
 | 3 | `import <name>` for a library that does not exist | DONE in 0.9.84 | `did you mean 'stdlib'?` (only the built-in names; libraries found on the search path are not listed yet) |
 | 4 | unknown name | DONE in 0.9.84 | `did you mean 'x'?` (locals, globals, functions; 1 edit, 2 for 5+ letters) |
-| 5 | `import` written without `#` | warning `write #import` | ok, keep (will become an error) |
+| 5 | `import` written without `#` | DONE in 0.9.92: error with help | |
 | 6 | return type mismatch (both types in the message) | to be probed | message with both types (missing return: DONE) |
 | 7 | use after move / ownership | to be probed | show where the value was moved |
 | 8 | index out of range of a constant index (`a[5]` on `a[3]`) | DONE in 0.9.84 | (a constant folded index such as `a[2+3]` or a `-1` is not checked yet) |
