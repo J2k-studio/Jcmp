@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.89
+* **The raw mode `#!library`** (owner's marker, `docs/syntax-design.md` 66.5): a file with this line gets nothing added - no start code, no helpers, no runtime, no `main` needed; the first instruction of the first function is the entry and every function of the file is written. A system call program is 188 bytes. An unknown `#!name` is an error.
+* Tests: `t325_bare_library`, `t326_fail_unknown_marker`.
+
 ## 0.9.88
 * **Leaf functions without a frame:** a function that makes no call and keeps all its variables in caller-saved registers has no prologue and no epilogue any more (no `sub sp`, no save of `x29` / `x30`): `int sq(int a, int b)` is four instructions and `ret`.
 * **More variables in registers in a leaf function:** the caller-saved registers cost nothing there, so a variable that is used twice (one store, one load) takes one too (before: only the ones used three times or more).

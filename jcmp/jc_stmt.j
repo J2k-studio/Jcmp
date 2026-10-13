@@ -2427,6 +2427,7 @@ void parse_function() {
         str_copy(@fname + fcount * 64, @d_fname, 64);
         farr[fcount] = 0;
         fvoid[fcount] = 0;
+        fbuiltin[fcount] = lvl_lib[lx_depth];
         if ty_void == 1 && ty_ptr == 0 { fvoid[fcount] = 1; }
         fself[fcount] = 0;
         fnpar[fcount] = 0;

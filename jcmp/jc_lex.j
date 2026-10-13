@@ -929,6 +929,23 @@ void next() {
             adv();
         }
         dw[dn] = 0;
+        if dn == 0 && lc(0) == '!' {
+            // #!library : a marker of the whole file (the raw mode); the rest of the line is ignored
+            adv();
+            char mk[16];
+            int mn = 0;
+            while is_letter(lc(0)) && mn < 15 {
+                mk[mn] = lc(0);
+                mn += 1;
+                adv();
+            }
+            mk[mn] = 0;
+            if !str_eq(@mk, "library") { die("unknown marker after '#!' (the known one is  #!library )"); }
+            bare_mode = 1;
+            while lc(0) != 10 && lc(0) != 0 { adv(); }
+            next();
+            return;
+        }
         if str_eq(@dw, "import") {
             // #import <lib> / #import "file" : the token is the word import, written with its #
             tok_kind = T_IDENT;

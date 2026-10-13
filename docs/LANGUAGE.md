@@ -914,3 +914,19 @@ Collections: `List<T>` (`push pop len ...`), `Map<K, V>` (`put get try_get remov
 (by the codes of the bytes); `s.count()` counts characters, `s.chars()` gives them one by one, `upper()` and `lower()` know Latin, Greek and Cyrillic.
 
 A loop over a range takes numbers or variables: `for i in 0..n`, `for i in lo..hi`, `for i in lo + 1..hi + 1`.
+
+
+## The raw mode: `#!library`
+
+A file that has the line `#!library` is a raw file (owner's marker, `docs/syntax-design.md` 66): the compiler adds nothing - no start code, no helpers, no runtime, no `main`. The first instruction of the first function is the entry of the program; every function is written. Use `naked` functions and the low level statements (see above); `exit` is a system call you write yourself:
+
+```
+#!library
+naked void start() {
+    Reg::x0 = 7;
+    Reg::x8 = 93;
+    svc(0);
+}
+```
+
+The program is 12 bytes of code after the 176 bytes of the ELF header. An unknown marker (`#!banana`) is an error.

@@ -1835,3 +1835,9 @@ Notes for all of them: the compiler cannot know what a raw word does to register
 
 ### 66.4 The assistant's view
 The marker is a good idea: it makes level 0 explicit, costs one line, and lets the rest of the compiler stay silent (no prelude, no helpers, no runtime). `#!bare` (A) is the easiest to read and to implement, and does not take the meaning of `#import`. Raw bytes as a statement `raw` (B) next to the existing instruction lines is enough; A and C can be sugar later. Questions: (1) marker A, B or C? (2) one name or two (`#!bare`, `#!freestanding`)? (3) raw bytes: A, B or C? (4) in bare mode is the ELF entry the first instruction or `_start`?
+
+### 66.5 Owner's answer (2026-10-13) and what was done (0.9.89)
+
+The owner: "`#!library`" (spelled right from `#!libary`), "used for the raw mode, and `#pragma` for forbidding changes of data".
+* **`#!library` is the marker of the raw mode** (taken from option A of 66.2, with the name the owner chose instead of `#!bare`). Done in 0.9.89: a file whose first lines contain `#!library` gets no start code, no helpers, no runtime and no `main` is needed; the first instruction of the first function is the entry (the file is the program, plus the 176 bytes of the ELF header). Every function of the file is written (none is left out as unused); built-in libraries are not loaded unless imported.
+* **Open (nothing decided):** the form of raw bytes (66.3 A / B / C) and `#pragma ...` "for forbidding changes of data": what it applies to (a variable, a block, a file; a read-only data section?), its name (`#pragma const`, `#pragma readonly`, ...), and what is an error (a store to it at compile time, or a fault at run time through a page that is not writable). Proposed next step: write the options in a section here before any code.

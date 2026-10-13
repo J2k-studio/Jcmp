@@ -212,6 +212,7 @@ int used_noret;              // 1 if a function can end without a return: the 'm
 int used_divz;               // 1 if a division was emitted: the 'division by zero' routine is added
 int used_oob;                // 1 if a bounds check was emitted: the error routine is added
 int pass_no;                 // 1 = learn declarations, 2 = check and note calls, 3 = generate code
+int bare_mode;               // 1: the file starts with #!library: nothing is added, the file is the program (the first instruction is the entry)
 
 // ------------------------------------------------------------------- files
 

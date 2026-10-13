@@ -1,6 +1,8 @@
-# J2K / Jcmp 0.9.88
+# J2K / Jcmp 0.9.89
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
+
+**0.9.89:** the raw mode: a file that starts with `#!library` gets no start code, no runtime and needs no `main` (the file is the program).
 
 **0.9.88:** leaf functions have no frame (no prologue / epilogue) and keep more variables in registers.
 

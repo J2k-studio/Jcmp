@@ -517,6 +517,7 @@ int ginit_count;
 char fname[1048576];          // 2048 x 64
 int fnpar[16384];             // declared parameters (an array parameter counts once)
 int fvoid[16384];            // 1 if the function returns void
+int fbuiltin[16384];         // 1 if the function is written in a built-in library (prelude, std)
 int fpstr[131072];             // 1 for a parameter of type String (8 per function)
 int fretdyn[16384];             // the packed element type if the function returns a dynamic array
 int fretstr[16384];             // 1 if the function returns a String
@@ -1536,6 +1537,14 @@ void compute_reach() {
     }
     int m = find_func("main");
     if m >= 0 { freach[m] = 1; }
+    if bare_mode == 1 {
+        // a raw file is the program: every function of it is written (there may be no main)
+        k = 0;
+        while k < fcount {
+            if fbuiltin[k] == 0 { freach[k] = 1; }
+            k += 1;
+        }
+    }
     bool changed = true;
     while changed {
         changed = false;
