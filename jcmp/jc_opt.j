@@ -470,7 +470,52 @@ void op_record(int i) {
     }
 }
 
+
 // liveness of the machine registers over the blocks, then the webs; returns the number of webs of the function
+// the live-in and live-out registers of the blocks only (op_li, op_lo), without the webs
+int lv_use[IR_MAXB];
+void op_liveness() {
+    op_graph();
+    int b = 0;
+    while b < ir_nb {
+        int u = 0;
+        int d = 0;
+        int i = ir_bs[b];
+        while i < ir_be[b] {
+            u = u | (op_uses(i) & ~d);
+            d = d | op_defs(i);
+            i += 1;
+        }
+        lv_use[b] = u;
+        ldef[b] = d;
+        op_li[b] = u;
+        op_lo[b] = 0;
+        b += 1;
+    }
+    bool changed = true;
+    while changed {
+        changed = false;
+        int ri = op_nrpo - 1;
+        while ri >= 0 {
+            int blk = op_rpo[ri];
+            int out = 0;
+            int k = 0;
+            while k < 2 {
+                int s = op_succ(blk, k);
+                if s >= 0 { out = out | op_li[s]; }
+                k += 1;
+            }
+            int nin = lv_use[blk] | (out & ~ldef[blk]);
+            if nin != op_li[blk] || out != op_lo[blk] {
+                op_li[blk] = nin;
+                op_lo[blk] = out;
+                changed = true;
+            }
+            ri -= 1;
+        }
+    }
+}
+
 int op_webs() {
     op_graph();
     // use / def of each block
@@ -2555,6 +2600,518 @@ void op_inline(char^ self) {
     }
 }
 
+
+// ---------------------------------------------------------------------------------------------- expressions out of loops
+// An instruction that writes a register of a variable (written once in the loop, not live at the entrance of the loop) and whose value
+// comes from instructions that are pure and from registers that the loop does not write is made once, in a block in front of the loop:
+// the address of b[i] in the loop over j is the same in every turn. The chain of scratch registers that leads to it (x0, x1, ...) moves
+// with it and gets registers of its own (temporaries). A chain whose scratch values are read by anything else stays.
+int lc_D[64];                   // how many instructions of the loop write the register (a call writes all the registers it clobbers)
+int lc_in[IR_MAXB];
+int lc_taken[IR_MAXI];
+int lc_mem[64];                 // the instructions of the slice being built
+int lc_nm;
+int lc_hl[2048];                // the instructions to move in order, the slices one after the other; -1 ends a slice
+int lc_nh;
+int lc_from[64];
+int lc_to[64];
+int lc_nmap;
+int lc_keep;                    // the instruction that makes the value the root store writes and that something else in the loop reads too: it becomes a load of the cell
+int lc_kl[256];
+int lc_kk[256];
+int lc_nkl;
+int lc_live;                    // the registers live at the entrance of the loop (the moved code may not write them)
+int lc_moved;                   // how many instructions were moved (for the statistics)
+int lc_nst[16384];              // the stores to each plain frame slot (index offset / 8) and stack cell (8192 + (-offset) / 8) in the loop
+int lc_ldo[16384];              // 1: a load of the slot outside the loop
+int lc_rootb;                   // the block and the index of the store that is the root (for the check of the loads)
+int lc_rooti;
+int lc_rootslot;
+
+// a load of a plain 8-byte frame slot that the loop never writes
+bool lc_inv_load(int m) {
+    if ir_op[m] != IR_LOAD || ir_a[m] != 30 || ir_w[m] != 8 { return false; }
+    int k = ir_k[m];
+    if k % 8 != 0 { return false; }
+    if k < 0 { return (0 - k) / 8 < 8192 && lc_nst[8192 + (0 - k) / 8] == 0; }
+    if k / 8 >= 8192 { return false; }
+    return op_plain[k / 8] == 1 && lc_nst[k / 8] == 0;
+}
+
+// the index of a frame slot or a stack cell (-1: not a whole slot)
+int lc_ci(int k) {
+    if k % 8 != 0 { return 0 - 1; }
+    if k >= 0 {
+        if k / 8 < 8192 { return k / 8; }
+        return 0 - 1;
+    }
+    if (0 - k) / 8 < 8192 { return 8192 + (0 - k) / 8; }
+    return 0 - 1;
+}
+
+bool lc_pure(int op) {
+    if op == IR_CONST || op == IR_COPY { return true; }
+    if op >= IR_ADD && op <= IR_MULHS && op != IR_SDIV && op != IR_UDIV { return true; }
+    if op == IR_NEG || op == IR_NOT || op == IR_EXT { return true; }
+    if op >= IR_FADD && op <= IR_FFLOOR { return true; }
+    if op == IR_I2F || op == IR_FCONST || op == IR_BITS2F || op == IR_F2BITS { return true; }
+    return false;
+}
+
+// the registers an instruction reads: a (when it is a register) and b (when it is a register): -1 for none
+int lc_src(int i, int which) {
+    int op = ir_op[i];
+    if op == IR_CONST || op == IR_FCONST { return 0 - 1; }
+    if which == 0 {
+        if ir_a[i] > 0 { return ir_a[i]; }
+        return 0 - 1;
+    }
+    if ir_uses_b(op) && ir_bi[i] == 0 && ir_b[i] > 0 { return ir_b[i]; }
+    return 0 - 1;
+}
+
+bool lc_in_slice(int m) {
+    int q = 0;
+    while q < lc_nm {
+        if lc_mem[q] == m { return true; }
+        q += 1;
+    }
+    return false;
+}
+
+// the slice that makes the value of instruction root (in block b); true when it can move
+bool lc_slice(int b, int root) {
+    lc_nm = 1;
+    lc_mem[0] = root;
+    int qi = 0;
+    while qi < lc_nm {
+        int k = lc_mem[qi];
+        int w = 0;
+        while w < 2 {
+            int r = lc_src(k, w);
+            if r >= 1 {
+                int m = 0 - 1;
+                int j = k - 1;
+                while j >= ir_bs[b] && m < 0 {
+                    if ir_op[j] != IR_NOP && ir_d[j] == r { m = j; }
+                    else if ir_op[j] == IR_CALL || ir_op[j] == IR_CALLIND || ir_op[j] == IR_SYSCALL {
+                        if r < 64 && (op_clobber() & (1 << r)) != 0 { return false; }
+                    }
+                    j -= 1;
+                }
+                if m >= 0 {
+                    if lc_taken[m] != 0 || !(lc_pure(ir_op[m]) || lc_inv_load(m)) { return false; }
+                    if !lc_in_slice(m) {
+                        if lc_nm >= 14 { return false; }
+                        lc_mem[lc_nm] = m;
+                        lc_nm += 1;
+                    }
+                } else {
+                    // not made in this block before: it must be a register that the loop never writes
+                    if r >= 64 || lc_D[r] != 0 { return false; }
+                }
+            }
+            w += 1;
+        }
+        qi += 1;
+    }
+    // the member that makes the value of a root store: when something else reads it afterwards it stays in the loop as a load of the cell
+    lc_keep = 0 - 1;
+    if ir_op[root] == IR_STORE {
+        int best = 0 - 1;
+        int c = 1;
+        while c < lc_nm {
+            if ir_d[lc_mem[c]] == ir_b[root] && lc_mem[c] < root && lc_mem[c] > best { best = lc_mem[c]; }
+            c += 1;
+        }
+        lc_keep = best;
+    }
+    // the scratch registers of the slice are read by nothing outside it, and the entrance of the loop does not need their values
+    int a = 1;
+    while a < lc_nm {
+        int m2 = lc_mem[a];
+        int r2 = ir_d[m2];
+        if r2 >= 64 || r2 < 1 || (lc_live & (1 << r2)) != 0 { return false; }
+        if m2 == lc_keep { a += 1; continue; }
+        int j2 = m2 + 1;
+        bool redef = false;
+        while j2 < ir_be[b] && !redef {
+            if !lc_in_slice(j2) && ir_op[j2] != IR_NOP {
+                if lc_src(j2, 0) == r2 || lc_src(j2, 1) == r2 { return false; }
+                int opj = ir_op[j2];
+                if opj == IR_STORE && ir_b[j2] == r2 { return false; }
+                if opj == IR_CALL || opj == IR_CALLIND || opj == IR_SYSCALL {
+                    int g = 0;
+                    while g < ir_ac[j2] {
+                        if ir_args[ir_as[j2] + g] == r2 { return false; }
+                        g += 1;
+                    }
+                    if opj != IR_SYSCALL && r2 < 64 && (op_clobber() & (1 << r2)) != 0 { redef = true; }
+                }
+                if opj == IR_BR || opj == IR_FBR || opj == IR_RET {
+                    if ir_a[j2] == r2 || (ir_uses_b(opj) && ir_bi[j2] == 0 && ir_b[j2] == r2) { return false; }
+                }
+                if ir_d[j2] == r2 { redef = true; }
+            } else if lc_in_slice(j2) && ir_d[j2] == r2 && j2 != m2 {
+                redef = true;
+            }
+            j2 += 1;
+        }
+        if !redef && r2 < 64 && (op_lo[b] & (1 << r2)) != 0 { return false; }
+        a += 1;
+    }
+    return true;
+}
+
+// the instructions that were moved out of the loop (written into the new block at the end)
+int lc_bop[1024];
+int lc_bd[1024];
+int lc_ba[1024];
+int lc_bb[1024];
+int lc_bbi[1024];
+int lc_bk[1024];
+int lc_bw[1024];
+int lc_nb2;
+int lc_tl[16384];               // the cells and slots that the function touches (each once)
+int lc_ntl;
+int lc_tmark[16384];
+int lc_tstamp;
+int lc_tot[16384];              // the loads of each slot / cell in the whole function that do not follow a store of the cell in their own block (stack cells) or any load (slots)
+
+// the loads of the whole function (once, and again after a loop was changed)
+void lc_prep() {
+    int zi = 0;
+    while zi < lc_ntl {
+        lc_tot[lc_tl[zi]] = 0;
+        zi += 1;
+    }
+    lc_ntl = 0;
+    lc_tstamp += 1;
+    int b = 0;
+    while b < ir_nb {
+        if op_po[b] >= 0 {
+            int i3 = ir_bs[b];
+            int seen_st[40];
+            int nseen = 0;
+            while i3 < ir_be[b] {
+                if ir_a[i3] == 30 && ir_op[i3] != IR_NOP && lc_ci(ir_k[i3]) >= 0 {
+                    int ws = lc_ci(ir_k[i3]);
+                    if lc_tmark[ws] != lc_tstamp {
+                        lc_tmark[ws] = lc_tstamp;
+                        lc_tl[lc_ntl] = ws;
+                        lc_ntl += 1;
+                        lc_tot[ws] = 0;
+                    }
+                    if ir_op[i3] == IR_STORE && nseen < 40 { seen_st[nseen] = ws; nseen += 1; }
+                    if ir_op[i3] == IR_LOAD {
+                        bool own = false;
+                        if ir_k[i3] < 0 {
+                            int sq = 0;
+                            while sq < nseen { if seen_st[sq] == ws { own = true; } sq += 1; }
+                        }
+                        if !own { lc_tot[ws] += 1; }
+                    }
+                }
+                i3 += 1;
+            }
+        }
+        b += 1;
+    }
+}
+
+// the numbers of the loop: how often registers and cells are written there (only the blocks of the loop are looked at)
+void lc_count(int h) {
+    int r = 0;
+    while r < 64 {
+        lc_D[r] = 0;
+        r += 1;
+    }
+    int zz = 0;
+    while zz < lc_ntl {
+        int ti = lc_tl[zz];
+        lc_nst[ti] = 0;
+        lc_ldo[ti] = lc_tot[ti];
+        zz += 1;
+    }
+    int b = 0;
+    while b < ir_nb {
+        if lc_in[b] == 1 {
+            int i = ir_bs[b];
+            int seen_st[40];
+            int nseen = 0;
+            while i < ir_be[b] {
+                int op = ir_op[i];
+                if op != IR_NOP {
+                    int dm = op_defs(i);
+                    if op == IR_SYSCALL { dm = dm | op_clobber(); }
+                    int v = 1;
+                    while v < 64 {
+                        if (dm & (1 << v)) != 0 { lc_D[v] += 1; }
+                        v += 1;
+                    }
+                    if op == IR_CALL || op == IR_CALLIND || op == IR_SYSCALL {
+                        v = 1;
+                        while v < 64 {
+                            if (dm & (1 << v)) != 0 { lc_D[v] += 1; }
+                            v += 1;
+                        }
+                    }
+                    if ir_a[i] == 30 && lc_ci(ir_k[i]) >= 0 {
+                        int ws = lc_ci(ir_k[i]);
+                        if op == IR_STORE { lc_nst[ws] += 1; if nseen < 40 { seen_st[nseen] = ws; nseen += 1; } }
+                        if op == IR_LOAD {
+                            // the loads inside the loop are not "outside"
+                            bool own = false;
+                            if ir_k[i] < 0 {
+                                int sq = 0;
+                                while sq < nseen { if seen_st[sq] == ws { own = true; } sq += 1; }
+                            }
+                            if !own { lc_ldo[ws] -= 1; }
+                        }
+                    }
+                }
+                i += 1;
+            }
+        }
+        b += 1;
+    }
+}
+
+// is the store i2 (in block b) a root that can be moved? every load of its slot in the loop comes after it
+bool lc_store_ok(int b, int i2) {
+    if ir_op[i2] != IR_STORE || ir_a[i2] != 30 || ir_w[i2] != 8 || lc_taken[i2] != 0 { return false; }
+    int sk = lc_ci(ir_k[i2]);
+    if sk < 0 { return false; }
+    if !(ir_k[i2] < 0 || op_plain[sk] == 1) { return false; }
+    if lc_nst[sk] != 1 || lc_ldo[sk] != 0 || ir_b[i2] <= 0 || ir_bi[i2] != 0 { return false; }
+    int lb = 0;
+    while lb < ir_nb {
+        if lc_in[lb] == 1 {
+            int li = ir_bs[lb];
+            while li < ir_be[lb] {
+                if ir_op[li] == IR_LOAD && ir_a[li] == 30 && ir_k[li] == ir_k[i2] {
+                    if lb == b { if li < i2 { return false; } }
+                    else if !op_dom(b, lb) { return false; }
+                }
+                li += 1;
+            }
+        }
+        lb += 1;
+    }
+    return true;
+}
+
+// the loop with the header h: expressions out of it, one at a time (what a move leaves behind can be moved the next time).
+// Returns true when something was moved (the graph is made again).
+bool lc_loop(int h) {
+    // the blocks of the loop
+    int b = 0;
+    while b < ir_nb {
+        lc_in[b] = 0;
+        b += 1;
+    }
+    lc_in[h] = 1;
+    int sp = 0;
+    b = 0;
+    while b < ir_nb {
+        if op_po[b] >= 0 && b != h {
+            int k = 0;
+            while k < 2 {
+                if op_succ(b, k) == h && lc_in[b] == 0 && op_dom(h, b) {
+                    lc_in[b] = 1;
+                    op_stack[sp] = b;
+                    sp += 1;
+                }
+                k += 1;
+            }
+        }
+        b += 1;
+    }
+    while sp > 0 {
+        sp -= 1;
+        int x = op_stack[sp];
+        int e = op_phead[x];
+        while e >= 0 {
+            int p = e / 2;
+            if op_po[p] >= 0 && lc_in[p] == 0 {
+                lc_in[p] = 1;
+                op_stack[sp] = p;
+                sp += 1;
+            }
+            e = op_enext[e];
+        }
+    }
+    vn_hints();
+    lc_live = op_li[h];
+    lc_nb2 = 0;
+    lc_nkl = 0;
+    int attempts = 0;
+    bool found = true;
+    while found && attempts < 40 && lc_nb2 < 900 {
+        found = false;
+        attempts += 1;
+        lc_count(h);
+        b = 0;
+        while b < ir_nb && !found {
+            if lc_in[b] == 1 {
+                int i2 = ir_bs[b];
+                int e2 = ir_be[b];
+                while i2 < e2 && !found {
+                    int op2 = ir_op[i2];
+                    int d = ir_d[i2];
+                    bool cand = false;
+                    if op2 == IR_STORE { cand = lc_store_ok(b, i2); }
+                    else if op2 != IR_NOP && lc_taken[i2] == 0 && lc_pure(op2) && op2 != IR_CONST && d >= 1 && d <= 63 && lc_D[d] == 1 && (lc_live & (1 << d)) == 0 { cand = true; }
+                    if cand && lc_slice(b, i2) {
+                        // in the order of the instructions
+                        int a = 0;
+                        while a < lc_nm {
+                            int c = a + 1;
+                            while c < lc_nm {
+                                if lc_mem[c] < lc_mem[a] {
+                                    int t = lc_mem[a];
+                                    lc_mem[a] = lc_mem[c];
+                                    lc_mem[c] = t;
+                                }
+                                c += 1;
+                            }
+                            a += 1;
+                        }
+                        // the move: the copies go to the buffer, the originals go away (or become a load of the cell)
+                        a = 0;
+                        while a < lc_nm && lc_nb2 < 1000 {
+                            int m = lc_mem[a];
+                            lc_bop[lc_nb2] = ir_op[m];
+                            lc_bd[lc_nb2] = ir_d[m];
+                            lc_ba[lc_nb2] = ir_a[m];
+                            lc_bb[lc_nb2] = ir_b[m];
+                            lc_bbi[lc_nb2] = ir_bi[m];
+                            lc_bk[lc_nb2] = ir_k[m];
+                            lc_bw[lc_nb2] = ir_w[m];
+                            lc_nb2 += 1;
+                            if m == lc_keep {
+                                ir_op[m] = IR_LOAD;
+                                ir_a[m] = 30;
+                                ir_b[m] = 0;
+                                ir_bi[m] = 0;
+                                ir_k[m] = ir_k[i2];
+                                ir_w[m] = 8;
+                            } else {
+                                ir_op[m] = IR_NOP;
+                                ir_d[m] = 0;
+                                ir_a[m] = 0;
+                                ir_bi[m] = 1;
+                            }
+                            lc_moved += 1;
+                            a += 1;
+                        }
+                        found = true;
+                    }
+                    i2 += 1;
+                }
+            }
+            b += 1;
+        }
+    }
+    if lc_nb2 == 0 { return false; }
+    // the new block in front of the loop
+    int nb0 = ir_nb;
+    int pre = ir_new_block(0 - 1);
+    ir_set_block(pre);
+    int hi = 0;
+    while hi < lc_nb2 {
+        int ni = ir_add(lc_bop[hi], lc_bd[hi], lc_ba[hi], lc_bb[hi], lc_bbi[hi], lc_bk[hi]);
+        ir_w[ni] = lc_bw[hi];
+        hi += 1;
+    }
+    int jm = ir_add(IR_JMP, 0, 0, 0, 0, 0);
+    ir_t1[jm] = h;
+    // every jump to the header from outside the loop goes to the new block
+    b = 0;
+    while b < nb0 {
+        if lc_in[b] == 0 {
+            int t = ir_be[b] - 1;
+            int top = ir_op[t];
+            if (top == IR_JMP || top == IR_BR || top == IR_FBR) && ir_t1[t] == h { ir_t1[t] = pre; }
+            if (top == IR_BR || top == IR_FBR) && ir_t2[t] == h { ir_t2[t] = pre; }
+        }
+        b += 1;
+    }
+    return true;
+}
+
+// all the loops, the innermost first (a header is found by its back edge; a header that is deeper in the tree of dominators is inner)
+int lc_us;                      // the time of this pass (the microseconds, for -xtime)
+int lc_calls;
+void op_licm_exprs() {
+    int t0 = 0;
+    if x_time == 1 { t0 = tm_now(); lc_calls += 1; }
+    op_licm_run();
+    if x_time == 1 { lc_us += tm_now() - t0; }
+}
+
+void op_licm_run() {
+    op_graph();
+    int hs[64];
+    int hd[64];
+    int nh = 0;
+    int b = 0;
+    while b < ir_nb {
+        if op_po[b] >= 0 {
+            int k = 0;
+            while k < 2 {
+                int s = op_succ(b, k);
+                if s > 0 && op_dom(s, b) && nh < 60 {
+                    bool seen = false;
+                    int z = 0;
+                    while z < nh {
+                        if hs[z] == s { seen = true; }
+                        z += 1;
+                    }
+                    if !seen {
+                        int dep = 0;
+                        int x = s;
+                        while x > 0 && dep < 1000 {
+                            x = op_idom[x];
+                            dep += 1;
+                        }
+                        hs[nh] = s;
+                        hd[nh] = dep;
+                        nh += 1;
+                    }
+                }
+                k += 1;
+            }
+        }
+        b += 1;
+    }
+    if nh == 0 { return; }
+    // the deepest first
+    int i = 1;
+    while i < nh {
+        int th = hs[i];
+        int td = hd[i];
+        int j = i - 1;
+        while j >= 0 && hd[j] < td {
+            hs[j + 1] = hs[j];
+            hd[j + 1] = hd[j];
+            j -= 1;
+        }
+        hs[j + 1] = th;
+        hd[j + 1] = td;
+        i += 1;
+    }
+    op_liveness();
+    lc_prep();
+    i = 0;
+    while i < nh {
+        if lc_loop(hs[i]) {
+            op_liveness();
+            lc_prep();
+        }
+        i += 1;
+    }
+}
 
 // ---------------------------------------------------------------------------------------------- stores to stack cells that nobody reads
 int dc_read[16384];

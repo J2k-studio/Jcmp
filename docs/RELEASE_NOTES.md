@@ -1,6 +1,8 @@
-# J2K / Jcmp 0.9.101
+# J2K / Jcmp 0.9.102
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
+
+**0.9.102:** a value that does not change in a loop (the address of `b[i]` in the loop over `j`) is computed once before it.
 
 **0.9.101:** a register rule no longer treats the address of `blr xN` as unused; moves that nothing reads are removed.
 

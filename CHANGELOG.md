@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.102
+* **Expressions out of loops** (`op_licm_exprs` in `jcmp/jc_opt.j`): a value that is the same in every turn of a loop is computed once before it. The address of `b[i]` inside the loop over `j` (a multiplication and an addition per turn) is made in front of the loop and read from its cell in the turns: the chains that end in a store to a slot or a stack cell (the variables of the program live in cells at this stage and the register pass puts them into registers afterwards), or in a register that is written once in the loop. Only pure instructions (arithmetic, loads of cells that the loop never writes) are moved, so no read or write of memory changes its place; nothing is moved when its values are read by anything else that cannot be given the loaded value. Loops are done innermost first, so an invariant of the inner loop can leave the outer loop too.
+* n-body (the inner loop of `advance`): the address of `b[i]` is out of the loop; `matmul`, `mandel`, `qsort` and the others are unchanged in speed.
+* `-xtime` also tells how long the pass took and how many instructions it moved (compiling the compiler: 130 ms, 1,226 instructions). A hidden switch turns it off: `-irdbg 8388608`.
+* A first version moved the code of the whole function (the loop was found without the test that its header dominates the back edge): found by the suite at once (t285, t281, the fuzzer); a second one gave the moved temporaries the two scratch registers of the lowering and lost the value of one of them: a moved chain keeps the registers it had (none of them is live at the entrance of the loop).
+* Tests: the suite (361), 3,300 random programs (also `-noinl`, `-d`, `-irclr 1`), 1,050 garbage programs; `t338_licm_exprs`.
+
 ## 0.9.101
 * **Fixed a latent bug of the register pass rules:** the search "is this register needed afterwards" took `blr x9` (a call through x9) as a place where x9 is not read: the register of the address was found dead. The address of a call is read now.
 * A move into a register that nothing reads afterwards (`mov x25, x0` left by the register pass) is removed.

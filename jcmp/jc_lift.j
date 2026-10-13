@@ -1506,9 +1506,11 @@ void ir_run() {
                     int ci0 = ci_changes;
                     if (ir_opt & 8192) != 0 && is_count > 0 && opt_debug == 0 { op_inline(@ir_stat_fn); }
                     ir_passes_basic();
+                    int lc0 = lc_moved;
                     if (ir_opt & 1) != 0 { op_run(); }
+                    if (ir_opt & 8388608) == 0 { op_licm_exprs(); }
                     if (ir_opt & 2) != 0 { op_ra_run(); }
-                    if op_hoisted == h0 && op_ra_changes == c0 && (vn_cellhits == vh0 || (ir_opt & 64) != 0 || op_count() >= cnt0) && bt_changes == bt0 && ci_changes == ci0 && (ir_opt & 64) == 0 { op_changed = 0; }
+                    if op_hoisted == h0 && op_ra_changes == c0 && (vn_cellhits == vh0 || (ir_opt & 64) != 0 || op_count() >= cnt0) && bt_changes == bt0 && ci_changes == ci0 && lc_moved == lc0 && (ir_opt & 64) == 0 { op_changed = 0; }
                 }
                 if ir_mode == 3 || (ir_opt & 2097152) != 0 {
                     ir_print();
