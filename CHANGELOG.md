@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.96
+* **The assembler of the compiler is 7 times faster** (0.8 s -> 0.11 s for the compiler itself; the whole compile 4.3 s -> 3.6 s): the text is read once (before: twice), the labels are found through a hash table (before: a linear search through up to 32,768 names for every branch), and a branch to a label that is not defined yet is patched at the end. The bytes it writes are the same: 371 programs (tests, examples, benchmarks) were compared byte by byte with the release before.
+* `-xtime` (hidden): the time of each stage of the compiler on the error output. First step of `docs/design/10-structured-pipeline.md` (the plan to go from text to records).
+* Measured with it: reading the program 1.0 s, IR 1.5 s, register pass 1.0 s, rest 0.3 s: the next targets.
+
 ## 0.9.95
 * **Big blocks go back to the system:** a block of 256 KB or more from `Mem::alloc` has pages of its own (`mmap`) and `Mem::free` gives them back (`munmap`) at once; before, the memory stayed in the heap of the program for ever (a program that made 64 MB blocks 400 times ended with the resident size of the biggest, but the address space of the heap only grew). Smaller blocks are as before (chunks of 1 MB, size classes, free lists, joined neighbours). At most 64 such blocks live at a time; more use the old way. Test `t335_big_block`.
 * The compiler is a little faster: the live analysis of the register pass works out the jumps and the candidates of each line once (before: at every turn of the loop), and the kept functions of the inliner are found through a hash table. Measured where the time of the compiler goes (compiling jcmp itself, 4.3 s on the phone): reading and checking the program 0.95 s, IR passes 1.3 s, register pass 0.9 s, assembler 0.8 s; inlining itself is 20 ms.

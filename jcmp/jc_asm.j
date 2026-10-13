@@ -232,12 +232,7 @@ void as_expect_comma() {
 
 void as_put32(int w) {
     if as_pos >= 8388608 { as_fail(); }
-    if as_pass == 2 {
-        as_code[as_pos] = w & 255;
-        as_code[as_pos + 1] = (w >> 8) & 255;
-        as_code[as_pos + 2] = (w >> 16) & 255;
-        as_code[as_pos + 3] = (w >> 24) & 255;
-    }
+    as_patch32(as_pos, w);
     as_pos += 4;
 }
 
@@ -300,25 +295,108 @@ bool as_name_matches(int slot) {
     return true;
 }
 
-void as_add_label() {
+int as_lhash[65536];             // the labels by name: slot + 1 (open addressing)
+int as_fx_pos[131072];          // the references to labels that are not defined yet: where the word is, its kind, the label, the word, the place in the text
+int as_fx_kind[131072];
+int as_fx_slot[131072];
+int as_fx_base[131072];
+int as_fx_ci[131072];
+int as_fx_n;
+
+int as_name_hash() {
+    int h = 5381;
+    int i = 0;
+    while i < 64 && as_nbuf[i] != 0 {
+        h = (h * 33 + as_nbuf[i]) & 1073741823;
+        i += 1;
+    }
+    return h & 65535;
+}
+
+// the slot of the label whose name is in as_nbuf: made (not defined yet: address -1) when it is new
+int as_label_slot() {
+    int h = as_name_hash();
+    while as_lhash[h] != 0 {
+        int sl = as_lhash[h] - 1;
+        if as_name_matches(sl) { return sl; }
+        h = (h + 1) & 65535;
+    }
     if as_label_count >= 32768 { as_fail(); }
     int i = 0;
     while i < 64 {
         as_lnames[as_label_count * 64 + i] = as_nbuf[i];
         i += 1;
     }
-    as_laddr[as_label_count] = as_pos;
+    as_laddr[as_label_count] = 0 - 1;
+    as_lhash[h] = as_label_count + 1;
     as_label_count += 1;
+    return as_label_count - 1;
+}
+
+// the label in as_nbuf is defined here (the first definition counts)
+void as_add_label() {
+    int sl = as_label_slot();
+    if as_laddr[sl] < 0 { as_laddr[sl] = as_pos; }
+}
+
+// the bits of a reference: kind 1 = the 26 bits of b / bl, 2 = 19 bits at bit 5 (b.cond, cbz, cbnz), 3 = 14 bits at bit 5 (tbz, tbnz),
+// 4 = adr (a distance in bytes)
+int as_ref_bits(int kind, int delta) {
+    if kind == 1 { return (delta >> 2) & 0x3FFFFFF; }
+    if kind == 2 { return ((delta >> 2) & 0x7FFFF) << 5; }
+    if kind == 3 { return ((delta >> 2) & 0x3FFF) << 5; }
+    return ((delta & 3) << 29) | (((delta >> 2) & 0x7FFFF) << 5);
+}
+
+// an instruction that names the label in as_nbuf: written at once when the label is known, else a hole that is filled at the end
+void as_emit_ref(int base, int kind) {
+    int sl = as_label_slot();
+    if as_laddr[sl] >= 0 {
+        as_put32(base | as_ref_bits(kind, as_laddr[sl] - as_pos));
+        return;
+    }
+    if as_fx_n >= 131072 { as_fail(); }
+    as_fx_pos[as_fx_n] = as_pos;
+    as_fx_kind[as_fx_n] = kind;
+    as_fx_slot[as_fx_n] = sl;
+    as_fx_base[as_fx_n] = base;
+    as_fx_ci[as_fx_n] = as_ci;
+    as_fx_n += 1;
+    as_put32(base);
+}
+
+void as_patch32(int at, int w) {
+    as_code[at] = w & 255;
+    as_code[at + 1] = (w >> 8) & 255;
+    as_code[at + 2] = (w >> 16) & 255;
+    as_code[at + 3] = (w >> 24) & 255;
+}
+
+// the end of the single pass: every hole gets its distance
+void as_resolve() {
+    int f = 0;
+    while f < as_fx_n {
+        int sl = as_fx_slot[f];
+        if as_laddr[sl] < 0 {
+            as_ci = as_fx_ci[f];          // the message points at the line that named the label
+            as_fail();
+        }
+        int at = as_fx_pos[f];
+        if as_fx_kind[f] == 5 {
+            int v = as_laddr[sl] + 0x4000B0;
+            as_patch32(at, v & 4294967295);
+            as_patch32(at + 4, (v >> 32) & 4294967295);
+        } else {
+            as_patch32(at, as_fx_base[f] | as_ref_bits(as_fx_kind[f], as_laddr[sl] - at));
+        }
+        f += 1;
+    }
 }
 
 int as_find_label() {
-    int i = 0;
-    while i < as_label_count {
-        if as_name_matches(i) { return as_laddr[i]; }
-        i += 1;
-    }
-    as_fail();
-    return 0;
+    int sl = as_label_slot();
+    if as_laddr[sl] < 0 { as_fail(); }
+    return as_laddr[sl];
 }
 
 // is there "name:" at the cursor?
@@ -659,17 +737,12 @@ void as_h_branch() {
     }
     as_skip_spaces();
     as_read_label_name();
-    if as_pass == 1 {
-        as_put32(0);
-        return;
-    }
-    int delta = (as_find_label() - as_pos) >> 2;
     if is_bl == 1 {
-        as_put32(0x94000000 | (delta & 0x3FFFFFF));
+        as_emit_ref(0x94000000, 1);
     } else if cond == 14 {
-        as_put32(0x14000000 | (delta & 0x3FFFFFF));
+        as_emit_ref(0x14000000, 1);
     } else {
-        as_put32(0x54000000 | ((delta & 0x7FFFF) << 5) | cond);
+        as_emit_ref(0x54000000 | cond, 2);
     }
 }
 
@@ -861,12 +934,7 @@ void as_h_adr() {
     int rd = as_parse_reg();
     as_expect_comma();
     as_read_label_name();
-    if as_pass == 1 {
-        as_put32(0);
-        return;
-    }
-    int delta = as_find_label() - as_pos;
-    as_put32(0x10000000 | ((delta & 3) << 29) | (((delta >> 2) & 0x7FFFF) << 5) | rd);
+    as_emit_ref(0x10000000 | rd, 4);
 }
 
 // blr xN : call the function whose address is in a register
@@ -955,9 +1023,7 @@ void as_h_cbz(int base) {
     as_expect_comma();
     as_skip_spaces();
     as_read_label_name();
-    if as_pass == 1 { as_put32(0); return; }
-    int delta = (as_find_label() - as_pos) >> 2;
-    as_put32(base | ((delta & 0x7FFFF) << 5) | rt);
+    as_emit_ref(base | rt, 2);
 }
 
 // tbz / tbnz xN, #bit, label
@@ -972,9 +1038,7 @@ void as_h_tbz(int base) {
     as_expect_comma();
     as_skip_spaces();
     as_read_label_name();
-    if as_pass == 1 { as_put32(0); return; }
-    int delta = (as_find_label() - as_pos) >> 2;
-    as_put32(base | ((bit >> 5) << 31) | ((bit & 31) << 19) | ((delta & 0x3FFF) << 5) | rt);
+    as_emit_ref(base | ((bit >> 5) << 31) | ((bit & 31) << 19) | rt, 3);
 }
 
 // br xN
@@ -1292,7 +1356,19 @@ void as_instruction() {
                 lo = as_parse_number();
             } else {
                 as_read_label_name();
-                if as_pass == 2 { lo = as_find_label() + 0x4000B0; }
+                int qsl = as_label_slot();
+                if as_laddr[qsl] >= 0 {
+                    lo = as_laddr[qsl] + 0x4000B0;
+                } else {
+                    // not defined yet: two words that are filled at the end
+                    if as_fx_n >= 131072 { as_fail(); }
+                    as_fx_pos[as_fx_n] = as_pos;
+                    as_fx_kind[as_fx_n] = 5;
+                    as_fx_slot[as_fx_n] = qsl;
+                    as_fx_base[as_fx_n] = 0;
+                    as_fx_ci[as_fx_n] = as_ci;
+                    as_fx_n += 1;
+                }
             }
             as_put32(lo & 4294967295);
             as_put32((lo >> 32) & 4294967295);
@@ -1426,7 +1502,7 @@ void as_run_pass() {
             if as_peek_is_label() {
                 as_read_label_name();
                 as_ci += 1;                 // ':'
-                if as_pass == 1 { as_add_label(); }
+                as_add_label();
                 as_skip_spaces();
                 if as_ci < as_src_len && as_src[as_ci] != 10 {
                     as_instruction();
@@ -1486,10 +1562,16 @@ void as_build_header() {
 // as_src[0 .. len) holds the .jasm text: assemble it (exits with a message on error)
 void as_assemble(int len) {
     as_src_len = len;
-    as_pass = 1;
-    as_run_pass();
     as_pass = 2;
+    as_label_count = 0;
+    as_fx_n = 0;
+    int z = 0;
+    while z < 65536 {
+        as_lhash[z] = 0;
+        z += 1;
+    }
     as_run_pass();
+    as_resolve();
     as_build_header();
 }
 

@@ -2,7 +2,7 @@
 // Build:  bin/jcmp jcmp/jcmp.jk -o jcmp1        (see bootstrap.sh)
 // Use:    jcmp1 input.jk -o program
 // the version of the compiler (also in the file VERSION; release.sh checks that they agree)
-#define JCMP_VERSION "0.9.95"
+#define JCMP_VERSION "0.9.96"
 
 #import "jc_base"
 #import "jc_asm"
@@ -49,6 +49,20 @@ void reset_state(char^ in_path) {
     used_thread = 0;
     lex_init(in_path);
     next();
+}
+
+// -xtime: the milliseconds since the last stage
+void tm_stage(char^ name) {
+    if x_time == 0 { return; }
+    int now = tm_now();
+    if tm_last != 0 {
+        write_err("  ");
+        write_err(name);
+        write_err(": ");
+        write_err_int((now - tm_last) / 1000);
+        write_err(" ms\n");
+    }
+    tm_last = now;
 }
 
 void usage() {
@@ -210,6 +224,8 @@ void main() {
             ir_mode = 3;
         } else if str_eq(a, "-noregs") {
             opt_regs = 0;
+        } else if str_eq(a, "-xtime") {
+            x_time = 1;                  // hidden: the time of each stage
         } else if str_eq(a, "-xbadasm") {
             x_badasm = 1;                // hidden: a line the assembler cannot read (tests the message of a compiler bug)
         } else if str_eq(a, "-nopeep") {
@@ -302,6 +318,7 @@ void main() {
     // pass 1 learns the functions, structs and enums (they may be used before they
     // are written); pass 2 checks everything and records which function calls which
     // (its code is thrown away); pass 3 makes the code, leaving out unused functions.
+    tm_stage("start");
     pass_no = 1;
     reset_state(in_path);
     parse_program();
@@ -309,6 +326,7 @@ void main() {
     pass_no = 2;
     reset_state(in_path);
     parse_program();
+    tm_stage("parse passes 1+2");
     if find_func("main") < 0 && bare_mode == 0 { die_no_main(in_path); }
     compute_reach();
     pass_no = 3;
@@ -331,14 +349,20 @@ void main() {
         if used_thread == 1 { emit_thread_helper(); }
         emit_start_stub();
     }
+    tm_stage("parse pass 3 (the code)");
     nr_run();
     if ir_mode > 0 && opt_peep == 1 && ir_pre == 1 { peep_run(); }
+    tm_stage("nr + first peephole");
     if ir_mode > 0 { ir_run(); }
+    tm_stage("ir");
     if opt_peep == 1 { peep_run(); }
+    tm_stage("peephole");
     regs_run();
+    tm_stage("register pass");
     if opt_peep == 1 && opt_regs != 0 { peep_run(); }
     if fr_on == 1 { fr_run(); }
     al_run();
+    tm_stage("peephole + alignment");
     if out_asm != null {
         if write_file(out_asm, @out_buf, out_len) != 0 {
             write_err("jcmp: cannot write the output file\n");
@@ -363,6 +387,7 @@ void main() {
         }
         as_embedded = 1;
         as_assemble(out_len);
+        tm_stage("assembler");
         as_write_elf(out_elf);
     }
     if warn_count > 0 {
