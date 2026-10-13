@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.103
+* **A value that does not change in a loop is made once also when nothing is stored in a variable:** `i * n` in `a[i * n + k]` inside the loop over `k` is computed before the loop, kept in a new stack cell (the register pass puts it into a register when it can) and read in the turns. Moved only when the chain has a multiplication or a division (integer or double) or three instructions.
+* Tests: the suite (361), 1,200 random programs.
+
 ## 0.9.102
 * **Expressions out of loops** (`op_licm_exprs` in `jcmp/jc_opt.j`): a value that is the same in every turn of a loop is computed once before it. The address of `b[i]` inside the loop over `j` (a multiplication and an addition per turn) is made in front of the loop and read from its cell in the turns: the chains that end in a store to a slot or a stack cell (the variables of the program live in cells at this stage and the register pass puts them into registers afterwards), or in a register that is written once in the loop. Only pure instructions (arithmetic, loads of cells that the loop never writes) are moved, so no read or write of memory changes its place; nothing is moved when its values are read by anything else that cannot be given the loaded value. Loops are done innermost first, so an invariant of the inner loop can leave the outer loop too.
 * n-body (the inner loop of `advance`): the address of `b[i]` is out of the loop; `matmul`, `mandel`, `qsort` and the others are unchanged in speed.

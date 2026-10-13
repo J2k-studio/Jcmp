@@ -1,6 +1,8 @@
-# J2K / Jcmp 0.9.102
+# J2K / Jcmp 0.9.103
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
+
+**0.9.103:** an invariant product or quotient in a loop (`i * n` in `a[i * n + k]`) is computed once before the loop.
 
 **0.9.102:** a value that does not change in a loop (the address of `b[i]` in the loop over `j`) is computed once before it.
 

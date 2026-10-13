@@ -2772,6 +2772,7 @@ int lc_bbi[1024];
 int lc_bk[1024];
 int lc_bw[1024];
 int lc_nb2;
+int lc_q;                       // the deepest stack cell used (a new cell is 8 deeper)
 int lc_tl[16384];               // the cells and slots that the function touches (each once)
 int lc_ntl;
 int lc_tmark[16384];
@@ -2877,6 +2878,17 @@ void lc_count(int h) {
     }
 }
 
+// is the slice in lc_mem worth a cell: a multiplication or a division in it, or three instructions
+bool lc_worth() {
+    int a = 0;
+    while a < lc_nm {
+        int op = ir_op[lc_mem[a]];
+        if op == IR_MUL || op == IR_MULHS || op == IR_FMUL || op == IR_FDIV || op == IR_FSQRT { return true; }
+        a += 1;
+    }
+    return lc_nm >= 3;
+}
+
 // is the store i2 (in block b) a root that can be moved? every load of its slot in the loop comes after it
 bool lc_store_ok(int b, int i2) {
     if ir_op[i2] != IR_STORE || ir_a[i2] != 30 || ir_w[i2] != 8 || lc_taken[i2] != 0 { return false; }
@@ -2962,7 +2974,11 @@ bool lc_loop(int h) {
                     bool cand = false;
                     if op2 == IR_STORE { cand = lc_store_ok(b, i2); }
                     else if op2 != IR_NOP && lc_taken[i2] == 0 && lc_pure(op2) && op2 != IR_CONST && d >= 1 && d <= 63 && lc_D[d] == 1 && (lc_live & (1 << d)) == 0 { cand = true; }
-                    if cand && lc_slice(b, i2) {
+                    bool value_root = false;
+                    if !cand && op2 != IR_NOP && op2 != IR_STORE && op2 != IR_CONST && op2 != IR_COPY && lc_pure(op2) && d >= 1 && d <= 63 && lc_D[d] >= 1 { value_root = true; }
+                    if value_root && !(lc_slice(b, i2) && lc_nm >= 2 && lc_worth()) { value_root = false; }
+                    if (cand || value_root) && (value_root || lc_slice(b, i2)) {
+                        if value_root { lc_keep = 0 - 1; }
                         // in the order of the instructions
                         int a = 0;
                         while a < lc_nm {
@@ -2978,6 +2994,12 @@ bool lc_loop(int h) {
                             a += 1;
                         }
                         // the move: the copies go to the buffer, the originals go away (or become a load of the cell)
+                        int vcell = 0;
+                        if value_root {
+                            // the value of the last instruction is kept in a new cell: written once before the loop, read where it was made
+                            lc_q += 8;
+                            vcell = 0 - lc_q;
+                        }
                         a = 0;
                         while a < lc_nm && lc_nb2 < 1000 {
                             int m = lc_mem[a];
@@ -2989,7 +3011,23 @@ bool lc_loop(int h) {
                             lc_bk[lc_nb2] = ir_k[m];
                             lc_bw[lc_nb2] = ir_w[m];
                             lc_nb2 += 1;
-                            if m == lc_keep {
+                            if value_root && m == i2 {
+                                // the store of the value in the new cell comes right after the instruction in the buffer
+                                lc_bop[lc_nb2] = IR_STORE;
+                                lc_bd[lc_nb2] = 0;
+                                lc_ba[lc_nb2] = 30;
+                                lc_bb[lc_nb2] = ir_d[m];
+                                lc_bbi[lc_nb2] = 0;
+                                lc_bk[lc_nb2] = vcell;
+                                lc_bw[lc_nb2] = 8;
+                                lc_nb2 += 1;
+                                ir_op[m] = IR_LOAD;
+                                ir_a[m] = 30;
+                                ir_b[m] = 0;
+                                ir_bi[m] = 0;
+                                ir_k[m] = vcell;
+                                ir_w[m] = 8;
+                            } else if m == lc_keep {
                                 ir_op[m] = IR_LOAD;
                                 ir_a[m] = 30;
                                 ir_b[m] = 0;
@@ -3101,6 +3139,7 @@ void op_licm_run() {
         hd[j + 1] = td;
         i += 1;
     }
+    lc_q = op_maxq();
     op_liveness();
     lc_prep();
     i = 0;
