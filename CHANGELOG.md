@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.94
+* **Constants: more of them become immediates.** The pass that follows known numbers now goes on from a block into the single block that follows it (the body of an inlined function is such a block: the arguments of the call are known inside it) and **folds an operation on two known numbers** (`32 - 6` is `26`). A shift by a known number is `lsl x0, x0, #26` (before: the number was made in a register first).
+* **`and` / `orr` / `eor` with a bitmask immediate**: `x & 4294967295`, `x & 255`, `x | 0x8000...` are one instruction (`and x0, x0, #4294967295`); the assembler encodes the bitmask immediates (checked against llvm-mc, 13 more lines in `test/asm_check_core.txt`, 0 differences).
+* New benchmarks (with C twins, the same results): `sha256`, `hashmap`, `strings` (J2K / clang -O2: 1.7x, 1.4x, 1.3x; sha256 was 2.0x before this release).
+* Tests: the suite (357), 300 random programs.
+
 ## 0.9.93
 * **`-d`: guard pages.** In a `-d` build every block of `Mem::alloc` (up to 12,000 live blocks) lives in pages of its own and ends exactly where a page that nobody may touch begins. A read or a write **one byte past the end of a block** is a fault at once (before: not found), and a block that was freed is made untouchable, so a **read or a write after free** is a fault at once (before: a read was not found; a write was found later, when the block left the quarantine). A second `free` of the same block says `free of a block that is not alive: freed twice`. The fault message of a `-d` build says what it can be: `null pointer, stack overflow, or a memory block used after free or past its end`, with the address and the place of the code.
 * The exit code of a write after free is 139 now (a fault; before 134 at the time the quarantine was checked): `t274` follows.

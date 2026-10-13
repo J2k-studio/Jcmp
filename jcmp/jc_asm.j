@@ -444,6 +444,69 @@ void as_h_rrrr(int base) {
     as_put32(base | (rm << 16) | (ra << 10) | (rn << 5) | rd);
 }
 
+// the "bitmask immediate" of and / orr / eor / ands: a run of ones, rotated, repeated in elements of 2 .. 64 bits.
+// returns N << 12 | immr << 6 | imms, or -1 when the number cannot be written that way
+int as_lsr(int v, int r) {
+    if r == 0 { return v; }
+    return (v >> r) & ((1 << (64 - r)) - 1);
+}
+
+int as_logic_imm(int v) {
+    if v == 0 || v == 0 - 1 { return 0 - 1; }
+    int size = 64;
+    while size > 2 {
+        int half = size / 2;
+        int hm = (1 << half) - 1;
+        if (as_lsr(v, half) & hm) != (v & hm) { break; }
+        size = half;
+    }
+    int emask = 0 - 1;
+    if size < 64 { emask = (1 << size) - 1; }
+    int e = v & emask;
+    int ones = 0;
+    int t = 0;
+    while t < size {
+        if (as_lsr(e, t) & 1) != 0 { ones += 1; }
+        t += 1;
+    }
+    if ones == 0 || ones == size { return 0 - 1; }
+    int run = (1 << ones) - 1;
+    int r = 0;
+    while r < size {
+        int rot = run;
+        if r > 0 { rot = (as_lsr(run, r) | (run << (size - r))) & emask; }
+        if rot == e {
+            int n = 0;
+            if size == 64 { n = 1; }
+            int prefix = ((0 - size) << 1) & 63;
+            if size == 64 { prefix = 0; }
+            return (n << 12) | (r << 6) | (prefix | (ones - 1));
+        }
+        r += 1;
+    }
+    return 0 - 1;
+}
+
+// and / orr / eor / ands with three registers, or with a bitmask immediate: and x0, x1, #255
+void as_h_logic(int regbase, int immbase) {
+    as_skip_spaces();
+    int rd = as_parse_reg();
+    as_expect_comma();
+    int rn = as_parse_reg();
+    as_expect_comma();
+    as_skip_spaces();
+    if as_cur() == 'x' {
+        int rm = as_parse_reg();
+        as_put32(regbase | (rm << 16) | (rn << 5) | rd);
+        return;
+    }
+    if as_cur() == '#' { as_ci += 1; }
+    int v = as_parse_signed();
+    int enc = as_logic_imm(v);
+    if enc < 0 { as_fail(); }
+    as_put32(immbase | (((enc >> 12) & 1) << 22) | (((enc >> 6) & 63) << 16) | ((enc & 63) << 10) | (rn << 5) | rd);
+}
+
 void as_h_rrr(int base) {
     as_skip_spaces();
     int rd = as_parse_reg();
@@ -1277,9 +1340,9 @@ void as_instruction() {
     if as_mn_is("mul") { as_h_rrr(0x9B007C00); return; }
     if as_mn_is("udiv") { as_h_rrr(0x9AC00800); return; }
     if as_mn_is("sdiv") { as_h_rrr(0x9AC00C00); return; }
-    if as_mn_is("and") { as_h_rrr(0x8A000000); return; }
-    if as_mn_is("orr") { as_h_rrr(0xAA000000); return; }
-    if as_mn_is("eor") { as_h_rrr(0xCA000000); return; }
+    if as_mn_is("and") { as_h_logic(0x8A000000, 0x92000000); return; }
+    if as_mn_is("orr") { as_h_logic(0xAA000000, 0xB2000000); return; }
+    if as_mn_is("eor") { as_h_logic(0xCA000000, 0xD2000000); return; }
     if as_mn_is("lsl") { as_h_shift(0x9AC02000, 0); return; }
     if as_mn_is("lsr") { as_h_shift(0x9AC02400, 1); return; }
     if as_mn_is("asr") { as_h_shift(0x9AC02800, 2); return; }

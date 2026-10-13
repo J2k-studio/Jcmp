@@ -962,9 +962,14 @@ int cp_flip(int cc) {
     return cc;
 }
 
-void op_prop_block(int b) {
-    cp_cur += 1;
-    cp_nact = 0;
+int cp_done[IR_MAXB];
+int cp_pc[IR_MAXB];
+
+void op_prop_block(int b, int cont) {
+    if cont == 0 {
+        cp_cur += 1;
+        cp_nact = 0;
+    }
     int i = ir_bs[b];
     while i < ir_be[b] {
         int op = ir_op[i];
@@ -987,6 +992,7 @@ void op_prop_block(int b) {
                     bool ok = false;
                     if op == IR_ADD || op == IR_SUB || op == IR_SETCC || op == IR_BR { ok = cp_small(k, 4095); }
                     if op == IR_SHL || op == IR_LSHR || op == IR_ASHR || op == IR_ROTR { ok = cp_small(k, 63); }
+                    if (op == IR_AND || op == IR_OR || op == IR_XOR) && as_logic_imm(k) >= 0 { ok = true; }
                     if ok {
                         ir_bi[i] = 1;
                         ir_b[i] = k;
@@ -1008,6 +1014,38 @@ void op_prop_block(int b) {
                         ir_k[i] = cp_flip(ir_k[i]);
                         op_clean_changes += 1;
                     }
+                }
+            }
+        }
+        // an operation on two known numbers is a number
+        if !fixed && op >= IR_ADD && op <= IR_ASHR && op != IR_SDIV && op != IR_UDIV && ir_d[i] != 0 && ir_vcls[ir_d[i]] == 0 && ir_a[i] != 0 && cp_get(ir_a[i]) == 1 && ir_vcls[ir_a[i]] == 0 {
+            bool haveb = false;
+            int kb = 0;
+            if ir_bi[i] == 1 { kb = ir_b[i]; haveb = true; }
+            else if cp_get(ir_b[i]) == 1 && ir_vcls[ir_b[i]] == 0 { kb = cp_val[ir_b[i]]; haveb = true; }
+            if haveb {
+                int ka = cp_val[ir_a[i]];
+                int r = 0;
+                bool okf = true;
+                if op == IR_ADD { r = ka + kb; }
+                else if op == IR_SUB { r = ka - kb; }
+                else if op == IR_MUL { r = ka * kb; }
+                else if op == IR_AND { r = ka & kb; }
+                else if op == IR_OR { r = ka | kb; }
+                else if op == IR_XOR { r = ka xor kb; }
+                else if op == IR_SHL && kb >= 0 && kb <= 63 { r = ka << kb; }
+                else if op == IR_ASHR && kb >= 0 && kb <= 63 { r = ka >> kb; }
+                else if op == IR_LSHR && kb >= 0 && kb <= 63 {
+                    r = ka;
+                    if kb > 0 { r = (ka >> kb) & ((1 << (64 - kb)) - 1); }
+                } else { okf = false; }
+                if okf {
+                    ir_op[i] = IR_CONST;
+                    ir_k[i] = r;
+                    ir_a[i] = 0;
+                    ir_bi[i] = 1;
+                    op = IR_CONST;
+                    op_clean_changes += 1;
                 }
             }
         }
@@ -1115,9 +1153,49 @@ void op_clean_run() {
     while round < 1 {
         op_graph();
         int b = 0;
-        while b < ir_nb {
-            if op_po[b] >= 0 { op_prop_block(b); }
+        int nb0 = ir_nb;
+        while b < nb0 {
+            cp_done[b] = 0;
+            cp_pc[b] = 0;
             b += 1;
+        }
+        b = 0;
+        while b < nb0 {
+            if op_po[b] >= 0 {
+                int k = 0;
+                while k < 2 {
+                    int sc = op_succ(b, k);
+                    if sc >= 0 && !(k == 1 && op_succ(b, 0) == sc) { cp_pc[sc] += 1; }
+                    k += 1;
+                }
+            }
+            b += 1;
+        }
+        // a block that only one block leads to goes on with what is known at the end of that block (the body of an inlined function
+        // follows the arguments this way)
+        int ri = 0;
+        while ri < op_nrpo {
+            int start = op_rpo[ri];
+            ri += 1;
+            if cp_done[start] == 0 && start < nb0 {
+                int cur = start;
+                int cont = 0;
+                while cur >= 0 {
+                    cp_done[cur] = 1;
+                    op_prop_block(cur, cont);
+                    int term = ir_be[cur] - 1;
+                    int nxt = 0 - 1;
+                    int tk = ir_op[term];
+                    int cand1 = 0 - 1;
+                    int cand2 = 0 - 1;
+                    if tk == IR_JMP { cand1 = ir_t1[term]; }
+                    if tk == IR_BR || tk == IR_FBR { cand1 = ir_t2[term]; cand2 = ir_t1[term]; }
+                    if cand1 >= 0 && cand1 < nb0 && cp_pc[cand1] == 1 && cp_done[cand1] == 0 && cand1 != cur { nxt = cand1; }
+                    else if cand2 >= 0 && cand2 < nb0 && cp_pc[cand2] == 1 && cp_done[cand2] == 0 && cand2 != cur && cand1 != cand2 { nxt = cand2; }
+                    cur = nxt;
+                    cont = 1;
+                }
+            }
         }
         op_webs();                 // liveness
         op_dce();
