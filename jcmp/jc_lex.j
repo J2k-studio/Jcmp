@@ -179,6 +179,19 @@ void die_name(char^ msg, char^ name) {
     syscall(93, 1);
 }
 
+// the program has no main function (a message about the whole file, so it has no line)
+void die_no_main(char^ path) {
+    msg_kind = 1;
+    set_color("[1m");
+    kind_color();
+    write_err("error:");
+    color_reset();
+    write_err(" no main function found in '");
+    write_err(path);
+    write_err("'\n  help: every program needs `void main()` or `int main()`\n");
+    syscall(93, 1);
+}
+
 // text += the decimal digits of v (v >= 0)
 void append_int(char^ dst, int v) {
     char tmp[24];
@@ -774,6 +787,7 @@ int read_escape() {
 }
 
 
+int tok_seq;                 // counts the tokens read (a literal followed by ']' is one step)
 int prev_tok_line;           // the line of the token before the current one
 int prev_end_line;           // where that token ended
 int prev_end_col;
@@ -782,6 +796,7 @@ int prev_end_ls;
 
 // the next token
 void next() {
+    tok_seq += 1;
     prev_tok_line = err_line;
     prev_end_line = cur_line;
     prev_end_col = cur_pos - cur_line_start + 1;

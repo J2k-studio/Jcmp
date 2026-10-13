@@ -454,6 +454,12 @@ void check_assign(int want) {
     }
 }
 
+// a text (char^) stored in an int is nearly always a mistake: say so (pointers and (int) casts are fine)
+void no_text_for_int(int want) {
+    if pass_no < 2 || want != 0 || ex_w != 9 { return; }
+    die("a text cannot be stored in an int (declare the variable as char^ or String)");
+}
+
 // the operand in x0 must be a bool (or the literal 0/1)
 void need_bool() {
     if pass_no < 2 { return; }
@@ -1025,6 +1031,30 @@ void check_index(int k, int nd, int cnt, int st1, int st2, int len_off, int len_
     emit_bounds(size);
 }
 
+// a literal index of a fixed array that is not below the size: an error at compile time
+void check_const_index(int lit, int lv, int k, int nd, int cnt, int st1, int st2, int len_off) {
+    if lit == 0 || len_off >= 0 || cnt <= 0 || pass_no < 2 { return; }
+    int size = cnt;
+    if nd == 2 && k == 0 { size = cnt / st1; }
+    if nd == 2 && k == 1 { size = st1; }
+    if nd == 3 && k == 0 { size = cnt / st1; }
+    if nd == 3 && k == 1 { size = st1 / st2; }
+    if nd == 3 && k == 2 { size = st2; }
+    if size <= 0 || lv < size { return; }
+    char m[200];
+    str_copy(@m, "index ", 200);
+    append_int(@m, lv);
+    append_text(@m, " is out of range: the array has ");
+    append_int(@m, size);
+    if size == 1 { append_text(@m, " element (the only index is 0)"); }
+    else {
+        append_text(@m, " elements (the indexes are 0..");
+        append_int(@m, size - 1);
+        append_text(@m, ")");
+    }
+    die(@m);
+}
+
 void parse_index_chain() {
     int nd = v_nd;
     int st1 = v_st1;
@@ -1035,8 +1065,14 @@ void parse_index_chain() {
     chk_cnt = 0;
     chk_len_off = 0 - 1;
     next();
+    int lit = 0;
+    int lv = 0;
+    int sq = tok_seq;
+    if tok_kind == T_NUM && tok_float == 0 { lit = 1; lv = tok_num; }
     parse_expr();
+    if tok_seq != sq + 1 { lit = 0; }
     expect("]");
+    check_const_index(lit, lv, 0, nd, cnt, st1, st2, len_off);
     check_index(0, nd, cnt, st1, st2, len_off, len_local);
     if nd > 1 {
         ins_n("mov x1, ", st1);
@@ -1044,8 +1080,13 @@ void parse_index_chain() {
         push_x0();
         if !tok_is("[") { die("this array needs more indexes"); }
         next();
+        lit = 0;
+        sq = tok_seq;
+        if tok_kind == T_NUM && tok_float == 0 { lit = 1; lv = tok_num; }
         parse_expr();
+        if tok_seq != sq + 1 { lit = 0; }
         expect("]");
+        check_const_index(lit, lv, 1, nd, cnt, st1, st2, len_off);
         check_index(1, nd, cnt, st1, st2, len_off, len_local);
         if nd == 3 {
             ins_n("mov x1, ", st2);
@@ -1057,8 +1098,13 @@ void parse_index_chain() {
             push_x0();
             if !tok_is("[") { die("this array needs more indexes"); }
             next();
+            lit = 0;
+            sq = tok_seq;
+            if tok_kind == T_NUM && tok_float == 0 { lit = 1; lv = tok_num; }
             parse_expr();
+            if tok_seq != sq + 1 { lit = 0; }
             expect("]");
+            check_const_index(lit, lv, 2, nd, cnt, st1, st2, len_off);
             check_index(2, nd, cnt, st1, st2, len_off, len_local);
             pop_x1();
             emit_line("add x0, x0, x1");
@@ -1130,6 +1176,32 @@ void parse_array_arg() {
     push_x0();
 }
 
+// a call with more or fewer arguments than the function declares: an error (the message says both numbers)
+void check_arg_count(int fi, int skip, int given) {
+    if fi < 0 || pass_no < 2 { return; }
+    int want = fnpar[fi] - skip;
+    if want < 0 || given == want { return; }
+    char m[300];
+    str_copy(@m, "'", 4);
+    int at = str_len(@m);
+    append_text(@m, @fname + fi * 64);
+    // a method is stored as Struct__name: write it as Struct::name
+    while m[at] != 0 {
+        if m[at] == '_' && m[at + 1] == '_' && at > 1 {
+            m[at] = ':';
+            m[at + 1] = ':';
+            at += 1;
+        }
+        at += 1;
+    }
+    append_text(@m, "' takes ");
+    append_int(@m, want);
+    if want == 1 { append_text(@m, " argument, but "); } else { append_text(@m, " arguments, but "); }
+    append_int(@m, given);
+    if given == 1 { append_text(@m, " was given"); } else { append_text(@m, " were given"); }
+    die(@m);
+}
+
 int parse_args() {
     int n = 0;
     int amask = arr_call_mask;
@@ -1142,6 +1214,7 @@ int parse_args() {
     call_skip = 0;
     int argno = 0;
     if tok_is(")") {
+        check_arg_count(pfi, pskip, 0);
         next();
         return 0;
     }
@@ -1187,6 +1260,7 @@ int parse_args() {
             break;
         }
     }
+    check_arg_count(pfi, pskip, argno);
     expect(")");
     return n;
 }
@@ -1923,6 +1997,7 @@ void lvalue_loop() {
             if lit_idx {
                 next();                                  // the number
                 lit_val = tok_num;
+                check_const_index(1, lit_val, 0, 1, chk_cnt, 0, 0, chk_len_off);
                 next();                                  // the ]
                 expect("]");
                 int lit_off = lit_val * size_of(s_code);

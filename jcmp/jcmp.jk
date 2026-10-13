@@ -2,7 +2,7 @@
 // Build:  bin/jcmp jcmp/jcmp.jk -o jcmp1        (see bootstrap.sh)
 // Use:    jcmp1 input.jk -o program
 // the version of the compiler (also in the file VERSION; release.sh checks that they agree)
-#define JCMP_VERSION "0.9.83"
+#define JCMP_VERSION "0.9.84"
 
 #import "jc_base"
 #import "jc_asm"
@@ -306,6 +306,7 @@ void main() {
     pass_no = 2;
     reset_state(in_path);
     parse_program();
+    if find_func("main") < 0 { die_no_main(in_path); }
     compute_reach();
     pass_no = 3;
     reset_state(in_path);

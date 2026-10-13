@@ -46,6 +46,7 @@ int cp_dst[8];
 int cp_size[8];
 int cp_sidx[8];
 int cp_count;
+int stmt_ends;               // 1 if the statement just parsed never falls through to the next one (or it is not known)
 int fn_returns;              // 1 once the function has a return with a value or a throw
 int fn_line;
 int fn_col;
@@ -506,6 +507,7 @@ void parse_assign_core(char^ target) {
         if rv_valid == 1 && op[0] == 0 && (a_ptr != 0 || a_kind == 3) { src_owner = own_find(rv_off); }      // only a pointer or an array handle can carry ownership
         if op[0] == 0 {
             check_assign(tgt_ty);
+            if a_ptr == 0 && a_kind != 3 { no_text_for_int(tgt_ty); }
         } else if !is_float(tgt_ty) {
             bin_type(tgt_ty, ex_ty);
         }
@@ -619,6 +621,7 @@ void parse_block() {
     own_ok = 1;
     int own_mark = own_count;
     expect("{");
+    stmt_ends = 0;
     while !tok_is("}") {
         if tok_kind == T_EOF { die("} expected"); }
         parse_statement();
@@ -645,9 +648,12 @@ void parse_condition(int lfalse) {
 void parse_if() {
     int lend = new_label();
     int lnext = new_label();
+    int all_end = 1;                     // every branch ends (return/throw)
     next();                              // "if"
     parse_condition(lnext);
     parse_block();
+    if stmt_ends == 0 { all_end = 0; }
+    int has_else = 0;
     while tok_is("else") {
         next();
         jump(lend);
@@ -657,20 +663,27 @@ void parse_if() {
             next();
             parse_condition(lnext);
             parse_block();
+            if stmt_ends == 0 { all_end = 0; }
         } else {
             lnext = 0;
             parse_block();
+            if stmt_ends == 0 { all_end = 0; }
+            has_else = 1;
             break;
         }
     }
     if lnext != 0 { place_label(lnext); }
     place_label(lend);
+    stmt_ends = 0;
+    if has_else == 1 && all_end == 1 { stmt_ends = 1; }
 }
 
 void parse_while() {
     int lstart = new_label();
     int lend = new_label();
     next();                              // "while"
+    int forever = 0;                     // while true: the end of the loop is not reached by falling through
+    if tok_is("true") || tok_is("1") { forever = 1; }
     place_label(lstart);
     parse_condition(lend);
     if loop_depth >= 63 { die("loops nested too deeply"); }
@@ -683,6 +696,7 @@ void parse_while() {
     loop_depth -= 1;
     jump(lstart);
     place_label(lend);
+    stmt_ends = forever;
 }
 
 // for TYPE name = e; cond; step { ... }      for name in a..b { ... }
@@ -2104,7 +2118,7 @@ void parse_local_decl_core() {
     if tok_is("=") {
         next();
         parse_expr();
-        if d_ptr == 0 { check_assign(d_tid); }
+        if d_ptr == 0 { check_assign(d_tid); no_text_for_int(d_tid); }
         int d_own = 0;
         if d_ptr != 0 && last_call_owning == 1 && own_ok == 1 { d_own = 1; }     // the variable owns what alloc gave
         expect(";");
@@ -2133,7 +2147,10 @@ void parse_statement() {
     int t0 = own_count;
     int saved_t0 = stmt_t0;
     stmt_t0 = t0;
+    int plain = 1;                       // anything but a block, if or while: "ends" is not known, so it counts as ending
+    if tok_is("{") || tok_is("if") || tok_is("while") { plain = 0; }
     parse_statement_inner();
+    if plain == 1 { stmt_ends = 1; }
     stmt_t0 = saved_t0;
     str_flush(t0, 0);
 }
@@ -2250,6 +2267,9 @@ void parse_statement_inner() {
             if cur_is_main == 1 { emit_line("mov x0, 0"); }
         } else {
             fn_returns = 1;
+            if cur_fidx >= 0 && fvoid[cur_fidx] == 1 && cur_is_main == 0 && pass_no >= 2 {
+                die("a void function cannot return a value (remove the value, or declare a return type)");
+            }
             parse_expr();
             if cur_ret_str == 1 && pass_no >= 2 {
                 // a String result: an owner or a temporary moves out, anything else is copied
@@ -2266,6 +2286,7 @@ void parse_statement_inner() {
                 }
             }
             check_assign(cur_ret_tid);
+            if cur_ret_isptr == 0 { no_text_for_int(cur_ret_tid); }
             if rv_valid == 1 && cur_ret_isptr == 1 { ret_mv = own_find(rv_off); }
             int rhow = 0;
             int rsrc = 0;
@@ -2671,6 +2692,17 @@ void parse_function() {
         emit_str(";H ");
         emit_str(@hint_buf);
         emit_nl();
+    }
+    if fvoid[f_idx] == 0 && cur_is_main == 0 && fn_returns == 1 && stmt_ends == 0 && in_lambda == 0 && pass_no >= 2 {
+        err_line = fn_line;
+        err_col = fn_col;
+        err_base = fn_base;
+        err_ls = fn_ls;
+        char em[200];
+        str_copy(@em, "function '", 200);
+        append_text(@em, @d_fname);
+        append_text(@em, "' can reach its end without returning a value (add a return at the end, or an else branch)");
+        die(@em);
     }
     if fvoid[f_idx] == 0 && cur_is_main == 0 && fn_returns == 0 {
         err_line = fn_line;
