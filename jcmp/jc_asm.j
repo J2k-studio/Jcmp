@@ -25,7 +25,25 @@ char as_hdr[176];               // the ELF header
 
 // ---------------------------------------------------------------- errors
 
+int as_embedded;                // 1 inside jcmp: the text is written by the compiler, so an error here is a compiler bug
+
+// the line of the text at the cursor, for the message of a compiler bug
+void as_fail_internal() {
+    int a = as_ci;
+    if a >= as_src_len { a = as_src_len - 1; }
+    while a > 0 && as_src[a - 1] != 10 { a -= 1; }
+    int b = a;
+    while b < as_src_len && as_src[b] != 10 && b - a < 200 { b += 1; }
+    char m1[96] = "internal error: the assembler could not read this line of the code written by jcmp:\n  ";
+    syscall(64, 2, @m1, 86);
+    syscall(64, 2, @as_src[a], b - a);
+    char m2[200] = "\nThis is a bug in jcmp, not in your program. Please report it with your source file (jcmp file.jk -o out -emit-asm file.s keeps the text).\n";
+    syscall(64, 2, @m2, 139);
+    syscall(93, 1);
+}
+
 void as_fail() {
+    if as_embedded == 1 { as_fail_internal(); }
     // "j2k_asm: error at line L, column C: parse or I/O error"
     int line = 1;
     int col = 1;

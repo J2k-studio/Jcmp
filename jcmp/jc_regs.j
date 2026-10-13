@@ -25,6 +25,12 @@ int rg_labl[8192];
 int rg_nlab;
 int rg_pick[8];              // the slots that got a register
 int rg_npick;
+int rg_leaf;                 // 1: the function makes no call (only calls that never return)
+int rg_nextra;               // caller-saved registers that a leaf function may use for variables: they are not mentioned in its text
+int rg_extra[8];
+int rg_elide;                // 1: the frame of the function is not needed (no stack slot is left)
+int rg_mask;                 // the registers x0 .. x30 that the text of the function mentions
+int al_to = 32;              // every function starts at a multiple of this many bytes (0: no padding)
 int rg_pin[8192];            // the register (18, 19 .. 25) a slot is pinned to, or 0 (int n @ x19)
 int rg_slotreg[8192];        // the register number (19..25) of a slot, or 0
 int rg_slotd[8192];          // the double register number (8..15) of a slot, or 0
@@ -406,14 +412,49 @@ void rg_allocate(int epi, int is_main) {
         taken[c2] = 0;
         c2 += 1;
     }
-    int xowner[8];
+    int xowner[16];
     int downer[8];
+    int xr[16];                           // the register of each entry of the pool: 0 .. 6 = x19 .. x25, 7 = x18, 8 .. = caller-saved ones of a leaf function
+    int ordx[16];                         // the entries that an ordinary variable may take, the best first
+    int nordx = 0;
     int k = 0;
-    while k < 8 {
+    while k < 16 {
         xowner[k] = 0 - 1;
+        xr[k] = 0;
+        k += 1;
+    }
+    k = 0;
+    while k < 8 {
         downer[k] = 0 - 1;
         // a register that the program reserved (#reserve x19) is never given to a variable
+        if k < 7 { xr[k] = 19 + k; }
         if k < 7 && (reserve_mask & (1 << (19 + k))) != 0 { xowner[k] = 0 - 2; }
+        k += 1;
+    }
+    xr[7] = 18;
+    if (reserve_mask & (1 << 18)) != 0 { xowner[7] = 0 - 2; }
+    int ex = 0;
+    while ex < rg_nextra {
+        xr[8 + ex] = rg_extra[ex];
+        ex += 1;
+    }
+    if rg_leaf == 1 {
+        // the registers that need no save first
+        ex = 0;
+        while ex < rg_nextra {
+            ordx[nordx] = 8 + ex;
+            nordx += 1;
+            ex += 1;
+        }
+        if xowner[7] == 0 - 1 {
+            ordx[nordx] = 7;
+            nordx += 1;
+        }
+    }
+    k = 0;
+    while k < 7 {
+        ordx[nordx] = k;
+        nordx += 1;
         k += 1;
     }
     // a pinned variable owns its register for the whole function
@@ -430,7 +471,7 @@ void rg_allocate(int epi, int is_main) {
             xowner[pk] = c2;
             taken[c2] = 1;
             done += 1;
-            if pk == 7 { rg_slotreg[ps] = 18; } else { rg_slotreg[ps] = 19 + pk; }
+            rg_slotreg[ps] = xr[pk];
             if pk < 7 && rg_xsave[pk] < 0 { rg_xsave[pk] = ps; }
         }
         c2 += 1;
@@ -449,35 +490,41 @@ void rg_allocate(int epi, int is_main) {
             done += 1;
             int slot = rg_cand[cur];
             bool is_d = rg_fl[slot] * 2 >= rg_tot[slot] && rg_tot[slot] > 0;
-            int nreg = 7;
+            int nreg = nordx;
             if is_d { nreg = 8; }
             // free the registers whose owner ended before this interval starts
-            k = 0;
-            while k < nreg {
+            int kj = 0;
+            while kj < nreg {
+                k = kj;
+                if !is_d { k = ordx[kj]; }
                 int ow = xowner[k];
                 if is_d { ow = downer[k]; }
                 if ow >= 0 && rg_last[ow] < rg_first[cur] && (is_d || rg_pin[rg_cand[ow]] == 0) {
                     if is_d { downer[k] = 0 - 1; } else { xowner[k] = 0 - 1; }
                 }
-                k += 1;
+                kj += 1;
             }
             // a free register, else the owner with the smallest weight if it is smaller than this one
             int pick = 0 - 1;
-            k = 0;
-            while k < nreg && pick < 0 {
+            kj = 0;
+            while kj < nreg && pick < 0 {
+                k = kj;
+                if !is_d { k = ordx[kj]; }
                 int ow2 = xowner[k];
                 if is_d { ow2 = downer[k]; }
                 if ow2 == 0 - 1 { pick = k; }
-                k += 1;
+                kj += 1;
             }
             if pick < 0 {
                 int low = 0 - 1;
-                k = 0;
-                while k < nreg {
+                kj = 0;
+                while kj < nreg {
+                    k = kj;
+                    if !is_d { k = ordx[kj]; }
                     int ow3 = xowner[k];
                     if is_d { ow3 = downer[k]; }
                     if ow3 >= 0 && (is_d || rg_pin[rg_cand[ow3]] == 0) && (low < 0 || rg_wt[rg_cand[ow3]] < rg_wt[rg_cand[low]]) { low = ow3; pick = k; }
-                    k += 1;
+                    kj += 1;
                 }
                 if low >= 0 && rg_wt[rg_cand[low]] < rg_wt[slot] {
                     // the old owner stays in memory
@@ -495,8 +542,8 @@ void rg_allocate(int epi, int is_main) {
                     if rg_dsave[pick] < 0 { rg_dsave[pick] = slot; }
                 } else {
                     xowner[pick] = cur;
-                    rg_slotreg[slot] = 19 + pick;
-                    if rg_xsave[pick] < 0 { rg_xsave[pick] = slot; }
+                    rg_slotreg[slot] = xr[pick];
+                    if pick < 7 && rg_xsave[pick] < 0 { rg_xsave[pick] = slot; }
                 }
             }
         }
@@ -512,7 +559,7 @@ void rg_allocate(int epi, int is_main) {
     while w < 8192 {
         if rg_slotreg[w] != 0 {
             rg_npick += 1;
-            if rg_xsave[rg_slotreg[w] - 19] < 0 { rg_xsave[rg_slotreg[w] - 19] = w; }
+            if rg_slotreg[w] >= 19 && rg_xsave[rg_slotreg[w] - 19] < 0 { rg_xsave[rg_slotreg[w] - 19] = w; }
         }
         if rg_slotd[w] != 0 {
             rg_npick += 1;
@@ -520,6 +567,38 @@ void rg_allocate(int epi, int is_main) {
         }
         w += 1;
     }
+}
+
+// the registers xN / wN that the line st mentions, as a mask
+int rg_line_regs(int st, int en) {
+    int m = 0;
+    int j = st;
+    while j < en {
+        int c = out_buf[j];
+        if (c == 'x' || c == 'w') && (j == st || !((out_buf[j - 1] >= 'a' && out_buf[j - 1] <= 'z') || (out_buf[j - 1] >= 'A' && out_buf[j - 1] <= 'Z') || (out_buf[j - 1] >= '0' && out_buf[j - 1] <= '9') || out_buf[j - 1] == '_')) && out_buf[j + 1] >= '0' && out_buf[j + 1] <= '9' {
+            int v = 0;
+            int q = j + 1;
+            while out_buf[q] >= '0' && out_buf[q] <= '9' {
+                v = v * 10 + (out_buf[q] - '0');
+                q += 1;
+            }
+            if v <= 30 { m = m | (1 << v); }
+            j = q;
+        } else {
+            j += 1;
+        }
+    }
+    return m;
+}
+
+// is the line a call that comes back?  (a call of a routine that never returns does not count)
+bool rg_is_call(int st) {
+    if rg_has(st, "blr ") || rg_has(st, "br ") || rg_has(st, "svc ") { return true; }
+    if rg_has(st, "bl ") {
+        if rg_has(st, "bl j2k_divzero") || rg_has(st, "bl j2k_noret") || rg_has(st, "bl j2k_oob") { return false; }
+        return true;
+    }
+    return false;
 }
 
 // the function that starts at the line fs and has the lines rg_ls[0 .. rg_n - 1]: write it (with registers if it pays)
@@ -687,6 +766,33 @@ void rg_function(int is_main) {
         i += 1;
     }
     if is_main == 0 && epi < 0 { ok = 0; }
+    // a leaf function (no call that comes back) may keep variables in caller-saved registers that its text does not mention: nothing to save
+    rg_leaf = 0;
+    rg_nextra = 0;
+    rg_mask = 0;
+    if ok == 1 && is_main == 0 && opt_debug == 0 {
+        rg_leaf = 1;
+        i = 0;
+        while i < rg_n {
+            int st2 = rg_ls[i];
+            int en2 = rg_end(st2);
+            if !rg_has(st2, ";H") {
+                if rg_is_call(st2) { rg_leaf = 0; }
+                rg_mask = rg_mask | rg_line_regs(st2, en2);
+            }
+            i += 1;
+        }
+        if rg_leaf == 1 {
+            // x2 x3 x4 x8 x9 (the text passes after this one use x5 x6 x7 x10 .. x14 as holders; x15 .. x17 are scratch registers)
+            int cand[5];
+            cand[0] = 9; cand[1] = 8; cand[2] = 4; cand[3] = 3; cand[4] = 2;
+            int ci2 = 0;
+            while ci2 < 5 {
+                if (rg_mask & (1 << cand[ci2])) == 0 { rg_extra[rg_nextra] = cand[ci2]; rg_nextra += 1; }
+                ci2 += 1;
+            }
+        }
+    }
     // the allocation: live variable analysis, then a linear scan over the live intervals of the slots that are used most
     rg_npick = 0;
     int k0 = 0;

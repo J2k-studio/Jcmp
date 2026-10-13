@@ -198,6 +198,7 @@ void write_err_int(int v) {
 int opt_debug;               // -d : a debug build
 int opt_strict;              // -st : warnings are errors
 int opt_regs = 1;            // 1: the register pass keeps the busiest whole-number locals of loops in x19..x25 (-noregs switches it off)
+int x_badasm;                // hidden flag -xbadasm: puts a line into the text that the assembler cannot read
 int opt_peep = 1;            // 1: the peephole pass makes the code shorter (-nopeep switches it off, to look for a fault)
 char inc_dir[256];           // -I dir : where `import "name"` looks if the file is not next to the importer
 int warn_count;

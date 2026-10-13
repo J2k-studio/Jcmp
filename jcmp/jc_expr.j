@@ -442,13 +442,14 @@ void check_assign(int want) {
     if is_unsigned(want) && is_unsigned(ex_ty) && ex_ty <= want { ok = 1; }      // widening needs no cast
     if want == 1 && (ex_ty == 1 || ex_ty == 2) { ok = 1; }
     if want >= 3 && ex_ty == want { ok = 1; }          // an enum, a struct, a float, an unsigned type of the same kind
+    if ok == 0 && ex_ty == 98 { die("this function returns nothing (it is void), so there is no value to store"); }
     if ok == 0 {
         begin_msg("error");
         write_err("type mismatch: expected ");
         type_name_err(want);
         write_err(", got ");
         if ex_ty == 2 { write_err("a number"); } else { type_name_err(ex_ty); }
-        write_err(" (use a comparison for a bool, or a cast)");
+        if want == 1 { write_err(" (use a comparison for a bool, or a cast)"); } else { write_err(" (use a cast to convert)"); }
         end_msg();
         syscall(93, 1);
     }
@@ -528,6 +529,25 @@ int op_pending;              // the word `operator` was read in front of the met
 int fself[16384];             // 1 if the function is a method with self (not static)
 int farr[16384];              // bit k: the declared parameter k is an array (T name[])
 int fcount;
+
+// every name that is known here (locals, globals, functions) is a candidate for "did you mean"
+void sug_names(char^ name) {
+    int i = 0;
+    while i < lcount {
+        sug_try(name, @lname + i * 64);
+        i += 1;
+    }
+    i = 0;
+    while i < gcount {
+        sug_try(name, @gname + i * 64);
+        i += 1;
+    }
+    i = 0;
+    while i < fcount {
+        sug_try(name, @fname + i * 64);
+        i += 1;
+    }
+}
 
 int find_func(char^ name) {
     int i = 0;
@@ -1772,6 +1792,7 @@ void gen_call() {
     if fi >= 0 && fcharret[fi] == 1 { ex_w = 2; }
     if fi >= 0 && fcharret[fi] == 2 { ex_w = 9; }
     ex_ty = res_ty;
+    if fi >= 0 && fvoid[fi] == 1 && fretdyn[fi] == 0 { ex_ty = 98; }          // a void call: there is no value (check_assign says so)
     last_call_owning = 0;
     if str_eq(@callee, "Mem__alloc") { last_call_owning = 1; }
     if fi >= 0 && fowned[fi] == 1 { last_call_owning = 1; }

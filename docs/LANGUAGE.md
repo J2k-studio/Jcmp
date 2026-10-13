@@ -18,8 +18,8 @@ void main() {
 }
 ```
 
-`cout` and `cin` come with the standard library: a program that uses them starts with `#import <stdlib>` and `using stdlib`
-(the snippets below leave these two lines out). Without them the compiler warns `[-Wstd]` for now; a later version makes it an error.
+`cout` and `cin` need no import and no `using`: they are always there (the other modules of the standard library still need
+`#import <stdlib>`; `using stdlib` makes their names usable without the prefix).
 `using stdlib` makes the names of all the std modules usable without the prefix; if two modules have the same name (`write` is in `Sys` and
 `File`) the compiler reports it and you write `File::write(...)`. `float` is the 32-bit and `double` the 64-bit decimal type (they were
 called `f32` and `f64`; the old names still work with a warning).

@@ -35,14 +35,14 @@ error: no main function found in 'file.jk'
 | # | Case | Today | Wanted |
 |---|---|---|---|
 | 1 | `int a = "hi";` | DONE in 0.9.84 | (function arguments `f("hi")` to an `int` parameter are still accepted: pointer parameters have the same type id, needs a flag per parameter) |
-| 2 | `int[3] a;` (C++/Java style array) | `expected ']'` | add `help: write  int a[3];` |
-| 3 | `import <name>` for a library that does not exist | has the search paths already | add the close names (`did you mean 'stdlib'?`) |
-| 4 | unknown name | `unknown name 'y'` | `did you mean 'x'?` when a name of the same scope is one edit away |
+| 2 | `int[3] a;` (C++/Java style array) | DONE in 0.9.84 | `help: write  int a[3];` |
+| 3 | `import <name>` for a library that does not exist | DONE in 0.9.84 | `did you mean 'stdlib'?` (only the built-in names; libraries found on the search path are not listed yet) |
+| 4 | unknown name | DONE in 0.9.84 | `did you mean 'x'?` (locals, globals, functions; 1 edit, 2 for 5+ letters) |
 | 5 | `import` written without `#` | warning `write #import` | ok, keep (will become an error) |
 | 6 | return type mismatch (both types in the message) | to be probed | message with both types (missing return: DONE) |
 | 7 | use after move / ownership | to be probed | show where the value was moved |
 | 8 | index out of range of a constant index (`a[5]` on `a[3]`) | DONE in 0.9.84 | (a constant folded index such as `a[2+3]` or a `-1` is not checked yet) |
-| 9 | assembler errors (`j2k_asm: error at line N`) | the line is a line of generated text | the compiler should never let one reach the user; map to a source line or say "internal error" |
+| 9 | assembler errors (`j2k_asm: error at line N`) | DONE in 0.9.84: `internal error: ... This is a bug in jcmp` with the generated line | (a source line cannot be given: the text has no line map) |
 
 ## Order of work
 

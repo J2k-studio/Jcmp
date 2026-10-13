@@ -2,7 +2,7 @@
 // Build:  bin/jcmp jcmp/jcmp.jk -o jcmp1        (see bootstrap.sh)
 // Use:    jcmp1 input.jk -o program
 // the version of the compiler (also in the file VERSION; release.sh checks that they agree)
-#define JCMP_VERSION "0.9.84"
+#define JCMP_VERSION "0.9.86"
 
 #import "jc_base"
 #import "jc_asm"
@@ -210,6 +210,8 @@ void main() {
             ir_mode = 3;
         } else if str_eq(a, "-noregs") {
             opt_regs = 0;
+        } else if str_eq(a, "-xbadasm") {
+            x_badasm = 1;                // hidden: a line the assembler cannot read (tests the message of a compiler bug)
         } else if str_eq(a, "-nopeep") {
             opt_peep = 0;
         } else if str_eq(a, "-st") {
@@ -345,6 +347,16 @@ void main() {
             as_src[k] = out_buf[k];
             k += 1;
         }
+        if x_badasm == 1 {
+            char bad[24] = "\nfrobnicate x1, x2\n";
+            int bk = 0;
+            while bad[bk] != 0 {
+                as_src[out_len] = bad[bk];
+                out_len += 1;
+                bk += 1;
+            }
+        }
+        as_embedded = 1;
         as_assemble(out_len);
         as_write_elf(out_elf);
     }

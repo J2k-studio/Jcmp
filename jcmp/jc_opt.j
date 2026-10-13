@@ -2687,7 +2687,7 @@ void op_sroa() {
 // ---------------------------------------------------------------------------------------------- function alignment
 // Every function starts at an address that is a multiple of al_to bytes (".align N" in the assembler text). Measured on the Cortex-A55: the
 // speed of `fib` changed between 68 and 83 ms only by moving the function by a few instructions; at 32 bytes it is always the fast one.
-int al_to = 32;
+
 
 void al_run() {
     regs_len = 0;

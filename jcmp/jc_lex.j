@@ -166,6 +166,64 @@ void die(char^ msg) {
     syscall(93, 1);
 }
 
+// an error with a second line  help: ...  under the source line
+void die_help(char^ msg, char^ help) {
+    begin_msg("error");
+    write_err(msg);
+    end_msg();
+    write_err("  help: ");
+    write_err(help);
+    write_err("\n");
+    syscall(93, 1);
+}
+
+// the closest known name to `name` (at most 1 edit away, 2 for names of 5+ letters): in sug_buf, 1 if there is one
+char sug_buf[64];
+int sug_best;                // the distance of the best one so far
+int sug_row[130];
+int edit_distance(char^ a, char^ b) {
+    int la = str_len(a);
+    int lb = str_len(b);
+    if la > 62 || lb > 62 { return 99; }
+    int j = 0;
+    while j <= lb {
+        sug_row[j] = j;
+        j += 1;
+    }
+    int i = 1;
+    while i <= la {
+        int prev = sug_row[0];
+        sug_row[0] = i;
+        j = 1;
+        while j <= lb {
+            int cur = sug_row[j];
+            int cost = 1;
+            if a[i - 1] == b[j - 1] { cost = 0; }
+            int best = prev + cost;
+            if sug_row[j] + 1 < best { best = sug_row[j] + 1; }
+            if sug_row[j - 1] + 1 < best { best = sug_row[j - 1] + 1; }
+            sug_row[j] = best;
+            prev = cur;
+            j += 1;
+        }
+        i += 1;
+    }
+    return sug_row[lb];
+}
+
+// offer one candidate (called for each known name)
+void sug_try(char^ name, char^ cand) {
+    if cand[0] == 0 || cand[0] == '_' { return; }
+    int lim = 1;
+    if str_len(name) >= 5 { lim = 2; }
+    int d = edit_distance(name, cand);
+    if d == 0 || d > lim { return; }
+    if d < sug_best {
+        sug_best = d;
+        str_copy(@sug_buf, cand, 64);
+    }
+}
+
 // die with a name in the message:  error: msg 'name'
 int in_lambda;               // 1 while the function being compiled is a lambda
 void die_name(char^ msg, char^ name) {
@@ -176,6 +234,20 @@ void die_name(char^ msg, char^ name) {
     write_err(name);
     write_err("'");
     end_msg();
+    sug_best = 99;
+    sug_buf[0] = 0;
+    if str_eq(msg, "unknown name") || str_eq(msg, "unknown function") { sug_names(name); }
+    if msg[0] == 'l' && msg[1] == 'i' && msg[2] == 'b' {
+        sug_try(name, "stdlib");
+        sug_try(name, "gfx");
+        sug_try(name, "math");
+        sug_try(name, "cpu");
+    }
+    if sug_buf[0] != 0 {
+        write_err("  help: did you mean '");
+        write_err(@sug_buf);
+        write_err("'?\n");
+    }
     syscall(93, 1);
 }
 

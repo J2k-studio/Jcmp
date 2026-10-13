@@ -152,11 +152,9 @@ void io_float_name() {
     warn("coutf and cinf are not needed: cout and cin print and read floats too", "deprecated");
 }
 
-// cout, coutf, cin and cinf need `import std` and `using std`: for now a warning, later an error
+// cout and cin need no import and no `using` (owner's decision, 2026-10-13, docs/syntax-design.md 64): nothing to check
 void check_io_std() {
-    if io_warned == 1 || (std_loaded == 1 && using_std_seen == 1) { return; }
     io_warned = 1;
-    warn("cout, coutf, cin and cinf need 'import <stdlib>' and 'using stdlib' at the top of the file (this will become an error)", "std");
 }
 
 void parse_type() {
@@ -299,6 +297,7 @@ void parse_type() {
         int de_code = ty_elem;
         int de_ptr = ty_ptr;
         next();
+        if tok_kind == T_NUM { die_help("the size of a fixed array comes after the name, not after the type", "write  int a[3];  (int[] without a size is a dynamic array)"); }
         expect("]");
         ty_dyn = dyn_pack(de_code, de_ptr, de_tid);
         ty_tid = 99;

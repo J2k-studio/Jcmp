@@ -1788,3 +1788,6 @@ Step 6 done: `#reserve`, pinned variables `int n @ x19` (the look the owner chos
 
 ### 63.12 Status (0.9.82): the plan of 63.4 is done
 Steps 7 and 8: `frame` with `save` / `restore` / `size`, `interrupt` functions (x0 .. x18 saved in the frame, `eret`), `align(N)`, `@no_reorder { }`. Open ideas from 61 / 62 that are not done: `Order::` arguments for `Atomic::`, LSE forms, `callconv` per function and two return values, `volatile` as a word, `mock` devices, the instruction table (design 08), SIMD (59).
+
+## 64. `cout` / `cin` need no import (owner, 2026-10-13)
+Decided by the owner: `cout`, `cin`, `coutf`, `cinf` stay usable in every program without `import` / `using` ("otherwise there would be no way to show a result"). They stay built into the compiler; this closes question E.1 of `open-questions.md`.

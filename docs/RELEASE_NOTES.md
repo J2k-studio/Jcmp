@@ -1,8 +1,12 @@
-# J2K / Jcmp 0.9.84
+# J2K / Jcmp 0.9.86
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
 
-**0.9.84:** error messages: a program without `main` and a call with the wrong number of arguments are reported clearly (the second was accepted silently before); a text stored in an `int`, a value returned from a `void` function, a path that ends a function without a value, and a literal index outside a fixed array are errors too; `docs/error-messages-plan.md`.
+**0.9.86:** leaf functions keep variables in more registers; using the value of a `void` call (`int a = f();`) is an error (it was accepted before); `cout` / `cin` need no import and no `using` (no warning).
+
+**0.9.85:** a function that can reach its end without a value, and a literal index outside a fixed array, are errors; `did you mean 'x'?` for names, functions and libraries; a hint for `int[3] a;`; an error of the assembler is reported as an internal error of jcmp (with the line).
+
+**0.9.84:** error messages: a program without `main` and a call with the wrong number of arguments are reported clearly (the second was accepted silently before); a text stored in an `int`, a value returned from a `void` function are errors too; `docs/error-messages-plan.md`.
 
 **0.9.83:** a round of bug hunting with a fuzzer, a garbage test and an encoding test (no wrong code found in 2,200 random programs); one example fixed.
 
