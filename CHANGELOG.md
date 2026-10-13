@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.100
+* **A use after `Mem::free(p)` is reported** (a warning `-Wmoved`, an error with `-st`) when `p` is a variable that owns its memory and the use follows in the same block: `this variable was freed by Mem::free and is used afterwards (it is null now)`. It was silent before (found only by `-d` at run time, as a null access). A new value stored in `p` clears it. First of the cases of `docs/error-messages-plan.md` (ownership messages): a warning, as proposed there.
+* Tests: `t336_fail_use_after_free`, `t337_free_then_new`.
+
 ## 0.9.99
 * **Constants out of loops is on by default** (`-irlicm` was a hidden switch; `-irclr 1` turns it off): a number that is made in every turn of a loop (`mov x4, 5270498306774157605` for `% 7`) is made once before it when a register is free. 600 random programs and the whole suite were run with it before the change. hashmap -8 %, strings -6 %, sha256 -15 %.
 * **Fixed (found by the benchmark `alloc`, 20 % slower since 0.9.97):** the values that the load CSE of 0.9.97 keeps in a cell made everything computed from them "heavy", so the register pass saw extra stores and loads in `Mem::free_raw` (index arithmetic of the size classes). The loaded value is a cell of its own now and the mark is not passed on. `alloc` is back at 125 ms.

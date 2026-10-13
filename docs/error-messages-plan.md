@@ -63,7 +63,7 @@ error: no main function found in 'file.jk'
 * The text names what is wrong and what to write instead.
 * Never print an error that comes from the assembler or the linker: if it is reached, it is a compiler bug.
 
-## Ownership messages: a proposal (2026-10-13, case 7; wording is not decided)
+## Ownership messages: a proposal (2026-10-13, case 7; wording is not decided; case 1 done as a warning in 0.9.100)
 
 What the compiler says today (probed with 0.9.92): `Mem::free(a); a[0] = 1;`, a double `Mem::free(a)`, and `take(a); a[0] = 1;` where `take` frees its parameter are all accepted without a word at compile time (only `-d` finds them when the program runs). Only a moved struct / String gives the warning `this variable was moved and is used afterwards`.
 

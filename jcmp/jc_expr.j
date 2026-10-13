@@ -1807,7 +1807,10 @@ void gen_call() {
         drop_args(n);
         if tmp_off != 0 { ins_n("add x0, x29, #", tmp_off); }
     }
-    if free_owner >= 0 { emit_owner_null(free_owner); }       // Mem::free(p) on an owner: p is null afterwards
+    if free_owner >= 0 {
+        emit_owner_null(free_owner);                          // Mem::free(p) on an owner: p is null afterwards
+        if own_blk[free_owner] == cur_blk && own_moved[free_owner] == 0 { own_moved[free_owner] = 2; }     // 2: freed (a use after it is reported)
+    }
     ex_w = 8;
     if fi >= 0 && fcharret[fi] == 1 { ex_w = 2; }
     if fi >= 0 && fcharret[fi] == 2 { ex_w = 9; }
@@ -1972,6 +1975,7 @@ void check_moved_use() {
     if lv_fresh == 1 && lv_base_local == 1 && lv_kind != 1 {
         int oi = own_find(lv_base_off);
         if oi >= 0 && own_moved[oi] == 1 { warn("this variable was moved and is used afterwards (it is null now)", "moved"); }
+        if oi >= 0 && own_moved[oi] == 2 { warn("this variable was freed by Mem::free and is used afterwards (it is null now)", "moved"); }
     }
 }
 
@@ -3725,6 +3729,7 @@ void finish_rvalue() {
         rv_off = lv_base_off;
         int oi = own_find(lv_base_off);
         if oi >= 0 && own_moved[oi] == 1 { warn("this variable was moved and is used afterwards (it is null now)", "moved"); }
+        if oi >= 0 && own_moved[oi] == 2 { warn("this variable was freed by Mem::free and is used afterwards (it is null now)", "moved"); }
     }
     if lv_kind == 3 {
         load_through(8);                 // a dynamic array as a value: its header address

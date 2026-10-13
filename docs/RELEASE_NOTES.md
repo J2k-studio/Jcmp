@@ -1,6 +1,8 @@
-# J2K / Jcmp 0.9.99
+# J2K / Jcmp 0.9.100
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
+
+**0.9.100:** a use of a variable after `Mem::free` of it is reported (warning; error with `-st`).
 
 **0.9.99:** constants are made once before a loop (on by default); a slowdown of `Mem::alloc` / `free` found by the benchmarks is fixed.
 
