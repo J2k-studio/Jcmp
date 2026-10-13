@@ -17,6 +17,7 @@ int std_dbg_n;                     // how many live blocks the table holds
 int std_dbg_full;                  // 1: the table was full once (the checks that need it are off)
 int std_dbg_quar[64];              // the last blocks that were freed (a -d build keeps them filled with 221 for a while)
 int std_dbg_qi;
+int std_guard_n;                   // how many blocks of a -d build live in pages of their own (a guard page after each; at most 12000)
 
 // a bug in the program (a null array, a position out of range, ...): say so and stop; try/catch cannot catch it
 void __panic(char^ msg) {
@@ -439,8 +440,33 @@ struct Mem {
         }
         return 0 - 1;
     }
+    // -d: a block of its own pages that ends where a page that nobody may touch begins: a write or a read past its end is a fault at once,
+    // and a freed block is made untouchable (a read or write after free is a fault at once too). The header is [size, 0] as for any block;
+    // the table of the live blocks remembers (bit 40 of the size) that the block has pages of its own.
+    static void^ dbg_guard_alloc(int n) {
+        int sz = ((n + 15) >> 4) * 16;
+        int pages = (sz + 16 + 4095) >> 12;
+        int base = syscall(222, 0, (pages + 1) * 4096, 3, 34, -1, 0);
+        if base < 0 && base > -4096 { return null; }
+        syscall(226, base + pages * 4096, 4096, 0);
+        int blk = base + pages * 4096 - sz;
+        int^ hh = (int^)(blk - 16);
+        hh[0] = sz + 16;
+        hh[1] = 0;
+        return (void^)blk;
+    }
     static void^ dbg_alloc(int n) {
-        void^ r = Mem::alloc_locked(n);
+        void^ r = null;
+        int guarded = 0;
+        if n > 0 && std_guard_n < 12000 && std_mt == 0 && std_dbg_full == 0 {
+            r = Mem::dbg_guard_alloc(n);
+            if (int)r != 0 {
+                std_guard_n += 1;
+                std_alloc_n += 1;
+                guarded = 1;
+            }
+        }
+        if (int)r == 0 { r = Mem::alloc_locked(n); }
         if (int)r != 0 {
             char^ where = Mem::dbg_where();
             int^ hh = (int^)((int)r - 16);
@@ -450,7 +476,7 @@ struct Mem {
             } else {
                 std_dbg_n += 1;
                 std_dbg_tab[sl * 3] = (int)r;
-                std_dbg_tab[sl * 3 + 1] = hh[0] - 16;
+                std_dbg_tab[sl * 3 + 1] = (hh[0] & -4) - 16 + guarded * 1099511627776;
                 std_dbg_tab[sl * 3 + 2] = (int)where;
             }
         }
@@ -479,6 +505,21 @@ struct Mem {
     }
     static void dbg_free(void^ p) {
         if (int)p == 0 { return; }
+        int gs = Mem::dbg_find((int)p);
+        if gs >= 0 {
+            int gsz = std_dbg_tab[gs * 3 + 1];
+            if gsz == 0 - 1 { __panic("free of a block that is not alive: freed twice"); }
+            if gsz >= 1099511627776 {
+                // a block with a guard page: the table keeps its place (marked as freed), no page of it may be touched again
+                int size = gsz - 1099511627776;
+                int pages = (size + 16 + 4095) >> 12;
+                std_dbg_tab[gs * 3 + 1] = 0 - 1;
+                std_dbg_n -= 1;
+                std_free_n += 1;
+                syscall(226, (int)p + size - pages * 4096, pages * 4096, 0);
+                return;
+            }
+        }
         int^ hh = (int^)((int)p - 16);
         if (hh[0] & 1) != 0 {
             Mem::free_piece((int)p - 16);
@@ -530,9 +571,9 @@ struct Mem {
         int i = 0;
         while i < 32768 && shown < 20 {
             int a = std_dbg_tab[i * 3];
-            if a > 0 {
+            if a > 0 && std_dbg_tab[i * 3 + 1] != 0 - 1 {
                 Mem::dbg_text("  leak: ");
-                Mem::dbg_num(std_dbg_tab[i * 3 + 1]);
+                Mem::dbg_num(std_dbg_tab[i * 3 + 1] & 1099511627775);
                 Mem::dbg_text(" bytes made in ");
                 Mem::dbg_text((char^)std_dbg_tab[i * 3 + 2]);
                 Mem::dbg_text("\n");

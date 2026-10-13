@@ -3133,7 +3133,7 @@ void emit_divzero_helper() {
 }
 
 // SIGSEGV (a null pointer, or a stack that ran out): say so and stop (the handler runs on its own stack)
-char segv_text[80];
+char segv_text[192];
 // writes  text  and the value that the line `load` puts in x5, as 16 hexadecimal digits and a newline, to the standard error
 void emit_segv_hex(char^ text, int n, char^ load, int k) {
     emit_text_chunks(text, n);
@@ -3184,6 +3184,7 @@ void emit_segv_hex(char^ text, int n, char^ load, int k) {
 
 void emit_segv_handler() {
     str_copy(@segv_text, "runtime error: segmentation fault (null pointer or stack overflow)\n", 80);
+    if opt_debug == 1 { str_copy(@segv_text, "runtime error: segmentation fault (null pointer, stack overflow, or a memory block used after free or past its end)\n", 160); }
     int n = str_len(@segv_text);
     emit_line("j2k_segv:");
     emit_line("sub sp, sp, #128");

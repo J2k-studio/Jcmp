@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.93
+* **`-d`: guard pages.** In a `-d` build every block of `Mem::alloc` (up to 12,000 live blocks) lives in pages of its own and ends exactly where a page that nobody may touch begins. A read or a write **one byte past the end of a block** is a fault at once (before: not found), and a block that was freed is made untouchable, so a **read or a write after free** is a fault at once (before: a read was not found; a write was found later, when the block left the quarantine). A second `free` of the same block says `free of a block that is not alive: freed twice`. The fault message of a `-d` build says what it can be: `null pointer, stack overflow, or a memory block used after free or past its end`, with the address and the place of the code.
+* The exit code of a write after free is 139 now (a fault; before 134 at the time the quarantine was checked): `t274` follows.
+* Tests: `t333_dbg_overflow`, `t334_dbg_read_after_free`.
+* Not changed: programs without `-d` (no cost), blocks of a program with more than one thread (the old checks), more than 12,000 live blocks (the old checks for the rest).
+
 ## 0.9.92
 * **`import` without `#` is an error** (it was a warning): `import must be written with a # at the start` with the help `write  #import <stdlib>  or  #import "file"`. The tests, examples and sources of the repository are changed. Test `t332_fail_import_without_hash`.
 * `bootstrap.sh` gives the frozen seed compiler a copy of each test with the old spelling (`import`), so the comparison of the two compilers goes on.

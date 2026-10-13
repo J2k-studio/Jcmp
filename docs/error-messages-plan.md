@@ -62,3 +62,18 @@ error: no main function found in 'file.jk'
 * One mistake, one message. A missing `;` at the end of a line is recoverable (the parser goes on as if it was there, up to 10 are shown, `soft_error` in `jc_lex.j`); any other error stops the compiler at the first one. More recoverable cases (a missing `)` or `}` at the end of a line) can use the same `soft_error`.
 * The text names what is wrong and what to write instead.
 * Never print an error that comes from the assembler or the linker: if it is reached, it is a compiler bug.
+
+## Ownership messages: a proposal (2026-10-13, case 7; wording is not decided)
+
+What the compiler says today (probed with 0.9.92): `Mem::free(a); a[0] = 1;`, a double `Mem::free(a)`, and `take(a); a[0] = 1;` where `take` frees its parameter are all accepted without a word at compile time (only `-d` finds them when the program runs). Only a moved struct / String gives the warning `this variable was moved and is used afterwards`.
+
+Cases, from the cheapest to the hardest (all of them only along straight lines of one function; a branch makes the compiler say nothing, so a correct program is never refused):
+
+| # | case | proposed message (a warning `-Wfree` first; an error with `-st`) |
+|---|---|---|
+| 1 | a variable is used after `Mem::free(p)` | `'p' is used after it was freed (line 7)` + `help: the memory was given back by Mem::free(p) on line 7` |
+| 2 | `Mem::free(p)` twice | `'p' is freed twice (first on line 7)` |
+| 3 | `take(p)` where `take` frees or owns its parameter, then `p` is used | `'p' was given to take() on line 7 and is used afterwards` |
+| 4 | memory from `Mem::alloc` that is neither freed, returned, stored, nor passed | `memory allocated here is never freed` (a leak; `alloc[ ]` frees itself) |
+
+Rule of three for the wording: say what happened, point at the first line (the compiler already prints the source line of the error; the line of the first event goes in the text), say what to do (`help:`). Questions for the owner: (a) warnings first or errors at once (the compiler would refuse programs that use memory after free: they are always bugs, but a rare false positive in a loop is possible); (b) is case 4 wanted (it needs a fairly complete walk of the function).
