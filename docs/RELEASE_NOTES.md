@@ -1,6 +1,8 @@
-# J2K / Jcmp 0.9.100
+# J2K / Jcmp 0.9.101
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
+
+**0.9.101:** a register rule no longer treats the address of `blr xN` as unused; moves that nothing reads are removed.
 
 **0.9.100:** a use of a variable after `Mem::free` of it is reported (warning; error with `-st`).
 

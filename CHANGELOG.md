@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.101
+* **Fixed a latent bug of the register pass rules:** the search "is this register needed afterwards" took `blr x9` (a call through x9) as a place where x9 is not read: the register of the address was found dead. The address of a call is read now.
+* A move into a register that nothing reads afterwards (`mov x25, x0` left by the register pass) is removed.
+* Tests: the suite (360), 1,100 random programs with `-noir`, `-noinl`, `-d`, `-irclr 1`, 1,050 garbage programs.
+
 ## 0.9.100
 * **A use after `Mem::free(p)` is reported** (a warning `-Wmoved`, an error with `-st`) when `p` is a variable that owns its memory and the use follows in the same block: `this variable was freed by Mem::free and is used afterwards (it is null now)`. It was silent before (found only by `-d` at run time, as a null access). A new value stored in `p` clears it. First of the cases of `docs/error-messages-plan.md` (ownership messages): a warning, as proposed there.
 * Tests: `t336_fail_use_after_free`, `t337_free_then_new`.

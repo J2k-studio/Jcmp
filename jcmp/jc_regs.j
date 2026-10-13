@@ -1228,6 +1228,7 @@ bool pt_dead(int idx, int r, int budget) {
         }
         if pt_mn(3, "ret") { return r != 0; }                // only x0 carries the result
         if pt_mn(3, "mov") && pt_op(3, 0, "x8") && (pt_op(3, 1, "94") || pt_op(3, 1, "93")) { return r != 0; }       // the program ends: only x0 (the exit code) is read
+        if pt_mn(3, "blr") && pt_no[3] >= 1 && pt_rd(3, 0, r) { return false; }          // the address of the call is read
         if r >= 8 && r <= 15 && (pt_mn(3, "bl") || pt_mn(3, "blr")) { return true; }       // not an argument register: a call does not read it, and clobbers it
         if pt_mn(3, "bl") || pt_mn(3, "blr") || pt_mn(3, "svc") || pt_mn(3, "br") {
             return false;
@@ -1655,6 +1656,18 @@ bool pt_rules(int i) {
     if j < 0 { return false; }
     if !pt_parse(0, i) { return false; }
     if !pt_parse(1, j) { return false; }
+    // mov xD, xS  /  mov xD, N   where nothing reads xD before it is written again (or the function ends): the line does nothing
+    if pt_mn(0, "mov") && pt_no[0] == 2 && pt_isreg(0, 0) && (pt_isreg(0, 1) || pt_isnum(0, 1)) {
+        int dr = pt_regno(0, 0, 'x');
+        if (dr >= 1 && dr <= 7) || (dr >= 9 && dr <= 17) || (dr >= 19 && dr <= 25) {
+            if pt_dead(j, dr, 40) {
+                pt_set(i, "");
+                return true;
+            }
+            pt_parse(0, i);
+            pt_parse(1, j);
+        }
+    }
     // lsl xD, xA, #n / add xD, xB, xD   ->   add xD, xB, xA, lsl #n      (also with the operands of the add the other way round):
     // the register xD gets the same value, the shifted number was only on its way
     if pt_mn(0, "lsl") && pt_no[0] == 3 && pt_isreg(0, 0) && pt_isreg(0, 1) && pt_isnum(0, 2) && pt_mn(1, "add") && pt_no[1] == 3 && pt_isreg(1, 0) && pt_isreg(1, 1) && pt_isreg(1, 2) {
