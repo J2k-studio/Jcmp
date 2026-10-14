@@ -4960,9 +4960,9 @@ bool vz_make(int q, int l) {
         m += 1;
     }
     if !vz_scan(q, islot, ld, inch, false) { return false; }
-    // doubles: two lanes of 64 bits are no faster than the scalar instructions on the cores of the target (Cortex-A55: measured, 308 ms
-    // scalar with fmadd against 320 ms vectorised); `-irdbg 536870912` vectorises them anyway
-    if vz_has_fp == 1 && (ir_opt & 536870912) == 0 { return false; }
+    // doubles: `-irdbg 536870912` keeps them scalar (0.9.128 did that by default, from a measurement of a poor vector loop: 320 against
+    // 308 ms; with pointers and one branch for each turn the vector loop is 106 ms against 297 ms)
+    if vz_has_fp == 1 && (ir_opt & 536870912) != 0 { return false; }
     vz_npk = 0;
     {
         int ak = 0;

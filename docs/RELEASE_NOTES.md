@@ -1,7 +1,8 @@
-# J2K / Jcmp 0.9.129
+# J2K / Jcmp 0.9.130
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
 
+**0.9.130:** floating point loops over arrays are vectorised again (3 times faster than scalar in the measurement).
 **0.9.129:** array addresses in counted loops are pointers that move on (strength reduction); the vector loop has one branch for each turn.
 **0.9.128:** vector loops walk along arrays with pointers (an int copy of 2048 elements is 3 times faster); floating point loops stay scalar (measured: no gain on this core); fewer copies in the generated text.
 **0.9.127:** a syntax tree per function body, first step: a probe that reads bodies into a tree (`-xast`); the generated code is the same.

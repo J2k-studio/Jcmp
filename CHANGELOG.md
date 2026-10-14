@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.130
+* **Floating point loops are vectorised again** (0.9.128 turned them off from a measurement of the poor vector loop of that time, 320 ms against 308 ms scalar, and an explanation that was wrong: the target core is wide, not a little in-order core). With pointers that move on and one branch for each turn the vector loop of `c[i] = a[i] + b[i] * k` is **106 ms against 297 ms scalar** (clang -O2: 86 ms vectorised, 148 ms scalar). `-irdbg 536870912` keeps floating point loops scalar (the test `t369_vectorize` runs both ways). The function has no fused multiply-add (the elements of the vector loop and of the remainder are made the same way); a vector `fmla` is the next step.
+* Measured with the arrays benchmark (a copy, an axpy and a sum of 2048 elements): J2K 436 ms (0.9.126) -> 260 ms, clang -O2 130 ms.
+* Tests: the suite (397), 400 random programs with four option sets.
+
 ## 0.9.129
 * **Strength reduction of array addresses in counted loops** (`op_ssr` in `jcmp/jc_opt.j`): the address `base + f * i + c` of an element (the base: the global area, the frame, or a pointer in a plain slot that the loop does not write; `f`: 8 for `a[i]`, the size of the struct for `b[i].x`) is a pointer in a stack cell (a register after the register pass): made in a new block in front of the loop, moved on by `f * step` in a block that the step of the counter falls into. `c[i] = a[i] + b[i] * k` is 9 instructions per element (was 13); measured with the same compiler, `-irclr 1073741824` switches it off: 340 -> 300 ms.
 * **The vector loop tests at the bottom** (one branch for each turn, before: two jumps and a compare at the top): an int copy of 2048 elements, 100,000 times: 301 ms scalar, 66 ms vectorised.
