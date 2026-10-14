@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.132
+* **The syntax tree reads structs (A1c-2, `docs/design/10-structured-pipeline.md` 8.4):** struct values and pointers to structs (`p^.x`; `p.x` inside a method), fields of every scalar, pointer and array type, nested structs, arrays of structs (`b[i].x`), initial lists, `null`, `Name::function(...)` calls. The probe (`-xast`; the generated code is the same) finds **535 of the 945 bodies (57 %)** in the subset (before: 367). Left out on purpose: `switch`, `throw`, `try` (the unwinding of the frame), String and dynamic arrays, methods.
+* Test `t371_ast_probe` (a function with a struct is in the subset, one with a String is not).
+
 ## 0.9.131
 * **The syntax tree reads more (A1c-1, `docs/design/10-structured-pipeline.md` 8.3):** scalars of every width and `double`, pointers (`p[i]`, `p^`, `@x`, `@a[i]`), fixed arrays of one dimension (locals and globals), casts to a scalar type, `++` / `--`, `cout << ...`, calls of functions that return a scalar or a pointer. The probe (`-xast`; the generated code is the same) finds **367 of the 945 function bodies** of the tests, benchmarks and examples in the subset (before: 153); the message of a body that is not says the token where it stopped.
 * Test `t371_ast_probe`.

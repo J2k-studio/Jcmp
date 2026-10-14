@@ -1,7 +1,8 @@
-# J2K / Jcmp 0.9.131
+# J2K / Jcmp 0.9.132
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
 
+**0.9.132:** the syntax tree probe reads structs and fields: 57 % of the function bodies are in the subset (generated code is the same).
 **0.9.131:** the syntax tree probe reads pointers, arrays, doubles and `cout`: 39 % of the function bodies are in the subset (generated code is the same).
 **0.9.130:** floating point loops over arrays are vectorised again (3 times faster than scalar in the measurement).
 **0.9.129:** array addresses in counted loops are pointers that move on (strength reduction); the vector loop has one branch for each turn.
