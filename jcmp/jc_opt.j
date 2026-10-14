@@ -3274,6 +3274,97 @@ void op_cell_fwd() {
     }
 }
 
+// ---------------------------------------------------------------------------------------------- variables that are set once to a number
+// A plain frame slot (a local `int n = 200;` that is never changed) with exactly one store in the whole function, of a number made in
+// the same block, in a block that comes before every load of the slot: each load is the number itself. The loop bounds and the factors
+// of the products then fold (`n * n`, `cmp i, 200`), and the register pass has fewer variables to keep.
+
+int cc_cnt[8192];
+int cc_blk[8192];
+int cc_pos[8192];
+int cc_val[8192];
+int cc_const[8192];
+int cc_changes;
+
+void op_const_cells() {
+    if (ir_opt & 33554432) != 0 { return; }
+    vn_hints();
+    op_graph();
+    int i = 0;
+    while i < 8192 {
+        cc_cnt[i] = 0;
+        cc_const[i] = 0;
+        i += 1;
+    }
+    int b = 0;
+    while b < ir_nb {
+        if op_po[b] >= 0 {
+            int j = ir_bs[b];
+            while j < ir_be[b] {
+                if ir_op[j] == IR_STORE && ir_a[j] == 30 && ir_k[j] >= 0 {
+                    int sl = ir_k[j] / 8;
+                    int w = ir_w[j];
+                    if w < 0 { w = 0 - w; }
+                    if sl < 8192 {
+                        // a store of a different width or place touches the slot of its first byte only; plain slots are whole words
+                        cc_cnt[sl] += 1;
+                        if (w != 8 || ir_k[j] % 8 != 0) { cc_cnt[sl] += 2; }
+                        cc_blk[sl] = b;
+                        cc_pos[sl] = j;
+                        // the value: the last definition of the register before the store in this block
+                        if ir_bi[j] == 0 {
+                            int r = ir_b[j];
+                            int q = j - 1;
+                            while q >= ir_bs[b] {
+                                if ir_d[q] == r && ir_op[q] != IR_NOP { break; }
+                                if ir_op[q] == IR_CALL || ir_op[q] == IR_CALLIND || ir_op[q] == IR_SYSCALL {
+                                    if r >= 1 && r <= 19 { q = ir_bs[b] - 2; break; }
+                                }
+                                q -= 1;
+                            }
+                            if q >= ir_bs[b] && ir_op[q] == IR_CONST && ir_d[q] == r {
+                                cc_val[sl] = ir_k[q];
+                                cc_const[sl] = 1;
+                            } else {
+                                cc_const[sl] = 0;
+                            }
+                        } else {
+                            cc_const[sl] = 0;
+                        }
+                    }
+                }
+                j += 1;
+            }
+        }
+        b += 1;
+    }
+    b = 0;
+    while b < ir_nb {
+        if op_po[b] >= 0 {
+            int j2 = ir_bs[b];
+            while j2 < ir_be[b] {
+                if ir_op[j2] == IR_LOAD && ir_a[j2] == 30 && ir_k[j2] >= 0 && ir_w[j2] == 8 && ir_k[j2] % 8 == 0 && ir_k[j2] / 8 < 8192 {
+                    int sl2 = ir_k[j2] / 8;
+                    if cc_cnt[sl2] == 1 && cc_const[sl2] == 1 && op_plain[sl2] == 1 && ir_d[j2] >= 1 && ir_d[j2] < 64 && ir_vcls[ir_d[j2]] == 0 {
+                        bool before = false;
+                        if cc_blk[sl2] == b { before = cc_pos[sl2] < j2; } else { before = op_dom(cc_blk[sl2], b); }
+                        if before {
+                            ir_op[j2] = IR_CONST;
+                            ir_k[j2] = cc_val[sl2];
+                            ir_a[j2] = 0;
+                            ir_b[j2] = 0;
+                            ir_bi[j2] = 0;
+                            cc_changes += 1;
+                        }
+                    }
+                }
+                j2 += 1;
+            }
+        }
+        b += 1;
+    }
+}
+
 // ---------------------------------------------------------------------------------------------- struct temporaries in the frame (SROA)
 // A pointer that is the frame pointer plus a number (ADDR_SLOT, add x, x29, #N, and copies and sums of them, also when they went through a
 // stack cell) is followed through each chain of blocks; a load or store through such a pointer becomes a load or store at the offset

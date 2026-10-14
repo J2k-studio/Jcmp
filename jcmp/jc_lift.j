@@ -1393,6 +1393,7 @@ void ir_passes_basic() {
     if (ir_opt & 32768) != 0 { op_sroa(); }
     if (ir_opt & 8) != 0 { op_cse_run(); }
     if (ir_opt & 8) != 0 { op_cell_fwd(); }
+    if (ir_opt & 8) != 0 { op_const_cells(); }
     if (ir_opt & 8) != 0 { op_dead_cells(); }
     if (ir_opt & 4) != 0 { op_clean_run(); }
     if (ir_opt & 32768) != 0 && (ir_opt & 16777216) == 0 && cf_changes != cf0 {

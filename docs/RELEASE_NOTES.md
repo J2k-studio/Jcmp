@@ -1,6 +1,8 @@
-# J2K / Jcmp 0.9.109
+# J2K / Jcmp 0.9.110
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
+
+**0.9.110:** a local variable that is set once to a number is that number in every use (loop bounds, products).
 
 **0.9.109:** a double `Mem::free(p)` has its own message.
 

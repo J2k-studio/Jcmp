@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.110
+* **A local that is set once to a number is that number everywhere** (`op_const_cells`): `int n = 200;` that nothing changes (one store in the function, of a number made in the same block, in a block that comes before every load) - its loads become the number, so `n * n` and `cmp k, n` fold and the loop bounds are immediate numbers. In `matmul` the three copies of `n` in registers and the loads in the inner loop are gone. A hidden switch: `-irdbg 33554432`.
+* Tests: `t347_const_cells` (the suite: 370), 400 random programs (`-noinl`, `-d`), bootstrap.
+
 ## 0.9.109
 * **A second `Mem::free(p)` says so:** `this variable was already freed by Mem::free and is freed again (it is null now)` (before: the general "used afterwards" text). Case 2 of the ownership proposal in `docs/error-messages-plan.md`; case 4 (a leak) is not needed because owners are freed at the end of their block.
 * Tests: `t346_fail_double_free` (the suite: 369).
