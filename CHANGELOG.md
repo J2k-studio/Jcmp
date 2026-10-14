@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.122
+* **32-bit `float` in the IR.** A function that has `float` values (`fmov sN, wN`, `fadd s0, s0, s1`, `fcvt`, `fcmp s..`, `scvtf s..`, `fcvtzs x, s..`) was left as the parser wrote it; it is lifted and optimised now (new IR operations `IR_F32IN`, `IR_F32OUT`, `IR_FADD32 .. IR_FDIV32`, `IR_FUN32`, `IR_FCVT_DS`, `IR_FCVT_SD`, `IR_I2F32`, `IR_F32TOI`; a float is held in the low 32 bits of a double register vreg, a comparison converts both sides to doubles, which is exact). This includes every function that has an `f32x4`.
+* Tests: `t366_float32_ir` (the same output with the default options, `-noir`, `-noregs`, `-noinl`, `-d`).
+
 ## 0.9.121
 * **SIMD step S4: `v.sum()`, `v.min()`, `v.max()`** on `f64x2`, `i64x2`, `f32x4`, `i32x4` (the methods of the proposal in `docs/syntax-design.md` 59). `sum()` of four lanes is `(x + y) + (z + w)`. They are small methods of `std/simd.j`; the IR inlines them, so a vector that is only summed at the end stays in a register.
 * Known: a function that uses `float` (32 bits) values, so every function with an `f32x4` brace initialiser, is still not lifted into the IR (`fcvt s0, d0`); it works, it is not optimised. 32-bit floats in the IR are the next step.

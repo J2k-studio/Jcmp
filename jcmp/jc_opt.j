@@ -1131,7 +1131,7 @@ void op_prop_block(int b, int cont) {
 
 bool op_pure(int op) {
     return op == IR_CONST || op == IR_COPY || (op >= IR_ADD && op <= IR_MULHS) || op == IR_NEG || op == IR_NOT || op == IR_EXT || op == IR_SETCC
-        || (op >= IR_FADD && op <= IR_FSETCC) || op == IR_ADDR_GLOBAL || op == IR_ADDR_FUNC || op == IR_FCONST || (op >= IR_CLZ && op <= IR_POPCNT) || op == IR_FTRUNC || op == IR_FCEIL;
+        || (op >= IR_FADD && op <= IR_FSETCC) || op == IR_ADDR_GLOBAL || op == IR_ADDR_FUNC || op == IR_FCONST || (op >= IR_CLZ && op <= IR_POPCNT) || op == IR_FTRUNC || op == IR_FCEIL || (op >= IR_F32IN && op <= IR_F32TOI);
 }
 
 int op_tl[IR_MAXV];

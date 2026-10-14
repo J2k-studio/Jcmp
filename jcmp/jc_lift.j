@@ -538,6 +538,18 @@ int lf_line(int idx) {
         }
         return 1;
     }
+    if pt_mn(0, "fcmp") && pt_no[0] == 2 && pt_regno(0, 0, 's') >= 0 && pt_regno(0, 1, 's') >= 0 {
+        // two floats: compared as doubles (the conversion is exact, so the result is the same)
+        int sa = ir_vreg(1);
+        int sb = ir_vreg(1);
+        lf_emit(IR_FCVT_SD, sa, lf_d(pt_regno(0, 0, 's')), 0, 0, 0);
+        lf_emit(IR_FCVT_SD, sb, lf_d(pt_regno(0, 1, 's')), 0, 0, 0);
+        lf_cmp_kind = 2;
+        lf_cmp_a = sa;
+        lf_cmp_b = sb;
+        lf_cmp_bi = 0;
+        return 1;
+    }
     if pt_mn(0, "fcmp") && pt_no[0] == 2 && pt_regno(0, 0, 'd') >= 0 && pt_regno(0, 1, 'd') >= 0 {
         lf_cmp_kind = 2;
         lf_cmp_a = lf_d(pt_regno(0, 0, 'd'));
@@ -566,7 +578,56 @@ int lf_line(int idx) {
             lf_emit(IR_F2BITS, lf_x(pt_regno(0, 0, 'x')), lf_d(pt_regno(0, 1, 'd')), 0, 0, 0);
             return 1;
         }
-        return lf_fail("a float of 32 bits (fmov with s or w registers)");
+        if pt_regno(0, 0, 's') >= 0 && pt_regno(0, 1, 'w') >= 0 {
+            lf_emit(IR_F32IN, lf_d(pt_regno(0, 0, 's')), lf_x(pt_regno(0, 1, 'w')), 0, 0, 0);
+            return 1;
+        }
+        if pt_regno(0, 0, 'w') >= 0 && pt_regno(0, 1, 's') >= 0 {
+            lf_emit(IR_F32OUT, lf_x(pt_regno(0, 0, 'w')), lf_d(pt_regno(0, 1, 's')), 0, 0, 0);
+            return 1;
+        }
+        if pt_regno(0, 0, 's') >= 0 && pt_regno(0, 1, 's') >= 0 {
+            lf_emit(IR_COPY, lf_d(pt_regno(0, 0, 's')), lf_d(pt_regno(0, 1, 's')), 0, 0, 0);
+            return 1;
+        }
+        return lf_fail("a float of 32 bits (an fmov that is not understood)");
+    }
+    // floats: the instructions with s registers (the register dN and sN are the same vreg: it holds the float in its low 32 bits)
+    int lfs = 0;
+    if pt_mn(0, "fadd") { lfs = IR_FADD32; }
+    else if pt_mn(0, "fsub") { lfs = IR_FSUB32; }
+    else if pt_mn(0, "fmul") { lfs = IR_FMUL32; }
+    else if pt_mn(0, "fdiv") { lfs = IR_FDIV32; }
+    if lfs != 0 && pt_no[0] == 3 && pt_regno(0, 0, 's') >= 0 && pt_regno(0, 1, 's') >= 0 && pt_regno(0, 2, 's') >= 0 {
+        lf_emit(lfs, lf_d(pt_regno(0, 0, 's')), lf_d(pt_regno(0, 1, 's')), lf_d(pt_regno(0, 2, 's')), 0, 0);
+        return 1;
+    }
+    int lfu = 0 - 1;
+    if pt_mn(0, "fneg") { lfu = 0; }
+    else if pt_mn(0, "fabs") { lfu = 1; }
+    else if pt_mn(0, "fsqrt") { lfu = 2; }
+    if lfu >= 0 && pt_no[0] == 2 && pt_regno(0, 0, 's') >= 0 && pt_regno(0, 1, 's') >= 0 {
+        lf_emit(IR_FUN32, lf_d(pt_regno(0, 0, 's')), lf_d(pt_regno(0, 1, 's')), 0, 0, lfu);
+        return 1;
+    }
+    if pt_mn(0, "fcvt") && pt_no[0] == 2 {
+        if pt_regno(0, 0, 's') >= 0 && pt_regno(0, 1, 'd') >= 0 {
+            lf_emit(IR_FCVT_DS, lf_d(pt_regno(0, 0, 's')), lf_d(pt_regno(0, 1, 'd')), 0, 0, 0);
+            return 1;
+        }
+        if pt_regno(0, 0, 'd') >= 0 && pt_regno(0, 1, 's') >= 0 {
+            lf_emit(IR_FCVT_SD, lf_d(pt_regno(0, 0, 'd')), lf_d(pt_regno(0, 1, 's')), 0, 0, 0);
+            return 1;
+        }
+        return lf_fail("fcvt with registers that are not understood");
+    }
+    if pt_mn(0, "scvtf") && pt_no[0] == 2 && pt_regno(0, 0, 's') >= 0 && pt_regno(0, 1, 'x') >= 0 {
+        lf_emit(IR_I2F32, lf_d(pt_regno(0, 0, 's')), lf_x(pt_regno(0, 1, 'x')), 0, 0, 0);
+        return 1;
+    }
+    if pt_mn(0, "fcvtzs") && pt_no[0] == 2 && pt_regno(0, 0, 'x') >= 0 && pt_regno(0, 1, 's') >= 0 {
+        lf_emit(IR_F32TOI, lf_x(pt_regno(0, 0, 'x')), lf_d(pt_regno(0, 1, 's')), 0, 0, 0);
+        return 1;
     }
     int lfop = 0;
     if pt_mn(0, "fadd") { lfop = IR_FADD; }
@@ -907,6 +968,12 @@ void lw_reg(int v) {
     }
 }
 
+// the single-precision name (sN) of a double register vreg
+void lw_sreg(int v) {
+    rg_text("s");
+    if v >= 32 && v <= 63 { rg_int(v - 32); } else { rg_int(lw_tmp_reg[v]); }
+}
+
 // the same as lw_reg for a whole-number register, written as a 32-bit one (wN)
 void lw_wreg(int v) {
     if v >= 1 && v <= 31 {
@@ -1147,6 +1214,33 @@ bool lw_instr(int i, int b) {
             lw_reg(d);
             rg_text(", x17\n");
         }
+        return true;
+    }
+    if op >= IR_F32IN && op <= IR_F32TOI {
+        lw_def(d);
+        if op == IR_F32IN {
+            rg_text("fmov "); lw_sreg(d); rg_text(", "); lw_wreg(ir_a[i]);
+        } else if op == IR_F32OUT {
+            rg_text("fmov "); lw_wreg(d); rg_text(", "); lw_sreg(ir_a[i]);
+        } else if op >= IR_FADD32 && op <= IR_FDIV32 {
+            if op == IR_FADD32 { rg_text("fadd "); }
+            else if op == IR_FSUB32 { rg_text("fsub "); }
+            else if op == IR_FMUL32 { rg_text("fmul "); }
+            else { rg_text("fdiv "); }
+            lw_sreg(d); rg_text(", "); lw_sreg(ir_a[i]); rg_text(", "); lw_sreg(ir_b[i]);
+        } else if op == IR_FUN32 {
+            if ir_k[i] == 0 { rg_text("fneg "); } else if ir_k[i] == 1 { rg_text("fabs "); } else { rg_text("fsqrt "); }
+            lw_sreg(d); rg_text(", "); lw_sreg(ir_a[i]);
+        } else if op == IR_FCVT_DS {
+            rg_text("fcvt "); lw_sreg(d); rg_text(", "); lw_reg(ir_a[i]);
+        } else if op == IR_FCVT_SD {
+            rg_text("fcvt "); lw_reg(d); rg_text(", "); lw_sreg(ir_a[i]);
+        } else if op == IR_I2F32 {
+            rg_text("scvtf "); lw_sreg(d); rg_text(", "); lw_reg(ir_a[i]);
+        } else {
+            rg_text("fcvtzs "); lw_reg(d); rg_text(", "); lw_sreg(ir_a[i]);
+        }
+        rg_put(10);
         return true;
     }
     if op == IR_VLANE {

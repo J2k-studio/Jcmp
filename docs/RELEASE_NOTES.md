@@ -1,7 +1,8 @@
-# J2K / Jcmp 0.9.121
+# J2K / Jcmp 0.9.122
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
 
+**0.9.122:** functions with 32-bit `float` values (and `f32x4`) go through the IR optimiser too.
 **0.9.121:** SIMD step S4: `sum()`, `min()`, `max()` of the lanes of `f64x2`, `i64x2`, `f32x4`, `i32x4`.
 **0.9.120:** SIMD step S3: `f64x2::load(@a[0], i)`, `v.store(@a[0], i)`; vectors stay in NEON registers in loops (a loop of `acc += d * 2.0` is 6 times faster).
 **0.9.119:** SIMD step S2b: functions with simd operators go through the IR (vectors as temporaries; copies and reloads are single 16-byte accesses).
