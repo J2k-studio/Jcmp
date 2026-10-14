@@ -1,6 +1,8 @@
-# J2K / Jcmp 0.9.104
+# J2K / Jcmp 0.9.105
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
+
+**0.9.105:** `sort_by` (stable, with a comparator), `lower_bound` / `upper_bound` / `binary_search`, `Queue`, `Deque` and `Heap` in the standard library.
 
 **0.9.104:** struct temporaries (`vec3` arithmetic) live in registers instead of stack cells (vec3 benchmark 85 -> 56 ms).
 

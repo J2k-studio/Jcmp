@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.105
+* **Standard library (`std/collections.j`): sort with a comparator, binary search, Queue, Deque, Heap.** `sort_by<T>(a, less)` (stable merge sort, n log n, one buffer; `less(x, y)` true when x comes first), `lower_bound<T>`, `upper_bound<T>`, `binary_search<T>` (sorted arrays, by `<`), `Queue<T>` (`push pop front len free`), `Deque<T>` (`push_back push_front pop_front pop_back front back get len free`), `Heap<T>` (a min-heap by `<`: `push pop top len free`). Empty ones throw "empty". The type is written (`sort_by<int>(v, ...)`, `Queue<int> q;`) as for every generic.
+* Tests: `t340_sort_search_queue` (checked against Python), the suite (363).
+
 ## 0.9.104
 * **Struct temporaries (`vec3` and the like) live in registers:** the argument and result cells of inlined operator calls (`v + a * 0.5`) were kept in the frame because a value stored to a stack cell and loaded back in the same block could not be named when its register was written in between. `op_cell_fwd` turns such a store into a copy into the register of the load (the load goes away), the dead stores follow, and a second SROA round (only when a cell went away) makes the temporaries plain words that the register pass puts into registers. `vec3`: the loop of the benchmark has no loads or stores of its temporaries any more (85 -> 56 ms, clang -O2: 52).
 * The exit call (`svc` with 93 or 94 as the number) reads only x0: x1..x8 were taken as alive in the whole of `main` (dead address computations were kept alive by them).

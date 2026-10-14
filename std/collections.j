@@ -194,3 +194,231 @@ struct Set<T> {
         self.used = 0;
     }
 }
+
+// ---------------------------------------------------------------------------------------------- sorting and searching
+// Written with the type: sort_by<int>(a, less). `less(x, y)` is true when x must come before y; the sort is stable (merge sort, one
+// buffer of the same length) and takes n log n steps.
+
+void sort_by<T>(T[] a, bool(T, T)^ less) {
+    int n = a.len;
+    if n < 2 { return; }
+    T[] tmp = arr(n);
+    tmp.resize(n);
+    int width = 1;
+    while width < n {
+        int lo = 0;
+        while lo < n {
+            int mid = lo + width;
+            if mid > n { mid = n; }
+            int hi = lo + width * 2;
+            if hi > n { hi = n; }
+            int i = lo;
+            int j = mid;
+            int k = lo;
+            while i < mid && j < hi {
+                if less(a[j], a[i]) {
+                    tmp[k] = a[j];
+                    j += 1;
+                } else {
+                    tmp[k] = a[i];
+                    i += 1;
+                }
+                k += 1;
+            }
+            while i < mid { tmp[k] = a[i]; i += 1; k += 1; }
+            while j < hi { tmp[k] = a[j]; j += 1; k += 1; }
+            lo += width * 2;
+        }
+        for q in 0..n { a[q] = tmp[q]; }
+        width *= 2;
+    }
+    tmp.free();
+}
+
+// the first place i of the sorted array a where a[i] >= x (a.len when there is none)
+int lower_bound<T>(T[] a, T x) {
+    int lo = 0;
+    int hi = a.len;
+    while lo < hi {
+        int mid = lo + (hi - lo) / 2;
+        if a[mid] < x { lo = mid + 1; } else { hi = mid; }
+    }
+    return lo;
+}
+
+// the first place i where a[i] > x
+int upper_bound<T>(T[] a, T x) {
+    int lo = 0;
+    int hi = a.len;
+    while lo < hi {
+        int mid = lo + (hi - lo) / 2;
+        if a[mid] <= x { lo = mid + 1; } else { hi = mid; }
+    }
+    return lo;
+}
+
+// the place of x in the sorted array a, or -1
+int binary_search<T>(T[] a, T x) {
+    int i = lower_bound<T>(a, x);
+    if i < a.len && a[i] == x { return i; }
+    return -1;
+}
+
+// ---------------------------------------------------------------------------------------------- Queue, Deque, Heap
+// Queue<T>: first in, first out (a ring buffer). Deque<T>: also at the front. Heap<T>: the smallest element (by `<`) comes out first.
+// Each has len and free(self); pop / front / back on an empty one throw "empty".
+
+struct Queue<T> {
+    T[] items;
+    int head;
+    int len;
+
+    void push(self, T x) {
+        if self.items == null { self.items = arr(8); self.items.resize(8); }
+        int cap = self.items.len;
+        if self.len == cap {
+            T[] bigger = arr(cap * 2);
+            bigger.resize(cap * 2);
+            for i in 0..self.len { bigger[i] = self.items[(self.head + i) % cap]; }
+            self.items.free();
+            self.items = bigger;
+            self.head = 0;
+            cap = cap * 2;
+        }
+        self.items[(self.head + self.len) % cap] = x;
+        self.len += 1;
+    }
+    T front(self) {
+        if self.len == 0 { throw "empty"; }
+        return self.items[self.head];
+    }
+    T pop(self) {
+        if self.len == 0 { throw "empty"; }
+        T x = self.items[self.head];
+        self.head = (self.head + 1) % self.items.len;
+        self.len -= 1;
+        return x;
+    }
+    void free(self) {
+        self.items.free();
+        self.head = 0;
+        self.len = 0;
+    }
+}
+
+struct Deque<T> {
+    T[] items;
+    int head;
+    int len;
+
+    void grow(self) {
+        if self.items == null { self.items = arr(8); self.items.resize(8); }
+        int cap = self.items.len;
+        if self.len == cap {
+            T[] bigger = arr(cap * 2);
+            bigger.resize(cap * 2);
+            for i in 0..self.len { bigger[i] = self.items[(self.head + i) % cap]; }
+            self.items.free();
+            self.items = bigger;
+            self.head = 0;
+        }
+    }
+    void push_back(self, T x) {
+        self.grow();
+        int cap = self.items.len;
+        self.items[(self.head + self.len) % cap] = x;
+        self.len += 1;
+    }
+    void push_front(self, T x) {
+        self.grow();
+        int cap = self.items.len;
+        self.head = (self.head + cap - 1) % cap;
+        self.items[self.head] = x;
+        self.len += 1;
+    }
+    T front(self) {
+        if self.len == 0 { throw "empty"; }
+        return self.items[self.head];
+    }
+    T back(self) {
+        if self.len == 0 { throw "empty"; }
+        return self.items[(self.head + self.len - 1) % self.items.len];
+    }
+    T pop_front(self) {
+        if self.len == 0 { throw "empty"; }
+        T x = self.items[self.head];
+        self.head = (self.head + 1) % self.items.len;
+        self.len -= 1;
+        return x;
+    }
+    T pop_back(self) {
+        if self.len == 0 { throw "empty"; }
+        self.len -= 1;
+        return self.items[(self.head + self.len) % self.items.len];
+    }
+    // the element number i from the front
+    T get(self, int i) {
+        if i < 0 || i >= self.len { throw "index out of range"; }
+        return self.items[(self.head + i) % self.items.len];
+    }
+    void free(self) {
+        self.items.free();
+        self.head = 0;
+        self.len = 0;
+    }
+}
+
+struct Heap<T> {
+    T[] items;
+    int len;
+
+    void push(self, T x) {
+        if self.items == null { self.items = arr(8); }
+        self.items.push(x);
+        int i = self.len;
+        self.len += 1;
+        while i > 0 {
+            int p = (i - 1) / 2;
+            if self.items[i] < self.items[p] {
+                T t = self.items[i];
+                self.items[i] = self.items[p];
+                self.items[p] = t;
+                i = p;
+            } else {
+                i = 0;
+            }
+        }
+    }
+    T top(self) {
+        if self.len == 0 { throw "empty"; }
+        return self.items[0];
+    }
+    T pop(self) {
+        if self.len == 0 { throw "empty"; }
+        T r = self.items[0];
+        self.len -= 1;
+        self.items[0] = self.items[self.len];
+        self.items.pop();
+        int i = 0;
+        bool go = true;
+        while go {
+            int l = i * 2 + 1;
+            int m = i;
+            if l < self.len && self.items[l] < self.items[m] { m = l; }
+            if l + 1 < self.len && self.items[l + 1] < self.items[m] { m = l + 1; }
+            if m == i {
+                go = false;
+            } else {
+                T t = self.items[i];
+                self.items[i] = self.items[m];
+                self.items[m] = t;
+                i = m;
+            }
+        }
+        return r;
+    }
+    void free(self) {
+        self.items.free();
+        self.len = 0;
+    }
+}
