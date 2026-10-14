@@ -2388,7 +2388,7 @@ void parse_statement_inner() {
         parse_device_assign(@s_name);        // Uart.data = 'A';
         return;
     }
-    if tok_is("::") && str_eq(@s_name, "Sys") {
+    if tok_is("::") && str_eq(@s_name, "Sys") && !sys_function_follows() {
         parse_sys_assign();              // Sys::name = value;
         return;
     }

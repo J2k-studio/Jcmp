@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.135
+* **The standard library in categories** (`docs/STDLIB.md`): `#import <core>`, `<number>`, `<text>`, `<files>`, `<system>`, `<time>`, `<data>`, `<crypto>` read only their own part and the parts it needs (`#import <stdlib>` reads all, as before). `std/os.j` is split into `fsdir.j` (`Fs`, `Dir`), `system.j` (`Env`, `Proc`, `Term`), `time.j` (`Time`, `Random`), `num.j` (`Num`); `Path` has its own file. `gen_std.sh` makes one function `push_std_units(mask)`.
+* **Fixed:** `Sys::write(...)` and every other function of the struct `Sys` called with its name in front was refused as "not a system register" since 0.9.80; a name that is a function of `Sys` is a call now.
+* Tests: `t373_std_categories`, `t374_std_categories2`.
+
 ## 0.9.134
 * **The syntax tree reads every function body of the corpus: 949 of 949** (before: 535; `docs/design/10-structured-pipeline.md` 8.6): `String`, dynamic arrays, enums, methods, `?`, `switch` with patterns, `try` / `catch`, `throw`, `defer`, `cin`, lambdas and function pointers, slices, tables of several dimensions, pointers to pointers, `Name::function`, `Enum::Member`, the built-in names. The hidden switches `-xast` / `-xastdump` print the result; the generated code is the same. The message for a body that does not fit names the token and the line.
 * Every local variable of the tree has a unique number (a block that ends does not reuse it); the dump prints compound assignments (`+=`, `shl=` ...), `for x in things`, members and methods.

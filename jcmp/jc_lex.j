@@ -43,6 +43,7 @@ int canvas_loaded;
 int screen_loaded;
 int math_loaded;             // 1 once `#import <math>` has been read (using math::vector loads the parts)           // 1 once `import <matrix>` has been read
 int std_loaded;              // 1 once `import std` has been read
+int std_units;               // the units of the standard library that are read (bit n = unit n, see gen_std.sh): 255 = all
 
 // ---------------------------------------------------------------- #define
 char def_name[131072];         // 256 names x 64
@@ -461,6 +462,7 @@ void lex_init(char^ path) {
     lx_depth = 0;
     lvl_inst[0] = 0;
     std_loaded = 0;
+    std_units = 0;
     vector_loaded = 0;
     matrix_loaded = 0;
     quat_loaded = 0;
@@ -732,6 +734,28 @@ void using_gfx() {
     next();
 }
 
+// the units of the mask that are not read yet become a new "file" (read next)
+void std_load(int mask) {
+    int need = mask - (mask & std_units);
+    if need == 0 { return; }
+    std_units = std_units | need;
+    std_loaded = 1;
+    push_std_units(need);
+}
+
+// the mask of a category of the standard library (0: it is not one): the units it needs are in it
+int std_category(char^ name) {
+    if str_eq(name, "core") { return 1; }
+    if str_eq(name, "number") { return 3; }
+    if str_eq(name, "text") { return 5; }
+    if str_eq(name, "files") { return 13; }
+    if str_eq(name, "system") { return 21; }
+    if str_eq(name, "time") { return 33; }
+    if str_eq(name, "data") { return 71; }
+    if str_eq(name, "crypto") { return 141; }
+    return 0;
+}
+
 // the library `name` (with / for the dots) is loaded: the built-in ones (stdlib, cpu), else a file found by find_library
 void import_library(char^ name, char^ rel) {
     if str_eq(name, "stdlib") || str_eq(name, "std") {
@@ -739,30 +763,26 @@ void import_library(char^ name, char^ rel) {
             import_warned = 1;
             warn("the library 'std' is now called 'stdlib': write import <stdlib>", "deprecated");
         }
-        if std_loaded == 0 {
-            std_loaded = 1;
-            push_std();
-        }
+        std_load(255);
         next();
         return;
     }
     if str_eq(name, "gfx") {
         // the graphics library: its parts (canvas) are chosen with  using gfx::canvas;  (needs stdlib and math::vector)
         gfx_loaded = 1;
-        if std_loaded == 0 {
-            std_loaded = 1;
-            push_std();
-        }
+        std_load(255);
         next();
         return;
     }
     if str_eq(name, "math") {
         // the math library: its parts (vector, matrix) are chosen with  using math::vector;
         math_loaded = 1;
-        if std_loaded == 0 {
-            std_loaded = 1;
-            push_std();
-        }
+        std_load(255);
+        next();
+        return;
+    }
+    if std_category(name) != 0 {
+        std_load(std_category(name));
         next();
         return;
     }

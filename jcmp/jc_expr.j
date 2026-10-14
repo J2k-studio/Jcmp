@@ -2288,13 +2288,32 @@ void lvalue_loop() {
     }
 }
 
+// the token is `::` after `Sys`: is the name that follows a function of the struct Sys (`Sys::write(...)`), not a system register?
+bool sys_function_follows() {
+    int sp = cur_pos;
+    while sp < cur_len && (src_bufs[cur_base + sp] == ' ' || src_bufs[cur_base + sp] == 9) { sp += 1; }
+    char nm[64];
+    char full[96];
+    int k = 0;
+    while sp < cur_len && k < 60 && is_alnum(src_bufs[cur_base + sp]) {
+        nm[k] = src_bufs[cur_base + sp];
+        k += 1;
+        sp += 1;
+    }
+    nm[k] = 0;
+    if k == 0 { return false; }
+    str_copy(@full, "Sys__", 96);
+    str_copy(@full + 5, @nm, 64);
+    return find_func(@full) >= 0;
+}
+
 // Struct::function(args) or Enum::Member: the name is in id_name, the token is "::"
 void gen_scope() {
     if str_eq(@id_name, "Reg") {
         gen_reg_read();
         return;
     }
-    if str_eq(@id_name, "Sys") {
+    if str_eq(@id_name, "Sys") && !sys_function_follows() {
         gen_sys_read();
         return;
     }
