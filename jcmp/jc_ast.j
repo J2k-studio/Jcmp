@@ -17,13 +17,13 @@
 #define AK_BIN 3             // val = operator code (AO_*), a, b = operands
 #define AK_NEG 4             // a
 #define AK_NOT 5             // a
-#define AK_CALL 6            // val = the function (index), a = first argument node, the arguments are a chain through c
+#define AK_CALL 6            // val = the function (index), a = first argument node, the arguments are a chain through ast_nx
 #define AK_ASSIGN 7          // c = the target (AK_VAR, AK_GVAR, AK_INDEX, AK_DEREF), a = the value; b = operator code (0: plain `=`, else AO_*)
 #define AK_IF 8              // a = condition, b = then block, c = else (a block, another AK_IF, or 0)
 #define AK_WHILE 9           // a = condition, b = body
 #define AK_FOR 10            // val = the local, a = from, b = to, c = body
 #define AK_RET 11            // a = value (0: none)
-#define AK_BLOCK 12          // a = first statement, the statements are a chain through c
+#define AK_BLOCK 12          // a = first statement, the statements are a chain through ast_nx
 #define AK_DECL 13           // val = the local, a = initial value (0: none)
 #define AK_EXPR 14           // a = the expression (a call)
 #define AK_BREAK 15
@@ -65,6 +65,8 @@ int ast_a[AST_MAXN];
 int ast_b[AST_MAXN];
 int ast_c[AST_MAXN];
 int ast_val[AST_MAXN];
+int ast_nx[AST_MAXN];            // the next one in a list (the arguments of a call, the items of a list or cout, the statements of a block)
+int ast_ty[AST_MAXN];            // the type of an expression node: base + 65536 * kind (kind 0 scalar, 1 pointer to, 2 array of, 3 struct)
 int ast_n;
 int ast_root;                    // the block of the last body read (0: it is not in the subset)
 
@@ -76,6 +78,7 @@ int ast_nl;
 int ast_ok;                      // 0 while reading, set to 0 by the first thing that is not understood
 char ast_why[128];
 int ast_report;                  // -xast
+int ast_dump;                    // -xastdump: the tree of every body that is in the subset
 int ast_funcs;                   // all bodies read / the ones in the subset (for -xast)
 int ast_funcs_ok;
 int ast_loop_depth;
@@ -100,12 +103,21 @@ void ast_fail(char^ why) {
     }
 }
 
+int ast_cur_ty;                  // the type the next node gets (set by the caller, used and cleared by ast_node)
+
+int ast_mkty(int kind, int base) {
+    return base + 65536 * kind;
+}
+
 int ast_node(int kind, int a, int b, int c, int val) {
     if ast_n >= AST_MAXN - 1 {
         ast_fail("the body is too big for the tree");
         return 0;
     }
     ast_n += 1;
+    ast_ty[ast_n] = ast_cur_ty;
+    ast_cur_ty = 0;
+    ast_nx[ast_n] = 0;
     ast_kind[ast_n] = kind;
     ast_a[ast_n] = a;
     ast_b[ast_n] = b;
@@ -133,6 +145,31 @@ int ast_add_local(char^ name) {
     ast_lbase[ast_nl] = 8;
     ast_nl += 1;
     return ast_nl - 1;
+}
+
+// the type of `a op b` for numbers: a double if one is, else a float if both are, else u64 if one is, else int
+int ast_arith_ty(int ta, int tb) {
+    int ba = ta % 65536;
+    int bb = tb % 65536;
+    if ba == 7 || bb == 7 { return ast_mkty(0, 7); }
+    if ba == 6 || bb == 6 { return ast_mkty(0, 6); }
+    if ba == 13 || bb == 13 { return ast_mkty(0, 13); }
+    return ast_mkty(0, 8);
+}
+
+// the type of the result of a function (fret is the type id: 0 a number, 1 a bool, 90 float, 91 double, 93 u8, 94 u32, 95 u64, 100 + n a struct)
+int ast_fn_ty(int fi) {
+    int t = fret[fi];
+    if t == 1 { return ast_mkty(0, 3); }
+    if t == 90 { return ast_mkty(0, 6); }
+    if t == 91 { return ast_mkty(0, 7); }
+    if t == 93 { return ast_mkty(0, 11); }
+    if t == 94 { return ast_mkty(0, 12); }
+    if t == 95 { return ast_mkty(0, 13); }
+    if t >= 100 { return ast_mkty(3, 16 + t - 100); }
+    if fcharret[fi] == 1 { return ast_mkty(0, 2); }
+    if fcharret[fi] == 2 { return ast_mkty(1, 2); }
+    return ast_mkty(0, 8);
 }
 
 // is the code a scalar of the subset (no struct, no enum, no String)?
@@ -234,7 +271,7 @@ int ast_call(int fidx) {
             int e = ast_expr(0);
             if ast_ok == 0 { return 0; }
             // the arguments are a chain through c
-            if first == 0 { first = e; } else { ast_c[last] = e; }
+            if first == 0 { first = e; } else { ast_nx[last] = e; }
             last = e;
             n += 1;
             if tok_is(",") { next(); } else { break; }
@@ -249,6 +286,7 @@ int ast_call(int fidx) {
         ast_fail("a call with another number of arguments");
         return 0;
     }
+    ast_cur_ty = ast_fn_ty(fidx);
     return ast_node(AK_CALL, first, 0, 0, fidx);
 }
 
@@ -270,12 +308,14 @@ int ast_postfix(int base, int kind, int tb) {
                 return 0;
             }
             next();
-            cur = ast_node(AK_INDEX, cur, ix, 0, 0);
             if ast_pbase >= 16 { ast_pkind = 3; } else { ast_pkind = 0; }
+            ast_cur_ty = ast_mkty(ast_pkind, ast_pbase);
+            cur = ast_node(AK_INDEX, cur, ix, 0, 0);
         } else if tok_is("^") && ast_pkind == 1 {
             next();
-            cur = ast_node(AK_DEREF, cur, 0, 0, 0);
             if ast_pbase >= 16 { ast_pkind = 3; } else { ast_pkind = 0; }
+            ast_cur_ty = ast_mkty(ast_pkind, ast_pbase);
+            cur = ast_node(AK_DEREF, cur, 0, 0, 0);
         } else if tok_is(".") && (ast_pkind == 3 || (ast_pkind == 1 && ast_pbase >= 16)) {
             // a field (not `..` of a range: the caller of a range reads the first `.` itself)
             int sv_pos = cur_pos;
@@ -293,6 +333,7 @@ int ast_postfix(int base, int kind, int tb) {
             }
             if ast_pkind == 1 {
                 // a pointer to a struct used like the struct (the `self` of a method, a name in a case)
+                ast_cur_ty = ast_mkty(3, ast_pbase);
                 cur = ast_node(AK_DEREF, cur, 0, 0, 0);
                 ast_pkind = 3;
             }
@@ -333,6 +374,7 @@ int ast_postfix(int base, int kind, int tb) {
                 if fldcode[fi] >= 16 { ast_pkind = 3; } else { ast_pkind = 0; }
                 ast_pbase = fldcode[fi];
             }
+            ast_cur_ty = ast_mkty(ast_pkind, ast_pbase);
             cur = ast_node(AK_FIELD, cur, 0, 0, fi);
         } else {
             break;
@@ -353,6 +395,7 @@ int ast_name_node() {
         next();
         ast_nkind = ast_lkind[li];
         ast_nbase = ast_lbase[li];
+        ast_cur_ty = ast_mkty(ast_nkind, ast_nbase);
         return ast_node(AK_VAR, 0, 0, 0, li);
     }
     int gi = find_global(@nm);
@@ -360,6 +403,7 @@ int ast_name_node() {
         next();
         ast_nkind = ast_gkind;
         ast_nbase = ast_gbase;
+        ast_cur_ty = ast_mkty(ast_nkind, ast_nbase);
         return ast_node(AK_GVAR, 0, 0, 0, gi);
     }
     ast_fail("a name that is not a local or a global of the subset");
@@ -423,7 +467,11 @@ int ast_primary() {
         int isf = tok_float;
         int v = tok_num;
         next();
-        if isf == 1 { return ast_node(AK_FNUM, 0, 0, 0, 0); }
+        if isf == 1 {
+            ast_cur_ty = ast_mkty(0, 7);
+            return ast_node(AK_FNUM, 0, 0, 0, 0);
+        }
+        ast_cur_ty = ast_mkty(0, 8);
         return ast_node(AK_NUM, 0, 0, 0, v);
     }
     if tok_is("(") {
@@ -433,7 +481,11 @@ int ast_primary() {
         if tc != 0 {
             // a cast to a scalar type or a pointer: (int)x  (Node^)p
             next();
-            if tok_is("^") { next(); }
+            int castptr = 0;
+            if tok_is("^") {
+                next();
+                castptr = 1;
+            }
             if !tok_is(")") {
                 ast_fail("a cast that is not understood");
                 return 0;
@@ -441,6 +493,7 @@ int ast_primary() {
             next();
             int v2 = ast_primary();
             if ast_ok == 0 { return 0; }
+            if castptr == 1 { ast_cur_ty = ast_mkty(1, tc); } else if tc >= 16 { ast_cur_ty = ast_mkty(3, tc); } else { ast_cur_ty = ast_mkty(0, tc); }
             return ast_node(AK_CAST, v2, 0, 0, tc);
         }
         int e = ast_expr(0);
@@ -456,12 +509,14 @@ int ast_primary() {
         next();
         int a = ast_primary();
         if ast_ok == 0 { return 0; }
+        ast_cur_ty = ast_arith_ty(ast_ty[a], ast_ty[a]);
         return ast_node(AK_NEG, a, 0, 0, 0);
     }
     if tok_is("!") {
         next();
         int a2 = ast_primary();
         if ast_ok == 0 { return 0; }
+        ast_cur_ty = ast_mkty(0, 3);
         return ast_node(AK_NOT, a2, 0, 0, 0);
     }
     if tok_is("@") {
@@ -474,6 +529,7 @@ int ast_primary() {
         if ast_ok == 0 { return 0; }
         int tgt = ast_postfix(bn, ast_nkind, ast_nbase);
         if ast_ok == 0 { return 0; }
+        ast_cur_ty = ast_mkty(1, ast_ty[tgt] % 65536);
         return ast_node(AK_ADDR, tgt, 0, 0, 0);
     }
     if tok_kind == T_IDENT {
@@ -481,10 +537,12 @@ int ast_primary() {
             int tv = 0;
             if tok_is("true") { tv = 1; }
             next();
+            ast_cur_ty = ast_mkty(0, 3);
             return ast_node(AK_NUM, 0, 0, 0, tv);
         }
         if tok_is("null") {
             next();
+            ast_cur_ty = ast_mkty(1, 8);
             return ast_node(AK_NUM, 0, 0, 0, 0);
         }
         if ast_colons_follow() && ast_find_local(@tok_text) < 0 {
@@ -570,6 +628,11 @@ int ast_expr(int level) {
         next();
         int rhs = ast_expr(lv + 1);
         if ast_ok == 0 { return 0; }
+        if code >= AO_LT {
+            ast_cur_ty = ast_mkty(0, 3);
+        } else {
+            ast_cur_ty = ast_arith_ty(ast_ty[lhs], ast_ty[rhs]);
+        }
         lhs = ast_node(AK_BIN, lhs, rhs, 0, code);
     }
     return lhs;
@@ -619,7 +682,7 @@ int ast_cout() {
             item = ast_expr(8);              // above the level of <<
             if ast_ok == 0 { return 0; }
         }
-        if first == 0 { first = item; } else { ast_c[last] = item; }
+        if first == 0 { first = item; } else { ast_nx[last] = item; }
         last = item;
     }
     if !tok_is(";") {
@@ -643,7 +706,7 @@ int ast_list() {
             item = ast_expr(0);
         }
         if ast_ok == 0 { return 0; }
-        if first == 0 { first = item; } else { ast_c[last] = item; }
+        if first == 0 { first = item; } else { ast_nx[last] = item; }
         last = item;
         if tok_is(",") { next(); } else { break; }
     }
@@ -884,6 +947,7 @@ int ast_stmt() {
             return 0;
         }
         next();
+        ast_cur_ty = ast_ty[target];
         return ast_node(AK_ASSIGN, v2, opc, target, 0);
     }
     ast_fail("a statement that is not in the subset");
@@ -907,12 +971,249 @@ int ast_block() {
         }
         int s = ast_stmt();
         if ast_ok == 0 { return 0; }
-        if first == 0 { first = s; } else { ast_c[last] = s; }
+        if first == 0 { first = s; } else { ast_nx[last] = s; }
         last = s;
     }
     next();
     ast_nl = saved_nl;
     return ast_node(AK_BLOCK, first, 0, 0, 0);
+}
+
+// ---------------------------------------------------------------- the printer (-xastdump)
+char ast_obuf[65536];
+int ast_olen;
+
+void ast_pc(int c) {
+    if ast_olen < 65530 {
+        ast_obuf[ast_olen] = c;
+        ast_olen += 1;
+    }
+}
+
+void ast_ps(char^ t) {
+    int i = 0;
+    while t[i] != 0 {
+        ast_pc(t[i]);
+        i += 1;
+    }
+}
+
+void ast_pn(int v) {
+    if v < 0 {
+        ast_pc('-');
+        v = 0 - v;
+    }
+    char d[24];
+    int n = 0;
+    if v == 0 {
+        d[0] = '0';
+        n = 1;
+    }
+    while v > 0 {
+        d[n] = '0' + v % 10;
+        v = v / 10;
+        n += 1;
+    }
+    while n > 0 {
+        n -= 1;
+        ast_pc(d[n]);
+    }
+}
+
+void ast_pbase(int b) {
+    if b == 1 { ast_ps("i8"); }
+    else if b == 2 { ast_ps("char"); }
+    else if b == 3 { ast_ps("bool"); }
+    else if b == 4 { ast_ps("i32"); }
+    else if b == 6 { ast_ps("float"); }
+    else if b == 7 { ast_ps("double"); }
+    else if b == 8 { ast_ps("int"); }
+    else if b == 11 { ast_ps("u8"); }
+    else if b == 12 { ast_ps("u32"); }
+    else if b == 13 { ast_ps("u64"); }
+    else if b >= 16 && b - 16 < scount { ast_ps(@sname + (b - 16) * 64); }
+    else { ast_ps("?"); }
+}
+
+void ast_pty(int t) {
+    int k = t / 65536;
+    ast_pbase(t % 65536);
+    if k == 1 { ast_pc('^'); }
+    if k == 2 { ast_ps("[]"); }
+}
+
+void ast_pexpr(int n) {
+    if n == 0 {
+        ast_ps("()");
+        return;
+    }
+    int k = ast_kind[n];
+    if k == AK_NUM {
+        ast_pn(ast_val[n]);
+    } else if k == AK_FNUM {
+        ast_ps("<float>");
+    } else if k == AK_VAR {
+        ast_ps(@ast_lname + ast_val[n] * 64);
+    } else if k == AK_GVAR {
+        ast_ps("$");
+        ast_ps(@gname + ast_val[n] * 64);
+    } else if k == AK_STR {
+        ast_ps("\"..\"");
+    } else if k == AK_BIN {
+        ast_pc('(');
+        ast_pexpr(ast_a[n]);
+        ast_pc(' ');
+        int o = ast_val[n];
+        if o == AO_ADD { ast_ps("+"); } else if o == AO_SUB { ast_ps("-"); } else if o == AO_MUL { ast_ps("*"); }
+        else if o == AO_DIV { ast_ps("/"); } else if o == AO_MOD { ast_ps("%"); } else if o == AO_SHL { ast_ps("<<"); }
+        else if o == AO_SHR { ast_ps(">>"); } else if o == AO_AND { ast_ps("&"); } else if o == AO_XOR { ast_ps("xor"); }
+        else if o == AO_OR { ast_ps("|"); } else if o == AO_LT { ast_ps("<"); } else if o == AO_LE { ast_ps("<="); }
+        else if o == AO_GT { ast_ps(">"); } else if o == AO_GE { ast_ps(">="); } else if o == AO_EQ { ast_ps("=="); }
+        else if o == AO_NE { ast_ps("!="); } else if o == AO_LAND { ast_ps("&&"); } else { ast_ps("||"); }
+        ast_pc(' ');
+        ast_pexpr(ast_b[n]);
+        ast_pc(')');
+    } else if k == AK_NEG {
+        ast_ps("(- ");
+        ast_pexpr(ast_a[n]);
+        ast_pc(')');
+    } else if k == AK_NOT {
+        ast_ps("(! ");
+        ast_pexpr(ast_a[n]);
+        ast_pc(')');
+    } else if k == AK_CALL {
+        ast_pc('(');
+        ast_ps(@fname + ast_val[n] * 64);
+        int a = ast_a[n];
+        while a != 0 {
+            ast_pc(' ');
+            ast_pexpr(a);
+            a = ast_nx[a];
+        }
+        ast_pc(')');
+    } else if k == AK_INDEX {
+        ast_pexpr(ast_a[n]);
+        ast_pc('[');
+        ast_pexpr(ast_b[n]);
+        ast_pc(']');
+    } else if k == AK_DEREF {
+        ast_pexpr(ast_a[n]);
+        ast_pc('^');
+    } else if k == AK_ADDR {
+        ast_pc('@');
+        ast_pexpr(ast_a[n]);
+    } else if k == AK_CAST {
+        ast_ps("((");
+        ast_pty(ast_ty[n]);
+        ast_ps(") ");
+        ast_pexpr(ast_a[n]);
+        ast_pc(')');
+    } else if k == AK_FIELD {
+        ast_pexpr(ast_a[n]);
+        ast_pc('.');
+        ast_ps(@fldname + ast_val[n] * 64);
+    } else if k == AK_LIST {
+        ast_pc('{');
+        int a2 = ast_a[n];
+        while a2 != 0 {
+            ast_pexpr(a2);
+            a2 = ast_nx[a2];
+            if a2 != 0 { ast_ps(", "); }
+        }
+        ast_pc('}');
+    } else {
+        ast_ps("<?>");
+    }
+    if k != AK_LIST && k != AK_STR && k != AK_FNUM {
+        ast_pc(':');
+        ast_pty(ast_ty[n]);
+    }
+}
+
+void ast_indent(int d) {
+    int i = 0;
+    while i < d {
+        ast_ps("  ");
+        i += 1;
+    }
+}
+
+void ast_pstmt(int n, int d) {
+    int k = ast_kind[n];
+    ast_indent(d);
+    if k == AK_BLOCK {
+        ast_ps("{\n");
+        int s = ast_a[n];
+        while s != 0 {
+            ast_pstmt(s, d + 1);
+            s = ast_nx[s];
+        }
+        ast_indent(d);
+        ast_ps("}\n");
+    } else if k == AK_DECL {
+        ast_ps("decl ");
+        ast_ps(@ast_lname + ast_val[n] * 64);
+        if ast_a[n] != 0 {
+            ast_ps(" = ");
+            ast_pexpr(ast_a[n]);
+        }
+        ast_pc(10);
+    } else if k == AK_ASSIGN {
+        ast_pexpr(ast_c[n]);
+        ast_ps(" = ");
+        if ast_b[n] != 0 { ast_ps("(op) "); }
+        ast_pexpr(ast_a[n]);
+        ast_pc(10);
+    } else if k == AK_INCDEC {
+        ast_pexpr(ast_a[n]);
+        if ast_b[n] > 0 { ast_ps("++\n"); } else { ast_ps("--\n"); }
+    } else if k == AK_IF {
+        ast_ps("if ");
+        ast_pexpr(ast_a[n]);
+        ast_pc(10);
+        ast_pstmt(ast_b[n], d + 1);
+        if ast_c[n] != 0 {
+            ast_indent(d);
+            ast_ps("else\n");
+            ast_pstmt(ast_c[n], d + 1);
+        }
+    } else if k == AK_WHILE {
+        ast_ps("while ");
+        ast_pexpr(ast_a[n]);
+        ast_pc(10);
+        ast_pstmt(ast_b[n], d + 1);
+    } else if k == AK_FOR {
+        ast_ps("for ");
+        ast_ps(@ast_lname + ast_val[n] * 64);
+        ast_ps(" in ");
+        ast_pexpr(ast_a[n]);
+        ast_ps(" .. ");
+        ast_pexpr(ast_b[n]);
+        ast_pc(10);
+        ast_pstmt(ast_c[n], d + 1);
+    } else if k == AK_RET {
+        ast_ps("return ");
+        if ast_a[n] != 0 { ast_pexpr(ast_a[n]); }
+        ast_pc(10);
+    } else if k == AK_BREAK {
+        ast_ps("break\n");
+    } else if k == AK_CONT {
+        ast_ps("continue\n");
+    } else if k == AK_EXPR {
+        ast_pexpr(ast_a[n]);
+        ast_pc(10);
+    } else if k == AK_COUT {
+        ast_ps("cout");
+        int it = ast_a[n];
+        while it != 0 {
+            ast_ps(" << ");
+            ast_pexpr(it);
+            it = ast_nx[it];
+        }
+        ast_pc(10);
+    } else {
+        ast_ps("<?>\n");
+    }
 }
 
 // ---------------------------------------------------------------- the probe
@@ -964,6 +1265,14 @@ bool ast_probe(int f_idx) {
     if ast_ok == 1 {
         ast_funcs_ok += 1;
         ast_root = root;
+    }
+    if ast_ok == 1 && ast_dump == 1 {
+        ast_olen = 0;
+        ast_ps("tree ");
+        ast_ps(@fname + f_idx * 64);
+        ast_pc(10);
+        ast_pstmt(root, 1);
+        syscall(64, 2, @ast_obuf, ast_olen);
     }
     if ast_report == 1 {
         write_err("ast: ");

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.133
+* **Types on the nodes of the syntax tree (A2, begun; `docs/design/10-structured-pipeline.md` 8.5):** every expression node has a type (width code and kind: scalar, pointer, array, struct); `a op b` follows double > float > u64 > int, a comparison is `bool`, a cast has its target, `@x` is a pointer, a call has the type of the function's result. The hidden switch `-xastdump` prints the tree of every body in the subset with the types (the generated code is the same).
+* **Fixed in the tree before it mattered:** the statements of a block and the arguments of a call were chained through the field that `for`, `if` and an assignment use for their body, else and target (a statement list overwrote it); the lists have their own field now.
+* Test: `t371` checks the printed tree (`test/t371_ast_probe.tree`).
+
 ## 0.9.132
 * **The syntax tree reads structs (A1c-2, `docs/design/10-structured-pipeline.md` 8.4):** struct values and pointers to structs (`p^.x`; `p.x` inside a method), fields of every scalar, pointer and array type, nested structs, arrays of structs (`b[i].x`), initial lists, `null`, `Name::function(...)` calls. The probe (`-xast`; the generated code is the same) finds **535 of the 945 bodies (57 %)** in the subset (before: 367). Left out on purpose: `switch`, `throw`, `try` (the unwinding of the frame), String and dynamic arrays, methods.
 * Test `t371_ast_probe` (a function with a struct is in the subset, one with a String is not).

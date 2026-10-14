@@ -2,7 +2,7 @@
 // Build:  bin/jcmp jcmp/jcmp.jk -o jcmp1        (see bootstrap.sh)
 // Use:    jcmp1 input.jk -o program
 // the version of the compiler (also in the file VERSION; release.sh checks that they agree)
-#define JCMP_VERSION "0.9.132"
+#define JCMP_VERSION "0.9.133"
 
 #import "jc_base"
 #import "jc_asm"
@@ -231,6 +231,9 @@ void main() {
             opt_fma = 0;
         } else if str_eq(a, "-xast") {
             ast_report = 1;              // hidden: say for every function whether its body is in the subset of the tree (design 10, 8.1)
+        } else if str_eq(a, "-xastdump") {
+            ast_report = 1;
+            ast_dump = 1;                // hidden: print the tree of every body that is in the subset
         } else if str_eq(a, "-xtime") {
             x_time = 1;                  // hidden: the time of each stage
         } else if str_eq(a, "-xbadasm") {
