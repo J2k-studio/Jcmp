@@ -1966,7 +1966,7 @@ bool pt_rules(int i) {
         }
     }
     // add xD, xS, #N / ldr or str with the address [xD, #0] (several of them)  ->  the address [xS, #N] in each, and no add
-    if pt_mn(0, "add") && pt_no[0] == 3 && pt_isreg(0, 0) && pt_isreg(0, 1) && pt_isnum(0, 2) && pt_regno(0, 0, 'x') != pt_regno(0, 1, 'x') && (pt_regno(0, 0, 'x') <= 7 || (pt_regno(0, 0, 'x') >= 10 && pt_regno(0, 0, 'x') <= 14)) && pt_regno(0, 1, 'x') >= 0 && pt_regno(0, 1, 'x') <= 30 {
+    if pt_mn(0, "add") && pt_no[0] == 3 && pt_isreg(0, 0) && pt_isreg(0, 1) && pt_isnum(0, 2) && pt_regno(0, 0, 'x') != pt_regno(0, 1, 'x') && (pt_regno(0, 0, 'x') <= 7 || (pt_regno(0, 0, 'x') >= 10 && pt_regno(0, 0, 'x') <= 16)) && pt_regno(0, 1, 'x') >= 0 && pt_regno(0, 1, 'x') <= 30 {
         int xd = pt_regno(0, 0, 'x');
         int xs = pt_regno(0, 1, 'x');
         int o2n = (0 * 4 + 2) * 40;
@@ -2090,7 +2090,7 @@ bool pt_rules(int i) {
     }
     // mov x0, S / (a line that does not touch x0 and S) / I  ->  I with S in place of x0   (and the same for x1): when I writes
     // x0 itself, or x0 is not needed afterwards
-    if pt_mn(0, "mov") && pt_no[0] == 2 && pt_isreg(0, 0) && pt_isreg(0, 1) && (pt_regno(0, 0, 'x') <= 7 || (pt_regno(0, 0, 'x') >= 10 && pt_regno(0, 0, 'x') <= 14)) {
+    if pt_mn(0, "mov") && pt_no[0] == 2 && pt_isreg(0, 0) && pt_isreg(0, 1) && (pt_regno(0, 0, 'x') <= 7 || (pt_regno(0, 0, 'x') >= 10 && pt_regno(0, 0, 'x') <= 16)) {
         int rr = pt_regno(0, 0, 'x');
         int sreg = pt_regno(0, 1, 'x');
         if sreg != rr {
@@ -2138,7 +2138,7 @@ bool pt_rules(int i) {
     }
     // mov xA, xB / <up to 9 lines that read xA (and not write xB)>  ->  the same lines with xB in place of xA, and no mov: when xA is
     // written by the last of them or is not needed afterwards
-    if pt_mn(0, "mov") && pt_no[0] == 2 && pt_isreg(0, 0) && pt_isreg(0, 1) && (pt_regno(0, 0, 'x') <= 7 || (pt_regno(0, 0, 'x') >= 10 && pt_regno(0, 0, 'x') <= 14)) && pt_regno(0, 1, 'x') >= 0 {
+    if pt_mn(0, "mov") && pt_no[0] == 2 && pt_isreg(0, 0) && pt_isreg(0, 1) && (pt_regno(0, 0, 'x') <= 7 || (pt_regno(0, 0, 'x') >= 10 && pt_regno(0, 0, 'x') <= 16)) && pt_regno(0, 1, 'x') >= 0 {
         int ra = pt_regno(0, 0, 'x');
         int rb = pt_regno(0, 1, 'x');
         if ra != rb && rb != 31 {
@@ -2306,7 +2306,7 @@ bool pt_rules(int i) {
         return true;
     }
     // I x0, ... / mov D, x0   ->   I D, ...   when x0 is not needed afterwards (I writes its first operand, and is not a plain mov)
-    if pt_writes_first(0) && !pt_mn(0, "mov") && !pt_mn(0, "adr") && pt_op(0, 0, "x0") && pt_no[0] >= 2 && pt_mn(1, "mov") && pt_isreg(1, 0) && pt_op(1, 1, "x0") && !pt_op(1, 0, "x0") && pt_dead(pt_next(j), 0, 40) {
+    if pt_writes_first(0) && !pt_mn(0, "mov") && !pt_mn(0, "adr") && pt_no[0] >= 2 && pt_regno(0, 0, 'x') >= 0 && (pt_regno(0, 0, 'x') == 0 || pt_regno(0, 0, 'x') == 15 || pt_regno(0, 0, 'x') == 16) && pt_mn(1, "mov") && pt_isreg(1, 0) && pt_regno(1, 1, 'x') == pt_regno(0, 0, 'x') && pt_regno(1, 0, 'x') != pt_regno(0, 0, 'x') && pt_dead(pt_next(j), pt_regno(0, 0, 'x'), 40) {
         int o1 = (1 * 4 + 0) * 40;
         char dd[40];
         int c = 0;

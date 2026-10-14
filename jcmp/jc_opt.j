@@ -4525,6 +4525,11 @@ int vz_sl_st[16384];
 int vz_acc_slot[8];              // the accumulators: the slot, and the vector that holds its two partial sums
 int vz_acc_q[8];
 int vz_nacc2;
+int vz_pk_base[16];              // the pointers that walk along the arrays: base, offset, the stack cell that holds the pointer
+int vz_pk_off[16];
+int vz_pk_cell[16];
+int vz_npk;
+int vz_has_fp;                   // the body has floating point arithmetic on elements
 int vz_bq[64];                  // a double register that the body only reads: its broadcast made in VP (0: none)
 int vz_work[IR_MAXI];            // the body instructions in order
 int vz_nwork;
@@ -4558,6 +4563,30 @@ int vz_abase(int base) {
     return ab;
 }
 
+// the index of the pointer for base + off (a new one is made when emit is false)
+int vz_pk_find(int base, int off, bool make) {
+    int u = 0;
+    while u < vz_npk {
+        if vz_pk_base[u] == base && vz_pk_off[u] == off { return u; }
+        u += 1;
+    }
+    if !make || vz_npk >= 16 { return 0 - 1; }
+    vz_pk_base[vz_npk] = base;
+    vz_pk_off[vz_npk] = off;
+    vz_npk += 1;
+    return vz_npk - 1;
+}
+
+// the pointer of the access `base + 8 * i + off`, loaded from its cell (the register pass keeps the cell in a register)
+int vz_ptr(int base, int off) {
+    int u = vz_pk_find(base, off, false);
+    int pt = ir_vreg(0);
+    int lp = ir_add(IR_LOAD, pt, 30, 0, 0, 0);
+    ir_w[lp] = 8;
+    ir_k[lp] = vz_pk_cell[u];
+    return pt;
+}
+
 int vz_hq_of(int slot) {
     int u = 0;
     while u < vz_nhs {
@@ -4572,6 +4601,7 @@ int vz_hq_of(int slot) {
 bool vz_scan(int q, int islot, int incl, int inch, bool emit) {
     int h = cl_head[q];
     vz_nacc = 0;
+    if !emit { vz_has_fp = 0; }
     int v = 0;
     while v < ir_nv {
         vz_kind[v] = 0;
@@ -4663,7 +4693,7 @@ bool vz_scan(int q, int islot, int incl, int inch, bool emit) {
                     vz_nacc += 1;
                     if emit {
                         int qv = ir_vreg(2);
-                        int le = ir_add(IR_LOAD, qv, vz_abase(vz_base[ir_a[j2]]), 0, 0, vz_off[ir_a[j2]] + ir_k[j2] + vz_shift);
+                        int le = ir_add(IR_LOAD, qv, vz_ptr(vz_base[ir_a[j2]], vz_off[ir_a[j2]] + ir_k[j2]), 0, 0, vz_shift);
                         ir_w[le] = 16;
                         vz_vec[d] = qv;
                     }
@@ -4739,6 +4769,7 @@ bool vz_scan(int q, int islot, int incl, int inch, bool emit) {
                 bool okb = kb3 == VZ_VEC || kb3 == VZ_DINV;
                 if !oka || !okb { return false; }
                 if ka3 == VZ_VEC || kb3 == VZ_VEC {
+                    if !emit { vz_has_fp = 1; }
                     if !emit {
                         int hk = 0;
                         while hk < 2 {
@@ -4815,7 +4846,7 @@ bool vz_scan(int q, int islot, int incl, int inch, bool emit) {
                         int dups = ir_add(IR_VDUP, qs, ir_b[j2], 0, 0, 0);
                         ir_w[dups] = 1;
                     }
-                    int se = ir_add(IR_STORE, 0, vz_abase(vz_base[ir_a[j2]]), qs, 0, vz_off[ir_a[j2]] + ir_k[j2] + vz_shift);
+                    int se = ir_add(IR_STORE, 0, vz_ptr(vz_base[ir_a[j2]], vz_off[ir_a[j2]] + ir_k[j2]), qs, 0, vz_shift);
                     ir_w[se] = 16;
                 }
             } else {
@@ -4922,6 +4953,17 @@ bool vz_make(int q, int l) {
         m += 1;
     }
     if !vz_scan(q, islot, ld, inch, false) { return false; }
+    // doubles: two lanes of 64 bits are no faster than the scalar instructions on the cores of the target (Cortex-A55: measured, 308 ms
+    // scalar with fmadd against 320 ms vectorised); `-irdbg 536870912` vectorises them anyway
+    if vz_has_fp == 1 && (ir_opt & 536870912) == 0 { return false; }
+    vz_npk = 0;
+    {
+        int ak = 0;
+        while ak < vz_nacc {
+            if vz_pk_find(vz_acc_base[ak], vz_acc_off[ak], true) < 0 { return false; }
+            ak += 1;
+        }
+    }
     // the registers the body writes must not be needed after the loop (the original header runs once more and writes its own)
     int ex = cl_exit[q];
     int c = 0;
@@ -5007,6 +5049,26 @@ bool vz_make(int q, int l) {
     ir_add(IR_ADD, vlim, vbnd2, 0 - 3, 1, 0);
     int stl = ir_add(IR_STORE, 0, 30, vlim, 0, qcell);
     ir_w[stl] = 8;
+    // the pointers: base + 8 * i + offset at the start, one cell each
+    {
+        int pu = 0;
+        while pu < vz_npk {
+            vz_pk_cell[pu] = qcell - 8 * (pu + 1);
+            int ti0 = ir_vreg(0);
+            int li0 = ir_add(IR_LOAD, ti0, 30, 0, 0, 0);
+            ir_w[li0] = 8;
+            ir_k[li0] = vz_slot_off(cl_slot[q]);
+            int sh0 = ir_vreg(0);
+            ir_add(IR_SHL, sh0, ti0, 3, 1, 0);
+            int pa = ir_vreg(0);
+            ir_add(IR_ADD, pa, vz_pk_base[pu], sh0, 0, 0);
+            int pb = ir_vreg(0);
+            ir_add(IR_ADD, pb, pa, vz_pk_off[pu], 1, 0);
+            int sp0 = ir_add(IR_STORE, 0, 30, pb, 0, vz_pk_cell[pu]);
+            ir_w[sp0] = 8;
+            pu += 1;
+        }
+    }
     int jpb = ir_add(IR_JMP, 0, 0, 0, 0, 0);
     int vh0 = ir_new_block(0 - 1);
     ir_t1[jpb] = vh0;
@@ -5044,7 +5106,22 @@ bool vz_make(int q, int l) {
         }
         vz_shift = 0;
     }
-    // i = i + 2
+    // the pointers move on by four elements
+    {
+        int pv = 0;
+        while pv < vz_npk {
+            int pcur = ir_vreg(0);
+            int lc0 = ir_add(IR_LOAD, pcur, 30, 0, 0, 0);
+            ir_w[lc0] = 8;
+            ir_k[lc0] = vz_pk_cell[pv];
+            int pnext = ir_vreg(0);
+            ir_add(IR_ADD, pnext, pcur, 32, 1, 0);
+            int sc0 = ir_add(IR_STORE, 0, 30, pnext, 0, vz_pk_cell[pv]);
+            ir_w[sc0] = 8;
+            pv += 1;
+        }
+    }
+    // i = i + 4
     {
         int tk = ir_vreg(0);
         int lk = ir_add(IR_LOAD, tk, 30, 0, 0, 0);

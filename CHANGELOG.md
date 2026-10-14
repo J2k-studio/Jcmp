@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.128
+* **Vector loops walk along the arrays with pointers**: the address `base + 8 * i + c` of each access is a pointer kept in a stack cell (the register pass keeps it in a register) that moves on by 32 bytes a turn; the vector body of `copy` is `ldr q / str q / ldr q / str q` and four adds (14 instructions for four elements in `axpy`, before 30). `q[i] = p[i]` over 2048 whole numbers: 278 -> 88 ms.
+* **Floating point loops are not vectorised any more (measured)**: on the target (Cortex-A55) two 64-bit lanes are no faster than the scalar instructions: `c[i] = a[i] + b[i] * k` was 308 ms scalar (with `fmadd`) and 320 ms vectorised. `-irdbg 536870912` vectorises them (the test `t369_vectorize` runs both ways). Copies, fills and sums of whole numbers are vectorised.
+* **Text rules for the scratch registers x15 and x16** (the registers of the temporaries of the IR lowering): `mov x15, x2` / use of x15 becomes a use of x2, and `add x16, x2, #32` / `mov x2, x16` becomes `add x2, x2, #32` (before, only x0 .. x7 and x10 .. x14, x0).
+* Tests: the suite (397), 250 random programs with four option sets.
+
 ## 0.9.127
 * **A syntax tree per function body, first step (A1a; the owner chose T1 + T2 in parts, `docs/design/10-structured-pipeline.md` 8.1/8.2).** `jcmp/jc_ast.j` reads the body of a function a second time with a small parser into a tree, for a subset (whole numbers, `int` locals and parameters, calls of functions that return a whole number, all binary operators in the order of the language, `if / else`, `while`, `for i in a..b`, `return`, `break`, `continue`), and puts the lexer back: the generated code is the same. Hidden switch `-xast` prints for every function whether its body is in the subset and why not. Measured on the 945 bodies of the tests, benchmarks and examples: 153 (16 %) are in the subset; the main reasons for the rest are parameters that are not whole numbers (356) and statements such as `cout` (324), which the next steps add by the largest reason first.
 * Test: the probe is checked in `run_all_tests.sh` (`t371`).

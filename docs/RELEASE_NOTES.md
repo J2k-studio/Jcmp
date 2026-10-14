@@ -1,7 +1,8 @@
-# J2K / Jcmp 0.9.127
+# J2K / Jcmp 0.9.128
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
 
+**0.9.128:** vector loops walk along arrays with pointers (an int copy of 2048 elements is 3 times faster); floating point loops stay scalar (measured: no gain on this core); fewer copies in the generated text.
 **0.9.127:** a syntax tree per function body, first step: a probe that reads bodies into a tree (`-xast`); the generated code is the same.
 **0.9.126:** the vectoriser: variables stay in registers (0.9.125 was slower than the scalar loop), four elements per turn, sums of whole numbers in two lanes.
 **0.9.125:** the first vectoriser: loops over arrays (`c[i] = a[i] + b[i] * k`, copies, fills) run two elements per turn with NEON.
