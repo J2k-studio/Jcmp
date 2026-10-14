@@ -1,6 +1,8 @@
-# J2K / Jcmp 0.9.111
+# J2K / Jcmp 0.9.112
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
+
+**0.9.112:** named low-level blocks `_.name { }` called with `_.name;`, and `_. { }` as a short `register { }`.
 
 **0.9.111:** `orr` / `eor` / `and` with a shifted register (rotate idioms are shorter); a value that goes through a frame slot once is kept in a register (sha256 about 10 % faster).
 

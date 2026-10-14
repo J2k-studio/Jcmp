@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.112
+* **`_.` blocks (owner's answer 5.2):** `_.name { ... }` at the top level is a block with a name: a function without parameters made of low-level statements (like a naked function, with a `ret` at the end), called with `_.name;` from normal code, register blocks and naked functions. `_. { ... }` inside a function is the same as `register { }` (with `in` / `out` / `clobber`). In a `#!library` file `_.start { }` can be the entry.
+* Tests: `t348_named_block`, `t349_named_block_raw` (the suite: 372).
+
 ## 0.9.111
 * **`and` / `orr` / `eor` with a shifted register** (`orr x0, x10, x11, lsl #30`; lsl, lsr, asr, ror) in the assembler, and a register-pass rule that joins `lsl|lsr|asr xS, xA, #n` with the following `orr|eor|and` that reads xS: a rotate written as `(x >> n) | (x << (32 - n))` is two instructions instead of three. The assembler check (llvm-mc) has four more lines (116).
 * **A value that goes through a plain frame slot and is read once is passed in a register** (`op_cell_fwd`, second case): `store [slot], r ... d = load [slot]` where the slot has no other load: when `d` or `r` is written in between (an inlined parameter `x` that the body shifts), the value waits in a register that the block does not name (and that does not live after it). The parameter slots of the inlined `rotr` of `sha256` are gone; sha256 100 -> 90 ms.

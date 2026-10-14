@@ -2200,6 +2200,30 @@ void parse_statement_inner() {
         parse_register_block();
         return;
     }
+    if tok_is("_") {
+        // _. { ... }  is a register block;   _.name;  calls the block _.name { ... }
+        char us_c = lc(0);
+        if us_c == '.' {
+            next();                          // _
+            next();                          // .
+            if tok_is("{") {
+                rb_alias = 1;
+                parse_register_block();
+                return;
+            }
+            if tok_kind != T_IDENT { die("_. { ... } or _.name; was expected"); }
+            char ub[256];
+            str_copy(@ub, "__blk_", 256);
+            append_text(@ub, @tok_text);
+            next();
+            expect(";");
+            note_call(@ub);
+            emit_str("bl ");
+            emit_str(@ub);
+            emit_nl();
+            return;
+        }
+    }
     if tok_is("@") {
         parse_no_reorder();
         return;
@@ -2402,6 +2426,8 @@ void emit_param_store(int reg, int off) {
     }
 }
 
+int blk_virtual;               // 1: a function made from  _.name { ... }  (no parameters, naked)
+
 void parse_function() {
     int f_void = ty_void;
     int f_rettid = ty_tid;
@@ -2507,8 +2533,15 @@ void parse_function() {
     }
     if f_naked == 1 {
         // no prologue, no epilogue: the body (jc_low.j) is all there is
-        expect("(");
-        parse_naked_function(f_idx);
+        if blk_virtual == 1 {
+            blk_virtual = 0;
+            fnpar[f_idx] = 0;
+            parse_naked_block();
+            nk_emit("ret");
+        } else {
+            expect("(");
+            parse_naked_function(f_idx);
+        }
         cur_in_func = 0;
         cur_fidx = 0 - 1;
         if f_skip == 1 {
@@ -3105,6 +3138,22 @@ void parse_one_item() {
         parse_device();
     } else if tok_is("frame") {
         parse_frame();
+    } else if tok_is("_") {
+        // _.name { ... }: a block with a name, a function without parameters made of low-level statements; call it with  _.name;
+        next();
+        expect(".");
+        if tok_kind != T_IDENT { die("a name was expected after _.  (_.name { ... })"); }
+        str_copy(@d_fname, "__blk_", 256);
+        append_text(@d_fname, @tok_text);
+        next();
+        if !tok_is("{") { die("{ was expected after _.name"); }
+        ty_void = 1; ty_ptr = 0; ty_dyn = 0; ty_tid = 0; ty_elem = 0;
+        fn_naked = 1;
+        fn_noreturn = 0;
+        fn_interrupt = 0;
+        fn_align = 0;
+        blk_virtual = 1;
+        parse_function();
     } else {
         parse_top_item();
     }

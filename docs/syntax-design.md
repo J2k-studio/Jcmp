@@ -1888,6 +1888,6 @@ The owner answered "67 68 ได้" (agreed): the assistant's recommendations s
 | 4.1 `#pragma` data | "all of them are fine" (a variable, a block and a file) | decided by the owner; name and error to be proposed |
 | 4.2 raw bytes | asks for the pros and cons of `raw<type>[values];` | answered in the reply |
 | 5.1 `a[1..5]` | "which is better" | assistant's pick: a view (Span), see reply |
-| 5.2 `_.` | "can be named: `_.start { }` defines, `_.start;` calls it" | decided by the owner; to do: a named block is a function without arguments, written `_.name { ... }` and called `_.name;` |
+| 5.2 `_.` | "can be named: `_.start { }` defines, `_.start;` calls it" | decided by the owner; DONE in 0.9.112: `_.name { ... }` is a function without arguments (`__blk_name`, `ret` added), called `_.name;`; `_. { }` is `register { }` |
 
 fmadd without a new function: (1) fuse `a * b + c` inside ONE expression by default, as Go and clang do, and never across statements; a switch `-nofma` gives the exact two-rounding result (tests, comparison with other machines). No `fma()` function, no new syntax. (2) or: never fuse unless `-ffma` is given. Rule of three: (1) is the same as C / Go (borrow), nothing new to learn (human), one peephole (machine); the cost is that the last bit of a result can differ from a machine without FMA.

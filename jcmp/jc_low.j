@@ -611,7 +611,27 @@ void nk_if() {
 }
 
 // one statement of a naked function
+// _.name;  : a call of a named block (the function __blk_name)
+void parse_block_call() {
+    next();                                  // _
+    expect(".");
+    if tok_kind != T_IDENT { die("the name of a block was expected after _."); }
+    char bn[256];
+    str_copy(@bn, "__blk_", 256);
+    append_text(@bn, @tok_text);
+    next();
+    expect(";");
+    note_call(@bn);
+    str_copy(@nk_line, "bl ", 256);
+    append_text(@nk_line, @bn);
+    emit_line(@nk_line);
+}
+
 void parse_naked_stmt() {
+    if tok_is("_") {
+        parse_block_call();
+        return;
+    }
     if tok_kind != T_IDENT && !tok_is("[") { die("a statement of the low level was expected (Reg::x0 = ...; ret; goto ...; if ...)"); }
     if tok_is("ret") {
         next();
@@ -1383,8 +1403,10 @@ bool nk_xnum_next() {
     return r;
 }
 
+int rb_alias;                                // 1: `_. { }` (the keyword was read already)
+
 void parse_register_block() {
-    next();                                  // register
+    if rb_alias == 1 { rb_alias = 0; } else { next(); }      // register
     if !tok_is("{") { die("register { ... } was expected"); }
     nk_reset();
     nk_dests = 0;

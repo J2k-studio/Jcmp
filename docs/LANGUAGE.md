@@ -396,6 +396,26 @@ register {
 ```
 `in` values are all made first and then loaded, so one expression cannot disturb the register of another.
 
+`_.` is the short name of the same block, and it can have a name (0.9.112):
+
+```jk
+_.addone {                      // a block with a name: a function without parameters, made of low-level statements
+    x0 += 1;                    // (`ret` is added at the end)
+}
+
+int main() {
+    int v = 41;
+    register {
+        in x0 = v;
+        _.addone;               // call it by name (also inside a naked function or a register block)
+        out x0 = v;
+    }
+    _. { x0 = 7; }              // without a name: the same as register { }
+    return v;
+}
+```
+A file marked `#!library` can start with `_.start { ... }`: the first block is the entry.
+
 A pinned variable (`int n @ x19`) is a whole number, pointer, bool, char or enum; its address cannot be taken; two variables of one function cannot share a register; programs with try / catch cannot pin. A function with a `register { }` block keeps its variables in the frame. Changing x19 .. x28 in a block without reserving it is a warning.
 
 ### `device`: hardware registers as data, and `Sys::` (0.9.80)
