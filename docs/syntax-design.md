@@ -1933,3 +1933,12 @@ Taken as the "methods `load()` `store()`" of the proposal in 59: `f64x2::load(@a
 
 ### 59.zz S4 (owner's "yep", 2026-10-14) and what was done in 0.9.121
 `sum()`, `min()`, `max()` as methods (the `c.sum()` form of the proposal in 59). Left out: a function form `Simd::sum(v)`, and `argmin` / `dot` (a `dot` of two vectors is `(a * b).sum()`).
+
+## 71. Libraries: `.sj` and `.so` (owner asked 2026-10-14: ".sj = static jk, or .so? plan it tight")
+Proposal only, nothing decided: see `docs/design/11-libraries.md` (what a library file holds, `.sj` as precompiled IR,
+`.so` for the C border and plugins, the order L0-L6, the questions). The names `.jk` / `.j` are already decided.
+
+### 71.1 Owner's answer (2026-10-14)
+"Not `.sj`, it is `.so`, only that it works with our language." Recorded: the J2K library extension is `.so`
+(J2K programs only). The form inside (IR / real ELF) stays as the proposal of design 11. Also: the owner wants the other
+plans finished first, because there is no real GPU module yet (design 12).

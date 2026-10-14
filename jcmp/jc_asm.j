@@ -647,6 +647,9 @@ void as_h_shift(int regbase, int kind) {
             as_put32(0xD340FC00 | (imm << 16) | (rn << 5) | rd);
         } else if kind == 3 {
             as_put32(0x93C00000 | (rn << 16) | (imm << 10) | (rn << 5) | rd);          // ror xd, xn, #imm  =  extr xd, xn, xn, #imm
+        } else if kind == 4 {
+            if imm > 31 { as_fail(); }
+            as_put32(0x13800000 | (rn << 16) | (imm << 10) | (rn << 5) | rd);          // ror32 xd, xn, #imm  =  ror wd, wn, #imm (the upper half of xd is 0)
         } else {
             as_put32(0x9340FC00 | (imm << 16) | (rn << 5) | rd);
         }
@@ -1652,6 +1655,7 @@ void as_instruction() {
     if as_mn_is("madd") { as_h_rrrr(0x9B000000); return; }
     if as_mn_is("smulh") { as_h_rrr(0x9B407C00); return; }
     if as_mn_is("ror") { as_h_shift(0x9AC02C00, 3); return; }
+    if as_mn_is("ror32") { as_h_shift(0x1AC02C00, 4); return; }
     if as_mn_is("neg") { as_h_neg(); return; }
     if as_mn_is("clz") { as_h_sxt(0xDAC0, 0x1000); return; }
     if as_mn_is("rbit") { as_h_sxt(0xDAC0, 0x0000); return; }

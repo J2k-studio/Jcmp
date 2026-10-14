@@ -1495,8 +1495,11 @@ void push_std() {
     put("        st[70] = 0xbef9a3f7;");
     put("        st[71] = 0xc67178f2;");
     put("    }");
+    put("    // the 32 bits of x turned right by n places (n = 1 .. 31); the mask first: the compiler then knows the value fits in 32 bits and");
+    put("    // makes one `ror w` of it");
     put("    static int rotr(int x, int n) {");
-    put("        return ((x >> n) | (x << (32 - n))) & 0xFFFFFFFF;");
+    put("        int y = x & 0xFFFFFFFF;");
+    put("        return ((y >> n) | (y << (32 - n))) & 0xFFFFFFFF;");
     put("    }");
     put("    // one block of 64 bytes at p");
     put("    static void block(int^ st, char^ p) {");

@@ -78,8 +78,11 @@ struct Sha256 {
         st[70] = 0xbef9a3f7;
         st[71] = 0xc67178f2;
     }
+    // the 32 bits of x turned right by n places (n = 1 .. 31); the mask first: the compiler then knows the value fits in 32 bits and
+    // makes one `ror w` of it
     static int rotr(int x, int n) {
-        return ((x >> n) | (x << (32 - n))) & 0xFFFFFFFF;
+        int y = x & 0xFFFFFFFF;
+        return ((y >> n) | (y << (32 - n))) & 0xFFFFFFFF;
     }
     // one block of 64 bytes at p
     static void block(int^ st, char^ p) {

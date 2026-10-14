@@ -1180,7 +1180,7 @@ bool pt_rd(int s, int k, int r) {
 
 // the mnemonics whose first operand is only written
 bool pt_writes_first(int s) {
-    return pt_mn(s, "mov") || pt_mn(s, "ldr") || pt_mn(s, "ldrb") || pt_mn(s, "ldrh") || pt_mn(s, "ldrsw") || pt_mn(s, "ldrsb") || pt_mn(s, "ldrsh") || pt_mn(s, "add") || pt_mn(s, "sub") || pt_mn(s, "mul") || pt_mn(s, "sdiv") || pt_mn(s, "udiv") || pt_mn(s, "and") || pt_mn(s, "orr") || pt_mn(s, "eor") || pt_mn(s, "lsl") || pt_mn(s, "lsr") || pt_mn(s, "asr") || pt_mn(s, "neg") || pt_mn(s, "mvn") || pt_mn(s, "cset") || pt_mn(s, "smulh") || pt_mn(s, "umulh") || pt_mn(s, "msub") || pt_mn(s, "madd") || pt_mn(s, "sxtw") || pt_mn(s, "uxtb") || pt_mn(s, "uxth") || pt_mn(s, "sxtb") || pt_mn(s, "sxth") || pt_mn(s, "adr") || pt_mn(s, "fmov") || pt_mn(s, "fcvtzs") || pt_mn(s, "scvtf") || pt_mn(s, "ucvtf") || pt_mn(s, "fadd") || pt_mn(s, "fsub") || pt_mn(s, "fmul") || pt_mn(s, "fdiv") || pt_mn(s, "fsqrt") || pt_mn(s, "fneg") || pt_mn(s, "fabs") || pt_mn(s, "fcvt") || pt_mn(s, "frintm") || pt_mn(s, "frintp") || pt_mn(s, "frintz");
+    return pt_mn(s, "mov") || pt_mn(s, "ldr") || pt_mn(s, "ldrb") || pt_mn(s, "ldrh") || pt_mn(s, "ldrsw") || pt_mn(s, "ldrsb") || pt_mn(s, "ldrsh") || pt_mn(s, "add") || pt_mn(s, "sub") || pt_mn(s, "mul") || pt_mn(s, "sdiv") || pt_mn(s, "udiv") || pt_mn(s, "and") || pt_mn(s, "orr") || pt_mn(s, "eor") || pt_mn(s, "lsl") || pt_mn(s, "lsr") || pt_mn(s, "asr") || pt_mn(s, "ror") || pt_mn(s, "ror32") || pt_mn(s, "neg") || pt_mn(s, "mvn") || pt_mn(s, "cset") || pt_mn(s, "smulh") || pt_mn(s, "umulh") || pt_mn(s, "msub") || pt_mn(s, "madd") || pt_mn(s, "sxtw") || pt_mn(s, "uxtb") || pt_mn(s, "uxth") || pt_mn(s, "sxtb") || pt_mn(s, "sxth") || pt_mn(s, "adr") || pt_mn(s, "fmov") || pt_mn(s, "fcvtzs") || pt_mn(s, "scvtf") || pt_mn(s, "ucvtf") || pt_mn(s, "fadd") || pt_mn(s, "fsub") || pt_mn(s, "fmul") || pt_mn(s, "fdiv") || pt_mn(s, "fsqrt") || pt_mn(s, "fneg") || pt_mn(s, "fabs") || pt_mn(s, "fcvt") || pt_mn(s, "frintm") || pt_mn(s, "frintp") || pt_mn(s, "frintz");
 }
 
 // the line index of the label L<n> in this function, or -1
@@ -2099,7 +2099,7 @@ bool pt_rules(int i) {
             sx[c] = 0;
             int jj = j;
             int tries = 0;
-            while jj >= 0 && tries < 3 {
+            while jj >= 0 && tries < 9 {
                 if !pt_parse(1, jj) { break; }
                 bool mentions = false;
                 int kq = 0;
@@ -2134,7 +2134,7 @@ bool pt_rules(int i) {
             pt_parse(1, j);
         }
     }
-    // mov xA, xB / <up to 4 lines that read xA (and not write xB)>  ->  the same lines with xB in place of xA, and no mov: when xA is
+    // mov xA, xB / <up to 9 lines that read xA (and not write xB)>  ->  the same lines with xB in place of xA, and no mov: when xA is
     // written by the last of them or is not needed afterwards
     if pt_mn(0, "mov") && pt_no[0] == 2 && pt_isreg(0, 0) && pt_isreg(0, 1) && (pt_regno(0, 0, 'x') <= 7 || (pt_regno(0, 0, 'x') >= 10 && pt_regno(0, 0, 'x') <= 14)) && pt_regno(0, 1, 'x') >= 0 {
         int ra = pt_regno(0, 0, 'x');
@@ -2145,14 +2145,14 @@ bool pt_rules(int i) {
             int cb = 0;
             while pt_o[o0b + cb] != 0 { sx2[cb] = pt_o[o0b + cb]; cb += 1; }
             sx2[cb] = 0;
-            char pend[320];
-            int pend_at[5];
+            char pend[640];
+            int pend_at[10];
             int npend = 0;
             int jj2 = j;
             bool ok2 = false;
             bool fail2 = false;
             int steps2 = 0;
-            while jj2 >= 0 && steps2 < 5 && !ok2 && !fail2 {
+            while jj2 >= 0 && steps2 < 10 && !ok2 && !fail2 {
                 if !pt_parse(1, jj2) { fail2 = true; break; }
                 bool ment = false;
                 int kq2 = 0;

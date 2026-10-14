@@ -80,6 +80,7 @@
 #define IR_FCVT_SD 67        // d (double) = a (float) (fcvt dD, sA)
 #define IR_I2F32 68          // d (float) = the whole number a (scvtf sD, xA)
 #define IR_F32TOI 69         // d (whole number) = the float a towards 0 (fcvtzs xD, sA)
+#define IR_ROTR32 70         // d = the low 32 bits of a turned right by b|k places (0..31); the upper half of d is 0 (ror wD, wA, #k)
 #define IR_VLANE 57          // d (a whole number or a double) = the lane of the vector a that starts at byte ir_k (ir_w: 8, 4 or -4 = signed)
 #define IR_VINS 58           // d (a vector) = a with the lane at byte ir_k replaced by b (ir_w: 8 or 4)
 
@@ -134,7 +135,7 @@ int ir_nnames;
 char ir_fname[128];          // the name of the function
 int op_changed;              // 1: the function is written again from the IR
 int ir_pre = 1;              // the peephole pass runs before the lifting too
-int ir_opt = 45293;           // the passes: 1 constants out of loops, 2 allocator, 4 cleaning, 8 value numbering, 32 double round trips, 64 always write back
+int ir_opt = 67154157;           // the passes: 1 constants out of loops, 2 allocator, 4 cleaning, 8 value numbering, 32 double round trips, 64 always write back
 int inl_off;                // -noinl: no inlining
 int ir_mode = 2;            // 0 off (-noir), 1 -irstat, 2 lift and write back, 3 -irdump
 int lf_frame;                // the size of the frame that the prologue made
@@ -280,6 +281,7 @@ char^ ir_opname(int op) {
     if op == IR_RBIT { return "rbit"; }
     if op == IR_BSWAP { return "bswap"; }
     if op == IR_ROTR { return "rotr"; }
+    if op == IR_ROTR32 { return "rotr32"; }
     if op == IR_POPCNT { return "popcnt"; }
     if op == IR_NOP { return "nop"; }
     if op == IR_FCONST { return "fconst"; }
@@ -539,7 +541,7 @@ char ir_err[200];
 
 // does the instruction use the vreg v as an operand? (for the checker)
 bool ir_uses_b(int op) {
-    return op >= IR_ADD && op <= IR_MULHS || op == IR_ROTR || op == IR_SETCC || op == IR_FSETCC || op == IR_BR || op == IR_FBR || op == IR_STORE || (op >= IR_FADD && op <= IR_FDIV) || op == IR_VOP || op == IR_VINS || (op >= IR_FADD32 && op <= IR_FDIV32);
+    return op >= IR_ADD && op <= IR_MULHS || op == IR_ROTR || op == IR_ROTR32 || op == IR_SETCC || op == IR_FSETCC || op == IR_BR || op == IR_FBR || op == IR_STORE || (op >= IR_FADD && op <= IR_FDIV) || op == IR_VOP || op == IR_VINS || (op >= IR_FADD32 && op <= IR_FDIV32);
 }
 
 // 1 if the function is well made, else 0 and the message in ir_err

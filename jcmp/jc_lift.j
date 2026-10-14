@@ -417,6 +417,7 @@ int lf_line(int idx) {
     else if pt_mn(0, "asr") { op = IR_ASHR; }
     else if pt_mn(0, "smulh") { op = IR_MULHS; }
     else if pt_mn(0, "ror") { op = IR_ROTR; }
+    else if pt_mn(0, "ror32") { op = IR_ROTR32; }
     if op != 0 {
         if pt_no[0] != 3 || !pt_isreg(0, 0) || !pt_isreg(0, 1) { return lf_fail("arithmetic with an operand that is not understood"); }
         int dd = lf_x(pt_regno(0, 0, 'x'));
@@ -1369,6 +1370,7 @@ bool lw_instr(int i, int b) {
     else if op == IR_ASHR { nm = "asr"; }
     else if op == IR_MULHS { nm = "smulh"; }
     else if op == IR_ROTR { nm = "ror"; }
+    else if op == IR_ROTR32 { nm = "ror32"; }
     else if op == IR_FADD { nm = "fadd"; }
     else if op == IR_FSUB { nm = "fsub"; }
     else if op == IR_FMUL { nm = "fmul"; }
@@ -1744,6 +1746,10 @@ void ir_passes_basic() {
         if (ir_opt & 8) != 0 { op_cse_run(); }
         if (ir_opt & 8) != 0 { op_dead_cells(); }
         if (ir_opt & 4) != 0 { op_clean_run(); }
+    }
+    if (ir_opt & 67108864) != 0 {
+        op_range_run();
+        if rn_changes > 0 && (ir_opt & 4) != 0 { op_clean_run(); }
     }
     if (ir_opt & 128) != 0 { op_thread(); }
     if (ir_opt & 32) != 0 { op_bits_run(); }

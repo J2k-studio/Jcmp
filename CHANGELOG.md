@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.123
+* **Known ranges of whole numbers** (`op_range_run` in `jcmp/jc_opt.j`, design `docs/design/13-vectorizer.md` V0/V1). For every whole number the compiler now keeps "never negative, at most N" (from constants, masks, shifts, `%` and `/` by constants, loop counters, unsigned loads), across blocks and through the frame slots of variables; a counter that grows by small steps is "never negative, no bound". Used for: a shift that moves every bit out (`x >> 63` of a counter: the sign fix of `i % 7` and `i / 10`) is 0, `x & 0xFFFFFFFF` of a value that fits is a copy, and an operation with the neutral number (`x + 0`, `x * 1`, `x & -1`, `x << 0`) is a copy.
+* **`ror w`: the rotation of a 32-bit value is one instruction.** `((y >> n) | (y << (32 - n))) & 0xFFFFFFFF` with `y` known to fit in 32 bits (written `y = x & 0xFFFFFFFF` first, in any number of blocks) is `IR_ROTR32` -> `ror32 xD, xA, #n` (the assembler knows the pseudo-instruction `ror32`, checked against llvm-mc `ror w`). `Sha256::rotr` in `std/hash.j` and the benchmark mask first; the rotation is 1 instruction instead of 4 (sha256 1.5x -> 1.0-1.3x of clang -O2).
+* The register pass knows `ror` / `ror32` as arithmetic that only writes its first operand.
+* Tests: `t367_ranges_rotate`; the tests `t360`..`t366` (SIMD, float32) are now registered in `run_all_tests.sh` (they were not run before).
+* Not done yet (design 13): V2/V3, the vectoriser. `loop` is still 3.2x: clang makes 8 lanes of 32 bits; the sign fix of the remainder is gone (the loop is 8 instead of 10 instructions).
+
 ## 0.9.122
 * **32-bit `float` in the IR.** A function that has `float` values (`fmov sN, wN`, `fadd s0, s0, s1`, `fcvt`, `fcmp s..`, `scvtf s..`, `fcvtzs x, s..`) was left as the parser wrote it; it is lifted and optimised now (new IR operations `IR_F32IN`, `IR_F32OUT`, `IR_FADD32 .. IR_FDIV32`, `IR_FUN32`, `IR_FCVT_DS`, `IR_FCVT_SD`, `IR_I2F32`, `IR_F32TOI`; a float is held in the low 32 bits of a double register vreg, a comparison converts both sides to doubles, which is exact). This includes every function that has an `f32x4`.
 * Tests: `t366_float32_ir` (the same output with the default options, `-noir`, `-noregs`, `-noinl`, `-d`).

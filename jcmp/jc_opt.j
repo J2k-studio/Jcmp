@@ -1037,6 +1037,7 @@ void op_prop_block(int b, int cont) {
                     bool ok = false;
                     if op == IR_ADD || op == IR_SUB || op == IR_SETCC || op == IR_BR { ok = cp_small(k, 4095); }
                     if op == IR_SHL || op == IR_LSHR || op == IR_ASHR || op == IR_ROTR { ok = cp_small(k, 63); }
+                    if op == IR_ROTR32 { ok = cp_small(k, 31); }
                     if (op == IR_AND || op == IR_OR || op == IR_XOR) && as_logic_imm(k) >= 0 { ok = true; }
                     if ok {
                         ir_bi[i] = 1;
@@ -1060,6 +1061,21 @@ void op_prop_block(int b, int cont) {
                         op_clean_changes += 1;
                     }
                 }
+            }
+        }
+        // an operation with the number that changes nothing is a copy (`x + 0`, `x << 0`, `x * 1`, `x & -1`)
+        if !fixed && ir_bi[i] == 1 && ir_d[i] > 0 && ir_a[i] > 0 && ir_vcls[ir_d[i]] == 0 && ir_vcls[ir_a[i]] == 0 {
+            bool same = false;
+            if (op == IR_ADD || op == IR_SUB || op == IR_OR || op == IR_XOR || op == IR_SHL || op == IR_LSHR || op == IR_ASHR) && ir_b[i] == 0 { same = true; }
+            if op == IR_MUL && ir_b[i] == 1 { same = true; }
+            if op == IR_AND && ir_b[i] == 0 - 1 { same = true; }
+            if same {
+                ir_op[i] = IR_COPY;
+                ir_b[i] = 0;
+                ir_bi[i] = 0;
+                ir_k[i] = 0;
+                op = IR_COPY;
+                op_clean_changes += 1;
             }
         }
         // an operation on two known numbers is a number
@@ -3794,4 +3810,465 @@ void nr_run() {
         t += 1;
     }
     out_len = regs_len;
+}
+
+// ---------------------------------------------------------------------------------------------- known ranges of whole numbers
+// For every whole number (a vreg inside a block, a plain frame slot or a stack cell across blocks) the pass keeps an upper bound
+// "0 .. hi" when the value cannot be negative. The values are
+//   0 .. rn_big - 1   a number that is never negative and at most that
+//   rn_big            never negative, no known bound: a counter (it started small and gets small steps; it would need 2^50 steps to wrap)
+//   rn_unk            nothing is known
+// (-2 is "not reached yet" in the flow and is the identity of the join, a maximum.) The flow is solved over the blocks (a loop makes the
+// bound of a counter grow: after a few turns it becomes rn_big). What the knowledge buys:
+//   * a shift that moves every possible bit out (`x >> 63` of a counter: the sign fix of a division by a constant) is 0,
+//   * `x & 0xFFFFFFFF` of a value that fits is x,
+//   * the rotation of a 32-bit value written as `((x >> n) | (x << (32 - n))) & 0xFFFFFFFF` is one `ror w` (IR_ROTR32).
+
+#define RN_NT 32
+#define RN_NS 96                 // the tracked slots (RN_NT) and the registers v1 .. v63
+#define RN_MAXB 2048
+
+int rn_out[196608];              // [block * RN_NS + t]: the bounds of the tracked slots and of the registers at the end of the block
+int rn_cs[RN_NS];                // the bounds in the block being scanned
+int rn_ent[64];                  // the bounds of the registers when the block began
+int rn_lr[IR_MAXV];              // the bound of a vreg inside the block (valid when rn_ls is the stamp of the block)
+int rn_ls[IR_MAXV];
+int rn_stamp;
+int rn_ir[IR_MAXI];              // the bound of the result of each instruction (set when the block is scanned)
+int rn_id[16384];                // slot (vn_slot) -> index t, or -1
+int rn_nt;
+int rn_leak;
+int rn_changes;
+int rn_big;
+int rn_unk;
+int rn_total;                    // all functions (for -irstat)
+
+int rn_get(int v) {
+    if v <= 0 || v >= IR_MAXV { return rn_unk; }
+    if v < 64 {
+        int x = rn_cs[RN_NT + v];
+        if x < 0 { return 0; }
+        return x;
+    }
+    if rn_ls[v] != rn_stamp { return rn_unk; }
+    return rn_lr[v];
+}
+
+void rn_set(int v, int x) {
+    if v > 0 && v < 64 { rn_cs[RN_NT + v] = x; }
+    else if v >= 64 && v < IR_MAXV {
+        rn_lr[v] = x;
+        rn_ls[v] = rn_stamp;
+    }
+}
+
+// the slot index t of a load / store, or -1
+int rn_slot_t(int i) {
+    int s = vn_slot(i);
+    if s < 0 { return 0 - 1; }
+    if s >= 8192 && rn_leak != 0 { return 0 - 1; }
+    return rn_id[s];
+}
+
+int rn_add(int x, int y) {
+    if x == rn_unk || y == rn_unk { return rn_unk; }
+    if x == rn_big && y == rn_big { return rn_unk; }
+    if x == rn_big { if y <= 1048576 { return rn_big; } return rn_unk; }
+    if y == rn_big { if x <= 1048576 { return rn_big; } return rn_unk; }
+    int s = x + y;
+    if s >= rn_big { return rn_unk; }
+    return s;
+}
+
+int rn_mul(int x, int y) {
+    if x == rn_unk || y == rn_unk || x == rn_big || y == rn_big { return rn_unk; }
+    if x == 0 || y == 0 { return 0; }
+    if x > (rn_big - 1) / y { return rn_unk; }
+    return x * y;
+}
+
+// all bits below the highest bit 1
+int rn_smear(int m) {
+    int r = m;
+    r = r | (r >> 1);
+    r = r | (r >> 2);
+    r = r | (r >> 4);
+    r = r | (r >> 8);
+    r = r | (r >> 16);
+    r = r | (r >> 32);
+    return r;
+}
+
+// the bound of the number the second operand is (a number of the instruction or a vreg)
+int rn_bval(int i) {
+    if ir_bi[i] == 1 {
+        int k = ir_b[i];
+        if k >= 0 && k < rn_big { return k; }
+        return rn_unk;
+    }
+    return rn_get(ir_b[i]);
+}
+
+// the bound of the result of the instruction i
+int rn_eval(int i) {
+    int op = ir_op[i];
+    int d = ir_d[i];
+    if d <= 0 || d >= IR_MAXV { return rn_unk; }
+    if ir_vcls[d] != 0 { return rn_unk; }
+    int a = rn_get(ir_a[i]);
+    if op == IR_CONST {
+        if ir_k[i] >= 0 && ir_k[i] < rn_big { return ir_k[i]; }
+        if ir_k[i] >= 0 { return rn_big; }       // a big positive number (the multiplier of a division): never negative
+        return rn_unk;
+    }
+    if op == IR_COPY { return a; }
+    if op == IR_ADD { return rn_add(a, rn_bval(i)); }
+    if op == IR_MUL { return rn_mul(a, rn_bval(i)); }
+    if op == IR_AND {
+        if ir_bi[i] == 1 {
+            int k = ir_b[i];
+            if k >= 0 && k < rn_big { return k; }
+            if k < 0 { return a; }         // a & ~mask: not bigger than a
+            return rn_unk;
+        }
+        int bb = rn_get(ir_b[i]);
+        if a == rn_unk { return bb; }
+        if bb == rn_unk { return a; }
+        if a < bb { return a; }
+        return bb;
+    }
+    if op == IR_OR || op == IR_XOR {
+        int bo = rn_bval(i);
+        if a == rn_unk || bo == rn_unk { return rn_unk; }
+        if a == rn_big || bo == rn_big { return rn_big; }
+        int m = a;
+        if bo > m { m = bo; }
+        return rn_smear(m);
+    }
+    if op == IR_SHL {
+        if ir_bi[i] == 0 || a == rn_unk || a == rn_big { return rn_unk; }
+        int k = ir_b[i];
+        if k < 0 || k > 61 { return rn_unk; }
+        if a > (rn_big - 1) >> k { return rn_unk; }
+        return a << k;
+    }
+    if op == IR_LSHR || op == IR_ASHR {
+        if ir_bi[i] == 0 { return rn_unk; }
+        int k = ir_b[i];
+        if k < 0 || k > 63 { return rn_unk; }
+        if a == rn_unk {
+            if op == IR_LSHR && k >= 2 { return (1 << (64 - k)) - 1; }
+            return rn_unk;
+        }
+        if a == rn_big { if k >= 1 { return rn_big; } return rn_big; }
+        return a >> k;
+    }
+    if op == IR_MULHS {
+        int bm = rn_get(ir_b[i]);
+        if ir_bi[i] == 1 { bm = rn_bval(i); }
+        if a != rn_unk && bm != rn_unk { return rn_big; }
+        return rn_unk;
+    }
+    if op == IR_SDIV || op == IR_UDIV {
+        if ir_bi[i] == 1 && ir_b[i] > 0 && a != rn_unk {
+            if a == rn_big { return rn_big; }
+            return a / ir_b[i];
+        }
+        return rn_unk;
+    }
+    if op == IR_SETCC { return 1; }
+    if op == IR_EXT {
+        if ir_w[i] == 0 && ir_k[i] == 8 { return 255; }
+        if ir_w[i] == 0 && ir_k[i] == 16 { return 65535; }
+        if ir_w[i] == 0 && ir_k[i] == 32 { return 4294967295; }
+        return rn_unk;
+    }
+    if op == IR_ROTR32 { return 4294967295; }
+    if op == IR_CLZ || op == IR_POPCNT { return 64; }
+    if op == IR_LOAD {
+        int w = ir_w[i];
+        if w == 1 { return 255; }
+        if w == 2 { return 65535; }
+        if w == 4 { return 4294967295; }
+        int t = rn_slot_t(i);
+        if t >= 0 && w == 8 {
+            int v = rn_cs[t];
+            if v < 0 { return 0; }
+            return v;
+        }
+        return rn_unk;
+    }
+    return rn_unk;
+}
+
+// the last instruction before `pos` in the block b that writes the vreg v (-1: none in the block, -2: a call in between)
+int rn_find_def(int b, int pos, int v) {
+    int j = pos - 1;
+    while j >= ir_bs[b] {
+        int op = ir_op[j];
+        if op == IR_CALL || op == IR_CALLIND || op == IR_SYSCALL { return 0 - 2; }
+        if ir_d[j] == v && op != IR_NOP && op != IR_STORE { return j; }
+        j -= 1;
+    }
+    return 0 - 1;
+}
+
+// is the vreg v written by an instruction in [from, to)?
+bool rn_written(int from, int to, int v) {
+    int j = from;
+    while j < to {
+        if ir_d[j] == v && ir_op[j] != IR_NOP && ir_op[j] != IR_STORE { return true; }
+        j += 1;
+    }
+    return false;
+}
+
+// where the value of v at `pos` comes from, through copies: the instruction that made it (>= 0), or -(v + 10) when it is the value the
+// block started with, or -1 when it cannot be said
+int rn_origin(int b, int pos, int v) {
+    int j = rn_find_def(b, pos, v);
+    int at = pos;
+    int x = v;
+    int n = 0;
+    while j >= 0 && ir_op[j] == IR_COPY && n < 16 {
+        at = j;
+        x = ir_a[j];
+        j = rn_find_def(b, j, x);
+        n += 1;
+    }
+    if j >= 0 { return j; }
+    if j == 0 - 1 { return 0 - (x + 10); }
+    return 0 - 1;
+}
+
+// the rotation of a 32-bit number: D = and(or(shr(x, n), shl(x, 32 - n)), 0xFFFFFFFF), x not bigger than 32 bits
+bool rn_rotate(int b, int i) {
+    if ir_bi[i] != 1 || ir_b[i] != 4294967295 { return false; }
+    int c = rn_find_def(b, i, ir_a[i]);
+    if c < 0 || ir_op[c] != IR_OR || ir_bi[c] != 0 { return false; }
+    int p = rn_find_def(b, c, ir_a[c]);
+    int q = rn_find_def(b, c, ir_b[c]);
+    int hop = 0;
+    while p >= 0 && ir_op[p] == IR_COPY && hop < 8 { p = rn_find_def(b, p, ir_a[p]); hop += 1; }
+    hop = 0;
+    while q >= 0 && ir_op[q] == IR_COPY && hop < 8 { q = rn_find_def(b, q, ir_a[q]); hop += 1; }
+    if p < 0 || q < 0 || ir_bi[p] != 1 || ir_bi[q] != 1 { return false; }
+    int r = p;
+    int l = q;
+    if ir_op[p] == IR_SHL { r = q; l = p; }
+    if ir_op[l] != IR_SHL { return false; }
+    if ir_op[r] != IR_LSHR && ir_op[r] != IR_ASHR { return false; }
+    int n = ir_b[r];
+    if n < 1 || n > 31 || ir_b[l] != 32 - n { return false; }
+    int o1 = rn_origin(b, r, ir_a[r]);
+    int o2 = rn_origin(b, l, ir_a[l]);
+    if o1 == 0 - 1 || o1 != o2 { return false; }
+    // the value must be known to fit in 32 bits (the instruction that made it)
+    int src = 0;
+    if o1 >= 0 {
+        if rn_ir[o1] > 4294967295 { return false; }
+        // made by `y & 0xFFFFFFFF`: the instruction ignores the upper half, so y itself can be turned
+        if ir_op[o1] == IR_AND && ir_bi[o1] == 1 && ir_b[o1] == 4294967295 && ir_a[o1] > 0 && !rn_written(o1, i, ir_a[o1]) { src = ir_a[o1]; }
+    } else {
+        // the value the block started with: the bound at the start
+        int lv = 0 - (o1 + 10);
+        if lv < 1 || lv >= 64 { return false; }
+        int eb = rn_ent[lv];
+        if eb < 0 || eb > 4294967295 { return false; }
+    }
+    // a vreg that still holds the value at D
+    if src == 0 && !rn_written(l, i, ir_a[l]) { src = ir_a[l]; }
+    if src == 0 && !rn_written(r, i, ir_a[r]) { src = ir_a[r]; }
+    if src == 0 { return false; }
+    ir_op[i] = IR_ROTR32;
+    ir_a[i] = src;
+    ir_b[i] = n;
+    ir_bi[i] = 1;
+    ir_k[i] = 0;
+    rn_changes += 1;
+    return true;
+}
+
+// run the transfer of the block b (rewrite: change instructions as well)
+void rn_block(int b, bool rewrite) {
+    rn_stamp += 1;
+    int ev = 1;
+    while ev < 64 { rn_ent[ev] = rn_cs[RN_NT + ev]; ev += 1; }
+    int i = ir_bs[b];
+    while i < ir_be[b] {
+        int op = ir_op[i];
+        if op == IR_NOP { i += 1; continue; }
+        if op == IR_CALL || op == IR_CALLIND || op == IR_SYSCALL {
+            rn_stamp += 1;
+            int cv = 1;
+            while cv <= 19 { rn_cs[RN_NT + cv] = rn_unk; cv += 1; }
+            if ir_d[i] > 0 { rn_set(ir_d[i], rn_unk); }
+            i += 1;
+            continue;
+        }
+        if op == IR_STORE {
+            int t = rn_slot_t(i);
+            if t >= 0 && ir_w[i] == 8 {
+                if ir_bi[i] == 1 {
+                    int k = ir_b[i];
+                    if k >= 0 && k < rn_big { rn_cs[t] = k; } else if k >= 0 { rn_cs[t] = rn_big; } else { rn_cs[t] = rn_unk; }
+                } else {
+                    rn_cs[t] = rn_get(ir_b[i]);
+                }
+            } else if t >= 0 {
+                rn_cs[t] = rn_unk;
+            }
+            i += 1;
+            continue;
+        }
+        if rewrite && ir_d[i] > 0 && ir_vcls[ir_d[i]] == 0 {
+            if (op == IR_LSHR || op == IR_ASHR) && ir_bi[i] == 1 && ir_b[i] >= 1 && ir_b[i] <= 63 {
+                int v = rn_get(ir_a[i]);
+                int k = ir_b[i];
+                bool zero = false;
+                if v != rn_unk && v != rn_big && v < (1 << k) { zero = true; }
+                if v == rn_big && k == 63 { zero = true; }
+                if zero {
+                    ir_op[i] = IR_CONST;
+                    ir_k[i] = 0;
+                    ir_a[i] = 0;
+                    ir_b[i] = 0;
+                    ir_bi[i] = 1;
+                    rn_changes += 1;
+                    op = IR_CONST;
+                }
+            } else if op == IR_AND && ir_bi[i] == 1 && ir_b[i] == 4294967295 {
+                if !rn_rotate(b, i) {
+                    int v2 = rn_get(ir_a[i]);
+                    if v2 != rn_unk && v2 != rn_big && v2 <= 4294967295 {
+                        ir_op[i] = IR_COPY;
+                        ir_b[i] = 0;
+                        ir_bi[i] = 0;
+                        rn_changes += 1;
+                        op = IR_COPY;
+                    }
+                }
+                op = ir_op[i];
+            }
+        }
+        if ir_d[i] > 0 {
+            int rv = rn_eval(i);
+            rn_ir[i] = rv;
+            rn_set(ir_d[i], rv);
+        }
+        i += 1;
+    }
+}
+
+// the state at the start of the block b: the join of the ends of the blocks that come before it
+void rn_entry(int b) {
+    int t = 0;
+    while t < RN_NS {
+        rn_cs[t] = 0 - 2;
+        if b == 0 { rn_cs[t] = rn_unk; }
+        t += 1;
+    }
+    int e = op_phead[b];
+    while e >= 0 {
+        int p = e / 2;
+        if op_po[p] >= 0 {
+            t = 0;
+            while t < RN_NS {
+                int v = rn_out[p * RN_NS + t];
+                if v > rn_cs[t] { rn_cs[t] = v; }
+                t += 1;
+            }
+        }
+        e = op_enext[e];
+    }
+}
+
+void op_range_run() {
+    if ir_nb > RN_MAXB || ir_nb < 1 { return; }
+    op_graph();
+    vn_hints();
+    rn_big = 1 << 62;
+    rn_unk = rn_big + 1;
+    rn_changes = 0;
+    // can an address of the frame leak (a stack cell could then change behind our back)?
+    rn_leak = 0;
+    int i = 0;
+    while i < ir_n {
+        int op = ir_op[i];
+        if op == IR_ADDR_SLOT { if ir_d[i] != 30 { rn_leak = 1; } }
+        else if op != IR_LOAD && op != IR_STORE && op != IR_NOP {
+            if ir_a[i] == 30 { rn_leak = 1; }
+            if ir_uses_b(op) && ir_bi[i] == 0 && ir_b[i] == 30 { rn_leak = 1; }
+            if op == IR_CALL || op == IR_CALLIND || op == IR_SYSCALL {
+                int g = 0;
+                while g < ir_ac[i] {
+                    if ir_args[ir_as[i] + g] == 30 { rn_leak = 1; }
+                    g += 1;
+                }
+            }
+        }
+        if op == IR_STORE && ir_bi[i] == 0 && ir_b[i] == 30 { rn_leak = 1; }
+        i += 1;
+    }
+    // the slots that are loaded or stored as whole words
+    i = 0;
+    while i < 16384 { rn_id[i] = 0 - 1; i += 1; }
+    rn_nt = 0;
+    i = 0;
+    while i < ir_n {
+        if (ir_op[i] == IR_LOAD || ir_op[i] == IR_STORE) && ir_a[i] == 30 {
+            int s = vn_slot(i);
+            if s >= 0 && rn_id[s] < 0 && rn_nt < RN_NT && !(s >= 8192 && rn_leak != 0) {
+                rn_id[s] = rn_nt;
+                rn_nt += 1;
+            }
+        }
+        i += 1;
+    }
+    if rn_nt == 0 {
+        // no slots: still useful inside the blocks (masks, rotations)
+    }
+    i = 0;
+    while i < ir_nb * RN_NS { rn_out[i] = 0 - 2; i += 1; }
+    // the flow
+    int pass = 0;
+    bool changed = true;
+    while changed && pass < 30 {
+        changed = false;
+        pass += 1;
+        int ri = 0;
+        while ri < op_nrpo {
+            int b = op_rpo[ri];
+            rn_entry(b);
+            rn_block(b, false);
+            int t = 0;
+            while t < RN_NS {
+                int old = rn_out[b * RN_NS + t];
+                int n = rn_cs[t];
+                if n < 0 { n = 0; }
+                if old >= 0 && n < old { n = old; }
+                if pass >= 4 && old >= 0 && n > old && n != rn_unk { n = rn_big; }
+                if n != old {
+                    rn_out[b * RN_NS + t] = n;
+                    changed = true;
+                }
+                t += 1;
+            }
+            ri += 1;
+        }
+    }
+    if changed { return; }          // did not settle: change nothing
+    int rj = 0;
+    while rj < op_nrpo {
+        int b2 = op_rpo[rj];
+        rn_entry(b2);
+        int t2 = 0;
+        while t2 < RN_NS {
+            if rn_cs[t2] < 0 { rn_cs[t2] = 0; }
+            t2 += 1;
+        }
+        rn_block(b2, true);
+        rj += 1;
+    }
+    rn_total += rn_changes;
 }
