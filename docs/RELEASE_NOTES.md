@@ -1,6 +1,8 @@
-# J2K / Jcmp 0.9.114
+# J2K / Jcmp 0.9.115
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
+
+**0.9.115:** `raw<u32>[...]` writes raw words / bytes inside low-level blocks.
 
 **0.9.114:** `a[lo..hi]` is a view (`Span`) of a part of an array.
 

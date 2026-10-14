@@ -627,9 +627,65 @@ void parse_block_call() {
     emit_line(@nk_line);
 }
 
+// raw<u32>[0xd503201f, ...];   raw bytes, half words, words or double words (little endian), as they are written;
+// the assembler takes whole 32-bit words, so u8 / u16 values are packed and the last word is filled with zeros
+void parse_raw() {
+    next();                                  // raw
+    if !tok_is("<") { die("raw<type>[values];  was expected (type: u8, u16, u32 or u64)"); }
+    next();
+    int size = 0;
+    if tok_is("u8") { size = 1; }
+    else if tok_is("u16") { size = 2; }
+    else if tok_is("u32") { size = 4; }
+    else if tok_is("u64") { size = 8; }
+    else { die("raw<type>: the type is u8, u16, u32 or u64"); }
+    next();
+    if !tok_is(">") { die("> was expected after the type of raw<type>"); }
+    next();
+    expect("[");
+    int w = 0;                               // the word that is being made
+    int nb = 0;                              // its bytes so far
+    int count = 0;
+    while !tok_is("]") {
+        if tok_kind != T_NUM { die("a number was expected in raw<type>[ ... ]"); }
+        int v = tok_num;
+        if size == 1 && (v < 0 || v > 255) { die("this value does not fit u8 (0 .. 255)"); }
+        if size == 2 && (v < 0 || v > 65535) { die("this value does not fit u16 (0 .. 65535)"); }
+        if size == 4 && (v < 0 || v > 4294967295) { die("this value does not fit u32 (0 .. 4294967295)"); }
+        next();
+        int k = 0;
+        while k < size {
+            w = w | (((v >> (k * 8)) & 255) << (nb * 8));
+            nb += 1;
+            if nb == 4 {
+                str_copy(@nk_line, ".word ", 256);
+                append_int(@nk_line, w);
+                nk_emit(@nk_line);
+                w = 0;
+                nb = 0;
+            }
+            k += 1;
+        }
+        count += 1;
+        if tok_is(",") { next(); } else if !tok_is("]") { die(", or ] was expected in raw<type>[ ... ]"); }
+    }
+    next();                                  // ]
+    expect(";");
+    if count == 0 { die("raw<type>[ ] needs at least one value"); }
+    if nb > 0 {
+        str_copy(@nk_line, ".word ", 256);
+        append_int(@nk_line, w);
+        nk_emit(@nk_line);
+    }
+}
+
 void parse_naked_stmt() {
     if tok_is("_") {
         parse_block_call();
+        return;
+    }
+    if tok_is("raw") {
+        parse_raw();
         return;
     }
     if tok_kind != T_IDENT && !tok_is("[") { die("a statement of the low level was expected (Reg::x0 = ...; ret; goto ...; if ...)"); }

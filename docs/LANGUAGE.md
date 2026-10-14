@@ -983,3 +983,16 @@ total(a[2..4]);
 can be expressions. A view does not own the memory and is checked when it is used (`span index out of range`). It works for dynamic arrays
 (`T[]`); for a String use `s.slice(a, b)`.
 
+## `raw<type>[values];`: bytes as they are written (0.9.115)
+
+In a naked function, a register block or a `_.name { }` block:
+
+```jk
+raw<u32>[0xd503201f];                    // one instruction word (nop)
+raw<u8>[0x1f, 0x20, 0x03, 0xd5];         // the same four bytes (little endian)
+raw<u16>[0x201f, 0xd503];                // the same, as half words
+raw<u64>[0x1100000011000000];            // two words
+```
+The type is `u8`, `u16`, `u32` or `u64`; a value that does not fit is an error. The assembler works in 4-byte words, so a group that does not fill
+the last word is padded with zeros. A function with a raw word is opaque to the passes (as every register block is).
+

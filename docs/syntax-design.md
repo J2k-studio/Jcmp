@@ -1886,7 +1886,7 @@ The owner answered "67 68 ได้" (agreed): the assistant's recommendations s
 | 2 SIMD | "explain more, break it into steps" | explanation and steps written; owner to choose the first step |
 | 3 32-bit | "i32 is int32 shortened, u is unsigned" and "ก is fine": option ก, the types `i32` / `u32` compute in 32 bits (wrap around, `ror w`) | decided by the owner; to do |
 | 4.1 `#pragma` data | "all of them are fine" (a variable, a block and a file) | decided by the owner; name and error to be proposed |
-| 4.2 raw bytes | asks for the pros and cons of `raw<type>[values];` | answered in the reply |
+| 4.2 raw bytes | asks for the pros and cons of `raw<type>[values];` | answered; "yep" = accepted; DONE in 0.9.115 (statement inside naked / register / `_.` blocks; u8 u16 u32 u64) |
 | 5.1 `a[1..5]` | "which is better" | assistant's pick: a view (Span); accepted by the owner ("ได้"); DONE in 0.9.114: `a[lo..hi]` is `span(a, lo, hi)` |
 | 5.2 `_.` | "can be named: `_.start { }` defines, `_.start;` calls it" | decided by the owner; DONE in 0.9.112: `_.name { ... }` is a function without arguments (`__blk_name`, `ret` added), called `_.name;`; `_. { }` is `register { }` |
 

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.115
+* **`raw<type>[values];`** (owner's answer 4.2): bytes of the program as they are written, in a naked function, a register block or a `_.name { }` block: `raw<u32>[0xd503201f];`, `raw<u8>[0x1f, 0x20, 0x03, 0xd5];`, `raw<u16>[...]`, `raw<u64>[...]` (little endian; a value that does not fit the type is an error; a partial last word is padded with zeros). The assembler has a `.word N` directive for it.
+* Tests: `t353_raw_words`, `t354_fail_raw_range`, `t355_raw_in_function` (the suite: 378).
+
 ## 0.9.114
 * **`a[lo..hi]` is a view of a part of an array** (owner's answer 5.1): `Span<int> s = a[1..5];` is written `span(a, 1, 5)` by the lexer (a name directly followed by brackets with `..` at their top level, on one line; `alloc`, `alloc0`, `free`, `grow`, `arr` are left alone). `lo` and `hi` can be any expression.
 * **A call of a generic without `<...>` accepts any expression for an argument that does not give a type** (`span(a, i + 1, n - 1)`: only the arguments that bind a type parameter must be simple).

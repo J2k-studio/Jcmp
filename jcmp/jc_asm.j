@@ -1423,6 +1423,13 @@ void as_instruction() {
             as_put32((lo >> 32) & 4294967295);
             return;
         }
+        if as_mn_is("word") {
+            // one 32-bit word (raw<u32>[...] of the language): a number
+            as_skip_spaces();
+            int wv = as_parse_number();
+            as_put32(wv & 4294967295);
+            return;
+        }
         if as_mn_is("align") {
             // pad with nops until the address (where the program is loaded: 0x4000B0 + as_pos) is a multiple of N bytes
             as_skip_spaces();
