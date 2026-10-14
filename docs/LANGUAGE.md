@@ -1023,5 +1023,12 @@ f32x4 f = {1.0, 2.0, 3.0, 4.0};       // four floats:            f.x f.y f.z f.w
 i32x4 m = {10, 20, 30, 40};           // four 32-bit numbers:    m.x m.y m.z m.w
 ```
 The types are 16 bytes (the size of a 128-bit NEON register); the lanes are named like the parts of `vec3`. This is the first step of
-`docs/syntax-design.md` 59: the operators (`a + b` in one NEON instruction), loads from arrays and sums come next.
+`docs/syntax-design.md` 59.
+
+The operators `+ - * /` (and `+= -= *= /=`) are one NEON instruction on the whole value (0.9.118):
+```jk
+f64x2 c = a + b * 2.0;          // a number on the right (or on the left of *) is used for every lane
+i32x4 k = m * m + m;
+```
+`/` needs a float type; `i64x2` has no `*`; both sides must be the same type (or a number). Loads from arrays and sums come next.
 

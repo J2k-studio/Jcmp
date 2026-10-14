@@ -1925,3 +1925,5 @@ The owner: "`#pragma read` is fine". Taken as: the name `read` (`readonly` is ac
 ### 59.x Owner's answer on SIMD (2026-10-14): "S1"
 Step S1 (the types `f64x2`, `i64x2`, `f32x4`, `i32x4`, written `#import <simd>`, lanes `x y z w`) was done in 0.9.117 as library structs of 16 bytes. S2 (the operators in NEON instructions), S3 (loads / stores from arrays), S4 (lanes, sums) and S5 (the compiler makes loops into vectors) are open.
 
+### 59.y Owner's answer: "S2" (2026-10-14) and what was done in 0.9.118
+The operators `+ - * /` of the four simd types are one NEON instruction each (`fadd v0.2d, ...`), also with a number on one side (`dup` into every lane). Not allowed (compile time error): `i64x2 * i64x2`, `/` on whole-number lanes, `%`, comparisons, mixed types. Open: S2b (the vectors in the IR and the register allocator, so a loop of them stays in registers), S3, S4, S5.

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.118
+* **SIMD step S2: operators** (owner's "S2" on `docs/syntax-design.md` 59): on `f64x2`, `i64x2`, `f32x4`, `i32x4` the operators `+ - * /` (and `+= -= *= /=`) are one NEON instruction on the whole 16 bytes. The right side can be a number (`v * 2.0`, `2.0 * v`, `m * 3`): it is used for every lane. `/` only for the float types; `i64x2` has no `*` (NEON has none for 64 bits). The two values must be of the same type.
+* The assembler knows `fadd fsub fmul fdiv add sub mul` on `vN.2d` / `vN.4s`, `dup vN.T, xN|wN` and `ldr/str qN, [..]`.
+* A function that uses these operators is not yet lifted into the IR (it keeps the text path); step S2b puts the vectors into the IR and the register allocator.
+* Tests: `t360_simd_ops`, `t361_fail_simd_i64_mul`.
+
 ## 0.9.117
 * **`#import <simd>`: vector types, step S1** (owner's answer "S1" on `docs/syntax-design.md` 59): `f64x2`, `i64x2`, `f32x4`, `i32x4`, 16 bytes each, lanes `x y z w`, written `f64x2 a = {1.5, 2.5};`. No operators yet (S2).
 * **Fixed:** a decimal literal in `{ ... }` for a `float` field was stored as the low half of a double (`F f = {1.5, 2.5};` gave 0 0).

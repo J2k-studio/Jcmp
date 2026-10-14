@@ -193,6 +193,62 @@ int as_parse_reg_or_sp() {
     return as_parse_reg();
 }
 
+// ----------------------------------------------------- NEON vector registers (vN.2d, vN.4s)
+int as_vec_arr;                 // after as_parse_vreg: 1 = .2d, 2 = .4s
+
+bool as_at_vreg() {
+    as_skip_spaces();
+    return as_cur() == 'v' && as_is_digit(as_peek(1));
+}
+
+int as_parse_vreg() {
+    if as_cur() != 'v' { as_fail(); }
+    as_ci += 1;
+    int n = as_parse_number();
+    if n > 31 { as_fail(); }
+    if as_cur() != '.' { as_fail(); }
+    as_ci += 1;
+    int cnt = as_parse_number();
+    int c = as_cur();
+    as_ci += 1;
+    if cnt == 2 && c == 'd' { as_vec_arr = 1; }
+    else if cnt == 4 && c == 's' { as_vec_arr = 2; }
+    else { as_fail(); }
+    return n;
+}
+
+// dup vD.2d, xN   /   dup vD.4s, wN   (the same number in every lane)
+void as_h_dup() {
+    as_skip_spaces();
+    int rd = as_parse_vreg();
+    as_expect_comma();
+    int rn = 0;
+    int base = 0x4E080C00;
+    if as_vec_arr == 1 {
+        rn = as_parse_reg();
+    } else {
+        base = 0x4E040C00;
+        rn = as_parse_wreg();
+    }
+    as_put32(base | (rn << 5) | rd);
+}
+
+// vD.T, vN.T, vM.T with the opcode for .2d (op2d) or .4s (op4s); 0 = not allowed
+void as_h_vec3(int op2d, int op4s) {
+    int rd = as_parse_vreg();
+    int arr = as_vec_arr;
+    as_expect_comma();
+    int rn = as_parse_vreg();
+    if as_vec_arr != arr { as_fail(); }
+    as_expect_comma();
+    int rm = as_parse_vreg();
+    if as_vec_arr != arr { as_fail(); }
+    int base = op4s;
+    if arr == 1 { base = op2d; }
+    if base == 0 { as_fail(); }
+    as_put32(base | (rm << 16) | (rn << 5) | rd);
+}
+
 // ----------------------------------------------------- floating-point registers
 int as_fp_kind;                 // after parse_freg: 1 = dN (double), 0 = sN (single)
 
@@ -690,7 +746,15 @@ void as_h_pair(bool store) {
 void as_h_mem(int op, int shift) {
     as_skip_spaces();
     int rt = 0;
-    if as_cur() == 'd' && as_is_digit(as_peek(1)) {
+    if as_cur() == 'q' && as_is_digit(as_peek(1)) {
+        // ldr qN, [..] / str qN, [..]  (16 bytes, one NEON register)
+        as_ci += 1;
+        rt = as_parse_number();
+        if op == 0xF940 { op = 0x3DC0; }
+        else if op == 0xF900 { op = 0x3D80; }
+        else { as_fail(); }
+        shift = 4;
+    } else if as_cur() == 'd' && as_is_digit(as_peek(1)) {
         // ldr dN, [..] / str dN, [..]  (a double)
         rt = as_parse_freg();
         if op == 0xF940 { op = 0xFD40; }
@@ -783,6 +847,13 @@ void as_h_branch() {
 
 // fadd fsub fmul fdiv: dREG, dREG, dREG (or the s forms)
 void as_h_fp3(int dbase, int sbase) {
+    if as_at_vreg() {
+        if dbase == 0x1E602800 { as_h_vec3(0x4E60D400, 0x4E20D400); }
+        else if dbase == 0x1E603800 { as_h_vec3(0x4EE0D400, 0x4EA0D400); }
+        else if dbase == 0x1E600800 { as_h_vec3(0x6E60DC00, 0x6E20DC00); }
+        else { as_h_vec3(0x6E60FC00, 0x6E20FC00); }
+        return;
+    }
     as_skip_spaces();
     int rd = as_parse_freg();
     int kind = as_fp_kind;
@@ -1466,10 +1537,11 @@ void as_instruction() {
     }
     as_read_mnemonic();
     if as_mn_is("mov") { as_h_mov(); return; }
-    if as_mn_is("add") { as_h_addsub(true); return; }
-    if as_mn_is("sub") { as_h_addsub(false); return; }
+    if as_mn_is("add") { if as_at_vreg() { as_h_vec3(0x4EE08400, 0x4EA08400); return; } as_h_addsub(true); return; }
+    if as_mn_is("sub") { if as_at_vreg() { as_h_vec3(0x6EE08400, 0x6EA08400); return; } as_h_addsub(false); return; }
     if as_mn_is("cmp") { as_h_cmp(); return; }
-    if as_mn_is("mul") { as_h_rrr(0x9B007C00); return; }
+    if as_mn_is("dup") { as_h_dup(); return; }
+    if as_mn_is("mul") { if as_at_vreg() { as_h_vec3(0, 0x4EA09C00); return; } as_h_rrr(0x9B007C00); return; }
     if as_mn_is("udiv") { as_h_rrr(0x9AC00800); return; }
     if as_mn_is("sdiv") { as_h_rrr(0x9AC00C00); return; }
     if as_mn_is("and") { as_h_logic(0x8A000000, 0x92000000); return; }

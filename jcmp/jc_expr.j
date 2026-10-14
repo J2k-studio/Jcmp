@@ -4244,8 +4244,74 @@ void operator_method(char^ op, char^ out) {
 }
 
 // `left op right` where the left value is a struct: [sp] = the left value (its address), x0 = the right operand.
+// the four types of #import <simd>: 1 = f64x2, 2 = i64x2, 3 = f32x4, 4 = i32x4; 0 = another struct
+int simd_kind(int lt) {
+    char^ n = @sname + (lt - 100) * 64;
+    if str_eq(n, "f64x2") { return 1; }
+    if str_eq(n, "i64x2") { return 2; }
+    if str_eq(n, "f32x4") { return 3; }
+    if str_eq(n, "i32x4") { return 4; }
+    return 0;
+}
+
+// a + b  a - b  a * b  a / b  on a simd struct: one NEON instruction on the whole 16 bytes. [sp] = the address of the left value,
+// x0 = the address of the right value (or a number: the same number is used for every lane); the result is a temporary, x0 = its address
+void emit_simd_op(char^ op, int lt, int kind) {
+    bool is_f = kind == 1 || kind == 3;
+    char arr[4];
+    str_copy(@arr, ".4s", 4);
+    if kind == 1 || kind == 2 { str_copy(@arr, ".2d", 4); }
+    char ins[8];
+    if str_eq(op, "+") { if is_f { str_copy(@ins, "fadd", 8); } else { str_copy(@ins, "add", 8); } }
+    else if str_eq(op, "-") { if is_f { str_copy(@ins, "fsub", 8); } else { str_copy(@ins, "sub", 8); } }
+    else if str_eq(op, "*") {
+        if kind == 2 { die("i64x2 has no * (NEON has no 64-bit multiply); use f64x2 or i32x4"); }
+        if is_f { str_copy(@ins, "fmul", 8); } else { str_copy(@ins, "mul", 8); }
+    } else if str_eq(op, "/") {
+        if !is_f { die("whole-number lanes have no / (use f64x2 or f32x4)"); }
+        str_copy(@ins, "fdiv", 8);
+    } else { die("a simd value works with + - * / only"); }
+    int rt = ex_ty;
+    bool scalar = rt < 100;
+    if !scalar && rt != lt { die("the two simd values must have the same type"); }
+    if scalar {
+        if kind == 1 && rt != 91 && rt != 92 { die("a number for f64x2 must be a double"); }
+        if kind == 3 && rt != 90 && rt != 92 { die("a number for f32x4 must be a float (write (float)x)"); }
+        if (kind == 2 || kind == 4) && !is_numeric(rt) { die("a number for a whole-number simd value must be an int"); }
+    }
+    add_local("..result", 0, 16 + lt - 100, ssize[lt - 100], 0);
+    int tmp_off = loff[lcount - 1];
+    if scalar && kind == 3 && rt == 92 { lit_to_f32(0); }
+    emit_line("ldr x1, [sp, #0]");
+    emit_line("add sp, sp, #16");
+    emit_line("ldr q0, [x1]");
+    if scalar {
+        emit_str("dup v1");
+        emit_str(@arr);
+        if kind == 3 || kind == 4 { emit_line(", w0"); } else { emit_line(", x0"); }
+    } else {
+        emit_line("ldr q1, [x0]");
+    }
+    emit_str(@ins);
+    emit_str(" v0");
+    emit_str(@arr);
+    emit_str(", v0");
+    emit_str(@arr);
+    emit_str(", v1");
+    emit_str(@arr);
+    emit_nl();
+    ins_n("add x0, x29, #", tmp_off);
+    emit_line("str q0, [x0]");
+    ex_ty = lt;
+}
+
 // The call is  left.method(right)  of a method declared with the word `operator`; the result is left in x0.
 void emit_operator_call(char^ op, int lt) {
+    int sk = simd_kind(lt);
+    if sk != 0 {
+        emit_simd_op(op, lt, sk);
+        return;
+    }
     char mname[16];
     operator_method(op, @mname);
     char fn[256];
