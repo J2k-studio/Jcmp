@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.106
+* **A file that `#import "name"` cannot find has a message of its own:** `cannot find the file to import: 'name' (looked for name.j and the same with .jk, next to this file and in the -I folder)` with a `help:`; `#import "name.jk"` (an extension in the quotes: the dot means a folder, so the compiler looked for `name/jk.j`) says so. Before: `cannot read file '.../name/jk.j'`.
+* Tests: `t341_fail_import_ext`, `t342_fail_import_missing` (the suite: 365).
+
 ## 0.9.105
 * **Standard library (`std/collections.j`): sort with a comparator, binary search, Queue, Deque, Heap.** `sort_by<T>(a, less)` (stable merge sort, n log n, one buffer; `less(x, y)` true when x comes first), `lower_bound<T>`, `upper_bound<T>`, `binary_search<T>` (sorted arrays, by `<`), `Queue<T>` (`push pop front len free`), `Deque<T>` (`push_back push_front pop_front pop_back front back get len free`), `Heap<T>` (a min-heap by `<`: `push pop top len free`). Empty ones throw "empty". The type is written (`sort_by<int>(v, ...)`, `Queue<int> q;`) as for every generic.
 * Tests: `t340_sort_search_queue` (checked against Python), the suite (363).

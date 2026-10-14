@@ -863,6 +863,19 @@ void lex_import() {
         }
         if try_ext(@alt, an) { str_copy(@path, @alt, 256); }
     }
+    if !file_exists(@path) {
+        char nm[200];
+        str_copy(@nm, "cannot find the file to import: '", 200);
+        append_text(@nm, @tok_str);
+        append_text(@nm, "' (looked for ");
+        append_text(@nm, @path + name_n);
+        append_text(@nm, " and the same with .jk, next to this file and in the -I folder)");
+        int sl = str_len(@tok_str);
+        if (sl > 3 && tok_str[sl - 3] == '.' && tok_str[sl - 2] == 'j' && tok_str[sl - 1] == 'k') || (sl > 2 && tok_str[sl - 2] == '.' && tok_str[sl - 1] == 'j') {
+            die_help(@nm, "a name in quotes has no extension: write  #import \"name\"  (a dot in it means a folder)");
+        }
+        die_help(@nm, "for a library of the standard set write  #import <name>;  for your own file  #import \"name\"  with name.j or name.jk next to this file");
+    }
     import_file(@path);
 }
 

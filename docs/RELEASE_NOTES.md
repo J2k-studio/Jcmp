@@ -1,6 +1,8 @@
-# J2K / Jcmp 0.9.105
+# J2K / Jcmp 0.9.106
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
+
+**0.9.106:** a missing file in `#import "name"` gives a clear message with help (and says when the extension should not be written).
 
 **0.9.105:** `sort_by` (stable, with a comparator), `lower_bound` / `upper_bound` / `binary_search`, `Queue`, `Deque` and `Heap` in the standard library.
 
