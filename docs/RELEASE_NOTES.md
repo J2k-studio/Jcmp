@@ -1,6 +1,8 @@
-# J2K / Jcmp 0.9.116
+# J2K / Jcmp 0.9.117
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
+
+**0.9.117:** `#import <simd>`: the vector types `f64x2`, `i64x2`, `f32x4`, `i32x4` (step S1); a float field of a struct can start from a decimal literal.
 
 **0.9.116:** `#pragma read`: global variables that cannot be written (compile time error, and not writable pages at run time).
 

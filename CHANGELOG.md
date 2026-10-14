@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.117
+* **`#import <simd>`: vector types, step S1** (owner's answer "S1" on `docs/syntax-design.md` 59): `f64x2`, `i64x2`, `f32x4`, `i32x4`, 16 bytes each, lanes `x y z w`, written `f64x2 a = {1.5, 2.5};`. No operators yet (S2).
+* **Fixed:** a decimal literal in `{ ... }` for a `float` field was stored as the low half of a double (`F f = {1.5, 2.5};` gave 0 0).
+* Tests: `t358_simd_types`, `t359_float_struct_init` (the suite: 382).
+
 ## 0.9.116
 * **`#pragma read`** (owner's answer 4.1; `docs/syntax-design.md` 70): global data that must not change. `#pragma read` before a declaration (that variable), `#pragma read begin` ... `#pragma read end` (the block), or as the first thing of a file (all its globals); `readonly` is the same word. A direct write is a compile time error; the variable gets pages of its own that the start code makes not writable (`mprotect`), so a write through a pointer stops the program (the segmentation fault text now ends with "or a write to read-only data").
 * Tests: `t356_pragma_read` (a write through a pointer: exit 139), `t357_fail_pragma_read` (the suite: 380).

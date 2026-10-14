@@ -581,6 +581,7 @@ void parse_brace(int s, int base) {
             while e < fldcnt[fi] {
                 if e > 0 { expect(","); }
                 parse_expr();
+                if fldcode[fi] == 6 && ex_ty == 92 { lit_to_f32(0); }       // a decimal literal for a float field
                 emit_line("ldr x3, [sp, #0]");
                 ins_n("add x3, x3, #", base + fldoff[fi] + e * esz);
                 emit_line("mov x1, x0");
@@ -592,6 +593,7 @@ void parse_brace(int s, int base) {
             parse_brace(fldcode[fi] - 16, base + fldoff[fi]);
         } else {
             parse_expr();
+            if fldcode[fi] == 6 && ex_ty == 92 { lit_to_f32(0); }           // a decimal literal for a float field
             emit_line("ldr x3, [sp, #0]");
             ins_n("add x3, x3, #", base + fldoff[fi]);
             emit_line("mov x1, x0");

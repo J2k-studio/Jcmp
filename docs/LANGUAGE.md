@@ -1013,3 +1013,15 @@ int scale = 3;
   segmentation fault message (`... or a write to read-only data`). The cost is 8 KB of address space for each read-only variable.
 * Locals cannot be read-only (a local with the pragma is not special); in a `#!library` file there is no start code, so only the compile time check works.
 
+## `#import <simd>`: vector types, step S1 (0.9.117)
+
+```jk
+#import <simd>
+f64x2 a = {1.5, 2.5};                 // two doubles:            a.x  a.y
+i64x2 n = {7, 8};                     // two 64-bit numbers:     n.x  n.y
+f32x4 f = {1.0, 2.0, 3.0, 4.0};       // four floats:            f.x f.y f.z f.w
+i32x4 m = {10, 20, 30, 40};           // four 32-bit numbers:    m.x m.y m.z m.w
+```
+The types are 16 bytes (the size of a 128-bit NEON register); the lanes are named like the parts of `vec3`. This is the first step of
+`docs/syntax-design.md` 59: the operators (`a + b` in one NEON instruction), loads from arrays and sums come next.
+

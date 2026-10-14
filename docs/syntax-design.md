@@ -1922,3 +1922,6 @@ Assistant's view: name A (`readonly`), the three scopes as above (one reader), a
 ### 70.4 Owner's answer (2026-10-14) and what was done in 0.9.116
 The owner: "`#pragma read` is fine". Taken as: the name `read` (`readonly` is accepted as the same word), all three scopes (the next variable / `begin` ... `end` / the first line of a file) and the assistant's pick 3 (a compile time error for direct writes and a page that is not writable at run time).
 
+### 59.x Owner's answer on SIMD (2026-10-14): "S1"
+Step S1 (the types `f64x2`, `i64x2`, `f32x4`, `i32x4`, written `#import <simd>`, lanes `x y z w`) was done in 0.9.117 as library structs of 16 bytes. S2 (the operators in NEON instructions), S3 (loads / stores from arrays), S4 (lanes, sums) and S5 (the compiler makes loops into vectors) are open.
+

@@ -31,6 +31,7 @@ int inc_count;
 int lvl_inst[16];            // 1 = the level is the text of a generic instance: its end is an end of items, not a return to the file below
 int mt_pending;              // 1 after #multithread until the for loop it belongs to is parsed
 int cpu_loaded;              // 1 once `import cpu` has been read
+int simd_loaded;             // 1 once `import <simd>` has been read
 int lvl_lib[16];             // 1 for a level that is a built-in library (its warnings are not shown)
 int vector_loaded;           // 1 once `import <vector>` has been read
 int matrix_loaded;
@@ -471,6 +472,7 @@ void lex_init(char^ path) {
     screen_loaded = 0;
     mt_pending = 0;
     cpu_loaded = 0;
+    simd_loaded = 0;
     lx_depth = 0;
     cur_base = 0;
     ro_block = 0;
@@ -760,6 +762,14 @@ void import_library(char^ name, char^ rel) {
         if std_loaded == 0 {
             std_loaded = 1;
             push_std();
+        }
+        next();
+        return;
+    }
+    if str_eq(name, "simd") {
+        if simd_loaded == 0 {
+            simd_loaded = 1;
+            push_simd();
         }
         next();
         return;

@@ -2349,6 +2349,57 @@ void push_cpu() {
     cur_line_start = 0;
 }
 
+// push_simd(): `import <simd>` -- f64x2, i64x2, f32x4, i32x4.
+void push_simd() {
+    if lx_depth >= 15 { die("imports nested too deeply"); }
+    stk_pos[lx_depth] = cur_pos;
+    stk_line[lx_depth] = cur_line;
+    stk_ls[lx_depth] = cur_line_start;
+    str_copy(@lvl_name + (lx_depth + 1) * 128, @lvl_name + lx_depth * 128, 128);
+    lx_depth += 1;
+    lvl_lib[lx_depth] = 1;
+    cur_base = lx_depth * 524288;
+    cur_len = 0;
+    put("// simd: vectors of 2 or 4 numbers that live in one 128-bit register.   #import <simd>");
+    put("//");
+    put("//   f64x2 v = {1.0, 2.0};       v.x  v.y                      two doubles");
+    put("//   i64x2 n = {1, 2};           n.x  n.y                      two 64-bit whole numbers");
+    put("//   f32x4 f = {1.0, 2.0, 3.0, 4.0};   f.x f.y f.z f.w         four floats");
+    put("//   i32x4 m = {1, 2, 3, 4};     m.x m.y m.z m.w               four 32-bit whole numbers");
+    put("//");
+    put("// The lanes are named x y z w as in vec3. Step S1 of docs/syntax-design.md 59: the types; the operators and");
+    put("// the loads from arrays come next.");
+    put("");
+    put("struct f64x2 {");
+    put("    double x;");
+    put("    double y;");
+    put("}");
+    put("");
+    put("struct i64x2 {");
+    put("    int x;");
+    put("    int y;");
+    put("}");
+    put("");
+    put("struct f32x4 {");
+    put("    float x;");
+    put("    float y;");
+    put("    float z;");
+    put("    float w;");
+    put("}");
+    put("");
+    put("struct i32x4 {");
+    put("    i32 x;");
+    put("    i32 y;");
+    put("    i32 z;");
+    put("    i32 w;");
+    put("}");
+    put("");
+    src_bufs[cur_base + cur_len] = 0;
+    cur_pos = 0;
+    cur_line = 1;
+    cur_line_start = 0;
+}
+
 // push_vector(): `import <vector>` -- Vec2, Vec3, Vec4.
 void push_vector() {
     if lx_depth >= 15 { die("imports nested too deeply"); }
