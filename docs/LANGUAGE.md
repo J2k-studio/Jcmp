@@ -1038,5 +1038,5 @@ double a[8] = {1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0};
 f64x2 v = f64x2::load(@a[0], 2);        // a[2], a[3]
 v.store(@a[0], 4);                        // a[4] = v.x, a[5] = v.y
 ```
-(`f64x2` and `i64x2` take an element of 8 bytes, `f32x4` (`float^`) and `i32x4` (`i32^`) of 4 bytes.) In a loop the vectors stay in NEON registers; sums of the lanes come next.
+(`f64x2` and `i64x2` take an element of 8 bytes, `f32x4` (`float^`) and `i32x4` (`i32^`) of 4 bytes.) In a loop the vectors stay in NEON registers. `v.sum()`, `v.min()` and `v.max()` (0.9.121) give the sum, the smallest and the largest lane (`sum()` of four lanes is `(x + y) + (z + w)`).
 

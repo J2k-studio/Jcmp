@@ -1930,3 +1930,6 @@ The operators `+ - * /` of the four simd types are one NEON instruction each (`f
 
 ### 59.z Owner's answer: "ทำเลย" on S3 (2026-10-14) and what was done in 0.9.120
 Taken as the "methods `load()` `store()`" of the proposal in 59: `f64x2::load(@a[0], i)` is a static method (the pair `a[i]`, `a[i+1]`), `v.store(@a[0], i)` a method; the array is given as a pointer (the language does not turn an array into a pointer by itself: `@a[0]`). Alternatives that were not chosen and can still be asked for: a free function `simd_load(a, i)` (one name for the four types), or `a[i..i+2]` as a span that converts to a vector. Lane sums and `min / max` (S4) and the loops that the compiler makes into vectors (S5) are open.
+
+### 59.zz S4 (owner's "yep", 2026-10-14) and what was done in 0.9.121
+`sum()`, `min()`, `max()` as methods (the `c.sum()` form of the proposal in 59). Left out: a function form `Simd::sum(v)`, and `argmin` / `dot` (a `dot` of two vectors is `(a * b).sum()`).

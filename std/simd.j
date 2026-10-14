@@ -22,6 +22,10 @@ struct f64x2 {
         p[i] = self.x;
         p[i + 1] = self.y;
     }
+    // the lanes together: sum() is x + y, min() and max() the smaller and the larger lane
+    double sum(self) { return self.x + self.y; }
+    double min(self) { if self.y < self.x { return self.y; } return self.x; }
+    double max(self) { if self.y > self.x { return self.y; } return self.x; }
 }
 
 struct i64x2 {
@@ -36,6 +40,9 @@ struct i64x2 {
         p[i] = self.x;
         p[i + 1] = self.y;
     }
+    int sum(self) { return self.x + self.y; }
+    int min(self) { if self.y < self.x { return self.y; } return self.x; }
+    int max(self) { if self.y > self.x { return self.y; } return self.x; }
 }
 
 struct f32x4 {
@@ -54,6 +61,24 @@ struct f32x4 {
         p[i + 2] = self.z;
         p[i + 3] = self.w;
     }
+    // sum() is (x + y) + (z + w)
+    float sum(self) { return (self.x + self.y) + (self.z + self.w); }
+    float min(self) {
+        float a = self.x;
+        float b = self.z;
+        if self.y < a { a = self.y; }
+        if self.w < b { b = self.w; }
+        if b < a { return b; }
+        return a;
+    }
+    float max(self) {
+        float a = self.x;
+        float b = self.z;
+        if self.y > a { a = self.y; }
+        if self.w > b { b = self.w; }
+        if b > a { return b; }
+        return a;
+    }
 }
 
 struct i32x4 {
@@ -71,5 +96,23 @@ struct i32x4 {
         p[i + 1] = self.y;
         p[i + 2] = self.z;
         p[i + 3] = self.w;
+    }
+    // sum() is (x + y) + (z + w)
+    i32 sum(self) { return (self.x + self.y) + (self.z + self.w); }
+    i32 min(self) {
+        i32 a = self.x;
+        i32 b = self.z;
+        if self.y < a { a = self.y; }
+        if self.w < b { b = self.w; }
+        if b < a { return b; }
+        return a;
+    }
+    i32 max(self) {
+        i32 a = self.x;
+        i32 b = self.z;
+        if self.y > a { a = self.y; }
+        if self.w > b { b = self.w; }
+        if b > a { return b; }
+        return a;
     }
 }

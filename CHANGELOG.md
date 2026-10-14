@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.121
+* **SIMD step S4: `v.sum()`, `v.min()`, `v.max()`** on `f64x2`, `i64x2`, `f32x4`, `i32x4` (the methods of the proposal in `docs/syntax-design.md` 59). `sum()` of four lanes is `(x + y) + (z + w)`. They are small methods of `std/simd.j`; the IR inlines them, so a vector that is only summed at the end stays in a register.
+* Known: a function that uses `float` (32 bits) values, so every function with an `f32x4` brace initialiser, is still not lifted into the IR (`fcvt s0, d0`); it works, it is not optimised. 32-bit floats in the IR are the next step.
+* Tests: `t365_simd_sum_min_max`.
+
 ## 0.9.120
 * **SIMD step S3: `f64x2::load(a, i)` and `v.store(a, i)`** (the methods `load()` / `store()` of the proposal in `docs/syntax-design.md` 59; the owner said "ทำเลย"): one 16-byte load or store at the element `i` of an array (`f64x2` and `i64x2`: elements of 8 bytes, `f32x4` and `i32x4`: 4 bytes). The array is written as its first element address: `f64x2::load(@a[0], i)`, or a pointer.
 * **Vectors live in registers** (new `jcmp/jc_vec.j`, at the end of the IR, before the text is written): a 16-byte stack object that is only loaded and stored as a whole or by lane (and whose address is only used for that) becomes a vector register; the other vectors get one of `v17 .. v29` that the function does not use as a double (graph colouring, copies joined). An object that is alive over a call is stored before and loaded after it. Lane reads and writes (`v.x`, `v.y = 1.0`, `{a, b}`) are `umov` / `ins` / `dup`.
