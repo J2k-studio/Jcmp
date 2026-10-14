@@ -93,6 +93,8 @@ int rg_num(int i) {
 }
 
 // is the line st..en a label of a function ("name:" followed by "sub sp, sp, #")?
+int rg_nofma_fn;                 // the function being finished has the line ;NOFMA (a vector loop): no fused multiply-add
+
 bool rg_is_func(int st) {
     int en = rg_end(st);
     if en <= st + 1 || out_buf[en - 1] != ':' { return false; }
@@ -1714,7 +1716,7 @@ bool pt_rules(int i) {
     // fmul dT, dA, dB ... fadd|fsub dD, ...  where one operand of the add is dT (not needed afterwards, or written by the add) and the
     // lines in between do not touch dT and do not write dA / dB (at most 4 lines):
     //   fmadd dD, dA, dB, dC   (C + T)      fmsub dD, dA, dB, dC  (C - T)      fnmsub dD, dA, dB, dC  (T - C)
-    if opt_fma == 1 && pt_mn(0, "fmul") && pt_no[0] == 3 && pt_regno(0, 0, 'd') >= 0 && pt_regno(0, 1, 'd') >= 0 && pt_regno(0, 2, 'd') >= 0 {
+    if opt_fma == 1 && rg_nofma_fn == 0 && pt_mn(0, "fmul") && pt_no[0] == 3 && pt_regno(0, 0, 'd') >= 0 && pt_regno(0, 1, 'd') >= 0 && pt_regno(0, 2, 'd') >= 0 {
         int ft = pt_regno(0, 0, 'd');
         int fa = pt_regno(0, 1, 'd');
         int fb = pt_regno(0, 2, 'd');
@@ -2757,6 +2759,14 @@ void regs_post(int start) {
     }
     if !fits { return; }
     pt_n = n;
+    rg_nofma_fn = 0;
+    {
+        int nf = 0;
+        while nf < n {
+            if pt_txt[nf * 64] == ';' && pt_txt[nf * 64 + 1] == 'N' && pt_txt[nf * 64 + 2] == 'O' && pt_txt[nf * 64 + 3] == 'F' { rg_nofma_fn = 1; pt_txt[nf * 64] = 0; }
+            nf += 1;
+        }
+    }
     pt_pushpop();
     int changed = 1;
     int rounds = 0;

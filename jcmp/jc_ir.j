@@ -133,9 +133,10 @@ int ir_nslots;
 char ir_name[262144];
 int ir_nnames;
 char ir_fname[128];          // the name of the function
+int ir_nofma_fn;             // the function has a vector loop: no fused multiply-add in its text (the line ;NOFMA)
 int op_changed;              // 1: the function is written again from the IR
 int ir_pre = 1;              // the peephole pass runs before the lifting too
-int ir_opt = 67154157;           // the passes: 1 constants out of loops, 2 allocator, 4 cleaning, 8 value numbering, 32 double round trips, 64 always write back
+int ir_opt = 335589613;           // the passes: 1 constants out of loops, 2 allocator, 4 cleaning, 8 value numbering, 32 double round trips, 64 always write back
 int inl_off;                // -noinl: no inlining
 int ir_mode = 2;            // 0 off (-noir), 1 -irstat, 2 lift and write back, 3 -irdump
 int lf_frame;                // the size of the frame that the prologue made
@@ -151,6 +152,7 @@ void ir_reset(char^ name) {
     ir_nv = 1;                                 // the vreg 0 means "none"
     ir_nslots = 0;
     ir_nnames = 0;
+    ir_nofma_fn = 0;
 }
 
 // a new vreg of the class cls

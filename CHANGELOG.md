@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.125
+* **The first vectoriser (V3a, `op_vectorize` in `jcmp/jc_opt.j`, design `docs/design/13-vectorizer.md`): innermost counted loops over arrays run two elements per turn.** `for i in 0..n { c[i] = a[i] + b[i] * k; }`, `a[i] = b[i]` (also whole numbers), `c[i] = k`: 16-byte loads and stores and the NEON `+ - * /` on two lanes in front of the original loop, which stays and does the rest (the length is not known at compile time). Only for the accesses that cannot get in each other's way (global or local arrays; two accesses of one array are the same element or at least two elements apart: `a[i + 2] = a[i] + 1.0` is vectorised, `a[i] = a[i - 1] + 1.0` stays scalar); loops with calls, `-d` builds and loops that carry a value in a register (sums) are left alone (reductions are the next step, V3b).
+* A function that got a vector loop has no fused multiply-add (the line `;NOFMA` in its text): the elements made by the vector loop and those of the remainder are made the same way, so the result of an element does not depend on its place.
+* Tests: `t369_vectorize` (every length 0 .. 11 and 63 against the values of a Python model, the same output with `-noir`, `-d`, `-nofma`).
+
 ## 0.9.124
 * **Counted loops are recognised on the IR** (`op_counted_loops` in `jcmp/jc_opt.j`; design `docs/design/13-vectorizer.md` V2; no change of the generated code, the vectoriser V3 builds on it): a loop whose header is `load i; load n | number; br i < n` and whose only write of the plain slot `i` is `i = i + step` is described (counter, step, bound as a number or a slot that nothing writes in the loop, number of calls, blocks, innermost or not). Hidden switch `-irdbg 134217728` prints the loops of a program.
 * **Decision of the owner (2026-10-14): T1** (a tree per function body) and T2 grown in parts beside it (`docs/design/10-structured-pipeline.md` 8.1: parts A1-A6; the hidden switch `-noast` will compare the two paths).

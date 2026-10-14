@@ -4474,3 +4474,412 @@ void op_counted_loops() {
         syscall(64, 2, @ir_pbuf, ir_plen);
     }
 }
+
+// ---------------------------------------------------------------------------------------------- the vectoriser (design 13, V3a)
+// An innermost counted loop (step 1, `i < bound`) with a straight-line body that only reads and writes 8-byte elements of arrays
+// (`c[i] = a[i] + b[i] * k`, `a[i] = b[i]`) runs two elements per turn in front of the original loop: the original loop stays and
+// does the rest (and everything the vector loop does not reach). The blocks:
+//   VH0: if i < bound go on, else the original header     VH1: if i + 1 < bound go to VB, else the original header
+//   VB : the body with 16-byte loads and stores, `+ - * /` as two lanes, then i = i + 2 and back to VH0
+// Only the addresses `base + 8 * i + c` with the base the global area or the frame, and no two accesses that are 1 .. 15 bytes
+// apart (the same element, or at least two elements apart: a two-lane step cannot see the difference).
+// Floating point results are the same per element. The function gets no fused multiply-add (`;NOFMA` in the text): the elements
+// of the vector loop and those of the rest must be made the same way.
+
+#define VZ_KIND_NONE 0
+#define VZ_I 1                   // the counter
+#define VZ_INV 2                 // a whole number that does not change in the loop (a plain number, or a pointer + number)
+#define VZ_IDX8 3                // 8 * i
+#define VZ_ADDR 4                // base + 8 * i + c
+#define VZ_WORD 5                // an 8-byte element that was loaded (a vector in the vector loop)
+#define VZ_VEC 6                 // a double made from such a word, or from vectors by + - * /
+#define VZ_DINV 7                // a double that does not change in the loop
+#define VZ_VWORD 8               // the bits of a VZ_VEC
+
+int vz_kind[IR_MAXV];
+int vz_base[IR_MAXV];            // VZ_INV / VZ_ADDR: 0 a plain number, 29 the global area, 30 the frame
+int vz_off[IR_MAXV];             // the number added to the base
+int vz_vec[IR_MAXV];             // VZ_WORD / VZ_VEC / VZ_VWORD: the vector vreg in the vector body (class 2)
+int vz_def[IR_MAXV];             // the register is written in the body
+int vz_chain[256];
+int vz_nchain;
+int vz_acc_base[64];             // the accesses: base, offset, store?
+int vz_acc_off[64];
+int vz_acc_st[64];
+int vz_nacc;
+int vz_count;                    // loops made (all functions)
+int vz_tried;
+int vz_work[IR_MAXI];            // the body instructions in order
+int vz_nwork;
+
+// the offset from the frame pointer of the slot index s (vn_slot)
+int vz_slot_off(int s) {
+    if s >= 8192 { return 0 - (s - 8192) * 8; }
+    return s * 8;
+}
+
+bool vz_is_nop(int j) {
+    return ir_op[j] == IR_NOP;
+}
+
+// the scalar instruction j cloned into the block that is being written
+void vz_clone(int j) {
+    int e = ir_add(ir_op[j], ir_d[j], ir_a[j], ir_b[j], ir_bi[j], ir_k[j]);
+    ir_w[e] = ir_w[j];
+}
+
+// walk the body: the kind of every value, the accesses; with emit the vector body is written too (into the block being written)
+// false when anything is not understood
+bool vz_scan(int q, int islot, int incl, int inch, bool emit) {
+    int h = cl_head[q];
+    vz_nacc = 0;
+    int v = 0;
+    while v < ir_nv {
+        vz_kind[v] = 0;
+        vz_def[v] = 0;
+        v += 1;
+    }
+    // what the body writes
+    int c = 0;
+    while c < vz_nchain {
+        int b = vz_chain[c];
+        int j = ir_bs[b];
+        while j < ir_be[b] - 1 {
+            if ir_op[j] != IR_NOP && ir_d[j] > 0 && j != inch { vz_def[ir_d[j]] = 1; }
+            j += 1;
+        }
+        c += 1;
+    }
+    // live in: v29 the global area, v30 the frame
+    vz_kind[29] = VZ_INV; vz_base[29] = 29; vz_off[29] = 0;
+    vz_kind[30] = VZ_INV; vz_base[30] = 30; vz_off[30] = 0;
+    c = 0;
+    while c < vz_nchain {
+        int b2 = vz_chain[c];
+        int j2 = ir_bs[b2];
+        while j2 < ir_be[b2] - 1 {
+            int op = ir_op[j2];
+            // the counter step: its load, add and store are not part of the work
+            if j2 == incl || j2 == incl + 1 || j2 == inch { j2 += 1; continue; }
+            if op == IR_NOP { j2 += 1; continue; }
+            // reading a register that the body writes later (a value carried to the next turn)
+            int a = ir_a[j2];
+            if a > 0 && a < ir_nv && vz_def[a] == 1 && vz_kind[a] == 0 { return false; }
+            if ir_uses_b(op) && ir_bi[j2] == 0 && ir_b[j2] > 0 && ir_b[j2] < ir_nv && vz_def[ir_b[j2]] == 1 && vz_kind[ir_b[j2]] == 0 { return false; }
+            int d = ir_d[j2];
+            if op == IR_LOAD {
+                if ir_w[j2] != 8 { return false; }
+                if ir_a[j2] == 30 && ir_bi[j2] == 0 {
+                    int s = vn_slot(j2);
+                    if s < 0 { return false; }
+                    if s == islot { vz_kind[d] = VZ_I; }
+                    else { vz_kind[d] = VZ_INV; vz_base[d] = 0; vz_off[d] = 0; }
+                    if emit { vz_clone(j2); }
+                } else if vz_kind[ir_a[j2]] == VZ_ADDR {
+                    if vz_nacc >= 64 { return false; }
+                    vz_acc_base[vz_nacc] = vz_base[ir_a[j2]];
+                    vz_acc_off[vz_nacc] = vz_off[ir_a[j2]] + ir_k[j2];
+                    vz_acc_st[vz_nacc] = 0;
+                    vz_nacc += 1;
+                    if emit {
+                        int qv = ir_vreg(2);
+                        int le = ir_add(IR_LOAD, qv, ir_a[j2], 0, 0, ir_k[j2]);
+                        ir_w[le] = 16;
+                        vz_vec[d] = qv;
+                    }
+                    vz_kind[d] = VZ_WORD;
+                } else { return false; }
+            } else if op == IR_CONST {
+                vz_kind[d] = VZ_INV; vz_base[d] = 0; vz_off[d] = 0;
+                if emit { vz_clone(j2); }
+            } else if op == IR_COPY {
+                int sa = ir_a[j2];
+                int ks = vz_kind[sa];
+                if ks == 0 || ks == VZ_WORD { return false; }
+                vz_kind[d] = ks; vz_base[d] = vz_base[sa]; vz_off[d] = vz_off[sa]; vz_vec[d] = vz_vec[sa];
+                if emit && ks != VZ_VEC && ks != VZ_VWORD { vz_clone(j2); }
+            } else if op == IR_SHL {
+                if ir_bi[j2] != 1 || ir_b[j2] != 3 || vz_kind[ir_a[j2]] != VZ_I { return false; }
+                vz_kind[d] = VZ_IDX8;
+                if emit { vz_clone(j2); }
+            } else if op == IR_ADD {
+                int ka = vz_kind[ir_a[j2]];
+                if ir_bi[j2] == 1 {
+                    if ka == VZ_INV { vz_kind[d] = VZ_INV; vz_base[d] = vz_base[ir_a[j2]]; vz_off[d] = vz_off[ir_a[j2]] + ir_b[j2]; }
+                    else if ka == VZ_ADDR { vz_kind[d] = VZ_ADDR; vz_base[d] = vz_base[ir_a[j2]]; vz_off[d] = vz_off[ir_a[j2]] + ir_b[j2]; }
+                    else { return false; }
+                } else {
+                    int kb = vz_kind[ir_b[j2]];
+                    int ra = ir_a[j2];
+                    int rb = ir_b[j2];
+                    if ka == VZ_IDX8 && kb == VZ_INV { int tmp = ra; ra = rb; rb = tmp; int tk = ka; ka = kb; kb = tk; }
+                    if ka == VZ_INV && kb == VZ_IDX8 && vz_base[ra] != 0 {
+                        vz_kind[d] = VZ_ADDR; vz_base[d] = vz_base[ra]; vz_off[d] = vz_off[ra];
+                    } else { return false; }
+                }
+                if emit { vz_clone(j2); }
+            } else if op == IR_BITS2F {
+                int ka2 = vz_kind[ir_a[j2]];
+                if ka2 == VZ_WORD { vz_kind[d] = VZ_VEC; vz_vec[d] = vz_vec[ir_a[j2]]; }
+                else if ka2 == VZ_INV { vz_kind[d] = VZ_DINV; if emit { vz_clone(j2); } }
+                else { return false; }
+            } else if op == IR_FCONST {
+                vz_kind[d] = VZ_DINV;
+                if emit { vz_clone(j2); }
+            } else if op == IR_FADD || op == IR_FSUB || op == IR_FMUL || op == IR_FDIV {
+                int ra3 = ir_a[j2];
+                int rb3 = ir_b[j2];
+                int ka3 = vz_kind[ra3];
+                int kb3 = vz_kind[rb3];
+                bool oka = ka3 == VZ_VEC || ka3 == VZ_DINV;
+                bool okb = kb3 == VZ_VEC || kb3 == VZ_DINV;
+                if !oka || !okb { return false; }
+                if ka3 == VZ_VEC || kb3 == VZ_VEC {
+                    if emit {
+                        int qa = 0;
+                        int qb = 0;
+                        if ka3 == VZ_VEC { qa = vz_vec[ra3]; }
+                        else {
+                            int xa = ir_vreg(0);
+                            ir_add(IR_F2BITS, xa, ra3, 0, 0, 0);
+                            qa = ir_vreg(2);
+                            int dupa = ir_add(IR_VDUP, qa, xa, 0, 0, 0);
+                            ir_w[dupa] = 1;
+                        }
+                        if kb3 == VZ_VEC { qb = vz_vec[rb3]; }
+                        else {
+                            int xb = ir_vreg(0);
+                            ir_add(IR_F2BITS, xb, rb3, 0, 0, 0);
+                            qb = ir_vreg(2);
+                            int dupb = ir_add(IR_VDUP, qb, xb, 0, 0, 0);
+                            ir_w[dupb] = 1;
+                        }
+                        int qr = ir_vreg(2);
+                        int kk = 0;
+                        if op == IR_FSUB { kk = 1; } else if op == IR_FMUL { kk = 2; } else if op == IR_FDIV { kk = 3; }
+                        int ve = ir_add(IR_VOP, qr, qa, qb, 0, kk);
+                        ir_w[ve] = 1;
+                        vz_vec[d] = qr;
+                    }
+                    vz_kind[d] = VZ_VEC;
+                } else {
+                    vz_kind[d] = VZ_DINV;
+                    if emit { vz_clone(j2); }
+                }
+            } else if op == IR_F2BITS {
+                int ka4 = vz_kind[ir_a[j2]];
+                if ka4 == VZ_VEC { vz_kind[d] = VZ_VWORD; vz_vec[d] = vz_vec[ir_a[j2]]; }
+                else if ka4 == VZ_DINV { vz_kind[d] = VZ_INV; vz_base[d] = 0; vz_off[d] = 0; if emit { vz_clone(j2); } }
+                else { return false; }
+            } else if op == IR_STORE {
+                if ir_w[j2] != 8 || ir_bi[j2] != 0 { return false; }
+                if vz_kind[ir_a[j2]] != VZ_ADDR { return false; }
+                int kv = vz_kind[ir_b[j2]];
+                if kv != VZ_VWORD && kv != VZ_WORD && kv != VZ_INV { return false; }
+                if vz_nacc >= 64 { return false; }
+                vz_acc_base[vz_nacc] = vz_base[ir_a[j2]];
+                vz_acc_off[vz_nacc] = vz_off[ir_a[j2]] + ir_k[j2];
+                vz_acc_st[vz_nacc] = 1;
+                vz_nacc += 1;
+                if emit {
+                    int qs = 0;
+                    if kv == VZ_VWORD || kv == VZ_WORD { qs = vz_vec[ir_b[j2]]; }
+                    else {
+                        qs = ir_vreg(2);
+                        int dups = ir_add(IR_VDUP, qs, ir_b[j2], 0, 0, 0);
+                        ir_w[dups] = 1;
+                    }
+                    int se = ir_add(IR_STORE, 0, ir_a[j2], qs, 0, ir_k[j2]);
+                    ir_w[se] = 16;
+                }
+            } else {
+                return false;
+            }
+            j2 += 1;
+        }
+        c += 1;
+    }
+    // the accesses must not get in each other's way
+    int x = 0;
+    while x < vz_nacc {
+        int y = 0;
+        while y < vz_nacc {
+            if x != y && (vz_acc_st[x] == 1 || vz_acc_st[y] == 1) && vz_acc_base[x] == vz_acc_base[y] {
+                int dd = vz_acc_off[x] - vz_acc_off[y];
+                if dd < 0 { dd = 0 - dd; }
+                if dd != 0 && dd < 16 { return false; }
+            }
+            y += 1;
+        }
+        x += 1;
+    }
+    // at least one store
+    bool st = false;
+    int w = 0;
+    while w < vz_nacc { if vz_acc_st[w] == 1 { st = true; } w += 1; }
+    return st;
+}
+
+bool vz_make(int q, int l) {
+    int h = cl_head[q];
+    int islot = cl_slot[q];
+    // the blocks of the loop other than the header must be one chain from the body to the block that jumps back
+    op_mark_loop(l);
+    int stamp = op_stamp;
+    int total = 0;
+    int b = 0;
+    while b < ir_nb {
+        if op_po[b] >= 0 && op_mark[b] == stamp { total += 1; }
+        b += 1;
+    }
+    vz_nchain = 0;
+    int cur = cl_body[q];
+    while cur != h {
+        if op_mark[cur] != stamp || vz_nchain >= 250 { return false; }
+        int tt = ir_be[cur] - 1;
+        if ir_op[tt] != IR_JMP { return false; }
+        vz_chain[vz_nchain] = cur;
+        vz_nchain += 1;
+        cur = ir_t1[tt];
+    }
+    if vz_nchain + 1 != total || vz_nchain == 0 { return false; }
+    // the header: loads and the branch only
+    int j = ir_bs[h];
+    while j < ir_be[h] - 1 {
+        if ir_op[j] != IR_LOAD && ir_op[j] != IR_NOP && ir_op[j] != IR_CONST { return false; }
+        j += 1;
+    }
+    // the step of the counter: the three instructions load, add, store at the end of the last block
+    int lastb = vz_chain[vz_nchain - 1];
+    int e = ir_be[lastb] - 2;
+    while e >= ir_bs[lastb] && ir_op[e] == IR_NOP { e -= 1; }
+    int inch = e;
+    if inch < ir_bs[lastb] || ir_op[inch] != IR_STORE || ir_a[inch] != 30 || vn_slot(inch) != islot || ir_bi[inch] != 0 { return false; }
+    int ad = rn_find_def(lastb, inch, ir_b[inch]);
+    if ad < 0 || ir_op[ad] != IR_ADD || ir_bi[ad] != 1 || ir_b[ad] != 1 { return false; }
+    int ld = rn_find_def(lastb, ad, ir_a[ad]);
+    if ld < 0 || ir_op[ld] != IR_LOAD || ir_a[ld] != 30 || vn_slot(ld) != islot { return false; }
+    // between the load and the store only the add (and nops)
+    int m = ld + 1;
+    while m < inch {
+        if m != ad && ir_op[m] != IR_NOP { return false; }
+        m += 1;
+    }
+    if !vz_scan(q, islot, ld, inch, false) { return false; }
+    // the registers the body writes must not be needed after the loop (the original header runs once more and writes its own)
+    int ex = cl_exit[q];
+    int c = 0;
+    while c < vz_nchain {
+        int jj = ir_bs[vz_chain[c]];
+        while jj < ir_be[vz_chain[c]] - 1 {
+            int dr = ir_d[jj];
+            if dr > 0 && dr < 64 && ir_op[jj] != IR_NOP {
+                bool in_header = false;
+                int hj = ir_bs[h];
+                while hj < ir_be[h] { if ir_d[hj] == dr { in_header = true; } hj += 1; }
+                if !in_header && (op_li[ex] & (1 << dr)) != 0 { return false; }
+                if (op_li[h] & (1 << dr)) != 0 && vz_kind[dr] != 0 { }
+            }
+            jj += 1;
+        }
+        c += 1;
+    }
+    // the new blocks
+    int vh0 = ir_new_block(0 - 1);
+    ir_set_block(vh0);
+    int t0 = ir_vreg(0);
+    int bound0 = ir_vreg(0);
+    {
+        int la = ir_add(IR_LOAD, t0, 30, 0, 0, 0);
+        ir_w[la] = 8;
+        ir_k[la] = vz_slot_off(cl_slot[q]);
+    }
+    if cl_bkind[q] == 0 {
+        ir_add(IR_CONST, bound0, 0, 0, 0, cl_bval[q]);
+    } else {
+        int lb = ir_add(IR_LOAD, bound0, 30, 0, 0, 0);
+        ir_w[lb] = 8;
+        ir_k[lb] = vz_slot_off(cl_bval[q]);
+    }
+    int br0 = ir_add(IR_BR, 0, t0, bound0, 0, cl_cc[q]);
+    int vh1 = ir_new_block(0 - 1);
+    ir_set_block(vh1);
+    int t1 = ir_vreg(0);
+    int t2 = ir_vreg(0);
+    ir_add(IR_ADD, t1, t0, 1, 1, 0);
+    // t0 / bound0 are temporaries of the block VH0: load them again here
+    {
+        int la1 = ir_add(IR_LOAD, t2, 30, 0, 0, 0);
+        ir_w[la1] = 8;
+        if cl_bkind[q] == 0 {
+            ir_op[la1] = IR_CONST;
+            ir_a[la1] = 0;
+            ir_k[la1] = cl_bval[q];
+        } else {
+            ir_k[la1] = vz_slot_off(cl_bval[q]);
+        }
+    }
+    int br1 = ir_add(IR_BR, 0, t1, t2, 0, cl_cc[q]);
+    int vb = ir_new_block(0 - 1);
+    ir_t1[br0] = vh1;
+    ir_t2[br0] = h;
+    ir_t1[br1] = vb;
+    ir_t2[br1] = h;
+    // the vector body
+    ir_set_block(vb);
+    vz_scan(q, islot, ld, inch, true);
+    // i = i + 2
+    {
+        int ti = ir_vreg(0);
+        int li = ir_add(IR_LOAD, ti, 30, 0, 0, 0);
+        ir_w[li] = 8;
+        ir_k[li] = ir_k[ld];
+        int tj = ir_vreg(0);
+        ir_add(IR_ADD, tj, ti, 2, 1, 0);
+        int si = ir_add(IR_STORE, 0, 30, tj, 0, ir_k[ld]);
+        ir_w[si] = 8;
+        int jm = ir_add(IR_JMP, 0, 0, 0, 0, 0);
+        ir_t1[jm] = vh0;
+    }
+    // the jumps into the header from outside the loop go to VH0
+    int nb0 = vh0;
+    op_mark_loop(l);
+    int bb = 0;
+    while bb < nb0 {
+        if op_mark[bb] != op_stamp && op_po[bb] >= 0 {
+            int tb = ir_be[bb] - 1;
+            int top = ir_op[tb];
+            if (top == IR_JMP || top == IR_BR || top == IR_FBR) && ir_t1[tb] == h { ir_t1[tb] = vh0; }
+            if (top == IR_BR || top == IR_FBR) && ir_t2[tb] == h { ir_t2[tb] = vh0; }
+        }
+        bb += 1;
+    }
+    ir_nofma_fn = 1;
+    vz_count += 1;
+    return true;
+}
+
+void op_vectorize() {
+    if opt_debug == 1 { return; }
+    op_counted_loops();
+    if cl_n == 0 { return; }
+    int nl = cl_n;
+    int heads[CL_MAX];
+    int q = 0;
+    while q < nl { heads[q] = cl_head[q]; q += 1; }
+    q = 0;
+    while q < nl {
+        // the loop descriptors can move when blocks are added: look the loop up again by its header
+        bool fine = cl_inner[q] == 1 && cl_calls[q] == 0 && cl_step[q] == 1 && (cl_cc[q] == IR_LT || cl_cc[q] == IR_ULT);
+        if fine {
+            int l = 0;
+            while l < op_nloops && op_lh[l] != heads[q] { l += 1; }
+            if l < op_nloops {
+                vz_tried += 1;
+                if (ir_opt & 536870912) != 0 { }
+                vz_make(q, l);
+            }
+        }
+        q += 1;
+    }
+}
