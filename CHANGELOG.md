@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.104
+* **Struct temporaries (`vec3` and the like) live in registers:** the argument and result cells of inlined operator calls (`v + a * 0.5`) were kept in the frame because a value stored to a stack cell and loaded back in the same block could not be named when its register was written in between. `op_cell_fwd` turns such a store into a copy into the register of the load (the load goes away), the dead stores follow, and a second SROA round (only when a cell went away) makes the temporaries plain words that the register pass puts into registers. `vec3`: the loop of the benchmark has no loads or stores of its temporaries any more (85 -> 56 ms, clang -O2: 52).
+* The exit call (`svc` with 93 or 94 as the number) reads only x0: x1..x8 were taken as alive in the whole of `main` (dead address computations were kept alive by them).
+* A hidden switch turns the new pass off: `-irdbg 16777216`.
+* Found on the way: dead-cell removal before the address walk of SROA is wrong (the first version of the order broke the compiler itself; found by the three-stage bootstrap).
+* Tests: the suite (362), 600 random programs (`-noinl`, `-d`), bootstrap; `t339_struct_temps` (checked against Python).
+
 ## 0.9.103
 * **A value that does not change in a loop is made once also when nothing is stored in a variable:** `i * n` in `a[i * n + k]` inside the loop over `k` is computed before the loop, kept in a new stack cell (the register pass puts it into a register when it can) and read in the turns. Moved only when the chain has a multiplication or a division (integer or double) or three instructions.
 * Tests: the suite (361), 1,200 random programs.

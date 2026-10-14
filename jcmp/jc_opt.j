@@ -3212,6 +3212,68 @@ void op_dead_cells() {
 }
 
 
+// ---------------------------------------------------------------------------------------------- stack cells inside one block
+// `store [cell], r` ... `d = load [cell]` ... `store [cell], x` in one block: the value only goes through the cell, but r may have been
+// written again before the load (the registers are not single-assignment, so value numbering cannot name it). The store becomes
+// `d = copy r` (d is neither read nor written in between) and the load goes away. Arguments of inlined calls are passed this way.
+
+int cf_changes;
+
+void op_cell_fwd() {
+    if (ir_opt & 16777216) != 0 { return; }
+    int b = 0;
+    while b < ir_nb {
+        if op_po[b] >= 0 {
+            int s = ir_bs[b];
+            while s < ir_be[b] {
+                if ir_op[s] == IR_STORE && ir_a[s] == 30 && ir_w[s] == 8 && ir_k[s] < 0 && ir_bi[s] == 0 {
+                    int c = ir_k[s];
+                    int r = ir_b[s];
+                    int ld = 0 - 1;
+                    int uses = 0;                     // registers read in between, by a call also the arguments
+                    int defs = 0;
+                    bool over = false;
+                    bool bad = false;
+                    int j = s + 1;
+                    while j < ir_be[b] && !over && !bad {
+                        int op = ir_op[j];
+                        if op == IR_LOAD && ir_a[j] == 30 && ir_k[j] < c + 8 && ir_k[j] + 8 > c {
+                            if ir_k[j] == c && ir_w[j] == 8 && ld < 0 { ld = j; } else { bad = true; }
+                        } else if op == IR_STORE && ir_a[j] == 30 && ir_k[j] < c + 8 && ir_k[j] + 8 > c {
+                            if ir_k[j] == c && ir_w[j] == 8 { over = true; } else { bad = true; }
+                        } else {
+                            if ld < 0 {
+                                uses = uses | op_uses(j);
+                                defs = defs | op_defs(j);
+                            }
+                        }
+                        j += 1;
+                    }
+                    if over && !bad && ld > 0 {
+                        int d = ir_d[ld];
+                        int bt = op_bit(d);
+                        if d >= 1 && d < 64 && r >= 1 && r < 64 && ir_vcls[d] == ir_vcls[r] && (uses & bt) == 0 && (defs & bt) == 0 {
+                            ir_op[s] = IR_COPY;
+                            ir_d[s] = d;
+                            ir_a[s] = r;
+                            ir_b[s] = 0;
+                            ir_k[s] = 0;
+                            ir_bi[s] = 0;
+                            ir_op[ld] = IR_NOP;
+                            ir_d[ld] = 0;
+                            ir_a[ld] = 0;
+                            ir_bi[ld] = 1;
+                            cf_changes += 1;
+                        }
+                    }
+                }
+                s += 1;
+            }
+        }
+        b += 1;
+    }
+}
+
 // ---------------------------------------------------------------------------------------------- struct temporaries in the frame (SROA)
 // A pointer that is the frame pointer plus a number (ADDR_SLOT, add x, x29, #N, and copies and sums of them, also when they went through a
 // stack cell) is followed through each chain of blocks; a load or store through such a pointer becomes a load or store at the offset

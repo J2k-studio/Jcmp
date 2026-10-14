@@ -744,6 +744,15 @@ int lf_function(char^ name) {
         if pt_mn(0, "svc") {
             int se = ir_add(IR_SYSCALL, lf_x(0), lf_x(8), 0, 0, 0);
             lf_set_call_args(se);
+            // exit / exit_group (the number is a constant made in this block): only x0 is an argument; the others must not stay alive for it
+            int sj = se - 1;
+            while sj >= ir_bs[ir_cur] {
+                if ir_d[sj] == lf_x(8) || (ir_op[sj] == IR_CALL || ir_op[sj] == IR_CALLIND || ir_op[sj] == IR_SYSCALL) {
+                    if ir_op[sj] == IR_CONST && ir_d[sj] == lf_x(8) && (ir_k[sj] == 93 || ir_k[sj] == 94) { ir_ac[se] = 1; }
+                    sj = 0 - 1;
+                }
+                sj -= 1;
+            }
             if i + 1 >= lf_total && lf_epi_line < 0 {
                 ir_add(IR_TRAP, 0, 0, 0, 0, 0);
                 fell = false;
@@ -1378,12 +1387,21 @@ void ir_say(char^ a, char^ b, char^ c) {
 
 // the passes that every function gets (the same for the functions that are kept for inlining and the others)
 void ir_passes_basic() {
+    int cf0 = cf_changes;
     if (ir_opt & 4096) != 0 { op_copy_inline(); }
     if (ir_opt & 128) != 0 { op_thread(); }
     if (ir_opt & 32768) != 0 { op_sroa(); }
     if (ir_opt & 8) != 0 { op_cse_run(); }
+    if (ir_opt & 8) != 0 { op_cell_fwd(); }
     if (ir_opt & 8) != 0 { op_dead_cells(); }
     if (ir_opt & 4) != 0 { op_clean_run(); }
+    if (ir_opt & 32768) != 0 && (ir_opt & 16777216) == 0 && cf_changes != cf0 {
+        // stack cells went away: struct temporaries that were passed through them may be plain words now
+        op_sroa();
+        if (ir_opt & 8) != 0 { op_cse_run(); }
+        if (ir_opt & 8) != 0 { op_dead_cells(); }
+        if (ir_opt & 4) != 0 { op_clean_run(); }
+    }
     if (ir_opt & 128) != 0 { op_thread(); }
     if (ir_opt & 32) != 0 { op_bits_run(); }
 }
