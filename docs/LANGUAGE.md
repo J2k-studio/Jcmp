@@ -382,6 +382,20 @@ int work(int n) {
     return Reg::x18;
 }
 ```
+Inside a `register { }` block, lines at its start can carry values in and out (0.9.108):
+
+```jk
+register {
+    in x1 = a;                  // x1 = the value of the expression a, made before the instructions (several `in`, at most 8)
+    in x2 = b * 2;
+    clobber x4;                 // the registers the block changes besides in / out: with this line the compiler warns about any other
+    x4 = x1 + x2;
+    x0 = x4;
+    out x0 = r;                 // the variable r (an int or a pointer) gets x0 after the block
+}
+```
+`in` values are all made first and then loaded, so one expression cannot disturb the register of another.
+
 A pinned variable (`int n @ x19`) is a whole number, pointer, bool, char or enum; its address cannot be taken; two variables of one function cannot share a register; programs with try / catch cannot pin. A function with a `register { }` block keeps its variables in the frame. Changing x19 .. x28 in a block without reserving it is a warning.
 
 ### `device`: hardware registers as data, and `Sys::` (0.9.80)

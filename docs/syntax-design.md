@@ -1871,3 +1871,9 @@ What the compiler has today (63.4, 66.5): `naked` functions, `register { }` bloc
 | raw `.byte` / `.word` inside | none (66.3 is open: A directives, B `raw`, C `Cpu::raw`) | open question 66.3 |
 
 Assistant's view: the block with `in / out / clobber` is a good readable form of what `register { }` already does, and costs little (the lines go to the same reader). The `_.` spelling has two risks: `_` is already the "ignore" name in some places and `_.exit;` as a call with no parentheses is a second call syntax. Options: (a) keep `register { }` and add `in/out/clobber` lines inside it; (b) add `_. { }` as a short alias of `register { }`; (c) take `_.` only for the anonymous block, and names stay normal `naked` functions. Recommended: (a) plus (c) the alias later. Questions: (1) is `in / out / clobber` wanted inside `register { }`? (2) is the `_.` spelling wanted as an alias? (3) raw bytes: 66.3 A, B or C?
+
+### 67 / 68: owner's answer (2026-10-14) and what was done
+
+The owner answered "67 68 ได้" (agreed): the assistant's recommendations stand, recorded as chosen by the owner's agreement.
+* **67:** B first: `Span<T>` in `std/collections.j` (0.9.108): `span<int>(a, lo, hi)`, `get`, `set`, `len`, `sub`, `to_array`; the index is checked and throws `span index out of range`. `a[1..5]` stays open (A, later as sugar for the same type).
+* **68:** (a) `in xN = expr;`, `out xN = variable;`, `clobber xN, ...;` inside `register { }` (0.9.108). The `_.` spelling as an alias (c) is not done yet (later).

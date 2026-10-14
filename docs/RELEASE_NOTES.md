@@ -1,6 +1,8 @@
-# J2K / Jcmp 0.9.107
+# J2K / Jcmp 0.9.108
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
+
+**0.9.108:** `Span<T>` (a view into an array) and `in` / `out` / `clobber` lines in `register { }` blocks.
 
 **0.9.107:** dead moves into x15 - x17 are removed (small code saving in float struct code).
 

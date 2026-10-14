@@ -422,3 +422,42 @@ struct Heap<T> {
         self.len = 0;
     }
 }
+
+// ---------------------------------------------------------------------------------------------- Span<T>
+// A view of a part of an array: no copy, no ownership (nothing to free; do not `push` to the array while a span of it is alive).
+//   Span<int> s = span<int>(a, 1, 5);      // the elements 1, 2, 3, 4 of a
+//   s.get(0)  s.set(0, 9)  s.len  s.sub(1, 3)  s.to_array()
+// A write through the span changes the array. The index is checked (throws "span index out of range").
+
+struct Span<T> {
+    T[] base;
+    int off;
+    int len;
+
+    T get(self, int i) {
+        if i < 0 || i >= self.len { throw "span index out of range"; }
+        return self.base[self.off + i];
+    }
+    void set(self, int i, T x) {
+        if i < 0 || i >= self.len { throw "span index out of range"; }
+        self.base[self.off + i] = x;
+    }
+    // the part lo .. hi of this span (a view of the same array)
+    Span<T> sub(self, int lo, int hi) {
+        if lo < 0 || hi > self.len || lo > hi { throw "span range out of range"; }
+        Span<T> r = {self.base, self.off + lo, hi - lo};
+        return r;
+    }
+    // a new array with a copy of the elements (the caller frees it)
+    T[] to_array(self) {
+        T[] r = arr(self.len + 1);
+        for i in 0..self.len { r.push(self.base[self.off + i]); }
+        return r;
+    }
+}
+
+Span<T> span<T>(T[] a, int lo, int hi) {
+    if lo < 0 || hi > a.len || lo > hi { throw "span range out of range"; }
+    Span<T> r = {a, lo, hi - lo};
+    return r;
+}

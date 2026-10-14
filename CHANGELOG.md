@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.108
+* **`Span<T>`** (`std/collections.j`): a view of a part of an array without copying: `Span<int> s = span<int>(a, 1, 5);` `s.get(i)`, `s.set(i, x)`, `s.len`, `s.sub(lo, hi)`, `s.to_array()`. Checked index (throws `span index out of range`). Chosen by the owner's agreement with `docs/syntax-design.md` 67 (option B).
+* **`in` / `out` / `clobber` in a `register { }` block** (68 (a)): `in x1 = expr;` makes the value in the register before the instructions, `out x0 = variable;` stores it after, `clobber x4;` lists the other registers (a warning for a register that the block changes and that is in no list, `-Wregister-block`).
+* Tests: `t343_span`, `t344_register_in_out`, `t345_fail_register_clobber` (the suite: 368).
+
 ## 0.9.107
 * A `mov` / `fmov` into x15, x16 or x17 that nothing reads afterwards is removed (the `fmov x15, d12` pairs that were left in the `vec3` loop after the struct temporaries went into registers).
 * Docs: `docs/syntax-design.md` 67 (Span / slice) and 68 (the `_.` block) from `plan-test.md`: comparisons for the owner, nothing locked.

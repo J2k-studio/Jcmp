@@ -1370,19 +1370,132 @@ void nk_dest(int r) {
     if r >= 0 && r <= 30 { nk_dests = nk_dests | (1 << r); }
 }
 
+// the token after the current one is a register name (so `in x1 = ...` is the statement, not a label or a variable called in)
+bool nk_xnum_next() {
+    int sp = cur_pos;
+    int sl = cur_line;
+    int sls = cur_line_start;
+    while lc(0) == ' ' { adv(); }
+    bool r = lc(0) == 'x' && lc(1) >= '0' && lc(1) <= '9';
+    cur_pos = sp;
+    cur_line = sl;
+    cur_line_start = sls;
+    return r;
+}
+
 void parse_register_block() {
     next();                                  // register
     if !tok_is("{") { die("register { ... } was expected"); }
     nk_reset();
     nk_dests = 0;
     next();
-    emit_line(";N");
+    // in xN = expr;  (before the instructions)   out xN = variable;   clobber x3, x4;
+    int in_regs[8];
+    int in_n = 0;
+    int out_regs[8];
+    char out_names[512];
+    int out_n = 0;
+    int listed = 0;                          // the registers the block names: in, out, clobber
+    bool clobber_given = false;
+    bool code_seen = false;
     while !tok_is("}") {
         if tok_kind == T_EOF { die("} expected at the end of the register block"); }
+        if tok_is("in") && nk_xnum_next() {
+            if code_seen { die("in xN = value; must come before the instructions of the block"); }
+            if in_n >= 8 { die("a register block has at most 8 'in' values"); }
+            next();
+            int ir = nk_xnum(@tok_text);
+            if ir < 0 { die_name("in needs a register name (x0 .. x30)", @tok_text); }
+            next();
+            expect("=");
+            parse_expr();
+            expect(";");
+                        push_x0();
+            in_regs[in_n] = ir;
+            in_n += 1;
+            listed = listed | (1 << ir);
+            continue;
+        }
+        if tok_is("out") && nk_xnum_next() {
+            if out_n >= 8 { die("a register block has at most 8 'out' values"); }
+            next();
+            int orr = nk_xnum(@tok_text);
+            if orr < 0 { die_name("out needs a register name (x0 .. x30)", @tok_text); }
+            next();
+            expect("=");
+            if tok_kind != T_IDENT { die("out xN = name;  needs the name of a variable"); }
+            str_copy(@out_names + out_n * 64, @tok_text, 64);
+            next();
+            expect(";");
+            out_regs[out_n] = orr;
+            out_n += 1;
+            listed = listed | (1 << orr);
+            continue;
+        }
+        if tok_is("clobber") && nk_xnum_next() {
+            next();
+            while true {
+                int cr = nk_xnum(@tok_text);
+                if cr < 0 { die_name("clobber needs register names (x0 .. x30)", @tok_text); }
+                listed = listed | (1 << cr);
+                next();
+                if tok_is(",") { next(); } else { break; }
+            }
+            expect(";");
+            clobber_given = true;
+            continue;
+        }
+        if !code_seen {
+            code_seen = true;
+            // the 'in' values: popped into their registers (the last one first)
+            int q = in_n - 1;
+            while q >= 0 {
+                str_copy(@nk_line, "ldr x", 256);
+                append_int(@nk_line, in_regs[q]);
+                append_text(@nk_line, ", [sp, #0]");
+                emit_line(@nk_line);
+                emit_line("add sp, sp, #16");
+                q -= 1;
+            }
+        }
         parse_naked_stmt();
+    }
+    if !code_seen && in_n > 0 {
+        int q2 = in_n - 1;
+        while q2 >= 0 {
+            str_copy(@nk_line, "ldr x", 256);
+            append_int(@nk_line, in_regs[q2]);
+            append_text(@nk_line, ", [sp, #0]");
+            emit_line(@nk_line);
+            emit_line("add sp, sp, #16");
+            q2 -= 1;
+        }
     }
     nk_check_labels();
     next();
+    // the 'out' values: stored into their variables (whole numbers and pointers, 8 bytes)
+    int o = 0;
+    while o < out_n {
+        if !lookup_var(@out_names + o * 64) { die_name("unknown name in out", @out_names + o * 64); }
+        if v_kind != 0 || v_elem >= 16 || size_of(v_elem) != 8 { die_name("out needs a variable of type int (or a pointer): not this", @out_names + o * 64); }
+        str_copy(@nk_line, "x", 256);
+        append_int(@nk_line, out_regs[o]);
+        ins_mem("str", @nk_line, base_of(v_local), v_off);
+        o += 1;
+    }
+    if clobber_given && pass_no >= 2 {
+        int rr = 1;
+        while rr <= 28 {
+            if (nk_dests & (1 << rr)) != 0 && (listed & (1 << rr)) == 0 && rr != 16 && rr != 17 {
+                char cm[200];
+                str_copy(@cm, "this register block changes x", 200);
+                append_int(@cm, rr);
+                append_text(@cm, ", which is not in its in / out / clobber lists");
+                warn(@cm, "register-block");
+            }
+            rr += 1;
+        }
+    }
     emit_line(";N");
     // callee-saved registers that the block changed and nobody reserved
     int r = 19;
