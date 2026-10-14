@@ -9,8 +9,9 @@
 // access) and (3) the function does not use the frame in a way that needs the memory: no defer (a piece of code that is called from
 // other places of the function),
 // no worker of a #multithread loop (x26), no copy of x29. The registers are saved at the start and given back at the end of the
-// function (callee-saved: x19..x25 are not used by anything else). A program with try/catch is left alone (a throw jumps over the
-// frames without giving the registers back). Lines ";H" are always removed. -noregs switches the pass off.
+// function (callee-saved: x19..x25 are not used by anything else). A function that has a try keeps its variables in the frame, and
+// puts x19..x25 / d8..d15 back as they were when the try began when it catches (a throw jumps over the frames in between without
+// giving their registers back; jc_stmt.j parse_try). Lines ";H" are always removed. -noregs switches the pass off.
 
 char regs_buf[8388608];
 int regs_len;
@@ -32,6 +33,7 @@ int rg_npick;
 int rg_leaf;                 // 1: the function makes no call (only calls that never return)
 int rg_nextra;               // caller-saved registers that a leaf function may use for variables: they are not mentioned in its text
 int rg_extra[8];
+int rg_callpre[65538];         // rg_callpre[i]: the calls (that come back) in the lines before i: an interval without a call may use the extras of a function that is not a leaf
 int rg_elide;                // 1: the frame of the function is not needed (no stack slot is left)
 int rg_mask;                 // the registers x0 .. x30 that the text of the function mentions
 int al_to = 32;              // every function starts at a multiple of this many bytes (0: no padding)
@@ -269,8 +271,9 @@ void rg_allocate(int epi, int is_main) {
             rounds += 1;
         }
     }
-    if rg_leaf == 1 {
+    if rg_nextra > 0 {
         // the caller-saved registers of a leaf function cost nothing (no save, no restore): they take slots of two uses too
+        // (in a function that is not a leaf: x8 and x9 for the variables that live between two calls)
         int extra_left = rg_nextra;
         rounds = 0;
         while extra_left > 0 && rounds < 16 && rg_ncand < 256 {
@@ -481,7 +484,7 @@ void rg_allocate(int epi, int is_main) {
         xr[8 + ex] = rg_extra[ex];
         ex += 1;
     }
-    if rg_leaf == 1 {
+    {
         // the registers that need no save first
         ex = 0;
         while ex < rg_nextra {
@@ -489,7 +492,7 @@ void rg_allocate(int epi, int is_main) {
             nordx += 1;
             ex += 1;
         }
-        if xowner[7] == 0 - 1 {
+        if rg_leaf == 1 && xowner[7] == 0 - 1 {
             ordx[nordx] = 7;
             nordx += 1;
         }
@@ -548,6 +551,8 @@ void rg_allocate(int epi, int is_main) {
                 kj += 1;
             }
             // a free register, else the owner with the smallest weight if it is smaller than this one
+            // (an interval that has a call inside cannot be in a caller-saved register)
+            bool callfree = rg_callpre[rg_last[cur] + 1] - rg_callpre[rg_first[cur]] == 0;
             int pick = 0 - 1;
             kj = 0;
             while kj < nreg && pick < 0 {
@@ -555,7 +560,8 @@ void rg_allocate(int epi, int is_main) {
                 if !is_d { k = ordx[kj]; }
                 int ow2 = xowner[k];
                 if is_d { ow2 = downer[k]; }
-                if ow2 == 0 - 1 { pick = k; }
+                bool allowed = is_d || k < 8 || rg_leaf == 1 || callfree;
+                if ow2 == 0 - 1 && allowed { pick = k; }
                 kj += 1;
             }
             if pick < 0 {
@@ -566,7 +572,8 @@ void rg_allocate(int epi, int is_main) {
                     if !is_d { k = ordx[kj]; }
                     int ow3 = xowner[k];
                     if is_d { ow3 = downer[k]; }
-                    if ow3 >= 0 && (is_d || rg_pin[rg_cand[ow3]] == 0) && (low < 0 || rg_wt[rg_cand[ow3]] < rg_wt[rg_cand[low]]) { low = ow3; pick = k; }
+                    bool allowed3 = is_d || k < 8 || rg_leaf == 1 || callfree;
+                    if allowed3 && ow3 >= 0 && (is_d || rg_pin[rg_cand[ow3]] == 0) && (low < 0 || rg_wt[rg_cand[ow3]] < rg_wt[rg_cand[low]]) { low = ow3; pick = k; }
                     kj += 1;
                 }
                 if low >= 0 && rg_wt[rg_cand[low]] < rg_wt[slot] {
@@ -816,14 +823,29 @@ void rg_function(int is_main) {
     if ok == 1 && is_main == 0 && opt_debug == 0 {
         rg_leaf = 1;
         i = 0;
+        rg_callpre[0] = 0;
         while i < rg_n {
             int st2 = rg_ls[i];
             int en2 = rg_end(st2);
+            rg_callpre[i + 1] = rg_callpre[i];
             if !rg_has(st2, ";H") {
-                if rg_is_call(st2) { rg_leaf = 0; }
+                if rg_is_call(st2) {
+                    rg_leaf = 0;
+                    rg_callpre[i + 1] += 1;
+                }
                 rg_mask = rg_mask | rg_line_regs(st2, en2);
             }
             i += 1;
+        }
+        if rg_leaf == 0 && rg_n < 65000 {
+            // x9 and x8, when the text does not mention them: for the variables that do not live over a call
+            int cand2[2];
+            cand2[0] = 9; cand2[1] = 8;
+            int cj = 0;
+            while cj < 2 {
+                if (rg_mask & (1 << cand2[cj])) == 0 { rg_extra[rg_nextra] = cand2[cj]; rg_nextra += 1; }
+                cj += 1;
+            }
         }
         if rg_leaf == 1 {
             // x2 x3 x4 x8 x9 (the text passes after this one use x5 x6 x7 x10 .. x14 as holders; x15 .. x17 are scratch registers)
@@ -992,8 +1014,7 @@ void regs_run() {
     regs_len = 0;
     int i = 0;
     int work = 1;
-    if used_try == 1 && pin_used == 1 { die("pinned variables (int n @ x19) are not possible in a program that has try / catch: a throw jumps over the frames and the registers would not be given back"); }
-    if opt_regs == 0 || used_try == 1 { work = 0; }
+    if opt_regs == 0 { work = 0; }
     while i < out_len {
         int en = rg_end(i);
         if work == 1 && rg_is_func(i) {

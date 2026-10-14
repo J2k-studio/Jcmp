@@ -1,7 +1,8 @@
-# J2K / Jcmp 0.9.137
+# J2K / Jcmp 0.9.138
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
 
+**0.9.138:** programs that use `throw` / `try` / `cin` (Map.get, unwrap, to_int ...) keep their variables in registers again: 25 - 45 % faster on the standard library; faster `alloc` / `free` and one allocation for a new array.
 **0.9.137:** new in the standard library: `Fmt`, `Regex`, `Date`, `Csv`, `Toml`, `Log`, `Net` (TCP sockets), `Arena`.
 **0.9.136:** error messages in plain sentences with the facts and a help line (the field list of a struct, both types of a mismatch, the import to write, the line of an unclosed block).
 **0.9.135:** the standard library in categories (`#import <text>`, `<data>`, `<files>` ...); `Sys::write(...)` works again.

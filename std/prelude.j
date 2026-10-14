@@ -129,7 +129,23 @@ struct Mem {
         return std_cls_exact[size / 16];
     }
     // n bytes, not cleared (null if the system has no memory left)
+    // The common case is written out here (one thread, a small block that a free list has): no other function is called.
     static void^ alloc(int n) {
+        if std_debug == 0 && std_mt == 0 && n > 0 && n <= 2032 {
+            int need = ((n + 15) >> 4) * 16 + 16;
+            int c = std_cls_of[need >> 4];
+            int h = std_free_cls[c];
+            if h != 0 {
+                int^ hd = (int^)h;
+                std_free_cls[c] = hd[1];
+                hd[1] = 0;
+                std_alloc_n += 1;
+                return (void^)(h + 16);
+            }
+        }
+        return Mem::alloc_general(n);
+    }
+    static void^ alloc_general(int n) {
         if std_debug != 0 { return Mem::dbg_alloc(n); }
         if std_mt == 0 { return Mem::alloc_raw(n); }          // one thread only: no lock
         while __cas(@std_mem_lock, 0, 1) != 0 {
@@ -255,8 +271,25 @@ struct Mem {
         nh[1] = 0;
         return (void^)(nb + 16);
     }
-    // give a block from alloc back (null is ignored)
+    // give a block from alloc back (null is ignored); the common case (one thread, a small block of a class) is written out here
     static void free(void^ p) {
+        if std_debug == 0 && std_mt == 0 && (int)p != 0 {
+            int blk = (int)p - 16;
+            int^ head = (int^)blk;
+            int size = head[0];
+            if (size & 1) == 0 && size <= 2048 {
+                int c = std_cls_exact[size >> 4];
+                if c >= 0 {
+                    std_free_n += 1;
+                    head[1] = std_free_cls[c];
+                    std_free_cls[c] = blk;
+                    return;
+                }
+            }
+        }
+        Mem::free_general(p);
+    }
+    static void free_general(void^ p) {
         if std_debug != 0 {
             Mem::dbg_free(p);
             return;
@@ -674,16 +707,17 @@ struct __Arr {
     static void nullerr() {
         __panic("the dynamic array is null");
     }
+    // The first data block is part of the block of the header (the data starts 32 bytes after it): one allocation for a new array.
+    // When the array grows the data moves to a block of its own; `h[2] == h + 32` tells which one it is.
     static void^ make(int esize, int cap) {
-        int^ h = (int^)Mem::alloc(32);
-        if (int)h == 0 { __panic("out of memory"); }
         int c = cap;
         if c < 4 { c = 4; }
+        int^ h = (int^)Mem::alloc(32 + c * esize);
+        if (int)h == 0 { __panic("out of memory"); }
         h[0] = 0;
         h[1] = c;
-        h[2] = (int)Mem::alloc(c * esize);
+        h[2] = (int)h + 32;
         h[3] = esize;
-        if h[2] == 0 { __panic("out of memory"); }
         return (void^)h;
     }
     // room for at least `need` elements
@@ -694,7 +728,7 @@ struct __Arr {
         int nd = (int)Mem::alloc(c * h[3]);
         if nd == 0 { __panic("out of memory"); }
         Mem::copy((void^)nd, (void^)h[2], h[0] * h[3]);
-        Mem::free((void^)h[2]);
+        if h[2] != (int)h + 32 { Mem::free((void^)h[2]); }
         h[2] = nd;
         h[1] = c;
     }
@@ -864,7 +898,7 @@ struct __Arr {
     static void free(void^ hv) {
         int^ h = (int^)hv;
         if (int)h == 0 { return; }
-        Mem::free((void^)h[2]);
+        if h[2] != (int)h + 32 { Mem::free((void^)h[2]); }
         Mem::free(hv);
     }
 }

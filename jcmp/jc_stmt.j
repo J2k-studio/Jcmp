@@ -1803,12 +1803,50 @@ void leave_tries(int n) {
     }
 }
 
+// the registers that a function keeps for its caller (x19 .. x25, d8 .. d15) are written to / read from 15 words of the frame at
+// `at`: a throw leaves the functions in between without giving their registers back, so the function that catches puts them as they
+// were when the try began (the variables of this function are in the frame: a function with a try has no variables in registers)
+void try_regs(char^ op, int at) {
+    char rn[8];
+    int k = 0;
+    while k < 7 {
+        rn[0] = 'x';
+        rn[1] = '1';
+        rn[2] = '9' + k;
+        rn[3] = 0;
+        if 19 + k >= 20 {
+            rn[1] = '2';
+            rn[2] = '0' + (19 + k - 20);
+        }
+        ins_mem(op, @rn, "x29", at + k * 8);
+        k += 1;
+    }
+    k = 0;
+    while k < 8 {
+        rn[0] = 'd';
+        if 8 + k < 10 {
+            rn[1] = '8' + k;
+            rn[2] = 0;
+        } else {
+            rn[1] = '1';
+            rn[2] = '0' + (8 + k - 10);
+            rn[3] = 0;
+        }
+        ins_mem(op, @rn, "x29", at + 56 + k * 8);
+        k += 1;
+    }
+}
+
 // try { ... } catch (e) { ... }     e is the text that was thrown (a char^)
 void parse_try() {
     used_try = 1;
     next();                              // "try"
     int lcatch = new_label();
     int lend = new_label();
+    int snap = frame_bytes;
+    hint_add(snap, 120, 0);
+    frame_bytes += 120;
+    try_regs("str", snap);
     emit_line("bl j2k_try_enter");       // returns 0 now, and 1 again after a throw
     emit_line("cmp x0, 0");
     jump_if("ne", lcatch);
@@ -1818,6 +1856,7 @@ void parse_try() {
     emit_line("bl j2k_try_leave");
     jump(lend);
     place_label(lcatch);
+    try_regs("ldr", snap);
     if !tok_is("catch") { die("catch expected after the try block"); }
     next();
     expect("(");
