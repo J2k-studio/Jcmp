@@ -1,7 +1,8 @@
-# J2K / Jcmp 0.9.125
+# J2K / Jcmp 0.9.126
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
 
+**0.9.126:** the vectoriser: variables stay in registers (0.9.125 was slower than the scalar loop), four elements per turn, sums of whole numbers in two lanes.
 **0.9.125:** the first vectoriser: loops over arrays (`c[i] = a[i] + b[i] * k`, copies, fills) run two elements per turn with NEON.
 **0.9.124:** counted loops are recognised on the IR (the base of the vectoriser; the generated code is unchanged); the owner chose a syntax tree per function body (T1).
 **0.9.123:** known ranges of whole numbers; the rotation of a 32-bit value is one `ror` (crypto code: `Sha256` and the like); the sign fix of `i % 7` / `i / 10` of a counter is gone.

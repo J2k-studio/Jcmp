@@ -2760,13 +2760,7 @@ void regs_post(int start) {
     if !fits { return; }
     pt_n = n;
     rg_nofma_fn = 0;
-    {
-        int nf = 0;
-        while nf < n {
-            if pt_txt[nf * 64] == ';' && pt_txt[nf * 64 + 1] == 'N' && pt_txt[nf * 64 + 2] == 'O' && pt_txt[nf * 64 + 3] == 'F' { rg_nofma_fn = 1; pt_txt[nf * 64] = 0; }
-            nf += 1;
-        }
-    }
+    if n > 0 && nofma_has(@pt_txt) { rg_nofma_fn = 1; }
     pt_pushpop();
     int changed = 1;
     int rounds = 0;

@@ -4509,6 +4509,23 @@ int vz_acc_st[64];
 int vz_nacc;
 int vz_count;                    // loops made (all functions)
 int vz_tried;
+int vz_lslot[IR_MAXV];           // an int value that is a load of a plain slot: the slot index (else -1)
+int vz_dslot[IR_MAXV];           // a double that is such a value's bits: the slot
+int vz_hs[16];                   // the slots whose double is broadcast once in VP
+int vz_hq[16];
+int vz_nhs;
+int vz_shift;                    // VB: bytes added to every element offset (the second copy of an unrolled body)
+int vz_ti;                       // VB: the counter, loaded once
+int vz_ab29;                     // VB: v29 + 8 * i (0: not made yet)
+int vz_ab30;                     // VB: v30 + 8 * i
+#define VZ_ACCV 9                // the value of an accumulator slot at the start of the turn (a vector in the vector loop)
+#define VZ_ACCN 10               // the new value of an accumulator (acc + element)
+int vz_sl_ld[16384];             // loads / stores of each plain frame slot in the body
+int vz_sl_st[16384];
+int vz_acc_slot[8];              // the accumulators: the slot, and the vector that holds its two partial sums
+int vz_acc_q[8];
+int vz_nacc2;
+int vz_bq[64];                  // a double register that the body only reads: its broadcast made in VP (0: none)
 int vz_work[IR_MAXI];            // the body instructions in order
 int vz_nwork;
 
@@ -4528,6 +4545,28 @@ void vz_clone(int j) {
     ir_w[e] = ir_w[j];
 }
 
+// the register that holds base + 8 * i in the vector body (made at the first use)
+int vz_abase(int base) {
+    int cur = vz_ab29;
+    if base == 30 { cur = vz_ab30; }
+    if cur != 0 { return cur; }
+    int tsh = ir_vreg(0);
+    ir_add(IR_SHL, tsh, vz_ti, 3, 1, 0);
+    int ab = ir_vreg(0);
+    ir_add(IR_ADD, ab, base, tsh, 0, 0);
+    if base == 30 { vz_ab30 = ab; } else { vz_ab29 = ab; }
+    return ab;
+}
+
+int vz_hq_of(int slot) {
+    int u = 0;
+    while u < vz_nhs {
+        if vz_hs[u] == slot { return vz_hq[u]; }
+        u += 1;
+    }
+    return 0;
+}
+
 // walk the body: the kind of every value, the accesses; with emit the vector body is written too (into the block being written)
 // false when anything is not understood
 bool vz_scan(int q, int islot, int incl, int inch, bool emit) {
@@ -4537,8 +4576,11 @@ bool vz_scan(int q, int islot, int incl, int inch, bool emit) {
     while v < ir_nv {
         vz_kind[v] = 0;
         vz_def[v] = 0;
+        vz_lslot[v] = 0 - 1;
+        vz_dslot[v] = 0 - 1;
         v += 1;
     }
+    if !emit { vz_nhs = 0; }
     // what the body writes
     int c = 0;
     while c < vz_nchain {
@@ -4549,6 +4591,27 @@ bool vz_scan(int q, int islot, int incl, int inch, bool emit) {
             j += 1;
         }
         c += 1;
+    }
+    // the loads and stores of frame slots in the body (an accumulator is stored once and loaded once)
+    {
+        int zi = 0;
+        while zi < 16384 { vz_sl_ld[zi] = 0; vz_sl_st[zi] = 0; zi += 1; }
+        int zc = 0;
+        while zc < vz_nchain {
+            int zb = vz_chain[zc];
+            int zj = ir_bs[zb];
+            while zj < ir_be[zb] - 1 {
+                if (ir_op[zj] == IR_LOAD || ir_op[zj] == IR_STORE) && ir_a[zj] == 30 {
+                    int zs = vn_slot(zj);
+                    if zs >= 0 {
+                        if ir_op[zj] == IR_LOAD { vz_sl_ld[zs] += 1; } else { vz_sl_st[zs] += 1; }
+                    }
+                }
+                zj += 1;
+            }
+            zc += 1;
+        }
+        if !emit { vz_nacc2 = 0; }
     }
     // live in: v29 the global area, v30 the frame
     vz_kind[29] = VZ_INV; vz_base[29] = 29; vz_off[29] = 0;
@@ -4572,9 +4635,26 @@ bool vz_scan(int q, int islot, int incl, int inch, bool emit) {
                 if ir_a[j2] == 30 && ir_bi[j2] == 0 {
                     int s = vn_slot(j2);
                     if s < 0 { return false; }
+                    if s != islot && vz_sl_st[s] > 0 {
+                        // an accumulator: one load, one store, a whole number, a plain slot, no use of the slot's value except `acc + x`
+                        if vz_sl_st[s] != 1 || vz_sl_ld[s] != 1 || vz_nacc2 >= 8 && !emit { return false; }
+                        int ai = 0;
+                        while ai < vz_nacc2 && vz_acc_slot[ai] != s { ai += 1; }
+                        if ai >= vz_nacc2 {
+                            if emit { return false; }
+                            vz_acc_slot[ai] = s;
+                            vz_acc_q[ai] = 0;
+                            vz_nacc2 += 1;
+                        }
+                        vz_kind[d] = VZ_ACCV;
+                        vz_lslot[d] = s;
+                        vz_vec[d] = vz_acc_q[ai];
+                        j2 += 1;
+                        continue;
+                    }
                     if s == islot { vz_kind[d] = VZ_I; }
-                    else { vz_kind[d] = VZ_INV; vz_base[d] = 0; vz_off[d] = 0; }
-                    if emit { vz_clone(j2); }
+                    else { vz_kind[d] = VZ_INV; vz_base[d] = 0; vz_off[d] = 0; vz_lslot[d] = s; }
+                    if emit && vz_kind[d] != VZ_I { vz_clone(j2); }
                 } else if vz_kind[ir_a[j2]] == VZ_ADDR {
                     if vz_nacc >= 64 { return false; }
                     vz_acc_base[vz_nacc] = vz_base[ir_a[j2]];
@@ -4583,7 +4663,7 @@ bool vz_scan(int q, int islot, int incl, int inch, bool emit) {
                     vz_nacc += 1;
                     if emit {
                         int qv = ir_vreg(2);
-                        int le = ir_add(IR_LOAD, qv, ir_a[j2], 0, 0, ir_k[j2]);
+                        int le = ir_add(IR_LOAD, qv, vz_abase(vz_base[ir_a[j2]]), 0, 0, vz_off[ir_a[j2]] + ir_k[j2] + vz_shift);
                         ir_w[le] = 16;
                         vz_vec[d] = qv;
                     }
@@ -4595,13 +4675,37 @@ bool vz_scan(int q, int islot, int incl, int inch, bool emit) {
             } else if op == IR_COPY {
                 int sa = ir_a[j2];
                 int ks = vz_kind[sa];
-                if ks == 0 || ks == VZ_WORD { return false; }
+                if ks == 0 || ks == VZ_WORD || ks == VZ_ACCN { return false; }
                 vz_kind[d] = ks; vz_base[d] = vz_base[sa]; vz_off[d] = vz_off[sa]; vz_vec[d] = vz_vec[sa];
-                if emit && ks != VZ_VEC && ks != VZ_VWORD { vz_clone(j2); }
+                vz_lslot[d] = vz_lslot[sa]; vz_dslot[d] = vz_dslot[sa];
+                if emit && ks != VZ_VEC && ks != VZ_VWORD && ks != VZ_ADDR && ks != VZ_IDX8 && ks != VZ_I && ks != VZ_ACCV { vz_clone(j2); }
             } else if op == IR_SHL {
                 if ir_bi[j2] != 1 || ir_b[j2] != 3 || vz_kind[ir_a[j2]] != VZ_I { return false; }
                 vz_kind[d] = VZ_IDX8;
-                if emit { vz_clone(j2); }
+            } else if (op == IR_ADD || op == IR_SUB) && ir_bi[j2] == 0 && (vz_kind[ir_a[j2]] == VZ_ACCV || (op == IR_ADD && vz_kind[ir_b[j2]] == VZ_ACCV)) {
+                int ra5 = ir_a[j2];
+                int rx = ir_b[j2];
+                if vz_kind[rx] == VZ_ACCV { int t5 = ra5; ra5 = rx; rx = t5; }
+                // the other operand: a loaded element or a value that does not change
+                int kx = vz_kind[rx];
+                if kx != VZ_WORD && kx != VZ_INV { return false; }
+                if vz_kind[ra5] != VZ_ACCV { return false; }
+                if emit {
+                    int qx = 0;
+                    if kx == VZ_WORD { qx = vz_vec[rx]; }
+                    else {
+                        qx = ir_vreg(2);
+                        int dupx = ir_add(IR_VDUP, qx, rx, 0, 0, 0);
+                        ir_w[dupx] = 1;
+                    }
+                    int aq = vz_vec[ra5];
+                    int ve5 = ir_add(IR_VOP, aq, aq, qx, 0, 4);
+                    if op == IR_SUB { ir_k[ve5] = 5; }
+                    ir_w[ve5] = 1;
+                    vz_vec[d] = aq;
+                }
+                vz_kind[d] = VZ_ACCN;
+                vz_lslot[d] = vz_lslot[ra5];
             } else if op == IR_ADD {
                 int ka = vz_kind[ir_a[j2]];
                 if ir_bi[j2] == 1 {
@@ -4617,11 +4721,11 @@ bool vz_scan(int q, int islot, int incl, int inch, bool emit) {
                         vz_kind[d] = VZ_ADDR; vz_base[d] = vz_base[ra]; vz_off[d] = vz_off[ra];
                     } else { return false; }
                 }
-                if emit { vz_clone(j2); }
+                if emit && vz_kind[d] != VZ_ADDR { vz_clone(j2); }
             } else if op == IR_BITS2F {
                 int ka2 = vz_kind[ir_a[j2]];
                 if ka2 == VZ_WORD { vz_kind[d] = VZ_VEC; vz_vec[d] = vz_vec[ir_a[j2]]; }
-                else if ka2 == VZ_INV { vz_kind[d] = VZ_DINV; if emit { vz_clone(j2); } }
+                else if ka2 == VZ_INV { vz_kind[d] = VZ_DINV; vz_dslot[d] = vz_lslot[ir_a[j2]]; if emit { vz_clone(j2); } }
                 else { return false; }
             } else if op == IR_FCONST {
                 vz_kind[d] = VZ_DINV;
@@ -4635,10 +4739,27 @@ bool vz_scan(int q, int islot, int incl, int inch, bool emit) {
                 bool okb = kb3 == VZ_VEC || kb3 == VZ_DINV;
                 if !oka || !okb { return false; }
                 if ka3 == VZ_VEC || kb3 == VZ_VEC {
+                    if !emit {
+                        int hk = 0;
+                        while hk < 2 {
+                            int rr = ra3;
+                            int kk2 = ka3;
+                            if hk == 1 { rr = rb3; kk2 = kb3; }
+                            if kk2 == VZ_DINV && vz_dslot[rr] >= 0 && vz_nhs < 16 {
+                                int hx = 0;
+                                bool have = false;
+                                while hx < vz_nhs { if vz_hs[hx] == vz_dslot[rr] { have = true; } hx += 1; }
+                                if !have { vz_hs[vz_nhs] = vz_dslot[rr]; vz_nhs += 1; }
+                            }
+                            hk += 1;
+                        }
+                    }
                     if emit {
                         int qa = 0;
                         int qb = 0;
                         if ka3 == VZ_VEC { qa = vz_vec[ra3]; }
+                        else if vz_dslot[ra3] >= 0 && vz_hq_of(vz_dslot[ra3]) != 0 { qa = vz_hq_of(vz_dslot[ra3]); }
+                        else if ra3 < 64 && vz_def[ra3] == 0 && vz_bq[ra3] != 0 { qa = vz_bq[ra3]; }
                         else {
                             int xa = ir_vreg(0);
                             ir_add(IR_F2BITS, xa, ra3, 0, 0, 0);
@@ -4647,6 +4768,8 @@ bool vz_scan(int q, int islot, int incl, int inch, bool emit) {
                             ir_w[dupa] = 1;
                         }
                         if kb3 == VZ_VEC { qb = vz_vec[rb3]; }
+                        else if vz_dslot[rb3] >= 0 && vz_hq_of(vz_dslot[rb3]) != 0 { qb = vz_hq_of(vz_dslot[rb3]); }
+                        else if rb3 < 64 && vz_def[rb3] == 0 && vz_bq[rb3] != 0 { qb = vz_bq[rb3]; }
                         else {
                             int xb = ir_vreg(0);
                             ir_add(IR_F2BITS, xb, rb3, 0, 0, 0);
@@ -4671,6 +4794,9 @@ bool vz_scan(int q, int islot, int incl, int inch, bool emit) {
                 if ka4 == VZ_VEC { vz_kind[d] = VZ_VWORD; vz_vec[d] = vz_vec[ir_a[j2]]; }
                 else if ka4 == VZ_DINV { vz_kind[d] = VZ_INV; vz_base[d] = 0; vz_off[d] = 0; if emit { vz_clone(j2); } }
                 else { return false; }
+            } else if op == IR_STORE && ir_a[j2] == 30 && ir_w[j2] == 8 && ir_bi[j2] == 0 && vn_slot(j2) >= 0 && vz_kind[ir_b[j2]] == VZ_ACCN {
+                // the new value of the accumulator goes to the slot after the loop: nothing is written in the vector loop
+                if vz_lslot[ir_b[j2]] != vn_slot(j2) { return false; }
             } else if op == IR_STORE {
                 if ir_w[j2] != 8 || ir_bi[j2] != 0 { return false; }
                 if vz_kind[ir_a[j2]] != VZ_ADDR { return false; }
@@ -4689,7 +4815,7 @@ bool vz_scan(int q, int islot, int incl, int inch, bool emit) {
                         int dups = ir_add(IR_VDUP, qs, ir_b[j2], 0, 0, 0);
                         ir_w[dups] = 1;
                     }
-                    int se = ir_add(IR_STORE, 0, ir_a[j2], qs, 0, ir_k[j2]);
+                    int se = ir_add(IR_STORE, 0, vz_abase(vz_base[ir_a[j2]]), qs, 0, vz_off[ir_a[j2]] + ir_k[j2] + vz_shift);
                     ir_w[se] = 16;
                 }
             } else {
@@ -4713,11 +4839,41 @@ bool vz_scan(int q, int islot, int incl, int inch, bool emit) {
         }
         x += 1;
     }
-    // at least one store
-    bool st = false;
+    // at least one store, or an accumulator
+    bool st = vz_nacc2 > 0;
     int w = 0;
     while w < vz_nacc { if vz_acc_st[w] == 1 { st = true; } w += 1; }
     return st;
+}
+
+// the live-in doubles that a vector operation reads: broadcast once in the block being written (VP)
+void vz_hoist(int q) {
+    int c = 0;
+    while c < vz_nchain {
+        int b = vz_chain[c];
+        int j = ir_bs[b];
+        while j < ir_be[b] - 1 {
+            int op = ir_op[j];
+            if op == IR_FADD || op == IR_FSUB || op == IR_FMUL || op == IR_FDIV {
+                int k = 0;
+                while k < 2 {
+                    int r = ir_a[j];
+                    if k == 1 { r = ir_b[j]; }
+                    if r >= 32 && r < 64 && vz_def[r] == 0 && vz_bq[r] == 0 && ir_vcls[r] == 1 {
+                        int xv = ir_vreg(0);
+                        ir_add(IR_F2BITS, xv, r, 0, 0, 0);
+                        int qv = ir_vreg(2);
+                        int dp = ir_add(IR_VDUP, qv, xv, 0, 0, 0);
+                        ir_w[dp] = 1;
+                        vz_bq[r] = qv;
+                    }
+                    k += 1;
+                }
+            }
+            j += 1;
+        }
+        c += 1;
+    }
 }
 
 bool vz_make(int q, int l) {
@@ -4784,77 +4940,168 @@ bool vz_make(int q, int l) {
         }
         c += 1;
     }
-    // the new blocks
+    // the new blocks: VP (once: the broadcasts, the limit n - 1 into a stack cell), VH (the test of every turn), VB (the body)
+    int qcell = 0 - (op_maxq() + 8);
+    int boff = vz_slot_off(cl_bval[q]);
+    int vp = ir_new_block(0 - 1);
+    ir_set_block(vp);
+    // the doubles that the body reads and does not write: made into vectors once
+    {
+        int u = 0;
+        while u < 64 { vz_bq[u] = 0; u += 1; }
+    }
+    int vbnd = ir_vreg(0);
+    int br_guard = 0 - 1;
+    int vpb = 0 - 1;
+    if cl_bkind[q] == 0 {
+        ir_add(IR_CONST, vbnd, 0, 0, 0, cl_bval[q]);
+    } else {
+        int lb = ir_add(IR_LOAD, vbnd, 30, 0, 0, 0);
+        ir_w[lb] = 8;
+        ir_k[lb] = boff;
+    }
+    // n - 1 must not wrap: the smallest number (0 for an unsigned compare) skips the vector loop
+    int vlim = ir_vreg(0);
+    int vmin = ir_vreg(0);
+    int minv = 0;
+    int gcc = IR_ULT;
+    if cl_cc[q] == IR_LT { minv = (1 << 63) + 3; gcc = IR_LT; } else { minv = 3; }
+    ir_add(IR_CONST, vmin, 0, 0, 0, minv);
+    br_guard = ir_add(IR_BR, 0, vbnd, vmin, 0, gcc);
+    vpb = ir_new_block(0 - 1);
+    ir_set_block(vpb);
+    // the broadcasts (the registers of the loop's doubles are live in here)
+    vz_hoist(q);
+    {
+        int hu = 0;
+        while hu < vz_nhs {
+            int hx = ir_vreg(0);
+            int hl = ir_add(IR_LOAD, hx, 30, 0, 0, 0);
+            ir_w[hl] = 8;
+            ir_k[hl] = vz_slot_off(vz_hs[hu]);
+            int hqv = ir_vreg(2);
+            int hd = ir_add(IR_VDUP, hqv, hx, 0, 0, 0);
+            ir_w[hd] = 1;
+            vz_hq[hu] = hqv;
+            hu += 1;
+        }
+        int au = 0;
+        while au < vz_nacc2 {
+            int zx = ir_vreg(0);
+            ir_add(IR_CONST, zx, 0, 0, 0, 0);
+            int zq = ir_vreg(2);
+            int zd = ir_add(IR_VDUP, zq, zx, 0, 0, 0);
+            ir_w[zd] = 1;
+            vz_acc_q[au] = zq;
+            au += 1;
+        }
+    }
+    int vbnd2 = ir_vreg(0);
+    if cl_bkind[q] == 0 {
+        ir_add(IR_CONST, vbnd2, 0, 0, 0, cl_bval[q]);
+    } else {
+        int lb2 = ir_add(IR_LOAD, vbnd2, 30, 0, 0, 0);
+        ir_w[lb2] = 8;
+        ir_k[lb2] = boff;
+    }
+    ir_add(IR_ADD, vlim, vbnd2, 0 - 3, 1, 0);
+    int stl = ir_add(IR_STORE, 0, 30, vlim, 0, qcell);
+    ir_w[stl] = 8;
+    int jpb = ir_add(IR_JMP, 0, 0, 0, 0, 0);
     int vh0 = ir_new_block(0 - 1);
+    ir_t1[jpb] = vh0;
     ir_set_block(vh0);
     int t0 = ir_vreg(0);
-    int bound0 = ir_vreg(0);
+    int t1 = ir_vreg(0);
     {
         int la = ir_add(IR_LOAD, t0, 30, 0, 0, 0);
         ir_w[la] = 8;
         ir_k[la] = vz_slot_off(cl_slot[q]);
+        int lc = ir_add(IR_LOAD, t1, 30, 0, 0, 0);
+        ir_w[lc] = 8;
+        ir_k[lc] = qcell;
     }
-    if cl_bkind[q] == 0 {
-        ir_add(IR_CONST, bound0, 0, 0, 0, cl_bval[q]);
-    } else {
-        int lb = ir_add(IR_LOAD, bound0, 30, 0, 0, 0);
-        ir_w[lb] = 8;
-        ir_k[lb] = vz_slot_off(cl_bval[q]);
-    }
-    int br0 = ir_add(IR_BR, 0, t0, bound0, 0, cl_cc[q]);
-    int vh1 = ir_new_block(0 - 1);
-    ir_set_block(vh1);
-    int t1 = ir_vreg(0);
-    int t2 = ir_vreg(0);
-    ir_add(IR_ADD, t1, t0, 1, 1, 0);
-    // t0 / bound0 are temporaries of the block VH0: load them again here
-    {
-        int la1 = ir_add(IR_LOAD, t2, 30, 0, 0, 0);
-        ir_w[la1] = 8;
-        if cl_bkind[q] == 0 {
-            ir_op[la1] = IR_CONST;
-            ir_a[la1] = 0;
-            ir_k[la1] = cl_bval[q];
-        } else {
-            ir_k[la1] = vz_slot_off(cl_bval[q]);
-        }
-    }
-    int br1 = ir_add(IR_BR, 0, t1, t2, 0, cl_cc[q]);
+    int br0 = ir_add(IR_BR, 0, t0, t1, 0, cl_cc[q]);
     int vb = ir_new_block(0 - 1);
-    ir_t1[br0] = vh1;
+    ir_t1[br0] = vb;
     ir_t2[br0] = h;
-    ir_t1[br1] = vb;
-    ir_t2[br1] = h;
+    ir_t1[br_guard] = h;
+    ir_t2[br_guard] = vpb;
     // the vector body
     ir_set_block(vb);
-    vz_scan(q, islot, ld, inch, true);
+    {
+        int chunk = 0;
+        while chunk < 2 {
+            vz_shift = chunk * 16;
+            vz_ab29 = 0;
+            vz_ab30 = 0;
+            vz_ti = ir_vreg(0);
+            int lti = ir_add(IR_LOAD, vz_ti, 30, 0, 0, 0);
+            ir_w[lti] = 8;
+            ir_k[lti] = ir_k[ld];
+            vz_scan(q, islot, ld, inch, true);
+            chunk += 1;
+        }
+        vz_shift = 0;
+    }
     // i = i + 2
     {
-        int ti = ir_vreg(0);
-        int li = ir_add(IR_LOAD, ti, 30, 0, 0, 0);
-        ir_w[li] = 8;
-        ir_k[li] = ir_k[ld];
+        int tk = ir_vreg(0);
+        int lk = ir_add(IR_LOAD, tk, 30, 0, 0, 0);
+        ir_w[lk] = 8;
+        ir_k[lk] = ir_k[ld];
         int tj = ir_vreg(0);
-        ir_add(IR_ADD, tj, ti, 2, 1, 0);
+        ir_add(IR_ADD, tj, tk, 4, 1, 0);
         int si = ir_add(IR_STORE, 0, 30, tj, 0, ir_k[ld]);
         ir_w[si] = 8;
         int jm = ir_add(IR_JMP, 0, 0, 0, 0, 0);
         ir_t1[jm] = vh0;
     }
-    // the jumps into the header from outside the loop go to VH0
-    int nb0 = vh0;
+    // the exit of the vector loop: the two partial sums of every accumulator are added to its slot
+    if vz_nacc2 > 0 {
+        int vx = ir_new_block(0 - 1);
+        ir_set_block(vx);
+        int au2 = 0;
+        while au2 < vz_nacc2 {
+            // two temporaries at a time (the lowering has few scratch registers): slot + lane 0, then + lane 1
+            int l0 = ir_vreg(0);
+            int e0 = ir_add(IR_VLANE, l0, vz_acc_q[au2], 0, 0, 0);
+            ir_w[e0] = 8;
+            int ov = ir_vreg(0);
+            int lo = ir_add(IR_LOAD, ov, 30, 0, 0, 0);
+            ir_w[lo] = 8;
+            ir_k[lo] = vz_slot_off(vz_acc_slot[au2]);
+            int s1 = ir_vreg(0);
+            ir_add(IR_ADD, s1, ov, l0, 0, 0);
+            int l1 = ir_vreg(0);
+            int e1 = ir_add(IR_VLANE, l1, vz_acc_q[au2], 0, 0, 8);
+            ir_w[e1] = 8;
+            int s2 = ir_vreg(0);
+            ir_add(IR_ADD, s2, s1, l1, 0, 0);
+            int so = ir_add(IR_STORE, 0, 30, s2, 0, 0);
+            ir_w[so] = 8;
+            ir_k[so] = vz_slot_off(vz_acc_slot[au2]);
+            au2 += 1;
+        }
+        int jx = ir_add(IR_JMP, 0, 0, 0, 0, 0);
+        ir_t1[jx] = h;
+        ir_t2[br0] = vx;
+    }
+    // the jumps into the header from outside the loop go to VP
+    int nb0 = vp;
     op_mark_loop(l);
     int bb = 0;
     while bb < nb0 {
         if op_mark[bb] != op_stamp && op_po[bb] >= 0 {
             int tb = ir_be[bb] - 1;
             int top = ir_op[tb];
-            if (top == IR_JMP || top == IR_BR || top == IR_FBR) && ir_t1[tb] == h { ir_t1[tb] = vh0; }
-            if (top == IR_BR || top == IR_FBR) && ir_t2[tb] == h { ir_t2[tb] = vh0; }
+            if (top == IR_JMP || top == IR_BR || top == IR_FBR) && ir_t1[tb] == h { ir_t1[tb] = vp; }
+            if (top == IR_BR || top == IR_FBR) && ir_t2[tb] == h { ir_t2[tb] = vp; }
         }
         bb += 1;
     }
     ir_nofma_fn = 1;
+    nofma_add(@ir_fname);
     vz_count += 1;
     return true;
 }

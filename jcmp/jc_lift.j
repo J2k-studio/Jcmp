@@ -1575,7 +1575,6 @@ void lw_hint() {
         ci += 1;
     }
     rg_put(10);
-    if ir_nofma_fn == 1 { rg_text(";NOFMA\n"); }
 }
 
 bool lw_function() {
@@ -1878,7 +1877,19 @@ void ir_run() {
                     int lc0 = lc_moved;
                     if (ir_opt & 1) != 0 { op_run(); }
                     int vz0 = vz_count;
-                    if (ir_opt & 268435456) != 0 { op_vectorize(); }
+                    if (ir_opt & 268435456) != 0 {
+                        op_vectorize();
+                        if vz_count != vz0 {
+                            // the addresses of the vector body were computed once for each access: value numbering and cleaning again
+                            if (ir_opt & 8) != 0 { op_cse_run(); }
+                            if (ir_opt & 8) != 0 { op_cell_fwd(); }
+                            if (ir_opt & 8) != 0 { op_vfwd(); }
+                            if (ir_opt & 8) != 0 { op_dead_cells(); }
+                            if (ir_opt & 4) != 0 { op_clean_run(); }
+                            if (ir_opt & 8) != 0 { op_cse_run(); }
+                            if (ir_opt & 4) != 0 { op_clean_run(); }
+                        }
+                    }
                     if (ir_opt & 8388608) == 0 { op_licm_exprs(); }
                     if (ir_opt & 2) != 0 { op_ra_run(); }
                     if op_hoisted == h0 && op_ra_changes == c0 && (vn_cellhits == vh0 || (ir_opt & 64) != 0 || op_count() >= cnt0) && bt_changes == bt0 && ci_changes == ci0 && lc_moved == lc0 && vz_count == vz0 && (ir_opt & 64) == 0 { op_changed = 0; }

@@ -133,7 +133,33 @@ int ir_nslots;
 char ir_name[262144];
 int ir_nnames;
 char ir_fname[128];          // the name of the function
-int ir_nofma_fn;             // the function has a vector loop: no fused multiply-add in its text (the line ;NOFMA)
+int ir_nofma_fn;             // the function has a vector loop: no fused multiply-add in its text
+char nofma_names[16384];     // the names of the functions that have one (64 characters each), for the register pass
+int nofma_n;
+
+void nofma_add(char^ name) {
+    if nofma_n < 256 {
+        int k = 0;
+        while name[k] != 0 && k < 63 {
+            nofma_names[nofma_n * 64 + k] = name[k];
+            k += 1;
+        }
+        nofma_names[nofma_n * 64 + k] = 0;
+        nofma_n += 1;
+    }
+}
+
+// is the function whose label line is the text s ("name:") on the list?
+bool nofma_has(char^ label) {
+    int u = 0;
+    while u < nofma_n {
+        int k = 0;
+        while nofma_names[u * 64 + k] != 0 && nofma_names[u * 64 + k] == label[k] { k += 1; }
+        if nofma_names[u * 64 + k] == 0 && label[k] == ':' { return true; }
+        u += 1;
+    }
+    return false;
+}
 int op_changed;              // 1: the function is written again from the IR
 int ir_pre = 1;              // the peephole pass runs before the lifting too
 int ir_opt = 335589613;           // the passes: 1 constants out of loops, 2 allocator, 4 cleaning, 8 value numbering, 32 double round trips, 64 always write back
