@@ -1891,3 +1891,34 @@ The owner answered "67 68 ได้" (agreed): the assistant's recommendations s
 | 5.2 `_.` | "can be named: `_.start { }` defines, `_.start;` calls it" | decided by the owner; DONE in 0.9.112: `_.name { ... }` is a function without arguments (`__blk_name`, `ret` added), called `_.name;`; `_. { }` is `register { }` |
 
 fmadd without a new function: (1) fuse `a * b + c` inside ONE expression by default, as Go and clang do, and never across statements; a switch `-nofma` gives the exact two-rounding result (tests, comparison with other machines). No `fma()` function, no new syntax. (2) or: never fuse unless `-ffma` is given. Rule of three: (1) is the same as C / Go (borrow), nothing new to learn (human), one peephole (machine); the cost is that the last bit of a result can differ from a machine without FMA.
+
+## 70. `#pragma` for data that must not change (owner, 2026-10-13 / 2026-10-14: "#pragma for forbidding changes of data"; "all of them are fine": a variable, a block, a file). A proposal, nothing decided
+
+What exists today: `const` is not a keyword of the language; constants are `#define NAME value` (text). Globals and locals are plain variables.
+
+### 70.1 Names
+| | A: `#pragma readonly` | B: `#pragma const` | C: `#pragma rom` |
+|---|---|---|---|
+| borrowed from | Rust `static` (not mut), D `immutable` | C `const`, C++ `constexpr` | embedded C (`const` in flash) |
+| easy for people | the word says the effect | known, but `const` in C means "this name cannot be assigned", not "the memory is protected" | known to embedded people only |
+| risk | none | the C meaning can mislead | too narrow (not only ROM) |
+
+### 70.2 Where it applies (the owner's answer: all of them)
+| scope | written | meaning |
+|---|---|---|
+| a variable | `#pragma readonly` on the line before `int table[16] = {...};` | that variable only |
+| a block | `#pragma readonly begin` ... `#pragma readonly end` | every global variable declared between |
+| a file | `#pragma readonly` as the first line (like `#!library`) | every global of the file |
+
+### 70.3 What a write does (to be decided)
+| | what happens | note |
+|---|---|---|
+| 1 compile time | a store to the name is an error: `'table' is read-only (#pragma readonly)` | cheap, covers the direct writes, not writes through a pointer |
+| 2 run time | the variable is placed in a page that is not writable (`mprotect`, or a read-only section of the ELF): a write through any pointer stops the program (segmentation fault with the text of the `-d` handler) | covers everything; needs the data in its own page |
+| 3 both | 1 for what the compiler sees, 2 for the rest | the two together are what "forbidding" means |
+
+Assistant's view: name A (`readonly`), the three scopes as above (one reader), and 3 (both). Locals: a local with the pragma is only the compile time check (the stack cannot be made read-only per variable). Questions for the owner: (1) the name A / B / C; (2) 3 (both) or 1 only first; (3) does the first line form (`#pragma readonly` for a file) need an end, or is the whole file enough?
+
+### 70.4 Owner's answer (2026-10-14) and what was done in 0.9.116
+The owner: "`#pragma read` is fine". Taken as: the name `read` (`readonly` is accepted as the same word), all three scopes (the next variable / `begin` ... `end` / the first line of a file) and the assistant's pick 3 (a compile time error for direct writes and a page that is not writable at run time).
+

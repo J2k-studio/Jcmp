@@ -371,6 +371,12 @@ void skip_blanks() {
 
 // ---------------------------------------------------------- files / imports
 
+int tok_seq;                 // counts the tokens read (a literal followed by ']' is one step)
+int ro_block;                // 1 between #pragma read begin and end
+int ro_next;                 // 1: the next global variable is read-only
+int ro_file;                 // bit d: the file at depth d has #pragma read as its first line
+int lvl_seq0[16];            // tok_seq when the file at this depth was entered
+
 // make `path` the current file (a new level); the old one is saved
 void push_file(char^ path) {
     if lx_depth >= 15 { die("imports nested too deeply"); }
@@ -379,6 +385,8 @@ void push_file(char^ path) {
     stk_ls[lx_depth] = cur_line_start;
     lx_depth += 1;
     lvl_lib[lx_depth] = 0;
+    lvl_seq0[lx_depth] = tok_seq;
+    ro_file = ro_file & ~(1 << lx_depth);
     cur_base = lx_depth * 524288;
     str_copy(@lvl_name + lx_depth * 128, path, 128);
     int n = read_file(path, @src_bufs + cur_base, 524288);
@@ -465,6 +473,10 @@ void lex_init(char^ path) {
     cpu_loaded = 0;
     lx_depth = 0;
     cur_base = 0;
+    ro_block = 0;
+    ro_next = 0;
+    ro_file = 0;
+    lvl_seq0[0] = 0;
     str_copy(@lvl_name, path, 128);
     int n = read_file(path, @src_bufs, 524288);
     if n < 0 { die_name("cannot read file", path); }
@@ -897,7 +909,6 @@ int read_escape() {
 }
 
 
-int tok_seq;                 // counts the tokens read (a literal followed by ']' is one step)
 int prev_tok_line;           // the line of the token before the current one
 int prev_end_line;           // where that token ended
 int prev_end_col;
@@ -1030,6 +1041,28 @@ void next() {
             tok_kind = T_IDENT;
             str_copy(@tok_text, "import", 8);
             import_hash = 1;
+            return;
+        }
+        if str_eq(@dw, "pragma") {
+            // #pragma read | readonly [begin | end]: data that must not change (docs/syntax-design.md 70)
+            while lc(0) == 32 || lc(0) == 9 { adv(); }
+            char pw[16];
+            int pn = 0;
+            while is_letter(lc(0)) && pn < 15 { pw[pn] = lc(0); pn += 1; adv(); }
+            pw[pn] = 0;
+            if !(str_eq(@pw, "read") || str_eq(@pw, "readonly")) { die("unknown #pragma (the known one is  #pragma read , also  #pragma readonly )"); }
+            while lc(0) == 32 || lc(0) == 9 { adv(); }
+            char pm[16];
+            int pk = 0;
+            while is_letter(lc(0)) && pk < 15 { pm[pk] = lc(0); pk += 1; adv(); }
+            pm[pk] = 0;
+            if str_eq(@pm, "begin") { ro_block = 1; }
+            else if str_eq(@pm, "end") { ro_block = 0; }
+            else if pk != 0 { die("after #pragma read only begin or end can follow"); }
+            else if tok_seq <= lvl_seq0[lx_depth] + 1 { ro_file = ro_file | (1 << lx_depth); }     // the first thing of the file: all of its globals
+            else { ro_next = 1; }                                                                   // the next global variable
+            while lc(0) != 10 && lc(0) != 0 { adv(); }
+            next();
             return;
         }
         if str_eq(@dw, "multithread") {

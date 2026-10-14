@@ -1,6 +1,8 @@
-# J2K / Jcmp 0.9.115
+# J2K / Jcmp 0.9.116
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
+
+**0.9.116:** `#pragma read`: global variables that cannot be written (compile time error, and not writable pages at run time).
 
 **0.9.115:** `raw<u32>[...]` writes raw words / bytes inside low-level blocks.
 

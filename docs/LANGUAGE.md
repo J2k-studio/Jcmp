@@ -996,3 +996,20 @@ raw<u64>[0x1100000011000000];            // two words
 The type is `u8`, `u16`, `u32` or `u64`; a value that does not fit is an error. The assembler works in 4-byte words, so a group that does not fill
 the last word is padded with zeros. A function with a raw word is opaque to the passes (as every register block is).
 
+## `#pragma read`: data that must not change (0.9.116)
+
+```jk
+#pragma read                    // the next global variable only
+int limit = 100;
+
+#pragma read begin              // every global variable up to `end`
+int table[4] = {10, 20, 30, 40};
+int scale = 3;
+#pragma read end
+```
+`#pragma read` as the very first thing of a file makes every global variable of that file read-only. (`#pragma readonly` is the same.)
+* A direct write (`limit = 1;`, `table[2] = 5;`, `limit += 1;`) is an error at compile time: `this variable is read-only (#pragma read) and cannot be written`.
+* The variable has pages of its own and the start code makes them not writable (`mprotect`): a write through a pointer stops the program with the
+  segmentation fault message (`... or a write to read-only data`). The cost is 8 KB of address space for each read-only variable.
+* Locals cannot be read-only (a local with the pragma is not special); in a `#!library` file there is no start code, so only the compile time check works.
+

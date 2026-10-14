@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.116
+* **`#pragma read`** (owner's answer 4.1; `docs/syntax-design.md` 70): global data that must not change. `#pragma read` before a declaration (that variable), `#pragma read begin` ... `#pragma read end` (the block), or as the first thing of a file (all its globals); `readonly` is the same word. A direct write is a compile time error; the variable gets pages of its own that the start code makes not writable (`mprotect`), so a write through a pointer stops the program (the segmentation fault text now ends with "or a write to read-only data").
+* Tests: `t356_pragma_read` (a write through a pointer: exit 139), `t357_fail_pragma_read` (the suite: 380).
+
 ## 0.9.115
 * **`raw<type>[values];`** (owner's answer 4.2): bytes of the program as they are written, in a naked function, a register block or a `_.name { }` block: `raw<u32>[0xd503201f];`, `raw<u8>[0x1f, 0x20, 0x03, 0xd5];`, `raw<u16>[...]`, `raw<u64>[...]` (little endian; a value that does not fit the type is an error; a partial last word is padded with zeros). The assembler has a `.word N` directive for it.
 * Tests: `t353_raw_words`, `t354_fail_raw_range`, `t355_raw_in_function` (the suite: 378).

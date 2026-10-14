@@ -367,6 +367,11 @@ void parse_assign_core(char^ target) {
         return;
     }
     if lv_swz == 1 { die("a swizzle with several components can only be read (assign the parts one by one: v.x = ...)"); }
+    if lv_base_local == 0 && pass_no >= 2 {
+        // a write to a global variable that is read-only (#pragma read): the plain variable, or an element / field of it
+        int ro_g = find_global(@id_name);
+        if ro_g >= 0 && gro[ro_g] == 1 && !(gptr[ro_g] != 0 && lv_fresh == 0) { die_name("this variable is read-only (#pragma read) and cannot be written", @id_name); }
+    }
     int a_code = lv_code;
     int a_kind = lv_kind;
     int lv_dyn_saved = lv_dyn;
@@ -3232,8 +3237,8 @@ void emit_segv_hex(char^ text, int n, char^ load, int k) {
 }
 
 void emit_segv_handler() {
-    str_copy(@segv_text, "runtime error: segmentation fault (null pointer or stack overflow)\n", 80);
-    if opt_debug == 1 { str_copy(@segv_text, "runtime error: segmentation fault (null pointer, stack overflow, or a memory block used after free or past its end)\n", 160); }
+    str_copy(@segv_text, "runtime error: segmentation fault (null pointer, stack overflow, or a write to read-only data)\n", 120);
+    if opt_debug == 1 { str_copy(@segv_text, "runtime error: segmentation fault (null pointer, stack overflow, a memory block used after free or past its end, or a write to read-only data)\n", 190); }
     int n = str_len(@segv_text);
     emit_line("j2k_segv:");
     emit_line("sub sp, sp, #128");
@@ -3348,6 +3353,26 @@ void emit_start_stub() {
             gi_n += 1;
         }
         gi_k += 1;
+    }
+    // #pragma read: the pages of the read-only variables are made not writable (after every initial value is stored)
+    int ro_i = 0;
+    while ro_i < gcount {
+        if gro[ro_i] == 1 {
+            int ro_len = gro_s[ro_i];
+            ins_n("mov x0, ", gro_a[ro_i] + 4095);
+            emit_line("add x0, x28, x0");
+            emit_line("lsr x0, x0, #12");
+            emit_line("lsl x0, x0, #12");
+            ins_n("mov x2, ", gro_a[ro_i] + ro_len);
+            emit_line("add x2, x28, x2");
+            emit_line("lsr x2, x2, #12");
+            emit_line("lsl x2, x2, #12");
+            emit_line("sub x1, x2, x0");
+            emit_line("mov x2, 1");
+            emit_line("mov x8, 226");
+            emit_line("svc 0");
+        }
+        ro_i += 1;
     }
     emit_line("b main");
     if used_fntab == 1 {

@@ -509,6 +509,9 @@ int gnd[16384];
 int gst1[16384];
 int gst2[16384];
 int gdyn[16384];
+int gro[16384];               // 1: #pragma read (the variable cannot be written)
+int gro_a[16384];             // the start of the region of a read-only variable and its size (a page before and after it)
+int gro_s[16384];
 int gtid[16384];
 int gcnt[16384];
 int gcount;
@@ -727,8 +730,23 @@ void add_global(char^ name, int kind, int elem, int bytes, int ptr) {
     gnd[gcount] = 1;
     gst1[gcount] = 0;
     gst2[gcount] = 0;
-    goff[gcount] = gl_bytes;
-    gl_bytes += (bytes + 7) / 8 * 8;
+    bool ro = ro_next == 1 || ro_block == 1 || (ro_file & (1 << lx_depth)) != 0;
+    ro_next = 0;
+    if name[0] == '.' || name[0] == '_' { ro = false; }
+    gro[gcount] = 0;
+    if ro {
+        // read-only: the variable has pages of its own (a page in front and behind it), the start code protects them (mprotect)
+        gro[gcount] = 1;
+        gro_a[gcount] = gl_bytes;
+        gl_bytes += 4096;
+        goff[gcount] = gl_bytes;
+        gl_bytes += (bytes + 7) / 8 * 8;
+        gl_bytes += 4096;
+        gro_s[gcount] = gl_bytes - gro_a[gcount];
+    } else {
+        goff[gcount] = gl_bytes;
+        gl_bytes += (bytes + 7) / 8 * 8;
+    }
     gcount += 1;
 }
 
