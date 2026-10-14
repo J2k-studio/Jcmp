@@ -48,6 +48,7 @@ error: no main function found in 'file.jk'
 
 | 0.9.90 | A missing `)` or `]` at the end of a line is reported with the other errors |
 | 0.9.106 | `#import "file"` not found / written with an extension: its own message and help |
+| 0.9.109 | `Mem::free(p)` twice: `this variable was already freed by Mem::free and is freed again` (case 2 of the ownership proposal) |
 | 0.9.91 | A number (not 0 / 1) stored in a pointer (declaration, assignment, return, argument), and a text passed to an `int` parameter, are errors |
 
 ## Order of work
@@ -78,3 +79,5 @@ Cases, from the cheapest to the hardest (all of them only along straight lines o
 | 4 | memory from `Mem::alloc` that is neither freed, returned, stored, nor passed | `memory allocated here is never freed` (a leak; `alloc[ ]` frees itself) |
 
 Rule of three for the wording: say what happened, point at the first line (the compiler already prints the source line of the error; the line of the first event goes in the text), say what to do (`help:`). Questions for the owner: (a) warnings first or errors at once (the compiler would refuse programs that use memory after free: they are always bugs, but a rare false positive in a loop is possible); (b) is case 4 wanted (it needs a fairly complete walk of the function).
+
+Case 4 (a leak) is not needed for owners: a local pointer that owns its memory is freed at the end of its block by the compiler (`LANGUAGE.md`, "Nothing leaks"); `-Wleak` already covers a thrown-away `alloc` result. Case 3 (`take(p)` where `take` frees its parameter) needs a flag per function and is left for later.

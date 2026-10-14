@@ -584,6 +584,7 @@ int label_no;                // label counter
 int in_cout;                 // 1 while parsing a cout operand: << and >> end it
 
 char id_name[256];           // a copy of the identifier being parsed
+int in_free_call;            // 1 while the argument of Mem::free is read (a second free says so)
 
 // ---------------------------------------------------------------- lookups
 
@@ -1671,7 +1672,9 @@ void gen_call() {
     if bare_call == 1 {
         bare_call = 0;
     } else {
+        if str_eq(@callee, "Mem__free") { in_free_call = 1; }
         n = parse_args() + pre;
+        in_free_call = 0;
     }
     int free_owner = 0 - 1;
     if str_eq(@callee, "Mem__free") && n == 1 && rv_valid == 1 { free_owner = own_find(rv_off); }
@@ -1975,7 +1978,7 @@ void check_moved_use() {
     if lv_fresh == 1 && lv_base_local == 1 && lv_kind != 1 {
         int oi = own_find(lv_base_off);
         if oi >= 0 && own_moved[oi] == 1 { warn("this variable was moved and is used afterwards (it is null now)", "moved"); }
-        if oi >= 0 && own_moved[oi] == 2 { warn("this variable was freed by Mem::free and is used afterwards (it is null now)", "moved"); }
+        if oi >= 0 && own_moved[oi] == 2 { if in_free_call == 1 { warn("this variable was already freed by Mem::free and is freed again (it is null now)", "moved"); } else { warn("this variable was freed by Mem::free and is used afterwards (it is null now)", "moved"); } }
     }
 }
 
@@ -3729,7 +3732,7 @@ void finish_rvalue() {
         rv_off = lv_base_off;
         int oi = own_find(lv_base_off);
         if oi >= 0 && own_moved[oi] == 1 { warn("this variable was moved and is used afterwards (it is null now)", "moved"); }
-        if oi >= 0 && own_moved[oi] == 2 { warn("this variable was freed by Mem::free and is used afterwards (it is null now)", "moved"); }
+        if oi >= 0 && own_moved[oi] == 2 { if in_free_call == 1 { warn("this variable was already freed by Mem::free and is freed again (it is null now)", "moved"); } else { warn("this variable was freed by Mem::free and is used afterwards (it is null now)", "moved"); } }
     }
     if lv_kind == 3 {
         load_through(8);                 // a dynamic array as a value: its header address

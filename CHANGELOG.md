@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.109
+* **A second `Mem::free(p)` says so:** `this variable was already freed by Mem::free and is freed again (it is null now)` (before: the general "used afterwards" text). Case 2 of the ownership proposal in `docs/error-messages-plan.md`; case 4 (a leak) is not needed because owners are freed at the end of their block.
+* Tests: `t346_fail_double_free` (the suite: 369).
+
 ## 0.9.108
 * **`Span<T>`** (`std/collections.j`): a view of a part of an array without copying: `Span<int> s = span<int>(a, 1, 5);` `s.get(i)`, `s.set(i, x)`, `s.len`, `s.sub(lo, hi)`, `s.to_array()`. Checked index (throws `span index out of range`). Chosen by the owner's agreement with `docs/syntax-design.md` 67 (option B).
 * **`in` / `out` / `clobber` in a `register { }` block** (68 (a)): `in x1 = expr;` makes the value in the register before the instructions, `out x0 = variable;` stores it after, `clobber x4;` lists the other registers (a warning for a register that the block changes and that is in no list, `-Wregister-block`).
