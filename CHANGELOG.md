@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.111
+* **`and` / `orr` / `eor` with a shifted register** (`orr x0, x10, x11, lsl #30`; lsl, lsr, asr, ror) in the assembler, and a register-pass rule that joins `lsl|lsr|asr xS, xA, #n` with the following `orr|eor|and` that reads xS: a rotate written as `(x >> n) | (x << (32 - n))` is two instructions instead of three. The assembler check (llvm-mc) has four more lines (116).
+* **A value that goes through a plain frame slot and is read once is passed in a register** (`op_cell_fwd`, second case): `store [slot], r ... d = load [slot]` where the slot has no other load: when `d` or `r` is written in between (an inlined parameter `x` that the body shifts), the value waits in a register that the block does not name (and that does not live after it). The parameter slots of the inlined `rotr` of `sha256` are gone; sha256 100 -> 90 ms.
+* About 32-bit numbers (owner's answer 3: option ก): `u32` and `i32` already wrap around at 32 bits at every step (the result is cut after each operation); the work that was left was the code, not the meaning. A real `ror w` is a later step.
+* Tests: the suite (370), 500 random programs (`-noinl`, `-d`), bootstrap; the stand-alone assembler (`bin/j2k_asm_j2k`) must be rebuilt after this change (`ship.sh` does).
+
 ## 0.9.110
 * **A local that is set once to a number is that number everywhere** (`op_const_cells`): `int n = 200;` that nothing changes (one store in the function, of a number made in the same block, in a block that comes before every load) - its loads become the number, so `n * n` and `cmp k, n` fold and the loop bounds are immediate numbers. In `matmul` the three copies of `n` in registers and the loads in the inner loop are gone. A hidden switch: `-irdbg 33554432`.
 * Tests: `t347_const_cells` (the suite: 370), 400 random programs (`-noinl`, `-d`), bootstrap.

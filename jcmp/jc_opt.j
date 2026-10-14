@@ -3219,14 +3219,47 @@ void op_dead_cells() {
 
 int cf_changes;
 
+int cf_loads[8192];             // the loads of each plain frame slot in the function
+
 void op_cell_fwd() {
     if (ir_opt & 16777216) != 0 { return; }
+    vn_hints();
+    int zi = 0;
+    while zi < 8192 {
+        cf_loads[zi] = 0;
+        zi += 1;
+    }
     int b = 0;
     while b < ir_nb {
         if op_po[b] >= 0 {
+            int lj = ir_bs[b];
+            while lj < ir_be[b] {
+                if ir_op[lj] == IR_LOAD && ir_a[lj] == 30 && ir_k[lj] >= 0 && ir_k[lj] / 8 < 8192 {
+                    cf_loads[ir_k[lj] / 8] += 1;
+                    if ir_k[lj] % 8 != 0 || ir_w[lj] != 8 { cf_loads[ir_k[lj] / 8] += 2; }
+                }
+                lj += 1;
+            }
+        }
+        b += 1;
+    }
+    op_liveness();
+    b = 0;
+    while b < ir_nb {
+        if op_po[b] >= 0 {
             int s = ir_bs[b];
+            int mention = op_lo[b];             // the registers that the block names, and the ones that live after it
+            int mj = ir_bs[b];
+            while mj < ir_be[b] {
+                mention = mention | op_uses(mj) | op_defs(mj);
+                mj += 1;
+            }
             while s < ir_be[b] {
-                if ir_op[s] == IR_STORE && ir_a[s] == 30 && ir_w[s] == 8 && ir_k[s] < 0 && ir_bi[s] == 0 {
+                bool lone = false;           // a plain slot that is read by one load only: the store goes away with it
+                if ir_op[s] == IR_STORE && ir_a[s] == 30 && ir_w[s] == 8 && ir_k[s] >= 0 && ir_k[s] % 8 == 0 && ir_k[s] / 8 < 8192 {
+                    lone = op_plain[ir_k[s] / 8] == 1 && cf_loads[ir_k[s] / 8] == 1;
+                }
+                if ir_op[s] == IR_STORE && ir_a[s] == 30 && ir_w[s] == 8 && (ir_k[s] < 0 || lone) && ir_bi[s] == 0 {
                     int c = ir_k[s];
                     int r = ir_b[s];
                     int ld = 0 - 1;
@@ -3249,7 +3282,7 @@ void op_cell_fwd() {
                         }
                         j += 1;
                     }
-                    if over && !bad && ld > 0 {
+                    if (over || lone) && !bad && ld > 0 {
                         int d = ir_d[ld];
                         int bt = op_bit(d);
                         if d >= 1 && d < 64 && r >= 1 && r < 64 && ir_vcls[d] == ir_vcls[r] && (uses & bt) == 0 && (defs & bt) == 0 {
@@ -3264,6 +3297,32 @@ void op_cell_fwd() {
                             ir_a[ld] = 0;
                             ir_bi[ld] = 1;
                             cf_changes += 1;
+                        } else if d >= 1 && d < 64 && r >= 1 && r < 64 && ir_vcls[d] == ir_vcls[r] && lone {
+                            // d or r is written or read in between: the value waits in a register that this block does not name
+                            int t = 0;
+                            int lo = 1;
+                            int hi = 14;
+                            if ir_vcls[r] == 1 { lo = 32; hi = 39; }
+                            int tt = lo;
+                            while tt <= hi && t == 0 {
+                                if (mention & (1 << tt)) == 0 { t = tt; }
+                                tt += 1;
+                            }
+                            if t != 0 {
+                                mention = mention | (1 << t);
+                                ir_op[s] = IR_COPY;
+                                ir_d[s] = t;
+                                ir_a[s] = r;
+                                ir_b[s] = 0;
+                                ir_k[s] = 0;
+                                ir_bi[s] = 0;
+                                ir_op[ld] = IR_COPY;
+                                ir_a[ld] = t;
+                                ir_b[ld] = 0;
+                                ir_k[ld] = 0;
+                                ir_bi[ld] = 0;
+                                cf_changes += 1;
+                            }
                         }
                     }
                 }

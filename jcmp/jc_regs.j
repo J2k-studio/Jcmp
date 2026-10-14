@@ -1711,6 +1711,55 @@ bool pt_rules(int i) {
             return true;
         }
     }
+    // lsl|lsr|asr xS, xA, #n / orr|eor|and xD, xP, xQ  (one of P, Q is S)  ->  op xD, xO, xA, lsl|lsr|asr #n
+    // (xS is written by the op itself, or nobody reads it afterwards)
+    if (pt_mn(0, "lsl") || pt_mn(0, "lsr") || pt_mn(0, "asr")) && pt_no[0] == 3 && pt_isreg(0, 0) && pt_isreg(0, 1) && pt_isnum(0, 2)
+        && (pt_mn(1, "orr") || pt_mn(1, "eor") || pt_mn(1, "and")) && pt_no[1] == 3 && pt_isreg(1, 0) && pt_isreg(1, 1) && pt_isreg(1, 2) {
+        int ls = pt_regno(0, 0, 'x');
+        int la = pt_regno(0, 1, 'x');
+        int ld = pt_regno(1, 0, 'x');
+        int lp = pt_regno(1, 1, 'x');
+        int lq = pt_regno(1, 2, 'x');
+        int lo = 0 - 1;
+        if lp == ls && lq != ls { lo = lq; }
+        else if lq == ls && lp != ls { lo = lp; }
+        int ln = 0;
+        int lso = (0 * 4 + 2) * 40;
+        int lsi = 0;
+        if pt_o[lso] == '#' { lsi = 1; }
+        while pt_o[lso + lsi] >= '0' && pt_o[lso + lsi] <= '9' && ln < 100 {
+            ln = ln * 10 + (pt_o[lso + lsi] - '0');
+            lsi += 1;
+        }
+        if lo >= 0 && ls >= 0 && la >= 0 && ld >= 0 && ls <= 30 && la <= 30 && ld <= 30 && lo <= 30 && ln >= 1 && ln <= 63 && (ld == ls || pt_dead(pt_next(j), ls, 40)) {
+            char ll[56];
+            int lq2 = 0;
+            int lc = 0;
+            while pt_m[16 + lc] != 0 { ll[lq2] = pt_m[16 + lc]; lq2 += 1; lc += 1; }     // the mnemonic of line 1
+            ll[lq2] = ' '; lq2 += 1;
+            int lparts[3];
+            lparts[0] = ld; lparts[1] = lo; lparts[2] = la;
+            int lpi = 0;
+            while lpi < 3 {
+                ll[lq2] = 'x'; lq2 += 1;
+                int lrv = lparts[lpi];
+                if lrv >= 10 { ll[lq2] = '0' + lrv / 10; lq2 += 1; }
+                ll[lq2] = '0' + lrv % 10; lq2 += 1;
+                ll[lq2] = ','; ll[lq2 + 1] = ' '; lq2 += 2;
+                lpi += 1;
+            }
+            ll[lq2] = 'l'; ll[lq2 + 1] = 's';
+            if pt_mn(0, "lsl") { ll[lq2 + 2] = 'l'; } else if pt_mn(0, "lsr") { ll[lq2 + 2] = 'r'; } else { ll[lq2] = 'a'; ll[lq2 + 1] = 's'; ll[lq2 + 2] = 'r'; }
+            lq2 += 3;
+            ll[lq2] = ' '; ll[lq2 + 1] = '#'; lq2 += 2;
+            if ln >= 10 { ll[lq2] = '0' + ln / 10; lq2 += 1; }
+            ll[lq2] = '0' + ln % 10; lq2 += 1;
+            ll[lq2] = 0;
+            pt_set(i, "");
+            pt_set(j, @ll);
+            return true;
+        }
+    }
     // <op> d0, ... / fmov dK, d0   ->   <op> dK, ...      (d0 is not needed afterwards)
     if pt_mn(1, "fmov") && pt_no[1] == 2 && pt_op(1, 1, "d0") && pt_regno(1, 0, 'd') > 0 && pt_no[0] >= 1 && pt_op(0, 0, "d0") && (pt_mn(0, "fadd") || pt_mn(0, "fsub") || pt_mn(0, "fmul") || pt_mn(0, "fdiv") || pt_mn(0, "fsqrt") || pt_mn(0, "fneg") || pt_mn(0, "fabs") || pt_mn(0, "fmov") || pt_mn(0, "ldr") || pt_mn(0, "scvtf") || pt_mn(0, "frintm") || pt_mn(0, "frintp") || pt_mn(0, "frintz")) {
         int kreg = pt_regno(1, 0, 'd');
