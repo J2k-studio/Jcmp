@@ -1,7 +1,8 @@
-# J2K / Jcmp 0.9.136
+# J2K / Jcmp 0.9.137
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
 
+**0.9.137:** new in the standard library: `Fmt`, `Regex`, `Date`, `Csv`, `Toml`, `Log`, `Net` (TCP sockets), `Arena`.
 **0.9.136:** error messages in plain sentences with the facts and a help line (the field list of a struct, both types of a mismatch, the import to write, the line of an unclosed block).
 **0.9.135:** the standard library in categories (`#import <text>`, `<data>`, `<files>` ...); `Sys::write(...)` works again.
 **0.9.134:** the syntax tree reads all 949 function bodies of the tests, benchmarks and examples (String, arrays, enums, switch, try, defer, methods, lambdas); generated code is the same.

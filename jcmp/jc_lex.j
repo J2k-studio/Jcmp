@@ -43,7 +43,7 @@ int canvas_loaded;
 int screen_loaded;
 int math_loaded;             // 1 once `#import <math>` has been read (using math::vector loads the parts)           // 1 once `import <matrix>` has been read
 int std_loaded;              // 1 once `import std` has been read
-int std_units;               // the units of the standard library that are read (bit n = unit n, see gen_std.sh): 255 = all
+int std_units;               // the units of the standard library that are read (bit n = unit n, see gen_std.sh): 511 = all
 
 // ---------------------------------------------------------------- #define
 char def_name[131072];         // 256 names x 64
@@ -770,6 +770,7 @@ int std_category(char^ name) {
     if str_eq(name, "time") { return 33; }
     if str_eq(name, "data") { return 71; }
     if str_eq(name, "crypto") { return 141; }
+    if str_eq(name, "net") { return 261; }
     return 0;
 }
 
@@ -780,21 +781,21 @@ void import_library(char^ name, char^ rel) {
             import_warned = 1;
             warn("the library 'std' is now called 'stdlib': write import <stdlib>", "deprecated");
         }
-        std_load(255);
+        std_load(511);
         next();
         return;
     }
     if str_eq(name, "gfx") {
         // the graphics library: its parts (canvas) are chosen with  using gfx::canvas;  (needs stdlib and math::vector)
         gfx_loaded = 1;
-        std_load(255);
+        std_load(511);
         next();
         return;
     }
     if str_eq(name, "math") {
         // the math library: its parts (vector, matrix) are chosen with  using math::vector;
         math_loaded = 1;
-        std_load(255);
+        std_load(511);
         next();
         return;
     }

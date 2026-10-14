@@ -6,14 +6,15 @@ cd "$(dirname "$0")"
 python3 - <<'PY'
 # the units of the standard library, in the order they are read; a category of `import <name>` is a set of units (bit n = unit n)
 units = [
-    ["sys", "result"],                          # 0 core
+    ["sys", "result", "arena"],                 # 0 core
     ["math", "num"],                            # 1 number
-    ["str", "encode"],                          # 2 text
+    ["str", "encode", "fmt", "regex"],          # 2 text
     ["fs", "fsdir", "path"],                    # 3 files
-    ["system"],                                 # 4 system
-    ["time"],                                   # 5 time
-    ["collections", "json"],                    # 6 data
+    ["system", "log"],                          # 4 system
+    ["time", "date"],                           # 5 time
+    ["collections", "json", "csv", "toml"],     # 6 data
     ["hash"],                                   # 7 crypto
+    ["net"],                                    # 8 net
 ]
 files = [f for u in units for f in u]
 def gen(name, files, doc):
