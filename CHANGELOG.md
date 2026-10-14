@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.124
+* **Counted loops are recognised on the IR** (`op_counted_loops` in `jcmp/jc_opt.j`; design `docs/design/13-vectorizer.md` V2; no change of the generated code, the vectoriser V3 builds on it): a loop whose header is `load i; load n | number; br i < n` and whose only write of the plain slot `i` is `i = i + step` is described (counter, step, bound as a number or a slot that nothing writes in the loop, number of calls, blocks, innermost or not). Hidden switch `-irdbg 134217728` prints the loops of a program.
+* **Decision of the owner (2026-10-14): T1** (a tree per function body) and T2 grown in parts beside it (`docs/design/10-structured-pipeline.md` 8.1: parts A1-A6; the hidden switch `-noast` will compare the two paths).
+* Tests: `t368_counted_loops` (and the check of the recogniser in `run_all_tests.sh`).
+
 ## 0.9.123
 * **Known ranges of whole numbers** (`op_range_run` in `jcmp/jc_opt.j`, design `docs/design/13-vectorizer.md` V0/V1). For every whole number the compiler now keeps "never negative, at most N" (from constants, masks, shifts, `%` and `/` by constants, loop counters, unsigned loads), across blocks and through the frame slots of variables; a counter that grows by small steps is "never negative, no bound". Used for: a shift that moves every bit out (`x >> 63` of a counter: the sign fix of `i % 7` and `i / 10`) is 0, `x & 0xFFFFFFFF` of a value that fits is a copy, and an operation with the neutral number (`x + 0`, `x * 1`, `x & -1`, `x << 0`) is a copy.
 * **`ror w`: the rotation of a 32-bit value is one instruction.** `((y >> n) | (y << (32 - n))) & 0xFFFFFFFF` with `y` known to fit in 32 bits (written `y = x & 0xFFFFFFFF` first, in any number of blocks) is `IR_ROTR32` -> `ror32 xD, xA, #n` (the assembler knows the pseudo-instruction `ror32`, checked against llvm-mc `ror w`). `Sha256::rotr` in `std/hash.j` and the benchmark mask first; the rotation is 1 instruction instead of 4 (sha256 1.5x -> 1.0-1.3x of clang -O2).

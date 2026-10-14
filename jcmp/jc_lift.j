@@ -1751,6 +1751,7 @@ void ir_passes_basic() {
         op_range_run();
         if rn_changes > 0 && (ir_opt & 4) != 0 { op_clean_run(); }
     }
+    if (ir_opt & 134217728) != 0 { op_counted_loops(); }
     if (ir_opt & 128) != 0 { op_thread(); }
     if (ir_opt & 32) != 0 { op_bits_run(); }
 }

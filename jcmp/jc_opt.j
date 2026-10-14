@@ -4272,3 +4272,205 @@ void op_range_run() {
     }
     rn_total += rn_changes;
 }
+
+// ---------------------------------------------------------------------------------------------- counted loops (design 13, V2)
+// A natural loop whose header is `load i; load or number n; br i < n` and whose only write of the plain slot i inside the loop is
+// `i = i + step` (step a positive number) is a counted loop: it runs from the value i has on entry up to n in steps of `step`. The
+// description is kept for the vectoriser (V3); `-irdbg 134217728` prints it.
+
+#define CL_MAX 64
+int cl_head[CL_MAX];             // the header block
+int cl_slot[CL_MAX];             // the slot index (vn_slot) of the counter
+int cl_step[CL_MAX];
+int cl_bkind[CL_MAX];            // the bound: 0 a number, 1 a slot that is not written in the loop
+int cl_bval[CL_MAX];             // the number, or the slot index
+int cl_cc[CL_MAX];               // the condition that keeps the loop going (IR_LT, IR_LE, IR_ULT, IR_ULE)
+int cl_body[CL_MAX];             // the first block of the body
+int cl_exit[CL_MAX];
+int cl_calls[CL_MAX];            // calls inside the loop (a loop with calls is never vectorised)
+int cl_nblk[CL_MAX];             // the blocks of the loop
+int cl_inner[CL_MAX];            // 1: no other loop inside
+int cl_n;
+int cl_total;                    // all functions (-irstat)
+
+int cl_inv(int cc) {
+    if cc == IR_GE { return IR_LT; }
+    if cc == IR_GT { return IR_LE; }
+    if cc == IR_UGE { return IR_ULT; }
+    if cc == IR_UGT { return IR_ULE; }
+    return 0 - 1;
+}
+
+void cl_analyse(int l) {
+    int h = op_lh[l];
+    int stamp = op_stamp;
+    // the loop is marked with op_stamp (op_mark_loop was called just before)
+    int t = ir_be[h] - 1;
+    if ir_op[t] != IR_BR || cl_n >= CL_MAX { return; }
+    bool in1 = op_mark[ir_t1[t]] == stamp;
+    bool in2 = op_mark[ir_t2[t]] == stamp;
+    if in1 == in2 { return; }
+    int cc = ir_k[t];
+    int body = ir_t1[t];
+    int ex = ir_t2[t];
+    if !in1 {
+        cc = cl_inv(cc);
+        body = ir_t2[t];
+        ex = ir_t1[t];
+    }
+    if cc != IR_LT && cc != IR_LE && cc != IR_ULT && cc != IR_ULE { return; }
+    int ld = rn_find_def(h, t, ir_a[t]);
+    if ld < 0 || ir_op[ld] != IR_LOAD || ir_w[ld] != 8 || ir_a[ld] != 30 { return; }
+    int sl = vn_slot(ld);
+    if sl < 0 { return; }
+    // the bound
+    int bk = 0;
+    int bv = 0;
+    if ir_bi[t] == 1 {
+        bv = ir_b[t];
+    } else {
+        int bd = rn_find_def(h, t, ir_b[t]);
+        if bd < 0 { return; }
+        if ir_op[bd] == IR_CONST { bv = ir_k[bd]; }
+        else if ir_op[bd] == IR_LOAD && ir_w[bd] == 8 && ir_a[bd] == 30 && vn_slot(bd) >= 0 { bk = 1; bv = vn_slot(bd); }
+        else { return; }
+    }
+    // the writes inside the loop
+    int stores = 0;
+    int st_b = 0 - 1;
+    int st_i = 0 - 1;
+    int calls = 0;
+    int nblk = 0;
+    bool bound_written = false;
+    int b = 0;
+    while b < ir_nb {
+        if op_po[b] >= 0 && op_mark[b] == stamp {
+            nblk += 1;
+            int j = ir_bs[b];
+            while j < ir_be[b] {
+                int op = ir_op[j];
+                if op == IR_CALL || op == IR_CALLIND || op == IR_SYSCALL { calls += 1; }
+                if op == IR_STORE && ir_a[j] == 30 {
+                    int s2 = vn_slot(j);
+                    if s2 == sl { stores += 1; st_b = b; st_i = j; }
+                    else if bk == 1 && s2 == bv { bound_written = true; }
+                    else if s2 < 0 {
+                        // a store at an offset that is not a plain word: it could be anywhere in the frame
+                        int k = ir_k[j];
+                        if k >= 0 && (k / 8 == sl || k / 8 == bv) { return; }
+                    }
+                }
+                j += 1;
+            }
+        }
+        b += 1;
+    }
+    if stores != 1 || bound_written { return; }
+    // the store: i = (load i) + step, in the same block
+    if ir_bi[st_i] != 0 { return; }
+    int ad = rn_find_def(st_b, st_i, ir_b[st_i]);
+    if ad < 0 || ir_op[ad] != IR_ADD || ir_bi[ad] != 1 || ir_b[ad] < 1 || ir_b[ad] > 1024 { return; }
+    int ld2 = rn_find_def(st_b, ad, ir_a[ad]);
+    if ld2 < 0 || ir_op[ld2] != IR_LOAD || ir_w[ld2] != 8 || ir_a[ld2] != 30 || vn_slot(ld2) != sl { return; }
+    // nothing stores to the slot between the load and the store (there is one store only), so the value is i + step
+    int n = cl_n;
+    cl_head[n] = h;
+    cl_slot[n] = sl;
+    cl_step[n] = ir_b[ad];
+    cl_bkind[n] = bk;
+    cl_bval[n] = bv;
+    cl_cc[n] = cc;
+    cl_body[n] = body;
+    cl_exit[n] = ex;
+    cl_calls[n] = calls;
+    cl_nblk[n] = nblk;
+    cl_inner[n] = 1;
+    cl_n += 1;
+}
+
+void op_counted_loops() {
+    cl_n = 0;
+    if ir_nb < 2 || ir_nb > RN_MAXB { return; }
+    op_graph();
+    vn_hints();
+    op_nback = 0;
+    int b = 0;
+    while b < ir_nb {
+        if op_po[b] >= 0 {
+            int k = 0;
+            while k < 2 {
+                int s = op_succ(b, k);
+                if s >= 0 && op_dom(s, b) && op_nback < OP_MAXL * 4 {
+                    op_bsrc[op_nback] = b;
+                    op_bdst[op_nback] = s;
+                    op_nback += 1;
+                }
+                k += 1;
+            }
+        }
+        b += 1;
+    }
+    if op_nback == 0 { return; }
+    op_nloops = 0;
+    int i = 0;
+    while i < op_nback {
+        int h = op_bdst[i];
+        bool known = false;
+        int j = 0;
+        while j < op_nloops {
+            if op_lh[j] == h { known = true; }
+            j += 1;
+        }
+        if !known && h != 0 && op_nloops < OP_MAXL {
+            op_lh[op_nloops] = h;
+            op_nloops += 1;
+        }
+        i += 1;
+    }
+    int l = 0;
+    while l < op_nloops {
+        op_lsize[l] = op_mark_loop(l);
+        cl_analyse(l);
+        l += 1;
+    }
+    // an inner loop has no other loop header inside it
+    int a = 0;
+    while a < cl_n {
+        int la = 0;
+        while la < op_nloops && op_lh[la] != cl_head[a] { la += 1; }
+        if la < op_nloops {
+            op_mark_loop(la);
+            int c = 0;
+            while c < op_nloops {
+                if c != la && op_mark[op_lh[c]] == op_stamp { cl_inner[a] = 0; }
+                c += 1;
+            }
+        }
+        a += 1;
+    }
+    cl_total += cl_n;
+    if (ir_opt & 134217728) != 0 && cl_n > 0 {
+        ir_plen = 0;
+        int q = 0;
+        while q < cl_n {
+            ir_ps("counted loop in ");
+            ir_ps(@ir_fname);
+            ir_ps(": header B");
+            ir_pn(cl_head[q]);
+            ir_ps(" slot ");
+            ir_pn(cl_slot[q]);
+            ir_ps(" step ");
+            ir_pn(cl_step[q]);
+            if cl_bkind[q] == 0 { ir_ps(" bound number "); } else { ir_ps(" bound slot "); }
+            ir_pn(cl_bval[q]);
+            ir_ps(" calls ");
+            ir_pn(cl_calls[q]);
+            ir_ps(" blocks ");
+            ir_pn(cl_nblk[q]);
+            if cl_inner[q] == 1 { ir_ps(" innermost"); }
+            ir_pc(10);
+            q += 1;
+        }
+        syscall(64, 2, @ir_pbuf, ir_plen);
+    }
+}

@@ -1,7 +1,8 @@
-# J2K / Jcmp 0.9.123
+# J2K / Jcmp 0.9.124
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
 
+**0.9.124:** counted loops are recognised on the IR (the base of the vectoriser; the generated code is unchanged); the owner chose a syntax tree per function body (T1).
 **0.9.123:** known ranges of whole numbers; the rotation of a 32-bit value is one `ror` (crypto code: `Sha256` and the like); the sign fix of `i % 7` / `i / 10` of a counter is gone.
 **0.9.122:** functions with 32-bit `float` values (and `f32x4`) go through the IR optimiser too.
 **0.9.121:** SIMD step S4: `sum()`, `min()`, `max()` of the lanes of `f64x2`, `i64x2`, `f32x4`, `i32x4`.
