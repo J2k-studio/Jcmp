@@ -904,6 +904,73 @@ int prev_end_col;
 int prev_end_base;
 int prev_end_ls;
 
+// a[lo..hi] (a name directly followed by brackets with .. at the top level of them, on one line) is written span(a, lo, hi) in the text
+// (a view of a part of an array: Span<T> of the standard library). The name is the one just read (wn characters before cur_pos).
+int slice_start;
+bool slice_rewrite(int wn) {
+    if str_eq(@tok_text, "alloc") || str_eq(@tok_text, "alloc0") || str_eq(@tok_text, "free") || str_eq(@tok_text, "grow") || str_eq(@tok_text, "arr") { return false; }
+    int p = cur_pos + 1;
+    int depth = 0;
+    int dots = 0 - 1;
+    int close = 0 - 1;
+    while p < cur_len && close < 0 {
+        int c = src_bufs[cur_base + p];
+        if c == 10 || c == ';' || c == '{' || c == '}' || c == '"' || c == 39 { return false; }
+        if c == '(' || c == '[' { depth += 1; }
+        else if c == ')' { depth -= 1; if depth < 0 { return false; } }
+        else if c == ']' {
+            if depth == 0 { close = p; } else { depth -= 1; }
+        } else if c == '.' && depth == 0 && dots < 0 && src_bufs[cur_base + p + 1] == '.' && src_bufs[cur_base + p - 1] != '.' && src_bufs[cur_base + p + 2] != '.' {
+            dots = p;
+        }
+        p += 1;
+    }
+    if close < 0 || dots < 0 { return false; }
+    int nstart = cur_pos - wn;
+    int lo_a = cur_pos + 1;
+    int lo_n = dots - lo_a;
+    int hi_a = dots + 2;
+    int hi_n = close - hi_a;
+    if lo_n <= 0 || hi_n <= 0 { return false; }
+    int newlen = 5 + wn + 1 + lo_n + 1 + hi_n + 1;          // span( name , lo , hi )
+    int oldlen = close + 1 - nstart;
+    int delta = newlen - oldlen;
+    if cur_len + delta + 2 >= 524288 { return false; }
+    // the new text in a temporary place, then the rest of the file is moved
+    char tmp[1100];
+    if newlen >= 1090 { return false; }
+    int q = 0;
+    tmp[q] = 's'; tmp[q + 1] = 'p'; tmp[q + 2] = 'a'; tmp[q + 3] = 'n'; tmp[q + 4] = '('; q += 5;
+    int k = 0;
+    while k < wn { tmp[q] = tok_text[k]; q += 1; k += 1; }
+    tmp[q] = ','; q += 1;
+    k = 0;
+    while k < lo_n { tmp[q] = src_bufs[cur_base + lo_a + k]; q += 1; k += 1; }
+    tmp[q] = ','; q += 1;
+    k = 0;
+    while k < hi_n { tmp[q] = src_bufs[cur_base + hi_a + k]; q += 1; k += 1; }
+    tmp[q] = ')'; q += 1;
+    int tail = cur_len - (close + 1) + 1;                    // with the byte after the end of the file
+    if delta > 0 {
+        int m = tail - 1;
+        while m >= 0 {
+            src_bufs[cur_base + close + 1 + delta + m] = src_bufs[cur_base + close + 1 + m];
+            m -= 1;
+        }
+    } else if delta < 0 {
+        int m2 = 0;
+        while m2 < tail {
+            src_bufs[cur_base + close + 1 + delta + m2] = src_bufs[cur_base + close + 1 + m2];
+            m2 += 1;
+        }
+    }
+    k = 0;
+    while k < q { src_bufs[cur_base + nstart + k] = tmp[k]; k += 1; }
+    cur_len += delta;
+    slice_start = nstart;
+    return true;
+}
+
 // the next token
 void next() {
     tok_seq += 1;
@@ -1048,6 +1115,12 @@ void next() {
         }
         tok_text[wn] = 0;
         tok_kind = T_IDENT;
+        if lc(0) == '[' && slice_rewrite(wn) {
+            // a[lo..hi] became span(a, lo, hi): read it again from the start of the name
+            cur_pos = slice_start;
+            next();
+            return;
+        }
         if wn == 6 && str_eq(@tok_text, "import") { import_hash = 0; }
         int dfound = find_define(@tok_text);
         if dfound >= 0 {

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.114
+* **`a[lo..hi]` is a view of a part of an array** (owner's answer 5.1): `Span<int> s = a[1..5];` is written `span(a, 1, 5)` by the lexer (a name directly followed by brackets with `..` at their top level, on one line; `alloc`, `alloc0`, `free`, `grow`, `arr` are left alone). `lo` and `hi` can be any expression.
+* **A call of a generic without `<...>` accepts any expression for an argument that does not give a type** (`span(a, i + 1, n - 1)`: only the arguments that bind a type parameter must be simple).
+* Tests: `t352_slice_view` (the suite: 375).
+
 ## 0.9.113
 * **Fused multiply-add** (owner's answer 1, way 1 of `docs/syntax-design.md` 69): `fmul` followed (up to four lines later) by the `fadd` / `fsub` that is the only reader of the product becomes `fmadd` / `fmsub` / `fnmsub`; a load of the other operand that wrote one of the factors is made into the register of the product. No new syntax or function. **`-nofma`** keeps the two roundings (the result of C without contraction: `nbody` gives the same exit code as `clang -ffp-contract=off`). `fmadd fmsub fnmadd fnmsub` in the assembler (four more lines of the llvm-mc check, 120).
 * First version fused over a line that wrote one factor (`fmovi d1, 112` in `x * y + 1.0` gave 2.5 for 4.75; a second one loaded the addend into the register of a factor): found by `t249`, `t283`; the lines in between are now a list of known instructions.

@@ -971,3 +971,15 @@ The program is 12 bytes of code after the 176 bytes of the ELF header. An unknow
 addition only: it is as fast as C (clang does the same) and the result has one rounding instead of two, so its last bit can differ from a machine
 without FMA or from the same program with `-nofma`, which keeps the two roundings. No new syntax: the code you write does not change.
 
+## `a[lo..hi]`: a view of a part of an array (0.9.114)
+
+```jk
+int[] a = arr(8);   // 10 20 30 40 50 60
+Span<int> s = a[1..5];          // 20 30 40 50: no copy, `s.get(i)`, `s.set(i, x)`, `s.len`, `s.sub(lo, hi)`, `s.to_array()`
+int total(Span<int> v) { ... }
+total(a[2..4]);
+```
+`a[lo..hi]` is written `span(a, lo, hi)` by the compiler (a name directly followed by brackets that have `..` in them, on one line); `lo` and `hi`
+can be expressions. A view does not own the memory and is checked when it is used (`span index out of range`). It works for dynamic arrays
+(`T[]`); for a String use `s.slice(a, b)`.
+

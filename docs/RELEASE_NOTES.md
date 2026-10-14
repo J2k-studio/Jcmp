@@ -1,6 +1,8 @@
-# J2K / Jcmp 0.9.113
+# J2K / Jcmp 0.9.114
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
+
+**0.9.114:** `a[lo..hi]` is a view (`Span`) of a part of an array.
 
 **0.9.113:** `a * b + c` with doubles is one `fmadd` (like C compilers do); `-nofma` keeps two roundings.
 

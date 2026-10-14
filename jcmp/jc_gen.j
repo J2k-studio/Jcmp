@@ -1278,7 +1278,7 @@ void gen_infer_call() {
     }
     int a = 0;
     while a < ia_n {
-        if !classify_arg(b, ia_s[a], ia_e[a], a) {
+        if tp_mode[a] >= 0 && !classify_arg(b, ia_s[a], ia_e[a], a) {
             char m[300];
             str_copy(@m, "cannot work out the types of the arguments of ", 300);
             append_text(@m, name);
