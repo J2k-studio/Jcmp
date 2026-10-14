@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.113
+* **Fused multiply-add** (owner's answer 1, way 1 of `docs/syntax-design.md` 69): `fmul` followed (up to four lines later) by the `fadd` / `fsub` that is the only reader of the product becomes `fmadd` / `fmsub` / `fnmsub`; a load of the other operand that wrote one of the factors is made into the register of the product. No new syntax or function. **`-nofma`** keeps the two roundings (the result of C without contraction: `nbody` gives the same exit code as `clang -ffp-contract=off`). `fmadd fmsub fnmadd fnmsub` in the assembler (four more lines of the llvm-mc check, 120).
+* First version fused over a line that wrote one factor (`fmovi d1, 112` in `x * y + 1.0` gave 2.5 for 4.75; a second one loaded the addend into the register of a factor): found by `t249`, `t283`; the lines in between are now a list of known instructions.
+* Tests: `t350_fma` (the exact error of a product is not 0), `t351_nofma` (the same source with `-nofma` prints 0); the suite (374), 900 random programs.
+
 ## 0.9.112
 * **`_.` blocks (owner's answer 5.2):** `_.name { ... }` at the top level is a block with a name: a function without parameters made of low-level statements (like a naked function, with a `ret` at the end), called with `_.name;` from normal code, register blocks and naked functions. `_. { ... }` inside a function is the same as `register { }` (with `in` / `out` / `clobber`). In a `#!library` file `_.start { }` can be the entry.
 * Tests: `t348_named_block`, `t349_named_block_raw` (the suite: 372).

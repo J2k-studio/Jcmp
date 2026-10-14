@@ -1711,6 +1711,112 @@ bool pt_rules(int i) {
             return true;
         }
     }
+    // fmul dT, dA, dB ... fadd|fsub dD, ...  where one operand of the add is dT (not needed afterwards, or written by the add) and the
+    // lines in between do not touch dT and do not write dA / dB (at most 4 lines):
+    //   fmadd dD, dA, dB, dC   (C + T)      fmsub dD, dA, dB, dC  (C - T)      fnmsub dD, dA, dB, dC  (T - C)
+    if opt_fma == 1 && pt_mn(0, "fmul") && pt_no[0] == 3 && pt_regno(0, 0, 'd') >= 0 && pt_regno(0, 1, 'd') >= 0 && pt_regno(0, 2, 'd') >= 0 {
+        int ft = pt_regno(0, 0, 'd');
+        int fa = pt_regno(0, 1, 'd');
+        int fb = pt_regno(0, 2, 'd');
+        int fj = j;
+        int fsteps = 0;
+        int ffound = 0 - 1;
+        int fkind = 0;
+        int fc = 0 - 1;
+        int fd = 0 - 1;
+        int fixl = 0 - 1;                          // a load that writes dA / dB and gives the addend: it loads into dT (free) instead
+        int fixr = 0 - 1;
+        char fixtext[64];
+        bool ffail = false;
+        while fj >= 0 && fsteps < 5 && ffound < 0 && !ffail {
+            if !pt_parse(1, fj) { ffail = true; break; }
+            if pt_mn(1, "b") || pt_mn(1, "bl") || pt_mn(1, "blr") || pt_mn(1, "ret") || pt_mn(1, "svc") || pt_mn(1, "cbz") || pt_mn(1, "cbnz") || pt_mn(1, "tbz") || pt_mn(1, "tbnz") || (pt_m[16] == 'b' && pt_m[17] == '.') { ffail = true; break; }
+            bool isfa = (pt_mn(1, "fadd") || pt_mn(1, "fsub")) && pt_no[1] == 3 && pt_regno(1, 0, 'd') >= 0 && pt_regno(1, 1, 'd') >= 0 && pt_regno(1, 2, 'd') >= 0;
+            int fx = 0 - 1;
+            int fy = 0 - 1;
+            if isfa { fx = pt_regno(1, 1, 'd'); fy = pt_regno(1, 2, 'd'); }
+            if isfa && ((fx == ft && fy != ft) || (fy == ft && fx != ft)) {
+                bool isadd = pt_mn(1, "fadd");
+                fd = pt_regno(1, 0, 'd');
+                if fx == ft { fc = fy; if isadd { fkind = 0; } else { fkind = 2; } }
+                else { fc = fx; if isadd { fkind = 0; } else { fkind = 1; } }
+                if fixl >= 0 {
+                    // the addend is the loaded value; the register it had must not be needed afterwards (unless the result goes there)
+                    if fc != fixr { ffail = true; }
+                    else if fd != fixr && !pt_dead(pt_next(fj), 32 + fixr, 40) { ffail = true; }
+                    else { ffound = fj; }
+                } else if fd == ft || pt_dead(pt_next(fj), 32 + ft, 40) { ffound = fj; } else { ffail = true; }
+            } else {
+                // another line: it may not read or write dT, nor write dA or dB
+                int fk = 0;
+                while fk < pt_no[1] {
+                    if pt_has_dreg(1, fk, ft) { ffail = true; }
+                    fk += 1;
+                }
+                if fixl >= 0 {
+                    int fk2 = 0;
+                    while fk2 < pt_no[1] {
+                        if pt_has_dreg(1, fk2, fixr) { ffail = true; }
+                        fk2 += 1;
+                    }
+                }
+                if pt_writes_first(1) && pt_no[1] > 0 && (pt_has_dreg(1, 0, fa) || pt_has_dreg(1, 0, fb)) {
+                    if pt_mn(1, "ldr") && pt_no[1] == 2 && fixl < 0 && !ffail && ft != fa && ft != fb {
+                        fixl = fj;
+                        fixr = pt_regno(1, 0, 'd');
+                        // the text of the load with dT as the destination
+                        int fo = (1 * 4 + 1) * 40;
+                        int fz = 0;
+                        fixtext[0] = 'l'; fixtext[1] = 'd'; fixtext[2] = 'r'; fixtext[3] = ' '; fixtext[4] = 'd'; fz = 5;
+                        if ft >= 10 { fixtext[fz] = '0' + ft / 10; fz += 1; }
+                        fixtext[fz] = '0' + ft % 10; fz += 1;
+                        fixtext[fz] = ','; fixtext[fz + 1] = ' '; fz += 2;
+                        int fw = 0;
+                        while pt_o[fo + fw] != 0 && fz < 60 { fixtext[fz] = pt_o[fo + fw]; fz += 1; fw += 1; }
+                        fixtext[fz] = 0;
+                        if pt_regno(1, 0, 'd') < 0 { ffail = true; }
+                    } else {
+                        ffail = true;
+                    }
+                }
+                bool fknown = pt_mn(1, "ldr") || pt_mn(1, "str") || pt_mn(1, "fadd") || pt_mn(1, "fsub") || pt_mn(1, "fmul") || pt_mn(1, "fdiv") || pt_mn(1, "fsqrt")
+                    || pt_mn(1, "fneg") || pt_mn(1, "fabs") || pt_mn(1, "fmov") || pt_mn(1, "fcmp") || pt_mn(1, "fcvtzs") || pt_mn(1, "scvtf")
+                    || pt_mn(1, "mov") || pt_mn(1, "add") || pt_mn(1, "sub") || pt_mn(1, "lsl") || pt_mn(1, "lsr") || pt_mn(1, "asr") || pt_mn(1, "cmp")
+                    || pt_mn(1, "and") || pt_mn(1, "orr") || pt_mn(1, "eor") || pt_mn(1, "mul");
+                if !fknown { ffail = true; }
+                if !ffail { fj = pt_next(fj); }
+            }
+            fsteps += 1;
+        }
+        if ffound >= 0 {
+            if fixl >= 0 { fc = ft; }              // dT holds the addend now
+            char fl[48];
+            int fq = 0;
+            fl[0] = 'f'; fq = 1;
+            if fkind == 0 { fl[1] = 'm'; fl[2] = 'a'; fl[3] = 'd'; fl[4] = 'd'; fq = 5; }
+            else if fkind == 1 { fl[1] = 'm'; fl[2] = 's'; fl[3] = 'u'; fl[4] = 'b'; fq = 5; }
+            else { fl[1] = 'n'; fl[2] = 'm'; fl[3] = 's'; fl[4] = 'u'; fl[5] = 'b'; fq = 6; }
+            fl[fq] = ' '; fq += 1;
+            int fparts[4];
+            fparts[0] = fd; fparts[1] = fa; fparts[2] = fb; fparts[3] = fc;
+            int fpi = 0;
+            while fpi < 4 {
+                fl[fq] = 'd'; fq += 1;
+                int frv = fparts[fpi];
+                if frv >= 10 { fl[fq] = '0' + frv / 10; fq += 1; }
+                fl[fq] = '0' + frv % 10; fq += 1;
+                if fpi < 3 { fl[fq] = ','; fl[fq + 1] = ' '; fq += 2; }
+                fpi += 1;
+            }
+            fl[fq] = 0;
+            pt_set(i, "");
+            if fixl >= 0 { pt_set(fixl, @fixtext); }
+            pt_set(ffound, @fl);
+            return true;
+        }
+        pt_parse(0, i);
+        pt_parse(1, j);
+    }
     // lsl|lsr|asr xS, xA, #n / orr|eor|and xD, xP, xQ  (one of P, Q is S)  ->  op xD, xO, xA, lsl|lsr|asr #n
     // (xS is written by the op itself, or nobody reads it afterwards)
     if (pt_mn(0, "lsl") || pt_mn(0, "lsr") || pt_mn(0, "asr")) && pt_no[0] == 3 && pt_isreg(0, 0) && pt_isreg(0, 1) && pt_isnum(0, 2)

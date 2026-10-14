@@ -797,6 +797,20 @@ void as_h_fp3(int dbase, int sbase) {
     as_put32(base | (rm << 16) | (rn << 5) | rd);
 }
 
+// fmadd fmsub fnmadd fnmsub dD, dN, dM, dA (doubles)
+void as_h_fp4(int base) {
+    as_skip_spaces();
+    int rd = as_parse_freg();
+    if as_fp_kind != 1 { as_fail(); }
+    as_expect_comma();
+    int rn = as_parse_freg();
+    as_expect_comma();
+    int rm = as_parse_freg();
+    as_expect_comma();
+    int ra = as_parse_freg();
+    as_put32(base | (rm << 16) | (ra << 10) | (rn << 5) | rd);
+}
+
 // fneg fabs fsqrt frintm frintp frintz: two registers of the same kind
 void as_h_fp2(int dbase, int sbase) {
     as_skip_spaces();
@@ -1503,6 +1517,10 @@ void as_instruction() {
     if as_mn_is("ret") { as_put32(0xD65F03C0); return; }
     if as_mn_is("svc") { as_h_svc(); return; }
     if as_mn_is("fadd") { as_h_fp3(0x1E602800, 0x1E202800); return; }
+    if as_mn_is("fmadd") { as_h_fp4(0x1F400000); return; }
+    if as_mn_is("fmsub") { as_h_fp4(0x1F408000); return; }
+    if as_mn_is("fnmadd") { as_h_fp4(0x1F600000); return; }
+    if as_mn_is("fnmsub") { as_h_fp4(0x1F608000); return; }
     if as_mn_is("fsub") { as_h_fp3(0x1E603800, 0x1E203800); return; }
     if as_mn_is("fmul") { as_h_fp3(0x1E600800, 0x1E200800); return; }
     if as_mn_is("fdiv") { as_h_fp3(0x1E601800, 0x1E201800); return; }

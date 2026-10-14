@@ -2,7 +2,7 @@
 // Build:  bin/jcmp jcmp/jcmp.jk -o jcmp1        (see bootstrap.sh)
 // Use:    jcmp1 input.jk -o program
 // the version of the compiler (also in the file VERSION; release.sh checks that they agree)
-#define JCMP_VERSION "0.9.112"
+#define JCMP_VERSION "0.9.113"
 
 #import "jc_base"
 #import "jc_asm"
@@ -82,6 +82,7 @@ void help() {
     write_out("  -st              strict: warnings are errors\n");
     write_out("  -I dir           also look for imported files in dir\n");
     write_out("  -emit-asm file   also write the assembler text\n");
+    write_out("  -nofma           do not fuse a * b + c into one instruction (the last bit of the result may differ with it)\n");
     write_out("  -color           coloured messages (the default when stderr is a terminal)\n");
     write_out("  -nocolor         plain messages\n");
     write_out("  -version         print the version\n");
@@ -224,6 +225,8 @@ void main() {
             ir_mode = 3;
         } else if str_eq(a, "-noregs") {
             opt_regs = 0;
+        } else if is_opt(a, "nofma") {
+            opt_fma = 0;
         } else if str_eq(a, "-xtime") {
             x_time = 1;                  // hidden: the time of each stage
         } else if str_eq(a, "-xbadasm") {

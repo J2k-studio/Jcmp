@@ -197,6 +197,7 @@ void write_err_int(int v) {
 // command-line options (set by main in jc_stmt.jk)
 int opt_debug;               // -d : a debug build
 int opt_strict;              // -st : warnings are errors
+int opt_fma = 1;             // 1: fmul + fadd / fsub of one value become fmadd / fmsub / fnmsub (-nofma switches it off)
 int opt_regs = 1;            // 1: the register pass keeps the busiest whole-number locals of loops in x19..x25 (-noregs switches it off)
 int x_time;                  // hidden flag -xtime: the time of each stage of the compiler is written to the error output
 int tm_ts[2];

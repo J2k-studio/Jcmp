@@ -1882,7 +1882,7 @@ The owner answered "67 68 ได้" (agreed): the assistant's recommendations s
 
 | item | owner's answer | status |
 |---|---|---|
-| 1 fmadd | "option ข has too many functions, people will be confused; take it or find another way" | open: assistant proposes a way with no new function (a switch only), see the table below |
+| 1 fmadd | "option ข has too many functions, people will be confused; take it or find another way" | DONE in 0.9.113: way 1 of the table below (fused by default when the product is used once by the next add or subtract; `-nofma` for the exact two roundings); no new function |
 | 2 SIMD | "explain more, break it into steps" | explanation and steps written; owner to choose the first step |
 | 3 32-bit | "i32 is int32 shortened, u is unsigned" and "ก is fine": option ก, the types `i32` / `u32` compute in 32 bits (wrap around, `ror w`) | decided by the owner; to do |
 | 4.1 `#pragma` data | "all of them are fine" (a variable, a block and a file) | decided by the owner; name and error to be proposed |

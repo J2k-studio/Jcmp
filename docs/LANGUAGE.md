@@ -964,3 +964,10 @@ naked void start() {
 ```
 
 The program is 12 bytes of code after the 176 bytes of the ELF header. An unknown marker (`#!banana`) is an error.
+
+## Fused multiply-add (0.9.113)
+
+`a * b + c`, `c - a * b` and `a * b - c` with doubles are made with one instruction (`fmadd`, `fmsub`, `fnmsub`) when the product is used by that
+addition only: it is as fast as C (clang does the same) and the result has one rounding instead of two, so its last bit can differ from a machine
+without FMA or from the same program with `-nofma`, which keeps the two roundings. No new syntax: the code you write does not change.
+
