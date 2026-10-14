@@ -213,8 +213,19 @@ int as_parse_vreg() {
     as_ci += 1;
     if cnt == 2 && c == 'd' { as_vec_arr = 1; }
     else if cnt == 4 && c == 's' { as_vec_arr = 2; }
+    else if cnt == 16 && c == 'b' { as_vec_arr = 3; }
     else { as_fail(); }
     return n;
+}
+
+// mov vD.16b, vN.16b
+void as_h_vmov() {
+    int rd = as_parse_vreg();
+    if as_vec_arr != 3 { as_fail(); }
+    as_expect_comma();
+    int rn = as_parse_vreg();
+    if as_vec_arr != 3 { as_fail(); }
+    as_put32(0x4EA01C00 | (rn << 16) | (rn << 5) | rd);
 }
 
 // dup vD.2d, xN   /   dup vD.4s, wN   (the same number in every lane)
@@ -224,6 +235,7 @@ void as_h_dup() {
     as_expect_comma();
     int rn = 0;
     int base = 0x4E080C00;
+    if as_vec_arr == 3 { as_fail(); }
     if as_vec_arr == 1 {
         rn = as_parse_reg();
     } else {
@@ -245,7 +257,7 @@ void as_h_vec3(int op2d, int op4s) {
     if as_vec_arr != arr { as_fail(); }
     int base = op4s;
     if arr == 1 { base = op2d; }
-    if base == 0 { as_fail(); }
+    if base == 0 || arr == 3 { as_fail(); }
     as_put32(base | (rm << 16) | (rn << 5) | rd);
 }
 
@@ -1536,7 +1548,7 @@ void as_instruction() {
         return;
     }
     as_read_mnemonic();
-    if as_mn_is("mov") { as_h_mov(); return; }
+    if as_mn_is("mov") { if as_at_vreg() { as_h_vmov(); return; } as_h_mov(); return; }
     if as_mn_is("add") { if as_at_vreg() { as_h_vec3(0x4EE08400, 0x4EA08400); return; } as_h_addsub(true); return; }
     if as_mn_is("sub") { if as_at_vreg() { as_h_vec3(0x6EE08400, 0x6EA08400); return; } as_h_addsub(false); return; }
     if as_mn_is("cmp") { as_h_cmp(); return; }

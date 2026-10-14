@@ -267,6 +267,45 @@ bool lf_cmp_clobbered(int idx, int ra, int rb) {
 
 // ---------------------------------------------------------------------------------------------- the lifter
 
+// ---------------------------------------------------------------------------------------------- 128-bit vectors (NEON, class 2)
+// A vector register qN / vN of the text is a temporary vreg (class 2) that lives inside one block: lf_qv[N] is the vreg that holds it
+// now (0: not written in this block, so a read of it is not understood).
+int lf_qv[32];
+int lf_varr;                     // after lf_vnum: 1 = .2d, 2 = .4s
+
+void lf_qreset() {
+    int i = 0;
+    while i < 32 {
+        lf_qv[i] = 0;
+        i += 1;
+    }
+}
+
+// the number of the vector register at operand (s, k): "q5" (pre 'q') or "v5.2d" / "v5.4s" (pre 'v'); -1 if it is not one
+int lf_vnum(int s, int k, char pre) {
+    int o = (s * 4 + k) * 40;
+    if k >= pt_no[s] || pt_o[o] != pre { return 0 - 1; }
+    int i = 1;
+    if pt_o[o + i] < '0' || pt_o[o + i] > '9' { return 0 - 1; }
+    int v = 0;
+    while pt_o[o + i] >= '0' && pt_o[o + i] <= '9' {
+        v = v * 10 + (pt_o[o + i] - '0');
+        i += 1;
+    }
+    if v > 31 { return 0 - 1; }
+    lf_varr = 0;
+    if pre == 'v' {
+        if pt_o[o + i] != '.' { return 0 - 1; }
+        i += 1;
+        if pt_o[o + i] == '2' && pt_o[o + i + 1] == 'd' && pt_o[o + i + 2] == 0 { lf_varr = 1; }
+        else if pt_o[o + i] == '4' && pt_o[o + i + 1] == 's' && pt_o[o + i + 2] == 0 { lf_varr = 2; }
+        else { return 0 - 1; }
+    } else if pt_o[o + i] != 0 {
+        return 0 - 1;
+    }
+    return v;
+}
+
 // instructions with the vregs of the machine registers
 int lf_emit(int op, int d, int a, int b, int bi, int k) {
     return ir_add(op, d, a, b, bi, k);
@@ -279,6 +318,66 @@ int lf_line(int idx) {
     if pt_no[0] >= 1 && pt_isreg(0, 0) && pt_writes_first(0) {
         int wr = pt_regno(0, 0, 'x');
         if wr == 27 || wr == 28 || wr == 29 { return lf_fail("a write to x27, x28 or x29"); }
+    }
+    // 128-bit vectors: ldr / str qN, [..]; fadd fsub fmul fdiv add sub mul vD.T, vN.T, vM.T; dup vD.T, xN | wN
+    if (pt_mn(0, "ldr") || pt_mn(0, "str")) && pt_no[0] == 2 && lf_vnum(0, 0, 'q') >= 0 {
+        int qn = lf_vnum(0, 0, 'q');
+        if !lf_mem(0, 1) { return lf_fail_line("memory access", idx); }
+        int qbase = 0;
+        int qoff = lf_moff;
+        if lf_mbase == 29 && lf_moff >= lf_frame { return lf_fail("reads an argument that was passed on the stack (more than 8 arguments)"); }
+        if lf_mbase == 31 {
+            qbase = fp;
+            qoff = lf_moff - lf_depth;
+        } else {
+            qbase = lf_x(lf_mbase);
+        }
+        if pt_mn(0, "ldr") {
+            int qv = ir_vreg(2);
+            int qe = lf_emit(IR_LOAD, qv, qbase, 0, 0, qoff);
+            ir_w[qe] = 16;
+            lf_qv[qn] = qv;
+        } else {
+            if lf_qv[qn] == 0 { return lf_fail("a vector register that was not written in this block"); }
+            int qs = lf_emit(IR_STORE, 0, qbase, lf_qv[qn], 0, qoff);
+            ir_w[qs] = 16;
+        }
+        return 1;
+    }
+    if pt_no[0] == 3 && lf_vnum(0, 0, 'v') >= 0 {
+        int vk = 0 - 1;
+        if pt_mn(0, "fadd") { vk = 0; }
+        else if pt_mn(0, "fsub") { vk = 1; }
+        else if pt_mn(0, "fmul") { vk = 2; }
+        else if pt_mn(0, "fdiv") { vk = 3; }
+        else if pt_mn(0, "add") { vk = 4; }
+        else if pt_mn(0, "sub") { vk = 5; }
+        else if pt_mn(0, "mul") { vk = 6; }
+        if vk < 0 { return lf_fail("a vector instruction that is not understood"); }
+        int vd = lf_vnum(0, 0, 'v');
+        int arr = lf_varr;
+        int vn = lf_vnum(0, 1, 'v');
+        if vn < 0 || lf_varr != arr { return lf_fail("a vector instruction that is not understood"); }
+        int vm = lf_vnum(0, 2, 'v');
+        if vm < 0 || lf_varr != arr { return lf_fail("a vector instruction that is not understood"); }
+        if lf_qv[vn] == 0 || lf_qv[vm] == 0 { return lf_fail("a vector register that was not written in this block"); }
+        int vres = ir_vreg(2);
+        int ve = lf_emit(IR_VOP, vres, lf_qv[vn], lf_qv[vm], 0, vk);
+        ir_w[ve] = arr;
+        lf_qv[vd] = vres;
+        return 1;
+    }
+    if pt_mn(0, "dup") && pt_no[0] == 2 && lf_vnum(0, 0, 'v') >= 0 {
+        int dd = lf_vnum(0, 0, 'v');
+        int darr = lf_varr;
+        int sr = 0 - 1;
+        if darr == 1 { sr = pt_regno(0, 1, 'x'); } else { sr = pt_regno(0, 1, 'w'); }
+        if sr < 0 { return lf_fail("a vector instruction that is not understood"); }
+        int dres = ir_vreg(2);
+        int de = lf_emit(IR_VDUP, dres, lf_x(sr), 0, 0, 0);
+        ir_w[de] = darr;
+        lf_qv[dd] = dres;
+        return 1;
     }
     // sub sp, sp, #N / add sp, sp, #N
     if (pt_mn(0, "sub") || pt_mn(0, "add")) && pt_no[0] == 3 && pt_op(0, 0, "sp") {
@@ -623,6 +722,7 @@ int lf_function(char^ name) {
     lf_fp = lf_x(29);
     lf_depth = 0;
     lf_cmp_kind = 0;
+    lf_qreset();
     int bi = 0;
     while bi < nblocks {
         lf_depth_at[bi] = 0 - 1;
@@ -660,6 +760,7 @@ int lf_function(char^ name) {
             }
             fell = true;
             lf_cmp_kind = 0;
+            lf_qreset();
         }
         if lf_label_line(i) >= 0 {
             i += 1;
@@ -801,8 +902,19 @@ void lw_reg(int v) {
         rg_int(v - 32);
     } else {
         int r = lw_tmp_reg[v];
-        if ir_vcls[v] == 1 { rg_text("d"); } else { rg_text("x"); }
+        if ir_vcls[v] == 1 { rg_text("d"); } else if ir_vcls[v] == 2 { rg_text("v"); } else { rg_text("x"); }
         rg_int(r);
+    }
+}
+
+// the same as lw_reg for a whole-number register, written as a 32-bit one (wN)
+void lw_wreg(int v) {
+    if v >= 1 && v <= 31 {
+        rg_text("w");
+        rg_int(v - 1);
+    } else {
+        rg_text("w");
+        rg_int(lw_tmp_reg[v]);
     }
 }
 
@@ -810,7 +922,9 @@ void lw_reg(int v) {
 void lw_def(int v) {
     if v >= 64 {
         lw_tmp_i += 1;
-        if ir_vcls[v] == 1 { lw_tmp_reg[v] = 30 + lw_tmp_i % 2; } else { lw_tmp_reg[v] = 15 + lw_tmp_i % 2; }
+        if ir_vcls[v] == 1 { lw_tmp_reg[v] = 30 + lw_tmp_i % 2; }
+        else if ir_vcls[v] == 2 { lw_tmp_reg[v] = 20 + lw_tmp_i % 8; }
+        else { lw_tmp_reg[v] = 15 + lw_tmp_i % 2; }
     }
 }
 
@@ -1035,9 +1149,47 @@ bool lw_instr(int i, int b) {
         }
         return true;
     }
+    if op == IR_VOP || op == IR_VDUP {
+        lw_def(d);
+        if op == IR_VDUP {
+            rg_text("dup v");
+            rg_int(lw_tmp_reg[d]);
+            if ir_w[i] == 1 { rg_text(".2d, "); lw_reg(ir_a[i]); } else { rg_text(".4s, "); lw_wreg(ir_a[i]); }
+            rg_put(10);
+            return true;
+        }
+        int vk = ir_k[i];
+        if vk == 0 { rg_text("fadd v"); }
+        else if vk == 1 { rg_text("fsub v"); }
+        else if vk == 2 { rg_text("fmul v"); }
+        else if vk == 3 { rg_text("fdiv v"); }
+        else if vk == 4 { rg_text("add v"); }
+        else if vk == 5 { rg_text("sub v"); }
+        else { rg_text("mul v"); }
+        rg_int(lw_tmp_reg[d]);
+        char^ ar = ".2d";
+        if ir_w[i] == 2 { ar = ".4s"; }
+        rg_text(ar);
+        rg_text(", v");
+        rg_int(lw_tmp_reg[ir_a[i]]);
+        rg_text(ar);
+        rg_text(", v");
+        rg_int(lw_tmp_reg[ir_b[i]]);
+        rg_text(ar);
+        rg_put(10);
+        return true;
+    }
     if op == IR_COPY {
         if d == ir_a[i] && d < 64 { return true; }            // a copy to the same register (the allocator made it)
         lw_def(d);
+        if ir_vcls[d] == 2 {
+            rg_text("mov v");
+            rg_int(lw_tmp_reg[d]);
+            rg_text(".16b, v");
+            rg_int(lw_tmp_reg[ir_a[i]]);
+            rg_text(".16b\n");
+            return true;
+        }
         if ir_vcls[d] == 1 { rg_text("fmov "); } else { rg_text("mov "); }
         lw_reg(d);
         rg_text(", ");
@@ -1112,6 +1264,36 @@ bool lw_instr(int i, int b) {
         rg_text(", ");
         lw_reg(ir_a[i]);
         rg_put(10);
+        return true;
+    }
+    if (op == IR_LOAD || op == IR_STORE) && ir_w[i] == 16 {
+        int qo = lw_offset(ir_a[i], ir_k[i]);
+        bool qfar = qo < 0 || qo % 16 != 0 || qo > 65520;
+        if qfar {
+            // the offset of ldr q is a multiple of 16: the address is made in x17 first
+            rg_text("add x17, ");
+            lw_reg(ir_a[i]);
+            rg_text(", #");
+            rg_int(qo);
+            rg_put(10);
+        }
+        if op == IR_LOAD {
+            lw_def(d);
+            rg_text("ldr q");
+            rg_int(lw_tmp_reg[d]);
+        } else {
+            rg_text("str q");
+            rg_int(lw_tmp_reg[ir_b[i]]);
+        }
+        if qfar {
+            rg_text(", [x17]\n");
+        } else {
+            rg_text(", [");
+            lw_reg(ir_a[i]);
+            rg_text(", #");
+            rg_int(qo);
+            rg_text("]\n");
+        }
         return true;
     }
     if op == IR_LOAD || op == IR_STORE {
@@ -1393,6 +1575,7 @@ void ir_passes_basic() {
     if (ir_opt & 32768) != 0 { op_sroa(); }
     if (ir_opt & 8) != 0 { op_cse_run(); }
     if (ir_opt & 8) != 0 { op_cell_fwd(); }
+    if (ir_opt & 8) != 0 { op_vfwd(); }
     if (ir_opt & 8) != 0 { op_const_cells(); }
     if (ir_opt & 8) != 0 { op_dead_cells(); }
     if (ir_opt & 4) != 0 { op_clean_run(); }

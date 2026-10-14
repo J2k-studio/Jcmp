@@ -2070,6 +2070,73 @@ void op_thread() {
     }
 }
 
+// ---------------------------------------------------------------------------------------------- vectors written and read again
+// A 16-byte store and a 16-byte load of the same place (the same base vreg and number) in one block, with no other store, call or
+// change of the base in between: the load is a copy of the stored vector. (The store stays: another pass may find it dead.)
+int vf_a[8];
+int vf_k[8];
+int vf_v[8];
+int vf_n;
+int vf_changes;
+
+void vf_kill_reg(int r) {
+    int j = 0;
+    int m = 0;
+    while j < vf_n {
+        if vf_a[j] != r && vf_v[j] != r {
+            vf_a[m] = vf_a[j];
+            vf_k[m] = vf_k[j];
+            vf_v[m] = vf_v[j];
+            m += 1;
+        }
+        j += 1;
+    }
+    vf_n = m;
+}
+
+void op_vfwd() {
+    int b = 0;
+    while b < ir_nb {
+        vf_n = 0;
+        int i = ir_bs[b];
+        while i < ir_be[b] {
+            int op = ir_op[i];
+            if op == IR_LOAD && ir_w[i] == 16 && ir_vcls[ir_d[i]] == 2 {
+                int j = 0;
+                int hit = 0 - 1;
+                while j < vf_n {
+                    if vf_a[j] == ir_a[i] && vf_k[j] == ir_k[i] { hit = j; }
+                    j += 1;
+                }
+                if hit >= 0 {
+                    int v = vf_v[hit];
+                    int d = ir_d[i];
+                    ir_op[i] = IR_COPY;
+                    ir_a[i] = v;
+                    ir_b[i] = 0;
+                    ir_bi[i] = 0;
+                    ir_k[i] = 0;
+                    ir_w[i] = 0;
+                    vf_changes += 1;
+                    vf_kill_reg(d);
+                    i += 1;
+                    continue;
+                }
+            }
+            if op == IR_STORE || op == IR_CALL || op == IR_CALLIND || op == IR_SYSCALL { vf_n = 0; }
+            if ir_d[i] != 0 { vf_kill_reg(ir_d[i]); }
+            if op == IR_STORE && ir_w[i] == 16 && ir_vcls[ir_b[i]] == 2 && ir_a[i] != ir_b[i] && vf_n < 8 {
+                vf_a[vf_n] = ir_a[i];
+                vf_k[vf_n] = ir_k[i];
+                vf_v[vf_n] = ir_b[i];
+                vf_n += 1;
+            }
+            i += 1;
+        }
+        b += 1;
+    }
+}
+
 // ---------------------------------------------------------------------------------------------- small copies of structs in place
 // bl j2k_copy (x0 = from, x3 = to, x2 = the size in bytes, a multiple of 8) with a size that is known and at most 128: loads and stores
 // instead of a call (a struct of three doubles is three pairs, not a call with a loop).
@@ -2078,7 +2145,7 @@ int ci_changes;
 // the size in bytes of the copy made by the call i, or -1 if it is not a small copy of known size
 int ci_size(int b, int i) {
     if ir_op[i] != IR_CALL { return 0 - 1; }
-    if !str_eq(@ir_name + ir_k[i] * 64, "j2k_copy") { return 0 - 1; }
+    if !str_eq(@ir_name + ir_k[i] * 64, "j2k_copy") && !str_eq(@ir_name + ir_k[i] * 64, "j2k_copy16") { return 0 - 1; }
     int j = i - 1;
     while j >= ir_bs[b] {
         if ir_d[j] == 3 {
@@ -2112,6 +2179,19 @@ void op_copy_inline() {
                     int sz2 = ci_size(b, i);
                     if sz2 > 0 {
                         int off = 0;
+                        bool as_vec = sz2 == 16 && str_eq(@ir_name + ir_k[i] * 64, "j2k_copy16");
+                        if as_vec {
+                            // a simd value: one 16-byte load and store
+                            int tq = ir_vreg(2);
+                            int lq = ir_n;
+                            ir_op[lq] = IR_LOAD; ir_d[lq] = tq; ir_a[lq] = 1; ir_b[lq] = 0; ir_bi[lq] = 0; ir_k[lq] = 0; ir_w[lq] = 16;
+                            ir_t1[lq] = 0 - 1; ir_t2[lq] = 0 - 1; ir_as[lq] = 0; ir_ac[lq] = 0;
+                            int sq = lq + 1;
+                            ir_op[sq] = IR_STORE; ir_d[sq] = 0; ir_a[sq] = 4; ir_b[sq] = tq; ir_bi[sq] = 0; ir_k[sq] = 0; ir_w[sq] = 16;
+                            ir_t1[sq] = 0 - 1; ir_t2[sq] = 0 - 1; ir_as[sq] = 0; ir_ac[sq] = 0;
+                            ir_n += 2;
+                            off = sz2;
+                        }
                         while off < sz2 {
                             int t = ir_vreg(0);
                             int l = ir_n;

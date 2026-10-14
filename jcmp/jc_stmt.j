@@ -430,7 +430,7 @@ void parse_assign_core(char^ target) {
             emit_operator_call(@op, a_tid);
             emit_line("ldr x3, [sp, #0]");
             ins_n("mov x2, ", ssize[a_code - 16]);
-            emit_line("bl j2k_copy");
+            emit_copy_call(a_code - 16);
         } else if tok_is("{") {
             parse_brace(a_code - 16, 0);
         } else {
@@ -453,7 +453,7 @@ void parse_assign_core(char^ target) {
             }
             emit_line("ldr x3, [sp, #0]");
             ins_n("mov x2, ", ssize[a_code - 16]);
-            emit_line("bl j2k_copy");
+            emit_copy_call(a_code - 16);
             if how == 2 {
                 emit_zero_local(src_off, ssize[a_code - 16]);
                 int oi = own_find(src_off);
@@ -1550,7 +1550,7 @@ void parse_switch_data(int sw_off, int sd, int sv_line, int sv_col, int sv_base,
                                     add_local(@bind_name + k * 64, 0, fldcode[fi], ssize[fldcode[fi] - 16], 0);
                                     ins_n("add x3, x29, #", loff[lcount - 1]);
                                     ins_n("mov x2, ", ssize[fldcode[fi] - 16]);
-                                    emit_line("bl j2k_copy");
+                                    emit_copy_call(fldcode[fi] - 16);
                                 }
                             } else {
                                 load_through(fldcode[fi]);
@@ -2092,7 +2092,7 @@ void parse_local_decl_core() {
                 add_local(@d_name, 0, d_width, ssize[d_sidx], 0);
                 ins_n("add x3, x29, #", loff[lcount - 1]);
                 ins_n("mov x2, ", ssize[d_sidx]);
-                emit_line("bl j2k_copy");
+                emit_copy_call(d_sidx);
                 if how == 2 {
                     emit_zero_local(src_off, ssize[d_sidx]);       // the value moved: the old variable is empty
                     int oi = own_find(src_off);
@@ -2333,7 +2333,7 @@ void parse_statement_inner() {
             if cur_ret_tid >= 100 {
                 ins_mem("ldr", "x3", "x29", cur_ret_off);
                 ins_n("mov x2, ", ssize[cur_ret_tid - 100]);
-                emit_line("bl j2k_copy");
+                emit_copy_call(cur_ret_tid - 100);
             }
             if rhow == 2 { emit_zero_local(rsrc, ssize[cur_ret_tid - 100]); }
             if rhow == 3 {
@@ -2715,7 +2715,7 @@ void parse_function() {
         ins_mem("ldr", "x0", "x29", cp_src[cp_i]);
         ins_n("add x3, x29, #", cp_dst[cp_i]);
         ins_n("mov x2, ", cp_size[cp_i]);
-        emit_line("bl j2k_copy");
+        emit_copy_call(cp_sidx[cp_i]);
         struct_owner_at(cp_dst[cp_i], cp_sidx[cp_i]);        // a value that frees itself is the callee's now
         cp_i += 1;
     }
@@ -3856,6 +3856,7 @@ void emit_thread_helper() {
 
 // the struct copy routine: x0 = from, x3 = to, x2 = bytes (a multiple of 8)
 void emit_copy_helper() {
+    emit_line("j2k_copy16:");
     emit_line("j2k_copy:");
     emit_line("cmp x2, 0");
     emit_line("b.eq j2k_cp2");

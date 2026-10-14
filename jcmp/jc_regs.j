@@ -2001,7 +2001,7 @@ bool pt_rules(int i) {
                 if pt_mn(1, "b") || pt_mn(1, "bl") || pt_mn(1, "blr") || pt_mn(1, "ret") || pt_mn(1, "svc") || pt_mn(1, "cbz") || pt_mn(1, "cbnz") || (pt_m[16] == 'b' && pt_m[17] == '.') { failm = true; break; }
                 if mentm {
                     // only as the address "[xD, #0]" of a load or store, and not as the register that is loaded or stored
-                    if !((pt_mn(1, "ldr") || pt_mn(1, "str")) && pt_no[1] == 2 && pt_op(1, 1, @want) && !pt_has_reg(1, 0, xd)) { 
+                    if !((pt_mn(1, "ldr") || pt_mn(1, "str")) && pt_no[1] == 2 && pt_op(1, 1, @want) && !pt_has_reg(1, 0, xd) && !(pt_o[(1 * 4 + 0) * 40] == 'q' && immn % 16 != 0)) { 
                         // "ldr xD, [xD, #0]" : the address is read, then xD is written
                         if (pt_mn(1, "ldr") && pt_no[1] == 2 && pt_op(1, 1, @want) && pt_op(1, 0, "x0") == false && pt_regno(1, 0, 'x') == xd) {
                             char nlx[64];
@@ -2213,6 +2213,7 @@ bool pt_rules(int i) {
         }
         bool wide = pt_mn(1, "ldr") || pt_mn(1, "str");
         bool range_ok = (wide && off % 8 == 0 && off <= 32760) || (!wide && off <= 4095);
+        if pt_o[(1 * 4 + 0) * 40] == 'q' { range_ok = off % 16 == 0 && off <= 65520; }     // a 128-bit vector: the offset is a multiple of 16
         // the address operand of the load: "[xD, #0]"
         int om = (1 * 4 + 1) * 40;
         int dreg = 0;

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.119
+* **SIMD step S2b: vectors in the IR.** A function that uses the simd operators is lifted and optimised like any other: a vector is a temporary of a new class 2 (`ldr q` / `str q` of 16 bytes, `IR_VOP` for `fadd fsub fmul fdiv add sub mul` on `.2d` / `.4s`, `IR_VDUP`), scratch registers v20..v27. Copies of a simd value are one `ldr q` / `str q` (`j2k_copy16`), and a vector that is stored and loaded again in a block is not read from memory (`op_vfwd`). The loop of 2*10^8 `acc += d * 2.0` went from 1.18 s to 0.67 s.
+* The text peepholes do not fold an address into `ldr q` / `str q` unless the offset is a multiple of 16. The assembler knows `mov vD.16b, vN.16b`.
+* Tests: `t362_simd_ir` (the same output with the default, `-noir`, `-noregs`, `-noinl`, `-d`).
+
 ## 0.9.118
 * **SIMD step S2: operators** (owner's "S2" on `docs/syntax-design.md` 59): on `f64x2`, `i64x2`, `f32x4`, `i32x4` the operators `+ - * /` (and `+= -= *= /=`) are one NEON instruction on the whole 16 bytes. The right side can be a number (`v * 2.0`, `2.0 * v`, `m * 3`): it is used for every lane. `/` only for the float types; `i64x2` has no `*` (NEON has none for 64 bits). The two values must be of the same type.
 * The assembler knows `fadd fsub fmul fdiv add sub mul` on `vN.2d` / `vN.4s`, `dup vN.T, xN|wN` and `ldr/str qN, [..]`.

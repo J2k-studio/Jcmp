@@ -1293,7 +1293,7 @@ int parse_args() {
                     int tmp_at = loff[lcount - 1];
                     ins_n("add x3, x29, #", tmp_at);
                     ins_n("mov x2, ", ssz);
-                    emit_line("bl j2k_copy");
+                    emit_copy_call(ex_ty - 100);
                     emit_zero_local(src_off, ssz);
                     int oi2 = own_find(src_off);
                     if oi2 >= 0 && own_blk[oi2] == cur_blk { own_moved[oi2] = 1; }
@@ -2680,7 +2680,7 @@ void gen_identifier() {
             int mv_at = loff[lcount - 1];
             ins_n("add x3, x29, #", mv_at);
             ins_n("mov x2, ", mv_sz);
-            emit_line("bl j2k_copy");
+            emit_copy_call(mv_s);
             emit_line("ldr x0, [sp, #0]");
             emit_line("add sp, sp, #16");
             emit_line("mov x1, 0");
@@ -3635,7 +3635,7 @@ void dyn_member() {
         if code >= 16 && code < 400 && eptr == 0 {
             emit_line("mov x0, x1");
             ins_n("mov x2, ", ssize[code - 16]);
-            emit_line("bl j2k_copy");
+            emit_copy_call(code - 16);
             if push_src >= 0 {
                 emit_zero_local(push_src, ssize[code - 16]);          // the array owns what the struct owned
                 int psi = own_find(push_src);
@@ -4252,6 +4252,16 @@ int simd_kind(int lt) {
     if str_eq(n, "f32x4") { return 3; }
     if str_eq(n, "i32x4") { return 4; }
     return 0;
+}
+
+// the call that copies a struct of the index sidx (x0 = from, x3 = to, x2 = size): a simd value is copied as one 16-byte vector (the IR
+// makes ldr q / str q of it, so a value that was written as a vector is read as a vector again)
+void emit_copy_call(int sidx) {
+    if ssize[sidx] == 16 && simd_kind(sidx + 100) != 0 {
+        emit_line("bl j2k_copy16");
+    } else {
+        emit_line("bl j2k_copy");
+    }
 }
 
 // a + b  a - b  a * b  a / b  on a simd struct: one NEON instruction on the whole 16 bytes. [sp] = the address of the left value,
