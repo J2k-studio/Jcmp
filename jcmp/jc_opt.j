@@ -4290,6 +4290,9 @@ int cl_exit[CL_MAX];
 int cl_calls[CL_MAX];            // calls inside the loop (a loop with calls is never vectorised)
 int cl_nblk[CL_MAX];             // the blocks of the loop
 int cl_inner[CL_MAX];            // 1: no other loop inside
+int cl_lidx[CL_MAX];             // the loop (op_lh index) of the description
+int cl_stb[CL_MAX];              // the block and the instruction of the step of the counter
+int cl_sti[CL_MAX];
 int cl_n;
 int cl_total;                    // all functions (-irstat)
 
@@ -4385,6 +4388,9 @@ void cl_analyse(int l) {
     cl_calls[n] = calls;
     cl_nblk[n] = nblk;
     cl_inner[n] = 1;
+    cl_lidx[n] = l;
+    cl_stb[n] = st_b;
+    cl_sti[n] = st_i;
     cl_n += 1;
 }
 
@@ -4529,6 +4535,7 @@ int vz_pk_base[16];              // the pointers that walk along the arrays: bas
 int vz_pk_off[16];
 int vz_pk_cell[16];
 int vz_npk;
+int vz_br_end;                   // the branch at the end of the vector body
 int vz_has_fp;                   // the body has floating point arithmetic on elements
 int vz_bq[64];                  // a double register that the body only reads: its broadcast made in VP (0: none)
 int vz_work[IR_MAXI];            // the body instructions in order
@@ -5131,8 +5138,14 @@ bool vz_make(int q, int l) {
         ir_add(IR_ADD, tj, tk, 4, 1, 0);
         int si = ir_add(IR_STORE, 0, 30, tj, 0, ir_k[ld]);
         ir_w[si] = 8;
-        int jm = ir_add(IR_JMP, 0, 0, 0, 0, 0);
-        ir_t1[jm] = vh0;
+        // the test at the bottom: one branch for each turn
+        int tlim = ir_vreg(0);
+        int lq = ir_add(IR_LOAD, tlim, 30, 0, 0, 0);
+        ir_w[lq] = 8;
+        ir_k[lq] = qcell;
+        vz_br_end = ir_add(IR_BR, 0, tj, tlim, 0, cl_cc[q]);
+        ir_t1[vz_br_end] = vb;
+        ir_t2[vz_br_end] = h;
     }
     // the exit of the vector loop: the two partial sums of every accumulator are added to its slot
     if vz_nacc2 > 0 {
@@ -5163,6 +5176,7 @@ bool vz_make(int q, int l) {
         int jx = ir_add(IR_JMP, 0, 0, 0, 0, 0);
         ir_t1[jx] = h;
         ir_t2[br0] = vx;
+        ir_t2[vz_br_end] = vx;
     }
     // the jumps into the header from outside the loop go to VP
     int nb0 = vp;
@@ -5204,6 +5218,301 @@ void op_vectorize() {
                 vz_make(q, l);
             }
         }
+        q += 1;
+    }
+}
+
+// ---------------------------------------------------------------------------------------------- strength reduction of array addresses
+// In a counted loop, the address `base + f * i + c` of an array element (the base: the global area, the frame, or a pointer kept in a plain
+// slot that the loop does not write; f: 8 for `a[i]`, the size of the struct for `b[i].x`) is computed again at every turn from the
+// counter. Here it becomes a pointer in a stack cell: made in a new block in front of the loop from the counter, moved on by f * step in
+// a new block that the step of the counter falls into. The register pass keeps the cells in registers; the address of an access is then a
+// register (`ldr d0, [x19, #8]`), and the instructions that made it are dead.
+
+#define SS_MAXK 24
+#define SS_MAXP 64
+int ss_kf[SS_MAXK];              // the scale
+int ss_kbase[SS_MAXK];           // 29 the global area, 30 the frame, 1000 + k: the plain slot at the frame offset k (a pointer)
+int ss_koff[SS_MAXK];
+int ss_kcell[SS_MAXK];
+int ss_nk;
+int ss_pj[SS_MAXP];              // the instructions to become `load pointer`, and their keys
+int ss_pk[SS_MAXP];
+int ss_np;
+int ss_kind[IR_MAXV];            // 1 the counter, 2 f * i, 3 a number, 4 an invariant pointer (base + c), 5 base + f * i + c
+int ss_f[IR_MAXV];
+int ss_base[IR_MAXV];
+int ss_off[IR_MAXV];
+int ss_stampv[IR_MAXV];
+int ss_prodv[IR_MAXV];           // kind 5: the instruction that made it (-1: not a producer that is changed)
+int ss_stamp;
+int ss_lst[16384];               // slots written in the loop
+int ss_total;                    // all functions
+int ss_nb0;                      // the blocks the function had before the loops were changed
+
+int ss_get(int v) {
+    if v <= 0 || v >= IR_MAXV || ss_stampv[v] != ss_stamp { return 0; }
+    return ss_kind[v];
+}
+
+void ss_set(int v, int kind, int f, int base, int off) {
+    if v <= 0 || v >= IR_MAXV { return; }
+    ss_stampv[v] = ss_stamp;
+    ss_kind[v] = kind;
+    ss_f[v] = f;
+    ss_base[v] = base;
+    ss_off[v] = off;
+    ss_prodv[v] = 0 - 1;
+}
+
+int ss_key(int f, int base, int off) {
+    int u = 0;
+    while u < ss_nk {
+        if ss_kf[u] == f && ss_kbase[u] == base && ss_koff[u] == off { return u; }
+        u += 1;
+    }
+    if ss_nk >= SS_MAXK { return 0 - 1; }
+    ss_kf[ss_nk] = f;
+    ss_kbase[ss_nk] = base;
+    ss_koff[ss_nk] = off;
+    ss_nk += 1;
+    return ss_nk - 1;
+}
+
+// scan one block of the loop; the producers that an access uses are collected
+void ss_block(int b, int islot) {
+    ss_stamp += 1;
+    int j = ir_bs[b];
+    while j < ir_be[b] - 1 {
+        int op = ir_op[j];
+        int d = ir_d[j];
+        if op == IR_NOP { j += 1; continue; }
+        if op == IR_CALL || op == IR_CALLIND || op == IR_SYSCALL {
+            ss_stamp += 1;
+            j += 1;
+            continue;
+        }
+        // a use of a changed address: the instruction that made it needs the pointer
+        if (op == IR_LOAD || op == IR_STORE) && ir_a[j] > 0 && ss_get(ir_a[j]) == 5 && ss_prodv[ir_a[j]] >= 0 && ss_np < SS_MAXP {
+            int pr = ss_prodv[ir_a[j]];
+            int k = ss_key(ss_f[ir_a[j]], ss_base[ir_a[j]], ss_off[ir_a[j]]);
+            bool known = false;
+            int u = 0;
+            while u < ss_np { if ss_pj[u] == pr { known = true; } u += 1; }
+            if k >= 0 && !known {
+                ss_pj[ss_np] = pr;
+                ss_pk[ss_np] = k;
+                ss_np += 1;
+            }
+        }
+        if d <= 0 || ir_vcls[d] != 0 {
+            if op == IR_STORE { j += 1; continue; }
+            if d > 0 { ss_set(d, 0, 0, 0, 0); }
+            j += 1;
+            continue;
+        }
+        int nk = 0;
+        int nf = 0;
+        int nb = 0;
+        int no = 0;
+        int a = ir_a[j];
+        int ka = ss_get(a);
+        if op == IR_LOAD && ir_w[j] == 8 && a == 30 {
+            int sl = vn_slot(j);
+            if sl == islot { nk = 1; nf = 1; }
+            else if sl >= 0 && sl < 8192 && ss_lst[sl] == 0 && op_plain[sl] == 1 { nk = 4; nb = 1000 + sl * 8; }
+        } else if op == IR_CONST {
+            nk = 3; no = ir_k[j];
+        } else if op == IR_COPY && ka != 0 {
+            nk = ka; nf = ss_f[a]; nb = ss_base[a]; no = ss_off[a];
+        } else if op == IR_SHL && ir_bi[j] == 1 && ka == 1 && ir_b[j] >= 0 && ir_b[j] <= 12 {
+            nk = 2; nf = 1 << ir_b[j];
+        } else if op == IR_MUL && ka == 1 {
+            // i * number (the number a constant register or an immediate)
+            int mv = 0;
+            bool have = false;
+            if ir_bi[j] == 1 { mv = ir_b[j]; have = true; }
+            else if ss_get(ir_b[j]) == 3 { mv = ss_off[ir_b[j]]; have = true; }
+            if have && mv > 0 && mv <= 4096 { nk = 2; nf = mv; }
+        } else if op == IR_ADD && ir_bi[j] == 1 && (a == 29 || a == 30) {
+            nk = 4; nb = a; no = ir_b[j];
+        } else if op == IR_ADD {
+            int kb = 0;
+            int bv = 0;
+            int rb = 0;
+            if ir_bi[j] == 1 { kb = 3; bv = ir_b[j]; } else { rb = ir_b[j]; kb = ss_get(rb); if kb == 3 { bv = ss_off[rb]; } }
+            if ka == 4 && kb == 3 { nk = 4; nb = ss_base[a]; no = ss_off[a] + bv; }
+            else if ka == 5 && kb == 3 { nk = 5; nf = ss_f[a]; nb = ss_base[a]; no = ss_off[a] + bv; }
+            else if ka == 2 && kb == 4 { nk = 5; nf = ss_f[a]; nb = ss_base[rb]; no = ss_off[rb]; }
+            else if ka == 4 && kb == 2 { nk = 5; nf = ss_f[rb]; nb = ss_base[a]; no = ss_off[a]; }
+            else if ka == 4 && kb == 0 && a == 29 { nk = 0; }
+        }
+        // the global area and the frame are pointers
+        if op == IR_ADD && ir_bi[j] == 0 {
+            int xa = ir_a[j];
+            int xb = ir_b[j];
+            int kxa = ss_get(xa);
+            int kxb = ss_get(xb);
+            if xa == 29 && kxb == 2 { nk = 5; nf = ss_f[xb]; nb = 29; no = 0; }
+            else if xb == 29 && kxa == 2 { nk = 5; nf = ss_f[xa]; nb = 29; no = 0; }
+            else if xa == 30 && kxb == 2 { nk = 5; nf = ss_f[xb]; nb = 30; no = 0; }
+            else if xb == 30 && kxa == 2 { nk = 5; nf = ss_f[xa]; nb = 30; no = 0; }
+        }
+        ss_set(d, nk, nf, nb, no);
+        if nk == 5 { ss_prodv[d] = j; }
+        j += 1;
+    }
+}
+
+bool ss_loop(int q) {
+    int h = cl_head[q];
+    int l = cl_lidx[q];
+    int islot = cl_slot[q];
+    int stb = cl_stb[q];
+    int sti = cl_sti[q];
+    if cl_step[q] < 1 || cl_step[q] > 64 { return false; }
+    // the step of the counter is the last instruction of its block (nops and the jump after it), and the block jumps to the header
+    int t = ir_be[stb] - 1;
+    if ir_op[t] != IR_JMP || ir_t1[t] != h { return false; }
+    int m = sti + 1;
+    while m < t {
+        if ir_op[m] != IR_NOP { return false; }
+        m += 1;
+    }
+    op_mark_loop(l);
+    int stamp = op_stamp;
+    // the slots that the loop writes
+    int zi = 0;
+    while zi < 16384 { ss_lst[zi] = 0; zi += 1; }
+    int b = 0;
+    while b < ss_nb0 {
+        if op_po[b] >= 0 && op_mark[b] == stamp {
+            int j = ir_bs[b];
+            while j < ir_be[b] {
+                if ir_op[j] == IR_STORE && ir_a[j] == 30 {
+                    int s2 = vn_slot(j);
+                    if s2 >= 0 && s2 < 16384 { ss_lst[s2] = 1; }
+                    else if ir_k[j] >= 0 && ir_k[j] / 8 < 16384 { ss_lst[ir_k[j] / 8] = 1; }
+                }
+                j += 1;
+            }
+        }
+        b += 1;
+    }
+    ss_nk = 0;
+    ss_np = 0;
+    b = 0;
+    int nb0 = ss_nb0;
+    while b < nb0 {
+        if op_po[b] >= 0 && op_mark[b] == stamp && b != h { ss_block(b, islot); }
+        b += 1;
+    }
+    if ss_np == 0 { return false; }
+    // cells
+    int cellbase = 0 - (op_maxq() + 8);
+    int u = 0;
+    while u < ss_nk {
+        ss_kcell[u] = cellbase - 8 * u;
+        u += 1;
+    }
+    // the instructions become loads of the pointers
+    u = 0;
+    while u < ss_np {
+        int pj = ss_pj[u];
+        ir_op[pj] = IR_LOAD;
+        ir_a[pj] = 30;
+        ir_b[pj] = 0;
+        ir_bi[pj] = 0;
+        ir_k[pj] = ss_kcell[ss_pk[u]];
+        ir_w[pj] = 8;
+        u += 1;
+    }
+    // the block in front of the loop: the pointers from the counter
+    int pre = ir_new_block(0 - 1);
+    ir_set_block(pre);
+    u = 0;
+    while u < ss_nk {
+        int ti = ir_vreg(0);
+        int li = ir_add(IR_LOAD, ti, 30, 0, 0, 0);
+        ir_w[li] = 8;
+        ir_k[li] = vz_slot_off(islot);
+        int cur = ti;
+        if ss_kf[u] != 1 {
+            int tm = ir_vreg(0);
+            if ss_kf[u] == 2 || ss_kf[u] == 4 || ss_kf[u] == 8 || ss_kf[u] == 16 || ss_kf[u] == 32 || ss_kf[u] == 64 || ss_kf[u] == 128 || ss_kf[u] == 256 || ss_kf[u] == 512 || ss_kf[u] == 1024 || ss_kf[u] == 2048 || ss_kf[u] == 4096 {
+                int sh = 0;
+                while (1 << sh) != ss_kf[u] { sh += 1; }
+                ir_add(IR_SHL, tm, ti, sh, 1, 0);
+            } else {
+                int cf = ir_vreg(0);
+                ir_add(IR_CONST, cf, 0, 0, 0, ss_kf[u]);
+                ir_add(IR_MUL, tm, ti, cf, 0, 0);
+            }
+            cur = tm;
+        }
+        int tb = ir_vreg(0);
+        if ss_kbase[u] >= 1000 {
+            // the pointer in the plain slot at the frame offset kbase - 1000
+            int lb = ir_add(IR_LOAD, tb, 30, 0, 0, 0);
+            ir_w[lb] = 8;
+            ir_k[lb] = ss_kbase[u] - 1000;
+            int ta = ir_vreg(0);
+            ir_add(IR_ADD, ta, tb, cur, 0, 0);
+            cur = ta;
+        } else {
+            int ta2 = ir_vreg(0);
+            ir_add(IR_ADD, ta2, ss_kbase[u], cur, 0, 0);
+            cur = ta2;
+        }
+        int tc = ir_vreg(0);
+        ir_add(IR_ADD, tc, cur, ss_koff[u], 1, 0);
+        int sp = ir_add(IR_STORE, 0, 30, tc, 0, ss_kcell[u]);
+        ir_w[sp] = 8;
+        u += 1;
+    }
+    int jp = ir_add(IR_JMP, 0, 0, 0, 0, 0);
+    ir_t1[jp] = h;
+    // the block after the step of the counter: the pointers move on
+    int inc = ir_new_block(0 - 1);
+    ir_set_block(inc);
+    u = 0;
+    while u < ss_nk {
+        int pc = ir_vreg(0);
+        int lc = ir_add(IR_LOAD, pc, 30, 0, 0, 0);
+        ir_w[lc] = 8;
+        ir_k[lc] = ss_kcell[u];
+        int pn = ir_vreg(0);
+        ir_add(IR_ADD, pn, pc, ss_kf[u] * cl_step[q], 1, 0);
+        int sc = ir_add(IR_STORE, 0, 30, pn, 0, ss_kcell[u]);
+        ir_w[sc] = 8;
+        u += 1;
+    }
+    int ji = ir_add(IR_JMP, 0, 0, 0, 0, 0);
+    ir_t1[ji] = h;
+    ir_t1[t] = inc;
+    // every jump into the header from outside the loop goes to the new block in front of it
+    b = 0;
+    while b < nb0 {
+        if op_po[b] >= 0 && op_mark[b] != stamp {
+            int tb2 = ir_be[b] - 1;
+            int top = ir_op[tb2];
+            if (top == IR_JMP || top == IR_BR || top == IR_FBR) && ir_t1[tb2] == h { ir_t1[tb2] = pre; }
+            if (top == IR_BR || top == IR_FBR) && ir_t2[tb2] == h { ir_t2[tb2] = pre; }
+        }
+        b += 1;
+    }
+    ss_total += 1;
+    return true;
+}
+
+void op_ssr() {
+    if opt_debug == 1 { return; }
+    op_counted_loops();
+    ss_nb0 = ir_nb;
+    int n = cl_n;
+    int q = 0;
+    while q < n {
+        if cl_calls[q] >= 0 { ss_loop(q); }
         q += 1;
     }
 }

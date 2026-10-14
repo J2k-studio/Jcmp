@@ -1877,9 +1877,11 @@ void ir_run() {
                     int lc0 = lc_moved;
                     if (ir_opt & 1) != 0 { op_run(); }
                     int vz0 = vz_count;
+                    int ss0 = ss_total;
                     if (ir_opt & 268435456) != 0 {
                         op_vectorize();
-                        if vz_count != vz0 {
+                        if (ir_opt & 1073741824) != 0 { op_ssr(); }
+                        if vz_count != vz0 || ss_total != ss0 {
                             // the addresses of the vector body were computed once for each access: value numbering and cleaning again
                             if (ir_opt & 8) != 0 { op_cse_run(); }
                             if (ir_opt & 8) != 0 { op_cell_fwd(); }
@@ -1892,7 +1894,7 @@ void ir_run() {
                     }
                     if (ir_opt & 8388608) == 0 { op_licm_exprs(); }
                     if (ir_opt & 2) != 0 { op_ra_run(); }
-                    if op_hoisted == h0 && op_ra_changes == c0 && (vn_cellhits == vh0 || (ir_opt & 64) != 0 || op_count() >= cnt0) && bt_changes == bt0 && ci_changes == ci0 && lc_moved == lc0 && vz_count == vz0 && (ir_opt & 64) == 0 { op_changed = 0; }
+                    if op_hoisted == h0 && op_ra_changes == c0 && (vn_cellhits == vh0 || (ir_opt & 64) != 0 || op_count() >= cnt0) && bt_changes == bt0 && ci_changes == ci0 && lc_moved == lc0 && vz_count == vz0 && ss_total == ss0 && (ir_opt & 64) == 0 { op_changed = 0; }
                 }
                 if ir_mode == 3 || (ir_opt & 2097152) != 0 {
                     ir_print();

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.129
+* **Strength reduction of array addresses in counted loops** (`op_ssr` in `jcmp/jc_opt.j`): the address `base + f * i + c` of an element (the base: the global area, the frame, or a pointer in a plain slot that the loop does not write; `f`: 8 for `a[i]`, the size of the struct for `b[i].x`) is a pointer in a stack cell (a register after the register pass): made in a new block in front of the loop, moved on by `f * step` in a block that the step of the counter falls into. `c[i] = a[i] + b[i] * k` is 9 instructions per element (was 13); measured with the same compiler, `-irclr 1073741824` switches it off: 340 -> 300 ms.
+* **The vector loop tests at the bottom** (one branch for each turn, before: two jumps and a compare at the top): an int copy of 2048 elements, 100,000 times: 301 ms scalar, 66 ms vectorised.
+* **The benchmark `arrays` was wrong in the first version** (a function called 60,000 times with the same arguments: clang -O2 computed it once, 125 ms); the arguments change in every turn now, the program of C and J2K give the same result.
+* Tests: the suite (397), 500 random programs with four option sets.
+
 ## 0.9.128
 * **Vector loops walk along the arrays with pointers**: the address `base + 8 * i + c` of each access is a pointer kept in a stack cell (the register pass keeps it in a register) that moves on by 32 bytes a turn; the vector body of `copy` is `ldr q / str q / ldr q / str q` and four adds (14 instructions for four elements in `axpy`, before 30). `q[i] = p[i]` over 2048 whole numbers: 278 -> 88 ms.
 * **Floating point loops are not vectorised any more (measured)**: on the target (Cortex-A55) two 64-bit lanes are no faster than the scalar instructions: `c[i] = a[i] + b[i] * k` was 308 ms scalar (with `fmadd`) and 320 ms vectorised. `-irdbg 536870912` vectorises them (the test `t369_vectorize` runs both ways). Copies, fills and sums of whole numbers are vectorised.
