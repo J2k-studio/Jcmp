@@ -2727,6 +2727,7 @@ void parse_function() {
     fn_base = err_base;
     fn_ls = err_ls;
     if cur_is_main == 1 && opt_debug == 1 { rt_call("Mem__debug_on"); }       // the checks of the heap are on
+    if pass_no == 3 && f_skip == 0 && f_naked == 0 && f_interrupt == 0 && ast_report != 0 && lvl_lib[lx_depth] == 0 { ast_probe(f_idx); }
     parse_block();
     own_free_from(0, 1);                 // what the parameters own (the body's own variables were given back at its end)
     if hint_len > 0 && hint_len < 16383 {
