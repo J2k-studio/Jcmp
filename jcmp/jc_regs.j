@@ -2267,7 +2267,7 @@ bool pt_rules(int i) {
     // a move or a conversion into an x register that nothing reads afterwards: gone
     if (pt_mn(0, "mov") || pt_mn(0, "fmov")) && pt_no[0] == 2 && pt_regno(0, 0, 'x') >= 0 {
         int dr = pt_regno(0, 0, 'x');
-        if (dr <= 4 || (dr >= 10 && dr <= 14)) && pt_dead(j, dr, 40) {
+        if (dr <= 4 || (dr >= 10 && dr <= 17)) && pt_dead(j, dr, 40) {
             pt_set(i, "");
             return true;
         }

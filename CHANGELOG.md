@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.107
+* A `mov` / `fmov` into x15, x16 or x17 that nothing reads afterwards is removed (the `fmov x15, d12` pairs that were left in the `vec3` loop after the struct temporaries went into registers).
+* Docs: `docs/syntax-design.md` 67 (Span / slice) and 68 (the `_.` block) from `plan-test.md`: comparisons for the owner, nothing locked.
+* Tests: the suite (365), 300 random programs (`-noinl`, `-d`), bootstrap.
+
 ## 0.9.106
 * **A file that `#import "name"` cannot find has a message of its own:** `cannot find the file to import: 'name' (looked for name.j and the same with .jk, next to this file and in the -I folder)` with a `help:`; `#import "name.jk"` (an extension in the quotes: the dot means a folder, so the compiler looked for `name/jk.j`) says so. Before: `cannot read file '.../name/jk.j'`.
 * Tests: `t341_fail_import_ext`, `t342_fail_import_missing` (the suite: 365).

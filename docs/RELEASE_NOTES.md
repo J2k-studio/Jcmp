@@ -1,6 +1,8 @@
-# J2K / Jcmp 0.9.106
+# J2K / Jcmp 0.9.107
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
+
+**0.9.107:** dead moves into x15 - x17 are removed (small code saving in float struct code).
 
 **0.9.106:** a missing file in `#import "name"` gives a clear message with help (and says when the extension should not be written).
 

@@ -1841,3 +1841,33 @@ The marker is a good idea: it makes level 0 explicit, costs one line, and lets t
 The owner: "`#!library`" (spelled right from `#!libary`), "used for the raw mode, and `#pragma` for forbidding changes of data".
 * **`#!library` is the marker of the raw mode** (taken from option A of 66.2, with the name the owner chose instead of `#!bare`). Done in 0.9.89: a file whose first lines contain `#!library` gets no start code, no helpers, no runtime and no `main` is needed; the first instruction of the first function is the entry (the file is the program, plus the 176 bytes of the ELF header). Every function of the file is written (none is left out as unused); built-in libraries are not loaded unless imported.
 * **Open (nothing decided):** the form of raw bytes (66.3 A / B / C) and `#pragma ...` "for forbidding changes of data": what it applies to (a variable, a block, a file; a read-only data section?), its name (`#pragma const`, `#pragma readonly`, ...), and what is an error (a store to it at compile time, or a fault at run time through a page that is not writable). Proposed next step: write the options in a section here before any code.
+
+## 67. Span / slice: a view into an array without copying (from `plan-test.md`, 2026-10-14; a proposal, nothing decided)
+
+Today `String.slice(a, b)` copies. There is no view type. Wanted: a pointer + a length, indexing checked in `-d`, writes go to the original, nothing to free.
+Already open in 57.4 (option ค): `int^ p = a[0..12];`. The cases are collected here so that one choice covers arrays, Strings and the standard library.
+
+| | A: `a[1..5]` gives a view | B: a type `Span<T>` | C: a method `a.view(1, 5)` |
+|---|---|---|---|
+| look | `int[] s = a[1..5];` (range inside the index brackets, the same `..` as `for i in 0..n`) | `Span<int> s = a.span(1, 5);` | `Span<int> s = a.view(1, 5);` |
+| borrowed from | Go, Python, Rust (`&a[1..5]`) | C++20 `std::span`, Rust `&[T]`, D `T[]` | C#, Java `subList` |
+| easy for people | shortest; the range already exists in `for` | a name that says what it is; the type is written | clear but wordy |
+| easy for machine | the index parser sees `..` after the first expression; result is the existing `T[]` header (ptr, len, cap) with `cap = len` and a flag "not owned" | a generic struct in the library (no compiler change); `s[i]` and `s.len` by operator methods | the same as B |
+| risk | `a[0..12]` in 57.5 meant a pool slice (a transfer): two meanings; the view of a `T[]` must not be freed or pushed to (`push` would write over the original) | the type has to be written | none |
+
+Rules that every option needs: a view does not own (no `free`, no `push`); a view that outlives the array is a bug (`-d` guard pages find it after `free`); `s.len` is the length of the view; bounds are checked against the view in `-d`; a view of a view is a view of the original.
+Assistant's view: **B first** (it needs no change in the compiler, works today as a generic struct in `std/collections.j`, and does not take the meaning of `a[x..y]` that 57.4 ค wants for pools); A can be added later as sugar that builds the same type. Question for the owner: (1) B now, A later, or A at once? (2) the name `Span` or `Slice`?
+
+## 68. The `_. { ... }` block of `plan-test.md` against what exists (2026-10-14; a comparison, nothing decided)
+
+`plan-test.md` §7.1 proposes `_. { mov x0, #42 ... }`, `_. { in x1 = value  out x0 = result  clobber x3, nzcv  add ... }` and a named one `_.exit { ... }` called as `_.exit;`, plus raw `.byte` / `.word` inside.
+What the compiler has today (63.4, 66.5): `naked` functions, `register { }` blocks, `Reg::` names, `Cpu::inst("name", ...)`, `abi`, `#!library` (raw file).
+
+| need in `_.` | what exists | gap |
+|---|---|---|
+| a block of instruction lines inside a function | `register { ... }` (63.4 step 6) | the name only: `_.` is shorter and has no letters |
+| `in x1 = value` / `out x0 = result` / `clobber ...` | `register(value -> x1) -> x0 { }` form of 60.1 B, pinned variables `int n @ x19` | the keyword form `in/out/clobber` is more readable than arrows; nothing decided |
+| a named block `_.exit` called by name | a `naked` function and a call | `_.exit;` is a call written without parentheses: a second way to call |
+| raw `.byte` / `.word` inside | none (66.3 is open: A directives, B `raw`, C `Cpu::raw`) | open question 66.3 |
+
+Assistant's view: the block with `in / out / clobber` is a good readable form of what `register { }` already does, and costs little (the lines go to the same reader). The `_.` spelling has two risks: `_` is already the "ignore" name in some places and `_.exit;` as a call with no parentheses is a second call syntax. Options: (a) keep `register { }` and add `in/out/clobber` lines inside it; (b) add `_. { }` as a short alias of `register { }`; (c) take `_.` only for the anonymous block, and names stay normal `naked` functions. Recommended: (a) plus (c) the alias later. Questions: (1) is `in / out / clobber` wanted inside `register { }`? (2) is the `_.` spelling wanted as an alias? (3) raw bytes: 66.3 A, B or C?
