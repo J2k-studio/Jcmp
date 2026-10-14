@@ -218,6 +218,80 @@ int as_parse_vreg() {
     return n;
 }
 
+// umov xD, vN.d[i]   umov wD, vN.s[i]   smov xD, vN.s[i]   ins vD.d[i], xN   ins vD.s[i], wN   ins vD.d[i], vN.d[0]
+// dup dD, vN.d[i]  (one lane of a vector)
+int as_lane_idx;                // after as_parse_vlane: the index
+int as_lane_sz;                 // 8 (.d) or 4 (.s)
+
+int as_parse_vlane() {
+    if as_cur() != 'v' { as_fail(); }
+    as_ci += 1;
+    int n = as_parse_number();
+    if n > 31 || as_cur() != '.' { as_fail(); }
+    as_ci += 1;
+    int c = as_cur();
+    as_ci += 1;
+    if c == 'd' { as_lane_sz = 8; } else if c == 's' { as_lane_sz = 4; } else { as_fail(); }
+    if as_cur() != '[' { as_fail(); }
+    as_ci += 1;
+    as_lane_idx = as_parse_number();
+    if as_cur() != ']' { as_fail(); }
+    as_ci += 1;
+    if as_lane_sz == 8 && as_lane_idx > 1 { as_fail(); }
+    if as_lane_sz == 4 && as_lane_idx > 3 { as_fail(); }
+    return n;
+}
+
+void as_h_umov(bool signed) {
+    as_skip_spaces();
+    int rd = 0;
+    bool wide = false;
+    if as_cur() == 'x' { rd = as_parse_reg(); wide = true; } else { rd = as_parse_wreg(); }
+    as_expect_comma();
+    int rn = as_parse_vlane();
+    int base = 0;
+    if as_lane_sz == 8 {
+        if signed || !wide { as_fail(); }
+        base = 0x4E083C00 | (as_lane_idx << 20);
+    } else {
+        int imm5 = (as_lane_idx << 3) | 4;
+        if signed {
+            if !wide { as_fail(); }
+            base = 0x4E002C00 | (imm5 << 16);
+        } else {
+            if wide { as_fail(); }
+            base = 0x0E003C00 | (imm5 << 16);
+        }
+    }
+    as_put32(base | (rn << 5) | rd);
+}
+
+void as_h_ins() {
+    as_skip_spaces();
+    int rd = as_parse_vlane();
+    int sz = as_lane_sz;
+    int idx = as_lane_idx;
+    as_expect_comma();
+    if as_cur() == 'v' {
+        int rn = as_parse_vlane();
+        if as_lane_sz != sz || as_lane_idx != 0 { as_fail(); }
+        int imm5 = (idx << 4) | 8;
+        if sz == 4 { imm5 = (idx << 3) | 4; }
+        as_put32(0x6E000400 | (imm5 << 16) | (rn << 5) | rd);
+        return;
+    }
+    int rn2 = 0;
+    int imm5b = 0;
+    if sz == 8 {
+        rn2 = as_parse_reg();
+        imm5b = (idx << 4) | 8;
+    } else {
+        rn2 = as_parse_wreg();
+        imm5b = (idx << 3) | 4;
+    }
+    as_put32(0x4E001C00 | (imm5b << 16) | (rn2 << 5) | rd);
+}
+
 // mov vD.16b, vN.16b
 void as_h_vmov() {
     int rd = as_parse_vreg();
@@ -231,6 +305,15 @@ void as_h_vmov() {
 // dup vD.2d, xN   /   dup vD.4s, wN   (the same number in every lane)
 void as_h_dup() {
     as_skip_spaces();
+    if as_cur() == 'd' && as_is_digit(as_peek(1)) {
+        // dup dD, vN.d[i]: one 64-bit lane into a double register
+        int fd = as_parse_freg();
+        as_expect_comma();
+        int vn = as_parse_vlane();
+        if as_lane_sz != 8 { as_fail(); }
+        as_put32(0x5E080400 | (as_lane_idx << 20) | (vn << 5) | fd);
+        return;
+    }
     int rd = as_parse_vreg();
     as_expect_comma();
     int rn = 0;
@@ -1553,6 +1636,9 @@ void as_instruction() {
     if as_mn_is("sub") { if as_at_vreg() { as_h_vec3(0x6EE08400, 0x6EA08400); return; } as_h_addsub(false); return; }
     if as_mn_is("cmp") { as_h_cmp(); return; }
     if as_mn_is("dup") { as_h_dup(); return; }
+    if as_mn_is("umov") { as_h_umov(false); return; }
+    if as_mn_is("smov") { as_h_umov(true); return; }
+    if as_mn_is("ins") { as_h_ins(); return; }
     if as_mn_is("mul") { if as_at_vreg() { as_h_vec3(0, 0x4EA09C00); return; } as_h_rrr(0x9B007C00); return; }
     if as_mn_is("udiv") { as_h_rrr(0x9AC00800); return; }
     if as_mn_is("sdiv") { as_h_rrr(0x9AC00C00); return; }

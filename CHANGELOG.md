@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.120
+* **SIMD step S3: `f64x2::load(a, i)` and `v.store(a, i)`** (the methods `load()` / `store()` of the proposal in `docs/syntax-design.md` 59; the owner said "ทำเลย"): one 16-byte load or store at the element `i` of an array (`f64x2` and `i64x2`: elements of 8 bytes, `f32x4` and `i32x4`: 4 bytes). The array is written as its first element address: `f64x2::load(@a[0], i)`, or a pointer.
+* **Vectors live in registers** (new `jcmp/jc_vec.j`, at the end of the IR, before the text is written): a 16-byte stack object that is only loaded and stored as a whole or by lane (and whose address is only used for that) becomes a vector register; the other vectors get one of `v17 .. v29` that the function does not use as a double (graph colouring, copies joined). An object that is alive over a call is stored before and loaded after it. Lane reads and writes (`v.x`, `v.y = 1.0`, `{a, b}`) are `umov` / `ins` / `dup`.
+* The loop `acc += d * 2.0` (2*10^8 times) takes 0.19 s (was 1.18 s in 0.9.118); `y[i] = y[i] + x[i] * 0.001` over 10^6 doubles, 200 times: 0.31 s (scalar J2K 0.59 s, clang -O2 0.28 s).
+* The assembler knows `umov smov ins dup dN, vN.d[i]` (31 more instructions in the llvm-mc check, `test/asm_check_neon.txt`).
+* Tests: `t363_simd_regs` (the same output with the default options, `-noir`, `-noregs`, `-noinl`, `-d`), `t364_simd_load_store`.
+
 ## 0.9.119
 * **SIMD step S2b: vectors in the IR.** A function that uses the simd operators is lifted and optimised like any other: a vector is a temporary of a new class 2 (`ldr q` / `str q` of 16 bytes, `IR_VOP` for `fadd fsub fmul fdiv add sub mul` on `.2d` / `.4s`, `IR_VDUP`), scratch registers v20..v27. Copies of a simd value are one `ldr q` / `str q` (`j2k_copy16`), and a vector that is stored and loaded again in a block is not read from memory (`op_vfwd`). The loop of 2*10^8 `acc += d * 2.0` went from 1.18 s to 0.67 s.
 * The text peepholes do not fold an address into `ldr q` / `str q` unless the offset is a multiple of 16. The assembler knows `mov vD.16b, vN.16b`.

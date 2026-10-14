@@ -1,7 +1,8 @@
-# J2K / Jcmp 0.9.119
+# J2K / Jcmp 0.9.120
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
 
+**0.9.120:** SIMD step S3: `f64x2::load(@a[0], i)`, `v.store(@a[0], i)`; vectors stay in NEON registers in loops (a loop of `acc += d * 2.0` is 6 times faster).
 **0.9.119:** SIMD step S2b: functions with simd operators go through the IR (vectors as temporaries; copies and reloads are single 16-byte accesses).
 **0.9.118:** SIMD step S2: `+ - * /` on `f64x2`, `i64x2`, `f32x4`, `i32x4` are one NEON instruction (a number on one side is used for every lane).
 **0.9.117:** `#import <simd>`: the vector types `f64x2`, `i64x2`, `f32x4`, `i32x4` (step S1); a float field of a struct can start from a decimal literal.

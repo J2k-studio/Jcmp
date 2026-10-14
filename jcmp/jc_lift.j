@@ -923,7 +923,7 @@ void lw_def(int v) {
     if v >= 64 {
         lw_tmp_i += 1;
         if ir_vcls[v] == 1 { lw_tmp_reg[v] = 30 + lw_tmp_i % 2; }
-        else if ir_vcls[v] == 2 { lw_tmp_reg[v] = 20 + lw_tmp_i % 8; }
+        else if ir_vcls[v] == 2 { }                              // the vector registers were given by vr_run
         else { lw_tmp_reg[v] = 15 + lw_tmp_i % 2; }
     }
 }
@@ -1149,6 +1149,69 @@ bool lw_instr(int i, int b) {
         }
         return true;
     }
+    if op == IR_VLANE {
+        lw_def(d);
+        int vl = ir_k[i];
+        int vw = ir_w[i];
+        if ir_vcls[d] == 1 {
+            rg_text("dup ");
+            lw_reg(d);
+            rg_text(", v");
+            rg_int(lw_tmp_reg[ir_a[i]]);
+            rg_text(".d[");
+            rg_int(vl / 8);
+            rg_text("]\n");
+        } else if vw == 8 {
+            rg_text("umov ");
+            lw_reg(d);
+            rg_text(", v");
+            rg_int(lw_tmp_reg[ir_a[i]]);
+            rg_text(".d[");
+            rg_int(vl / 8);
+            rg_text("]\n");
+        } else {
+            if vw < 0 { rg_text("smov "); lw_reg(d); } else { rg_text("umov "); lw_wreg(d); }
+            rg_text(", v");
+            rg_int(lw_tmp_reg[ir_a[i]]);
+            rg_text(".s[");
+            rg_int(vl / 4);
+            rg_text("]\n");
+        }
+        return true;
+    }
+    if op == IR_VINS {
+        lw_def(d);
+        if lw_tmp_reg[d] != lw_tmp_reg[ir_a[i]] && !(ir_vcls[ir_a[i]] != 2) {
+            rg_text("mov v");
+            rg_int(lw_tmp_reg[d]);
+            rg_text(".16b, v");
+            rg_int(lw_tmp_reg[ir_a[i]]);
+            rg_text(".16b\n");
+        }
+        int il = ir_k[i];
+        rg_text("ins v");
+        rg_int(lw_tmp_reg[d]);
+        if ir_w[i] == 8 {
+            rg_text(".d[");
+            rg_int(il / 8);
+            rg_text("], ");
+            if ir_vcls[ir_b[i]] == 1 {
+                rg_text("v");
+                if ir_b[i] >= 32 && ir_b[i] < 64 { rg_int(ir_b[i] - 32); } else { rg_int(lw_tmp_reg[ir_b[i]]); }
+                rg_text(".d[0]\n");
+            } else {
+                lw_reg(ir_b[i]);
+                rg_put(10);
+            }
+        } else {
+            rg_text(".s[");
+            rg_int(il / 4);
+            rg_text("], ");
+            lw_wreg(ir_b[i]);
+            rg_put(10);
+        }
+        return true;
+    }
     if op == IR_VOP || op == IR_VDUP {
         lw_def(d);
         if op == IR_VDUP {
@@ -1183,6 +1246,7 @@ bool lw_instr(int i, int b) {
         if d == ir_a[i] && d < 64 { return true; }            // a copy to the same register (the allocator made it)
         lw_def(d);
         if ir_vcls[d] == 2 {
+            if lw_tmp_reg[d] == lw_tmp_reg[ir_a[i]] { return true; }
             rg_text("mov v");
             rg_int(lw_tmp_reg[d]);
             rg_text(".16b, v");
@@ -1469,6 +1533,7 @@ bool lw_function() {
         i += 1;
     }
     if ir_opt != 0 { op_webs(); }
+    if !vr_run() { return false; }
     lw_layout();
     // the blocks that a jump goes to get a label; the others do not
     b = 0;

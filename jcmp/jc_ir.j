@@ -69,6 +69,8 @@
 #define IR_FCONST 54         // d (double) = the double whose bits are k
 #define IR_VOP 55            // d (a 128-bit vector, class 2) = a op b (vectors); ir_k: 0 fadd 1 fsub 2 fmul 3 fdiv 4 add 5 sub 6 mul; ir_w: 1 = .2d, 2 = .4s
 #define IR_VDUP 56           // d (a vector) = the whole number a in every lane (ir_w as for IR_VOP: a 64-bit or a 32-bit lane)
+#define IR_VLANE 57          // d (a whole number or a double) = the lane of the vector a that starts at byte ir_k (ir_w: 8, 4 or -4 = signed)
+#define IR_VINS 58           // d (a vector) = a with the lane at byte ir_k replaced by b (ir_w: 8 or 4)
 
 // the conditions (cc) of IR_SETCC and IR_BR
 #define IR_EQ 0
@@ -272,6 +274,8 @@ char^ ir_opname(int op) {
     if op == IR_FCONST { return "fconst"; }
     if op == IR_VOP { return "vop"; }
     if op == IR_VDUP { return "vdup"; }
+    if op == IR_VLANE { return "vlane"; }
+    if op == IR_VINS { return "vins"; }
     return "?";
 }
 
@@ -360,6 +364,22 @@ void ir_print_instr(int i) {
         ir_pn(ir_w[i]);
         ir_pc(' ');
         ir_pv(ir_a[i]);
+        ir_ps(", ");
+        ir_pv(ir_b[i]);
+    } else if op == IR_VLANE {
+        ir_pc('.');
+        ir_pn(ir_w[i]);
+        ir_pc(' ');
+        ir_pv(ir_a[i]);
+        ir_ps(" + ");
+        ir_pn(ir_k[i]);
+    } else if op == IR_VINS {
+        ir_pc('.');
+        ir_pn(ir_w[i]);
+        ir_pc(' ');
+        ir_pv(ir_a[i]);
+        ir_ps(" + ");
+        ir_pn(ir_k[i]);
         ir_ps(", ");
         ir_pv(ir_b[i]);
     } else if op == IR_VDUP {
@@ -497,7 +517,7 @@ char ir_err[200];
 
 // does the instruction use the vreg v as an operand? (for the checker)
 bool ir_uses_b(int op) {
-    return op >= IR_ADD && op <= IR_MULHS || op == IR_ROTR || op == IR_SETCC || op == IR_FSETCC || op == IR_BR || op == IR_FBR || op == IR_STORE || (op >= IR_FADD && op <= IR_FDIV) || op == IR_VOP;
+    return op >= IR_ADD && op <= IR_MULHS || op == IR_ROTR || op == IR_SETCC || op == IR_FSETCC || op == IR_BR || op == IR_FBR || op == IR_STORE || (op >= IR_FADD && op <= IR_FDIV) || op == IR_VOP || op == IR_VINS;
 }
 
 // 1 if the function is well made, else 0 and the message in ir_err

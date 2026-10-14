@@ -1030,5 +1030,13 @@ The operators `+ - * /` (and `+= -= *= /=`) are one NEON instruction on the whol
 f64x2 c = a + b * 2.0;          // a number on the right (or on the left of *) is used for every lane
 i32x4 k = m * m + m;
 ```
-`/` needs a float type; `i64x2` has no `*`; both sides must be the same type (or a number). Loads from arrays and sums come next.
+`/` needs a float type; `i64x2` has no `*`; both sides must be the same type (or a number).
+
+Loads and stores of arrays (0.9.120): one 16-byte access at the element `i`:
+```jk
+double a[8] = {1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0};
+f64x2 v = f64x2::load(@a[0], 2);        // a[2], a[3]
+v.store(@a[0], 4);                        // a[4] = v.x, a[5] = v.y
+```
+(`f64x2` and `i64x2` take an element of 8 bytes, `f32x4` (`float^`) and `i32x4` (`i32^`) of 4 bytes.) In a loop the vectors stay in NEON registers; sums of the lanes come next.
 

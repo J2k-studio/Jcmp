@@ -1822,6 +1822,22 @@ void gen_call() {
         emit_line("ldr x9, [x28, #0]");
         emit_line("add x9, x9, x0");
         emit_line("ldr x0, [x9, #8]");
+    } else if simd_mem_kind(@callee) != 0 {
+        // f64x2::load(a, i) / v.store(a, i) (and the other three simd types): one 16-byte load or store at the element i of the array.
+        // x0 = the result (load) or the value (store), x1 = the array, x2 = the index.
+        if n != 3 { die("this simd function takes the array and the index"); }
+        int smk = simd_mem_kind(@callee);
+        if smk == 1 || smk == 2 || smk == 5 || smk == 6 { emit_line("lsl x2, x2, #3"); } else { emit_line("lsl x2, x2, #2"); }
+        emit_line("add x1, x1, x2");
+        if smk <= 4 {
+            emit_line("ldr q0, [x1]");
+            emit_line("str q0, [x0]");
+        } else {
+            emit_line("ldr q0, [x0]");
+            emit_line("str q0, [x1]");
+        }
+        drop_args(n);
+        if tmp_off != 0 { ins_n("add x0, x29, #", tmp_off); }
     } else {
         emit_str("bl ");
         emit_line(@callee);
@@ -4244,6 +4260,19 @@ void operator_method(char^ op, char^ out) {
 }
 
 // `left op right` where the left value is a struct: [sp] = the left value (its address), x0 = the right operand.
+// 1..4 = f64x2 i64x2 f32x4 i32x4 ::load, 5..8 = the same .store; 0 = something else
+int simd_mem_kind(char^ n) {
+    if str_eq(n, "f64x2__load") { return 1; }
+    if str_eq(n, "i64x2__load") { return 2; }
+    if str_eq(n, "f32x4__load") { return 3; }
+    if str_eq(n, "i32x4__load") { return 4; }
+    if str_eq(n, "f64x2__store") { return 5; }
+    if str_eq(n, "i64x2__store") { return 6; }
+    if str_eq(n, "f32x4__store") { return 7; }
+    if str_eq(n, "i32x4__store") { return 8; }
+    return 0;
+}
+
 // the four types of #import <simd>: 1 = f64x2, 2 = i64x2, 3 = f32x4, 4 = i32x4; 0 = another struct
 int simd_kind(int lt) {
     char^ n = @sname + (lt - 100) * 64;
