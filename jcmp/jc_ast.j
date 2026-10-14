@@ -18,7 +18,7 @@
 #define AK_NEG 4             // a
 #define AK_NOT 5             // a
 #define AK_CALL 6            // val = the function (index), a = first argument node, the arguments are a chain through c
-#define AK_ASSIGN 7          // val = the local, a = the value; b = operator code (0: plain `=`, else AO_* for `+=` ...)
+#define AK_ASSIGN 7          // c = the target (AK_VAR, AK_GVAR, AK_INDEX, AK_DEREF), a = the value; b = operator code (0: plain `=`, else AO_*)
 #define AK_IF 8              // a = condition, b = then block, c = else (a block, another AK_IF, or 0)
 #define AK_WHILE 9           // a = condition, b = body
 #define AK_FOR 10            // val = the local, a = from, b = to, c = body
@@ -28,6 +28,15 @@
 #define AK_EXPR 14           // a = the expression (a call)
 #define AK_BREAK 15
 #define AK_CONT 16
+#define AK_INDEX 17          // a = the array or pointer (AK_VAR / AK_GVAR), b = the index
+#define AK_DEREF 18          // a = the pointer (p^)
+#define AK_ADDR 19           // a = the variable or element (@x, @a[i])
+#define AK_CAST 20           // val = the type code, a = the value
+#define AK_GVAR 21           // val = the global
+#define AK_STR 22            // a string literal (only in cout)
+#define AK_COUT 23           // a = the first item, the items are a chain through c
+#define AK_INCDEC 24         // val = the local (or -1 - the global), b = +1 / -1
+#define AK_FNUM 25           // a number with a decimal point (the bits are not kept)
 
 // operator codes
 #define AO_ADD 1
@@ -59,6 +68,8 @@ int ast_root;                    // the block of the last body read (0: it is no
 
 // the locals of the body: names (the probe's own table; the parameters come first)
 char ast_lname[16384];           // 256 x 64
+int ast_lkind[256];              // 0 a scalar, 1 a pointer, 2 a fixed array of one dimension
+int ast_lbase[256];              // the width code of the scalar / the pointee / the element
 int ast_nl;
 int ast_ok;                      // 0 while reading, set to 0 by the first thing that is not understood
 char ast_why[128];
@@ -70,7 +81,20 @@ int ast_loop_depth;
 void ast_fail(char^ why) {
     if ast_ok == 1 {
         ast_ok = 0;
-        str_copy(@ast_why, why, 128);
+        str_copy(@ast_why, why, 100);
+        // the token where it happened
+        int n = str_len(@ast_why);
+        if n < 100 && tok_kind != T_EOF {
+            ast_why[n] = ' ';
+            ast_why[n + 1] = '[';
+            int k = 0;
+            while tok_text[k] != 0 && k < 20 {
+                ast_why[n + 2 + k] = tok_text[k];
+                k += 1;
+            }
+            ast_why[n + 2 + k] = ']';
+            ast_why[n + 3 + k] = 0;
+        }
     }
 }
 
@@ -103,25 +127,95 @@ int ast_add_local(char^ name) {
         return 0 - 1;
     }
     str_copy(@ast_lname + ast_nl * 64, name, 64);
+    ast_lkind[ast_nl] = 0;
+    ast_lbase[ast_nl] = 8;
     ast_nl += 1;
     return ast_nl - 1;
 }
 
-// the parameters and the locals that the parser has already: whole number scalars only
+// is the code a scalar of the subset (no struct, no enum, no String)?
+bool ast_scalar_code(int code) {
+    return code >= 1 && code <= 15;
+}
+
+// the parameters and the locals that the parser has already: scalars (whole numbers, char, bool, double), pointers to them and fixed arrays
 void ast_load_params() {
     ast_nl = 0;
     int i = 0;
     while i < lcount {
-        if lkind[i] != 0 || lelem[i] != 8 || lptr[i] != 0 || ldyn[i] != 0 {
-            ast_fail("a parameter that is not a whole number");
+        if ldyn[i] != 0 {
+            ast_fail("a parameter that is a dynamic array or a String");
             return;
         }
-        ast_add_local(@lname + i * 64);
+        if ltid[i] >= 3 && ltid[i] < 90 {
+            ast_fail("a parameter that is an enum");
+            return;
+        }
+        if ltid[i] >= 100 {
+            ast_fail("a parameter that is a struct");
+            return;
+        }
+        int li = ast_add_local(@lname + i * 64);
+        if li < 0 { return; }
+        if lkind[i] == 1 {
+            if lnd[i] != 1 || !ast_scalar_code(lelem[i]) {
+                ast_fail("a parameter that is an array of more dimensions or of structs");
+                return;
+            }
+            ast_lkind[li] = 2;
+            ast_lbase[li] = lelem[i];
+        } else if lptr[i] != 0 {
+            if !ast_scalar_code(lptr[i]) {
+                ast_fail("a parameter that is a pointer to a struct or a pointer");
+                return;
+            }
+            ast_lkind[li] = 1;
+            ast_lbase[li] = lptr[i];
+        } else {
+            if !ast_scalar_code(lelem[i]) {
+                ast_fail("a parameter that is not a scalar");
+                return;
+            }
+            ast_lbase[li] = lelem[i];
+        }
         i += 1;
     }
 }
 
 // ---------------------------------------------------------------- expressions
+// the code of the scalar type that the current token names (0: it is not one)
+int ast_type_kw() {
+    if tok_kind != T_IDENT { return 0; }
+    if tok_is("int") { return 8; }
+    if tok_is("char") { return 2; }
+    if tok_is("bool") { return 3; }
+    if tok_is("i8") { return 1; }
+    if tok_is("i32") { return 4; }
+    if tok_is("float") || tok_is("f32") { return 6; }
+    if tok_is("double") || tok_is("f64") { return 7; }
+    if tok_is("u8") { return 11; }
+    if tok_is("u32") { return 12; }
+    if tok_is("u64") { return 13; }
+    return 0;
+}
+
+// the kind (0 scalar, 1 pointer, 2 array) and base code of a global; -1 when it is not in the subset
+int ast_gkind;
+int ast_gbase;
+bool ast_global_ok(int gi) {
+    if gdyn[gi] != 0 || gtid[gi] >= 100 || (gtid[gi] >= 3 && gtid[gi] < 90) { return false; }
+    ast_gkind = 0;
+    ast_gbase = gelem[gi];
+    if gkind[gi] == 1 {
+        if gnd[gi] != 1 { return false; }
+        ast_gkind = 2;
+    } else if gptr[gi] != 0 {
+        ast_gkind = 1;
+        ast_gbase = gptr[gi];
+    }
+    return ast_scalar_code(ast_gbase);
+}
+
 
 int ast_call(int fidx) {
     // the name and `(` were read
@@ -152,18 +246,76 @@ int ast_call(int fidx) {
     return ast_node(AK_CALL, first, 0, 0, fidx);
 }
 
+// `[index]` and `^` after a name that is a pointer or an array
+int ast_postfix(int base, int kind) {
+    int cur = base;
+    while true {
+        if tok_is("[") && kind != 0 {
+            next();
+            int ix = ast_expr(0);
+            if ast_ok == 0 { return 0; }
+            if !tok_is("]") {
+                ast_fail("an index that is not understood");
+                return 0;
+            }
+            next();
+            cur = ast_node(AK_INDEX, cur, ix, 0, 0);
+            kind = 0;                        // one dimension only
+        } else if tok_is("^") && kind == 1 {
+            next();
+            cur = ast_node(AK_DEREF, cur, 0, 0, 0);
+            kind = 0;
+        } else {
+            break;
+        }
+    }
+    return cur;
+}
+
+int ast_nkind;                   // the kind (0 scalar, 1 pointer, 2 array) of the name that ast_name_node read
+
+int ast_name_node() {
+    // a name (the current token) that is a local or a global of the subset: a node (0 when it is not); the kind in ast_nkind
+    char nm[64];
+    str_copy(@nm, @tok_text, 64);
+    int li = ast_find_local(@nm);
+    if li >= 0 {
+        next();
+        ast_nkind = ast_lkind[li];
+        return ast_node(AK_VAR, 0, 0, 0, li);
+    }
+    int gi = find_global(@nm);
+    if gi >= 0 && ast_global_ok(gi) {
+        next();
+        ast_nkind = ast_gkind;
+        return ast_node(AK_GVAR, 0, 0, 0, gi);
+    }
+    ast_fail("a name that is not a local or a global of the subset");
+    return 0;
+}
 int ast_primary() {
     if tok_kind == T_NUM {
-        if tok_float == 1 {
-            ast_fail("a number with a decimal point");
-            return 0;
-        }
+        int isf = tok_float;
         int v = tok_num;
         next();
+        if isf == 1 { return ast_node(AK_FNUM, 0, 0, 0, 0); }
         return ast_node(AK_NUM, 0, 0, 0, v);
     }
     if tok_is("(") {
         next();
+        int tc = ast_type_kw();
+        if tc != 0 {
+            // a cast to a scalar type: (int)x
+            next();
+            if !tok_is(")") {
+                ast_fail("a cast that is not understood");
+                return 0;
+            }
+            next();
+            int v2 = ast_primary();
+            if ast_ok == 0 { return 0; }
+            return ast_node(AK_CAST, v2, 0, 0, tc);
+        }
         int e = ast_expr(0);
         if ast_ok == 0 { return 0; }
         if !tok_is(")") {
@@ -185,28 +337,55 @@ int ast_primary() {
         if ast_ok == 0 { return 0; }
         return ast_node(AK_NOT, a2, 0, 0, 0);
     }
-    if tok_kind == T_IDENT {
-        char nm[64];
-        str_copy(@nm, @tok_text, 64);
+    if tok_is("@") {
         next();
-        if tok_is("(") {
-            int fi = find_func(@nm);
-            if fi < 0 {
-                ast_fail("a call of a function that is not known yet");
-                return 0;
-            }
-            if fvoid[fi] == 1 || fret[fi] != 0 || fretdyn[fi] != 0 || fbuiltin[fi] == 1 || fop[fi] == 1 {
-                ast_fail("a call of a function that does not return a whole number (or a library function)");
-                return 0;
-            }
-            return ast_call(fi);
-        }
-        int li = ast_find_local(@nm);
-        if li < 0 {
-            ast_fail("a name that is not a whole number local or parameter");
+        if tok_kind != T_IDENT {
+            ast_fail("an address that is not of a variable or an element");
             return 0;
         }
-        return ast_node(AK_VAR, 0, 0, 0, li);
+        int bn = ast_name_node();
+        if ast_ok == 0 { return 0; }
+        int tgt = ast_postfix(bn, ast_nkind);
+        if ast_ok == 0 { return 0; }
+        return ast_node(AK_ADDR, tgt, 0, 0, 0);
+    }
+    if tok_kind == T_IDENT {
+        if tok_is("true") || tok_is("false") {
+            int tv = 0;
+            if tok_is("true") { tv = 1; }
+            next();
+            return ast_node(AK_NUM, 0, 0, 0, tv);
+        }
+        // a call?
+        char nm[64];
+        str_copy(@nm, @tok_text, 64);
+        int fi = find_func(@nm);
+        if fi >= 0 && ast_find_local(@nm) < 0 {
+            // look ahead: `name (`: the lexer has no peek, so read the name and see
+            int sv_pos = cur_pos;
+            int sv_line = cur_line;
+            int sv_ls = cur_line_start;
+            while cur_pos < cur_len && (lc(0) == ' ' || lc(0) == 9) { adv(); }
+            bool is_call = lc(0) == '(';
+            cur_pos = sv_pos;
+            cur_line = sv_line;
+            cur_line_start = sv_ls;
+            if is_call {
+                if fbuiltin[fi] == 1 || fop[fi] == 1 || fretdyn[fi] != 0 || fret[fi] >= 100 || (fret[fi] >= 3 && fret[fi] < 90) {
+                    ast_fail("a call of a function that is a library function, an operator or returns a String, an array or a struct");
+                    return 0;
+                }
+                if fvoid[fi] == 1 {
+                    ast_fail("a call of a function that returns nothing used as a value");
+                    return 0;
+                }
+                next();                          // the name; the current token is `(`
+                return ast_call(fi);
+            }
+        }
+        int bn2 = ast_name_node();
+        if ast_ok == 0 { return 0; }
+        return ast_postfix(bn2, ast_nkind);
     }
     ast_fail("an expression that is not in the subset");
     return 0;
@@ -263,7 +442,6 @@ int ast_expr(int level) {
 }
 
 // ---------------------------------------------------------------- statements
-
 int ast_stmt_assign_op(char^ t) {
     if str_eq(t, "+=") { return AO_ADD; }
     if str_eq(t, "-=") { return AO_SUB; }
@@ -290,6 +468,81 @@ int ast_if() {
         if ast_ok == 0 { return 0; }
     }
     return ast_node(AK_IF, c, th, el, 0);
+}
+
+// `cout << a << "text" << b;`
+int ast_cout() {
+    next();                                  // cout
+    int first = 0;
+    int last = 0;
+    while tok_is("<<") {
+        next();
+        int item = 0;
+        if tok_kind == T_STR {
+            next();
+            item = ast_node(AK_STR, 0, 0, 0, 0);
+        } else {
+            item = ast_expr(8);              // above the level of <<
+            if ast_ok == 0 { return 0; }
+        }
+        if first == 0 { first = item; } else { ast_c[last] = item; }
+        last = item;
+    }
+    if !tok_is(";") {
+        ast_fail("a cout that is not understood");
+        return 0;
+    }
+    next();
+    return ast_node(AK_COUT, first, 0, 0, 0);
+}
+
+// a declaration of a scalar, a pointer or a fixed array: `T name = e;`  `T^ name = e;`  `T name[N];`
+int ast_decl(int base) {
+    next();                                  // the type
+    int ptr = 0;
+    if tok_is("^") {
+        next();
+        ptr = 1;
+    }
+    if tok_kind != T_IDENT {
+        ast_fail("a declaration that is not understood");
+        return 0;
+    }
+    char dn[64];
+    str_copy(@dn, @tok_text, 64);
+    next();
+    int kind = ptr;
+    if tok_is("[") {
+        next();
+        if tok_kind != T_NUM || tok_float == 1 {
+            ast_fail("an array whose size is not a number");
+            return 0;
+        }
+        next();
+        if !tok_is("]") {
+            ast_fail("an array of more dimensions");
+            return 0;
+        }
+        next();
+        kind = 2;
+    }
+    int init = 0;
+    if tok_is("=") && kind != 2 {
+        next();
+        init = ast_expr(0);
+        if ast_ok == 0 { return 0; }
+    }
+    if !tok_is(";") {
+        ast_fail("a declaration that is not understood (a list, a struct, an initial list)");
+        return 0;
+    }
+    next();
+    int di = ast_add_local(@dn);
+    if di >= 0 {
+        ast_lkind[di] = kind;
+        ast_lbase[di] = base;
+    }
+    return ast_node(AK_DECL, init, 0, 0, di);
 }
 
 int ast_stmt() {
@@ -376,56 +629,52 @@ int ast_stmt() {
             next();
             return ast_node(AK_CONT, 0, 0, 0, 0);
         }
-        if tok_is("int") {
-            next();
-            if tok_kind != T_IDENT {
-                ast_fail("a declaration that is not understood");
-                return 0;
-            }
-            char dn[64];
-            str_copy(@dn, @tok_text, 64);
-            next();
-            int init = 0;
-            if tok_is("=") {
-                next();
-                init = ast_expr(0);
-                if ast_ok == 0 { return 0; }
-            }
-            if !tok_is(";") {
-                ast_fail("a declaration that is not understood (an array, a pointer or a list)");
-                return 0;
-            }
-            next();
-            int di = ast_add_local(@dn);
-            return ast_node(AK_DECL, init, 0, 0, di);
-        }
-        // `name = expr;`  `name += expr;`  `f(args);`
+        if tok_is("cout") { return ast_cout(); }
+        int tcode = ast_type_kw();
+        if tcode != 0 { return ast_decl(tcode); }
+        // `f(args);`   `target = e;`   `target += e;`   `name++;`
         char nm[64];
         str_copy(@nm, @tok_text, 64);
-        next();
-        if tok_is("(") {
-            int fi = find_func(@nm);
-            if fi < 0 || fbuiltin[fi] == 1 || fop[fi] == 1 {
-                ast_fail("a call that is not in the subset");
-                return 0;
+        int fi = find_func(@nm);
+        if fi >= 0 && ast_find_local(@nm) < 0 {
+            int sv_pos = cur_pos;
+            int sv_line = cur_line;
+            int sv_ls = cur_line_start;
+            while cur_pos < cur_len && (lc(0) == ' ' || lc(0) == 9) { adv(); }
+            bool is_call = lc(0) == '(';
+            cur_pos = sv_pos;
+            cur_line = sv_line;
+            cur_line_start = sv_ls;
+            if is_call {
+                if fbuiltin[fi] == 1 || fop[fi] == 1 {
+                    ast_fail("a call of a library function or an operator");
+                    return 0;
+                }
+                next();
+                int cn = ast_call(fi);
+                if ast_ok == 0 { return 0; }
+                if !tok_is(";") {
+                    ast_fail("a statement that is not understood");
+                    return 0;
+                }
+                next();
+                return ast_node(AK_EXPR, cn, 0, 0, 0);
             }
-            if fnpar[fi] < 0 {
-                ast_fail("a call that is not in the subset");
-                return 0;
-            }
-            int cn = ast_call(fi);
-            if ast_ok == 0 { return 0; }
+        }
+        int target = ast_name_node();
+        if ast_ok == 0 { return 0; }
+        target = ast_postfix(target, ast_nkind);
+        if ast_ok == 0 { return 0; }
+        if tok_kind == T_OP && (tok_is("++") || tok_is("--")) {
+            int step = 1;
+            if tok_is("--") { step = 0 - 1; }
+            next();
             if !tok_is(";") {
                 ast_fail("a statement that is not understood");
                 return 0;
             }
             next();
-            return ast_node(AK_EXPR, cn, 0, 0, 0);
-        }
-        int li2 = ast_find_local(@nm);
-        if li2 < 0 {
-            ast_fail("a statement that is not in the subset");
-            return 0;
+            return ast_node(AK_INCDEC, target, step, 0, 0);
         }
         int opc = 0;
         if tok_kind == T_OP && tok_is("=") {
@@ -444,7 +693,7 @@ int ast_stmt() {
             return 0;
         }
         next();
-        return ast_node(AK_ASSIGN, v2, opc, 0, li2);
+        return ast_node(AK_ASSIGN, v2, opc, target, 0);
     }
     ast_fail("a statement that is not in the subset");
     return 0;

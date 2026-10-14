@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.131
+* **The syntax tree reads more (A1c-1, `docs/design/10-structured-pipeline.md` 8.3):** scalars of every width and `double`, pointers (`p[i]`, `p^`, `@x`, `@a[i]`), fixed arrays of one dimension (locals and globals), casts to a scalar type, `++` / `--`, `cout << ...`, calls of functions that return a scalar or a pointer. The probe (`-xast`; the generated code is the same) finds **367 of the 945 function bodies** of the tests, benchmarks and examples in the subset (before: 153); the message of a body that is not says the token where it stopped.
+* Test `t371_ast_probe`.
+
 ## 0.9.130
 * **Floating point loops are vectorised again** (0.9.128 turned them off from a measurement of the poor vector loop of that time, 320 ms against 308 ms scalar, and an explanation that was wrong: the target core is wide, not a little in-order core). With pointers that move on and one branch for each turn the vector loop of `c[i] = a[i] + b[i] * k` is **106 ms against 297 ms scalar** (clang -O2: 86 ms vectorised, 148 ms scalar). `-irdbg 536870912` keeps floating point loops scalar (the test `t369_vectorize` runs both ways). The function has no fused multiply-add (the elements of the vector loop and of the remainder are made the same way); a vector `fmla` is the next step.
 * Measured with the arrays benchmark (a copy, an axpy and a sum of 2048 elements): J2K 436 ms (0.9.126) -> 260 ms, clang -O2 130 ms.
