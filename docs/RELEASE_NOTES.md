@@ -1,7 +1,8 @@
-# J2K / Jcmp 0.9.133
+# J2K / Jcmp 0.9.134
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
 
+**0.9.134:** the syntax tree reads all 949 function bodies of the tests, benchmarks and examples (String, arrays, enums, switch, try, defer, methods, lambdas); generated code is the same.
 **0.9.133:** the syntax tree has types on its nodes and can be printed (`-xastdump`); a fault in how the lists were chained is fixed.
 **0.9.132:** the syntax tree probe reads structs and fields: 57 % of the function bodies are in the subset (generated code is the same).
 **0.9.131:** the syntax tree probe reads pointers, arrays, doubles and `cout`: 39 % of the function bodies are in the subset (generated code is the same).

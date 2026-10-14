@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.134
+* **The syntax tree reads every function body of the corpus: 949 of 949** (before: 535; `docs/design/10-structured-pipeline.md` 8.6): `String`, dynamic arrays, enums, methods, `?`, `switch` with patterns, `try` / `catch`, `throw`, `defer`, `cin`, lambdas and function pointers, slices, tables of several dimensions, pointers to pointers, `Name::function`, `Enum::Member`, the built-in names. The hidden switches `-xast` / `-xastdump` print the result; the generated code is the same. The message for a body that does not fit names the token and the line.
+* Every local variable of the tree has a unique number (a block that ends does not reuse it); the dump prints compound assignments (`+=`, `shl=` ...), `for x in things`, members and methods.
+* Tests: `t372_ast_more` (the tree of a program with String, array, enum, switch, try, defer and methods, and its output); `t371_ast_probe` follows the new tree.
+* **A test that was wrong:** `Counter c;` without `init` has an undefined `n` (the first version of `t372` printed 12 or 15 or a large number): the test uses `Counter c = {0};`.
+
 ## 0.9.133
 * **Types on the nodes of the syntax tree (A2, begun; `docs/design/10-structured-pipeline.md` 8.5):** every expression node has a type (width code and kind: scalar, pointer, array, struct); `a op b` follows double > float > u64 > int, a comparison is `bool`, a cast has its target, `@x` is a pointer, a call has the type of the function's result. The hidden switch `-xastdump` prints the tree of every body in the subset with the types (the generated code is the same).
 * **Fixed in the tree before it mattered:** the statements of a block and the arguments of a call were chained through the field that `for`, `if` and an assignment use for their body, else and target (a statement list overwrote it); the lists have their own field now.
