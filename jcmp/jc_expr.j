@@ -192,8 +192,18 @@ int sig_intern(int ret, int n) {
 // (only in pass 2, when every function and enum is known)
 
 // the text for a type id in messages
+// the context of an argument that is being checked: which call and which argument (arg_ctx_fi < 0: none)
+int arg_ctx_fi = -1;
+int arg_ctx_no;
+
 void type_name_err(int t) {
-    if t == 99 {
+    if t == 80 {
+        write_err("a String");
+    } else if t == 97 {
+        write_err("null");
+    } else if t == 98 {
+        write_err("nothing (void)");
+    } else if t == 99 {
         write_err("a dynamic array");
     } else if t < 0 {
         write_err("a function pointer");
@@ -407,8 +417,20 @@ bool num_compat(int a, int b) {
 // the type of  a OP b  (+ - * / % & | xor): dies on a bool, an enum, a float, or a bad mix
 int bin_type(int a, int b) {
     if pass_no < 2 { return 0; }
-    if !is_numeric(a) || !is_numeric(b) { die("arithmetic needs numbers (bool and enum values cannot be used)"); }
-    if !num_compat(a, b) { die("cannot mix signed and unsigned numbers (use a cast, e.g. (u32)x)"); }
+    if !is_numeric(a) || !is_numeric(b) {
+        begin_msg("error");
+        write_err("this operation needs numbers, but the ");
+        int bad = a;
+        if is_numeric(a) { bad = b; write_err("right"); } else { write_err("left"); }
+        write_err(" side is ");
+        type_name_err(bad);
+        end_msg();
+        write_err("  help: bool and enum values are not numbers; compare them or cast with (int)\n");
+        err_count += 1;
+        err_summary();
+        syscall(93, 1);
+    }
+    if !num_compat(a, b) { die_help("cannot mix signed and unsigned numbers", "use a cast, e.g. (u32)x"); }
     if is_unsigned(a) && is_unsigned(b) {
         if a > b { return a; }           // u8 < u32 < u64: the wider one
         return b;
@@ -443,8 +465,18 @@ void check_assign(int want) {
     if want == 1 && (ex_ty == 1 || ex_ty == 2) { ok = 1; }
     if want >= 3 && ex_ty == want { ok = 1; }          // an enum, a struct, a float, an unsigned type of the same kind
     if ok == 0 && ex_ty == 98 { die("this function returns nothing (it is void), so there is no value to store"); }
+    if ok == 0 && want == 0 && (ex_ty == 92 || ex_ty == 91 || ex_ty == 90) && arg_ctx_fi < 0 {
+        begin_msg("error");
+        write_err("a decimal number cannot be stored in a whole number (int)");
+        end_msg();
+        write_err("  help: write (int)value to drop the decimals, or declare the variable as double\n");
+        err_count += 1;
+        err_summary();
+        syscall(93, 1);
+    }
     if ok == 0 {
         begin_msg("error");
+        write_arg_ctx();
         write_err("type mismatch: expected ");
         type_name_err(want);
         write_err(", got ");
@@ -458,7 +490,17 @@ void check_assign(int want) {
 // a text (char^) stored in an int is nearly always a mistake: say so (pointers and (int) casts are fine)
 void no_text_for_int(int want) {
     if pass_no < 2 || want != 0 || ex_w != 9 { return; }
-    die("a text cannot be stored in an int (declare the variable as char^ or String)");
+    if arg_ctx_fi >= 0 {
+        begin_msg("error");
+        write_arg_ctx();
+        write_err("a text was given, but the parameter is a number");
+        end_msg();
+        write_err("  help: declare the parameter as char^ or String, or give a number\n");
+        err_count += 1;
+        err_summary();
+        syscall(93, 1);
+    }
+    die_help("a text cannot be stored in an int", "declare the variable as char^ or String");
 }
 
 // a number written in the program (not 0 and not 1) stored in a pointer is a mistake: 0 / null is fine, an address is written with a cast
@@ -652,7 +694,20 @@ void check_local_name(char^ name) {
     if name[0] == '.' { return; }
     if find_global(name) >= 0 { die_name("a local variable hides a global of the same name", name); }
     int dup = find_local(name);
-    if dup >= scope_base && dup >= 0 { die_name("this name is already declared in this block", name); }
+    if dup >= scope_base && dup >= 0 {
+        begin_msg("error");
+        write_err("'");
+        write_err(name);
+        write_err("' is already declared in this block");
+        if dup < 8192 && lw_line[dup] > 0 {
+            write_err(" (the first one is on line ");
+            write_err_int(lw_line[dup]);
+            write_err(")");
+        }
+        end_msg();
+        write_err("  help: use another name, or assign to the variable that exists\n");
+        syscall(93, 1);
+    }
 }
 
 int luninit[8192];           // 1: a scalar declared without a value that nothing has written yet
@@ -1223,6 +1278,74 @@ void parse_array_arg() {
 }
 
 // a call with more or fewer arguments than the function declares: an error (the message says both numbers)
+// "argument N of 'f': " (or nothing) before a message about the type of a value
+void write_arg_ctx() {
+    if arg_ctx_fi >= 0 {
+        write_err("argument ");
+        write_err_int(arg_ctx_no);
+        write_err(" of '");
+        write_err(@fname + arg_ctx_fi * 64);
+        write_err("': ");
+    }
+}
+
+// the names of the struct st: fields (kind 0) or methods (kind 1), at most 8, in a help line
+void write_member_names(int st, int kind) {
+    int shown = 0;
+    if kind == 0 {
+        int f = sfirst[st];
+        int last = sfirst[st] + snf[st];
+        while f < last && shown < 8 {
+            if shown > 0 { write_err(", "); }
+            write_err(@fldname + f * 64);
+            shown += 1;
+            f += 1;
+        }
+    } else {
+        int k = 0;
+        int pl = str_len(@sname + st * 64);
+        while k < fcount && shown < 8 {
+            char^ nm = @fname + k * 64;
+            bool same = true;
+            int c = 0;
+            while c < pl {
+                if nm[c] != sname[st * 64 + c] { same = false; }
+                c += 1;
+            }
+            if same && nm[pl] == '_' && nm[pl + 1] == '_' && nm[pl + 2] != '_' && fbuiltin[k] == 0 {
+                if shown > 0 { write_err(", "); }
+                write_err(@nm + pl + 2);
+                shown += 1;
+            }
+            k += 1;
+        }
+    }
+    if shown == 0 { write_err("(none)"); }
+}
+
+// the struct st has no field / method `name`
+void die_no_member(int st, int kind, char^ name) {
+    begin_msg("error");
+    write_err("the struct '");
+    write_err(@sname + st * 64);
+    if kind == 0 { write_err("' has no field '"); } else { write_err("' has no method '"); }
+    write_err(name);
+    write_err("'");
+    end_msg();
+    sug_best = 99;
+    sug_buf[0] = 0;
+    write_err("  help: the ");
+    if kind == 0 { write_err("fields"); } else { write_err("methods"); }
+    write_err(" of '");
+    write_err(@sname + st * 64);
+    write_err("' are: ");
+    write_member_names(st, kind);
+    write_err("\n");
+    err_count += 1;
+    err_summary();
+    syscall(93, 1);
+}
+
 void check_arg_count(int fi, int skip, int given) {
     if fi < 0 || pass_no < 2 { return; }
     int want = fnpar[fi] - skip;
@@ -1276,9 +1399,12 @@ int parse_args() {
             }
             if pfi >= 0 && argno + pskip < fnpar[pfi] && argno + pskip < 8 {
                 int pidx = pfi * 8 + argno + pskip;
+                arg_ctx_fi = pfi;
+                arg_ctx_no = argno + 1;
                 if fpstr[pidx] == 2 { no_num_for_ptr(); }
                 if fpstr[pidx] == 0 && fptid[pidx] == 0 && farr[pfi] == 0 { no_text_for_int(0); }
                 check_assign(fptid[pidx]);
+                arg_ctx_fi = 0 - 1;
             }
             if psig >= 0 && argno < sig_n[psig] { check_assign(sig_p[psig * 16 + argno]); }
             if pfi >= 0 && argno + pskip < 8 && fptid[pfi * 8 + argno + pskip] >= 100 && ex_ty >= 100 && struct_has_free(ex_ty - 100) {
@@ -1650,7 +1776,10 @@ void gen_call() {
         expect("(");
     }
     int fi = find_func(@callee);
-    if fi < 0 && pass_no >= 2 && !(callee[0] == '_' && callee[1] == '_') && !str_eq(@callee, "syscall") && !str_eq(@callee, "argc") && !str_eq(@callee, "arg") { die_name("unknown function", @callee); }
+    if fi < 0 && pass_no >= 2 && !(callee[0] == '_' && callee[1] == '_') && !str_eq(@callee, "syscall") && !str_eq(@callee, "argc") && !str_eq(@callee, "arg") {
+        if lookup_var(@callee) { die_help("a variable cannot be called like a function", "it holds a value, not a function; call a function by its own name"); }
+        die_name("unknown function", @callee);
+    }
     int res_ty = 0;
     int tmp_off = 0;
     if fi >= 0 { res_ty = fret[fi]; }
@@ -2053,7 +2182,7 @@ void lvalue_loop() {
                 v_local = saved_loc;
             }
             if s_isarr == 0 {
-                if s_ptr == 0 { die("this is neither an array nor a pointer"); }
+                if s_ptr == 0 { die_help("this value cannot be indexed with [ ]: it is not an array, a String or a pointer", "only arrays, Strings, dynamic arrays and pointers have elements"); }
                 if s_ptr == 10 { die("a void^ cannot be indexed (cast it to a typed pointer first)"); }
                 v_nd = 1;
                 load_through(8);             // x0 = the pointer's value
@@ -2210,7 +2339,7 @@ void lvalue_loop() {
                 str_copy(@m_full, @sname + st * 64, 64);
                 str_copy(@m_full + str_len(@m_full), "__", 4);
                 str_copy(@m_full + str_len(@m_full), @m_name, 100);
-                if find_func(@m_full) < 0 && pass_no >= 2 { die_name("the struct has no such method", @m_name); }
+                if find_func(@m_full) < 0 && pass_no >= 2 { die_no_member(st, 1, @m_name); }
                 if pass_no >= 2 && fself[find_func(@m_full)] == 0 { die_name("this function is static: call it as Struct::name(...)", @m_name); }
                 str_copy(@id_name, @m_full, 256);
                 if lv_fresh == 1 && lv_base_local == 1 {
@@ -2269,7 +2398,7 @@ void lvalue_loop() {
                     continue;
                 }
             }
-            if fi < 0 { die_name("the struct has no such field", @m_name); }
+            if fi < 0 { die_no_member(st, 0, @m_name); }
             if fldoff[fi] != 0 { ins_n("add x0, x0, #", fldoff[fi]); }
             lv_code = fldcode[fi];
             lv_kind = fldkind[fi];
@@ -3023,7 +3152,14 @@ void str_adopt() {
         } else if ex_w == 9 {
             rt_call("__Str__from");
         } else {
-            die("a String can only be made from a text or another String");
+            begin_msg("error");
+            write_err("a String cannot be made from ");
+            type_name_err(ex_ty);
+            end_msg();
+            write_err("  help: a String comes from a text or another String; str(value) makes text from a number\n");
+            err_count += 1;
+            err_summary();
+            syscall(93, 1);
         }
     }
     rv_valid = 0;

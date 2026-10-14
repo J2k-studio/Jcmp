@@ -256,7 +256,17 @@ void sug_try(char^ name, char^ cand) {
 int in_lambda;               // 1 while the function being compiled is a lambda
 void die_name(char^ msg, char^ name) {
     begin_msg("error");
-    write_err(msg);
+    bool as_type = false;
+    if str_eq(msg, "unknown name") && cur_pos < cur_len {
+        // `Name other` is a declaration: the word is a type that does not exist
+        int sp = cur_pos;
+        while sp < cur_len && (src_bufs[cur_base + sp] == ' ' || src_bufs[cur_base + sp] == 9) { sp += 1; }
+        int c = src_bufs[cur_base + sp];
+        if sp < cur_len && sp > cur_pos && ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_') { as_type = true; }
+    }
+    // the parser has read the next word already: `Foo f;` stops at `f`
+    if str_eq(msg, "unknown name") && tok_kind == T_IDENT && !str_eq(@tok_text, name) && name[0] >= 'A' && name[0] <= 'Z' { as_type = true; }
+    if as_type { write_err("unknown type"); } else { write_err(msg); }
     if in_lambda == 1 && str_eq(msg, "unknown name") { write_err(" (a lambda cannot use the variables around it)"); }
     write_err(" '");
     write_err(name);
@@ -275,6 +285,13 @@ void die_name(char^ msg, char^ name) {
         write_err("  help: did you mean '");
         write_err(@sug_buf);
         write_err("'?\n");
+    } else if as_type {
+        write_err("  help: declare it with struct or enum class, check the spelling, or add the #import that holds it\n");
+    } else if str_eq(msg, "unknown function") && (str_eq(name, "alloc") || str_eq(name, "free") || str_eq(name, "arr")) {
+        write_err("  help: this is part of the standard library: write #import <stdlib> at the top of the file\n");
+    }
+    if msg[0] == 'l' && msg[1] == 'i' && msg[2] == 'b' {
+        write_err("  help: looked in the -I folders, J2K_PATH, ~/.j2k/lib and the lib folder next to the compiler; built in: stdlib, core, number, text, files, system, time, data, crypto, math, gfx, cpu, simd\n");
     }
     syscall(93, 1);
 }
@@ -803,7 +820,7 @@ void import_library(char^ name, char^ rel) {
         return;
     }
     char found[256];
-    if !find_library(rel, @found) { die_name("library not found (looked in -I, J2K_PATH, ~/.j2k/lib and lib next to the compiler)", name); }
+    if !find_library(rel, @found) { die_name("library not found", name); }
     import_file(@found);
 }
 
@@ -1369,7 +1386,7 @@ void missing_semicolon(int soft) {
     err_ls = prev_end_ls;
     str_copy(@m, "expected ';' at the end of line ", 100);
     append_int(@m, prev_tok_line);
-    append_text(@m, " (it is missing there)");
+    append_text(@m, ": the statement is not finished");
     if soft == 1 { soft_error(@m); } else { die(@m); }
 }
 
@@ -1395,7 +1412,7 @@ void expect(char^ s) {
             append_text(@m2, s);
             append_text(@m2, "' at the end of line ");
             append_int(@m2, prev_tok_line);
-            append_text(@m2, " (it is missing there)");
+            append_text(@m2, ": it is not closed");
             soft_error(@m2);
             err_line = sv_line;
             err_col = sv_col;
@@ -1404,7 +1421,23 @@ void expect(char^ s) {
             soft_paren_line = prev_tok_line;
             return;
         }
-        die_name("expected", s);
+        begin_msg("error");
+        write_err("expected '");
+        write_err(s);
+        write_err("', but found ");
+        if tok_kind == T_EOF {
+            write_err("the end of the file");
+        } else if tok_kind == T_STR {
+            write_err("a text");
+        } else {
+            write_err("'");
+            write_err(@tok_text);
+            write_err("'");
+        }
+        end_msg();
+        err_count += 1;
+        err_summary();
+        syscall(93, 1);
     }
     next();
 }

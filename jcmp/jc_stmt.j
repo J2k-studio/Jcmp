@@ -627,10 +627,19 @@ void parse_block() {
     int saved_ok = own_ok;
     own_ok = 1;
     int own_mark = own_count;
+    int open_line = err_line;
     expect("{");
     stmt_ends = 0;
     while !tok_is("}") {
-        if tok_kind == T_EOF { die("} expected"); }
+        if tok_kind == T_EOF {
+            begin_msg("error");
+            write_err("the file ends inside a block: the '{' on line ");
+            write_err_int(open_line);
+            write_err(" is never closed");
+            end_msg();
+            write_err("  help: a '}' is missing; check the braces that follow that line\n");
+            syscall(93, 1);
+        }
         parse_statement();
     }
     expect("}");
@@ -2268,9 +2277,9 @@ void parse_statement_inner() {
         return;
     }
     if tok_is("break") {
+        if loop_depth == 0 { die_help("'break' can only be used inside a loop (while, for)", "remove it, or put it in the body of a loop"); }
         next();
         expect(";");
-        if loop_depth == 0 { die("break outside a loop"); }
         if in_defer > 0 && loop_depth <= defer_loop_base { die("a deferred statement cannot break out of a loop around it"); }
         if mt_active == 1 && loop_depth - 1 == mt_base { die("break cannot be used in a #multithread loop (every iteration runs on its own)"); }
         leave_tries(try_depth - loop_try[loop_depth - 1]);
@@ -2279,9 +2288,9 @@ void parse_statement_inner() {
         return;
     }
     if tok_is("continue") {
+        if loop_depth == 0 { die_help("'continue' can only be used inside a loop (while, for)", "remove it, or put it in the body of a loop"); }
         next();
         expect(";");
-        if loop_depth == 0 { die("continue outside a loop"); }
         if in_defer > 0 && loop_depth <= defer_loop_base { die("a deferred statement cannot continue a loop around it"); }
         leave_tries(try_depth - loop_try[loop_depth - 1]);
         own_free_from(loop_own[loop_depth - 1], 0);
@@ -2313,7 +2322,14 @@ void parse_statement_inner() {
                     ex_ty = 80;
                     rv_valid = 0;
                 } else {
-                    die("this function returns a String");
+                    begin_msg("error");
+                    write_err("this function returns a String, but this 'return' gives ");
+                    type_name_err(ex_ty);
+                    end_msg();
+                    write_err("  help: return a text or a String, or change the return type of the function\n");
+                    err_count += 1;
+                    err_summary();
+                    syscall(93, 1);
                 }
             }
             check_assign(cur_ret_tid);

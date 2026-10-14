@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.136
+* **Error messages in plain sentences with the facts** (`docs/error-messages-plan.md`, the night of 2026-10-14): `'break' can only be used inside a loop` (the position is the keyword; it was the token after it); `'a' is already declared in this block (the first one is on line 2)`; `the file ends inside a block: the '{' on line N is never closed`; `expected ';', but found 'x'` (the token that was found is named); `the struct 'P' has no field 'y'` / `no method 'go'` with the list of the fields (methods) of the struct; `this value cannot be indexed with [ ]`; `a variable cannot be called like a function`; `argument 1 of 'twice': a text was given, but the parameter is a number`; `a decimal number cannot be stored in a whole number (int)`; `this operation needs numbers, but the left side is a String`; `this function returns a String, but this 'return' gives a number`; `a String cannot be made from a number`; `unknown type 'Foo'`; `library not found 'x'` with the places that were searched; `unknown function 'alloc'` says to write `#import <stdlib>`.
+* The names of types in messages: a String, null, nothing (void) are named (before the name of a String was empty).
+* Tests: `t375` .. `t386` (twelve messages); `t330`, `t309`, `t311` check the new / old words.
+
 ## 0.9.135
 * **The standard library in categories** (`docs/STDLIB.md`): `#import <core>`, `<number>`, `<text>`, `<files>`, `<system>`, `<time>`, `<data>`, `<crypto>` read only their own part and the parts it needs (`#import <stdlib>` reads all, as before). `std/os.j` is split into `fsdir.j` (`Fs`, `Dir`), `system.j` (`Env`, `Proc`, `Term`), `time.j` (`Time`, `Random`), `num.j` (`Num`); `Path` has its own file. `gen_std.sh` makes one function `push_std_units(mask)`.
 * **Fixed:** `Sys::write(...)` and every other function of the struct `Sys` called with its name in front was refused as "not a system register" since 0.9.80; a name that is a function of `Sys` is a call now.

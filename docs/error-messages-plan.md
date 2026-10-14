@@ -81,3 +81,19 @@ Cases, from the cheapest to the hardest (all of them only along straight lines o
 Rule of three for the wording: say what happened, point at the first line (the compiler already prints the source line of the error; the line of the first event goes in the text), say what to do (`help:`). Questions for the owner: (a) warnings first or errors at once (the compiler would refuse programs that use memory after free: they are always bugs, but a rare false positive in a loop is possible); (b) is case 4 wanted (it needs a fairly complete walk of the function).
 
 Case 4 (a leak) is not needed for owners: a local pointer that owns its memory is freed at the end of its block by the compiler (`LANGUAGE.md`, "Nothing leaks"); `-Wleak` already covers a thrown-away `alloc` result. Case 3 (`take(p)` where `take` frees its parameter) needs a flag per function and is left for later.
+
+## 2026-10-14 (night): messages in plain, formal sentences, with the facts (0.9.136)
+Done: every message below says what is wrong, where, and what to do (a `help:` line):
+* `break` / `continue` outside a loop: the position is the keyword (it was the next token); `'break' can only be used inside a loop`.
+* a name declared twice: `'a' is already declared in this block (the first one is on line 2)`.
+* the end of the file inside a block: `the file ends inside a block: the '{' on line N is never closed`.
+* a missing token: `expected ';', but found 'x'` (the found token is named).
+* a field or method that does not exist: `the struct 'P' has no field 'y'` + the list of the fields (methods) of the struct.
+* a value that is indexed and is not an array; a variable that is called like a function.
+* an argument of the wrong type: `argument 1 of 'twice': a text was given, but the parameter is a number`.
+* a decimal number in a whole number: `a decimal number cannot be stored in a whole number (int)`; arithmetic on a String names the side and the type.
+* `return` of the wrong type in a String function names both types; a String made from a number says how to make text.
+* an unknown type (`Foo f;`), a library that is not found (the places that were searched and the built-in names), `alloc` without
+  `#import <stdlib>` (the import is named).
+Open (for the owner): the style of the messages in Thai or English only (all are English now), and the exact words of the ownership
+messages (case 7 of the plan above).
