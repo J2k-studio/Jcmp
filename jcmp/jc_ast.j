@@ -900,6 +900,7 @@ int ast_fop_of(int at) {
     if str_eq(nm, "__ftrunc") { return 4; }
     if str_eq(nm, "alloc") { return 5; }            // alloc(n): the address of a block (typed as a whole number, a cast gives the pointer)
     if str_eq(nm, "free") { return 6; }
+    if str_eq(nm, "arr") { return 7; }              // arr(n): a new dynamic array (only as the value of a declaration)
     return 0;
 }
 

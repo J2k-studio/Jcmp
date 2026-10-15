@@ -119,6 +119,11 @@ int as1_flw(int b) {
     return as1_lw(b);
 }
 
+// a dynamic array of numbers (the elements are 1 i8, 2 char, 4 i32, 8 int, 7 double; its value is the address of the header)
+bool as1_dyn(int t) {
+    return t / 65536 == 5 && as1_el(t % 65536);
+}
+
 bool as1_dbl(int t) {
     return t / 65536 == 0 && t % 65536 == 7;
 }
@@ -204,6 +209,7 @@ bool as1_base(int n) {
     if n == 0 { return false; }
     int k = ast_kind[n];
     int t = ast_ty[n];
+    if as1_dyn(t) { return k == AK_VAR && opt_debug == 0; }
     if as1_arr(t) || as1_sarr(t) { return as1_lv(n); }
     if as1_pt(t) {
         if k == AK_VAR || k == AK_GVAR { return as1_var_ok(n); }
@@ -247,7 +253,10 @@ bool as1_args(int fi, int a2, int pk) {
     while a2 != 0 {
         if pk >= fnpar[fi] { return false; }
         int pt = fptid[fi * 8 + pk];
-        if pt >= 100 {
+        if pt == 99 {
+            // a dynamic array: the variable (the callee borrows it)
+            if ast_kind[a2] != AK_VAR || !as1_dyn(ast_ty[a2]) { return false; }
+        } else if pt >= 100 {
             // a struct by value: a struct of that type that has an address, or a call that makes one
             if !as1_ptid(pt) || ast_ty[a2] != 3 * 65536 + 16 + pt - 100 || !as1_sx(a2) { return false; }
         } else {
@@ -314,6 +323,33 @@ int as1_mfn(int n) {
     return find_func(@full);
 }
 
+// a member function of a dynamic array variable of numbers: 1 push(v), 2 pop(), 3 resize(n), 4 clear(), 5 free(); 0 when it is not one
+int as1_dynmethod(int n) {
+    int r = ast_a[n];
+    if opt_debug == 1 || ast_kind[r] != AK_VAR || !as1_dyn(ast_ty[r]) { return 0; }
+    char^ nm = @ast_pool + ast_val[n];
+    int a = ast_b[n];
+    int na = 0;
+    int e = a;
+    while e != 0 {
+        na += 1;
+        e = ast_nx[e];
+    }
+    int code = ast_ty[r] % 65536;
+    if str_eq(nm, "push") {
+        if na != 1 || !as1_scalar(ast_ty[a]) || !as1_expr(a) || as1_dbl(ast_ty[a]) != (code == 7) { return 0; }
+        return 1;
+    }
+    if str_eq(nm, "pop") { if na == 0 { return 2; } return 0; }
+    if str_eq(nm, "resize") {
+        if na != 1 || !as1_scalar(ast_ty[a]) || as1_dbl(ast_ty[a]) || !as1_expr(a) { return 0; }
+        return 3;
+    }
+    if str_eq(nm, "clear") { if na == 0 { return 4; } return 0; }
+    if str_eq(nm, "free") { if na == 0 { return 5; } return 0; }
+    return 0;
+}
+
 // a method of a struct (its first parameter is the address of the struct) with parameters and a result of the subset
 bool as1_method(int n) {
     if opt_debug == 1 { return false; }
@@ -364,6 +400,13 @@ bool as1_expr(int n) {
         return bo >= 1 && bo <= 4 && a1 != 0 && ast_nx[a1] == 0 && as1_dbl(ast_ty[a1]) && as1_expr(a1);
     }
     if k == AK_VAR { return as1_scalar(ty) || as1_pt(ty); }
+    if k == AK_FIELD && ast_val[n] < 0 {
+        // a.len, a.cap of a dynamic array variable
+        int dr = ast_a[n];
+        if ast_kind[dr] != AK_VAR || !as1_dyn(ast_ty[dr]) || !as1_scalar(ty) { return false; }
+        char^ dm = @ast_pool + ast_b[n] - 1;
+        return str_eq(dm, "len") || str_eq(dm, "cap");
+    }
     if k == AK_FIELD {
         int fi = ast_val[n];
         if opt_debug == 1 || fi < 0 || fldkind[fi] != 0 || flddyn[fi] != 0 || !as1_sty(ast_ty[ast_a[n]]) { return false; }
@@ -428,7 +471,10 @@ bool as1_expr(int n) {
         return (tc == 7 || as1_el(tc)) && as1_scalar(ast_ty[ast_a[n]]) && as1_expr(ast_a[n]);
     }
     if k == AK_CALL { return as1_call(n); }
-    if k == AK_METHOD { return as1_method(n) && fvoid[as1_mfn(n)] == 0; }
+    if k == AK_METHOD {
+        if as1_dyn(ast_ty[ast_a[n]]) { return as1_dynmethod(n) == 2; }
+        return as1_method(n) && fvoid[as1_mfn(n)] == 0;
+    }
     return false;
 }
 
@@ -508,6 +554,14 @@ bool as1_decl(int n) {
             }
             return true;
         }
+        if as1_dyn(dt) {
+            // no value (null), a new array arr(n), or another dynamic array variable (the same array)
+            if init == 0 { return true; }
+            if ast_kind[init] == AK_VAR { return as1_dyn(ast_ty[init]); }
+            if ast_kind[init] != AK_BUILTIN || ast_fop_of(ast_val[init]) != 7 { return false; }
+            int na0 = ast_a[init];
+            return opt_debug == 0 && na0 != 0 && ast_nx[na0] == 0 && as1_scalar(ast_ty[na0]) && !as1_dbl(ast_ty[na0]) && as1_expr(na0);
+        }
         if as1_sty(dt) {
             if !as1_splain(dt % 65536 - 16) || ssize[dt % 65536 - 16] > 128 && init != 0 { return false; }
             // no value, a list, or a struct of the same type (a variable, a field, an element or a call)
@@ -542,6 +596,7 @@ bool as1_decl(int n) {
 
 bool as1_assign(int n) {
     int k = ast_kind[n];
+        if as1_dyn(ast_ty[ast_c[n]]) { return false; }
         int t = ast_c[n];
         if as1_sty(ast_ty[t]) {
             // a struct is copied: the target has an address, the value is a struct of the same type
@@ -584,6 +639,7 @@ bool as1_stmt(int n) {
             int fa = ast_a[ex];
             return opt_debug == 0 && fa != 0 && ast_nx[fa] == 0 && as1_pt(ast_ty[fa]) && as1_expr(fa) && find_func("Mem__free") >= 0;
         }
+        if ast_kind[ex] == AK_METHOD && as1_dyn(ast_ty[ast_a[ex]]) { return as1_dynmethod(ex) != 0; }
         return (ast_kind[ex] == AK_CALL && as1_call(ex)) || (ast_kind[ex] == AK_METHOD && as1_method(ex));
     }
     if k == AK_IF { return as1_expr(ast_a[n]) && as1_stmt(ast_b[n]) && as1_stmt(ast_c[n]); }
@@ -697,6 +753,16 @@ void at_reject(int f_idx, char^ why) {
     write_err("\n");
 }
 
+// every local that the parser had when the body began and that is a dynamic array or a String is a dynamic array of numbers
+bool as1_dynparams() {
+    int i = 0;
+    while i < lcount && i < ast_nl {
+        if ast_lkind[i] == 4 || (ast_lkind[i] == 5 && !as1_el(ast_lbase[i])) { return false; }
+        i += 1;
+    }
+    return true;
+}
+
 // called at the end of ast_probe for a body that is in the tree's subset: keep it when it is in the subset of the lowering
 void at_store(int f_idx) {
     if ast_lower_on == 0 || at_nfn >= AT_FUNCS || at_n + ast_n + 2 >= AT_MAX { return; }
@@ -708,6 +774,7 @@ void at_store(int f_idx) {
     }
     int pk = 0;
     while pk < fnpar[f_idx] {
+        if fptid[f_idx * 8 + pk] == 99 && as1_dynparams() { pk += 1; continue; }
         if !as1_ptid(fptid[f_idx * 8 + pk]) { at_rej_n = fptid[f_idx * 8 + pk]; at_reject(f_idx, "parameter"); return; }
         pk += 1;
     }
@@ -731,6 +798,13 @@ void at_store(int f_idx) {
         at_val[base + i] = ast_val[i];
         at_ty[base + i] = ast_ty[i];
         if k == AK_METHOD { at_val[base + i] = as1_mfn(i); }
+        if k == AK_METHOD && as1_dyn(ast_ty[ast_a[i]]) {
+            at_val[base + i] = 1000 + as1_dynmethod(i);
+        }
+        if k == AK_FIELD && ast_val[i] < 0 && as1_dyn(ast_ty[ast_a[i]]) {
+            at_val[base + i] = 0 - 2;                                 // .len
+            if str_eq(@ast_pool + ast_b[i] - 1, "cap") { at_val[base + i] = 0 - 3; }
+        }
         if k == AK_BUILTIN { at_val[base + i] = ast_fop_of(ast_val[i]); }
         if k == AK_DECL && ast_b[i] < 0 && ast_a[i] != 0 && ast_kind[ast_a[i]] == AK_LIST { at_b[base + i] = as1_count(ast_a[i]); }
         if k == AK_STR {
@@ -1348,6 +1422,109 @@ void gl_iarith(int ao, bool nzk) {
 // the address of an element (a[i], p[i]) or of what a pointer points to (p^): the base register and the offset go to gl_ab and
 // gl_ao (the base is v30 or v29 for an array with a number as index, else v1). May use v1 and v2.
 
+// v1 = the header of the dynamic array that the variable holds, stops with an exception when it is null (dyn_null_check)
+void gl_dyn_header(int var) {
+    gl_ensure();
+    gl_load(1, 30, gl_off[at_val[var]]);
+    gl_nullchk();
+}
+
+void gl_nullchk() {
+    int lok = gl_label();
+    int lnull = gl_label();
+    gl_br(IR_NE, 1, 0, 1, lok, lnull);
+    gl_place(lnull);
+    int ce = ir_add(IR_CALL, 1, 0, 0, 0, ir_name_index("__Arr__nullerr"));
+    ir_set_args(ce, 0, @gl_args);
+    gl_place(lok);
+}
+
+// a call of a runtime routine with one or two arguments in v1 (v2)
+void gl_rt2(char^ name, int n) {
+    gl_ensure();
+    int e = ir_add(IR_CALL, 1, 0, 0, 0, ir_name_index(name));
+    gl_args[0] = 1;
+    gl_args[1] = 2;
+    ir_set_args(e, n, @gl_args);
+}
+
+// the element of the code at v1 (an address): v1 = its value, f32 for a double
+void gl_dyn_load(int code) {
+    gl_ensure();
+    int le = ir_add(IR_LOAD, 1, 1, 0, 0, 0);
+    ir_w[le] = as1_lw(code);
+    if code == 7 { ir_add(IR_BITS2F, 32, 1, 0, 0, 0); }
+}
+
+// the member functions of a dynamic array variable (statement or value); at_val is 1000 + 1 push, 2 pop, 3 resize, 4 clear, 5 free
+void gl_dynmethod(int n) {
+    int op = at_val[n] - 1000;
+    int r = at_a[n];
+    int off = gl_off[at_val[r]];
+    int code = at_ty[r] % 65536;
+    int a = at_b[n];
+    if op == 1 {
+        // push(v): the header, then the value, then the place of the new element
+        gl_ensure();
+        gl_load(1, 30, off);
+        int c0 = gl_cell(gl_depth);
+        gl_store(30, c0, 1);
+        gl_depth += 1;
+        if code == 7 {
+            gl_expr_d(a);
+            gl_ensure();
+            ir_add(IR_F2BITS, 1, 32, 0, 0, 0);
+        } else {
+            gl_expr(a);
+            gl_ensure();
+        }
+        int c1 = gl_cell(gl_depth);
+        gl_store(30, c1, 1);
+        gl_depth += 1;
+        gl_load(1, 30, c0);
+        gl_rt2("__Arr__slot", 1);
+        ir_add(IR_COPY, 3, 1, 0, 0, 0);
+        gl_load(2, 30, c1);
+        int se = ir_add(IR_STORE, 0, 3, 2, 0, 0);
+        ir_w[se] = as1_bytes(code);
+        gl_depth -= 2;
+        return;
+    }
+    if op == 2 {
+        gl_ensure();
+        gl_load(1, 30, off);
+        gl_rt2("__Arr__pop", 1);
+        gl_dyn_load(code);
+        return;
+    }
+    if op == 3 {
+        gl_ensure();
+        gl_load(1, 30, off);
+        int c2 = gl_cell(gl_depth);
+        gl_store(30, c2, 1);
+        gl_depth += 1;
+        gl_expr(a);
+        gl_ensure();
+        ir_add(IR_COPY, 2, 1, 0, 0, 0);
+        gl_load(1, 30, c2);
+        gl_depth -= 1;
+        gl_rt2("__Arr__resize", 2);
+        return;
+    }
+    if op == 4 {
+        gl_dyn_header(r);
+        ir_add(IR_CONST, 2, 0, 0, 0, 0);
+        gl_store(1, 0, 2);
+        return;
+    }
+    // free()
+    gl_ensure();
+    gl_load(1, 30, off);
+    gl_rt2("__Arr__free", 1);
+    ir_add(IR_CONST, 1, 0, 0, 0, 0);
+    gl_store(30, off, 1);
+}
+
 // the address of an object: a variable that is an array or a struct (v30 / v29 and its offset), or what gl_addr gives
 void gl_lv(int n) {
     int k = at_kind[n];
@@ -1391,6 +1568,48 @@ void gl_addr(int n) {
     }
     int b = at_a[n];
     int ix = at_b[n];
+    if at_kind[b] == AK_VAR && as1_dyn(at_ty[b]) {
+        // an element of a dynamic array: the data pointer is at [header + 16]; the header is checked first and waits while the index is worked out
+        int des = as1_bytes(at_ty[n] % 65536);
+        int dp2 = 1;
+        int dsh = 0;
+        while dp2 < des {
+            dp2 = dp2 * 2;
+            dsh += 1;
+        }
+        gl_dyn_header(b);
+        if at_kind[ix] == AK_NUM && at_val[ix] >= 0 && at_val[ix] < 4096 {
+            gl_load(1, 1, 16);
+            gl_ab = 1;
+            gl_ao = at_val[ix] * des;
+            return;
+        }
+        int dar = 0;
+        int dc = gl_cell(gl_depth);
+        if gl_rdepth < 7 && !gl_has_call(ix) {
+            dar = 9 + gl_rdepth;
+            ir_add(IR_COPY, dar, 1, 0, 0, 0);
+            gl_rdepth += 1;
+        } else {
+            gl_store(30, dc, 1);
+            gl_depth += 1;
+        }
+        gl_expr(ix);
+        gl_scale(des, dsh);
+        gl_ensure();
+        if dar != 0 {
+            ir_add(IR_COPY, 2, dar, 0, 0, 0);
+            gl_rdepth -= 1;
+        } else {
+            gl_load(2, 30, dc);
+            gl_depth -= 1;
+        }
+        gl_load(2, 2, 16);
+        ir_add(IR_ADD, 1, 1, 2, 0, 0);
+        gl_ab = 1;
+        gl_ao = 0;
+        return;
+    }
     bool is_arr = as1_arr(at_ty[b]) || as1_sarr(at_ty[b]);
     int bk = at_kind[b];
     int boff = 0;
@@ -1585,6 +1804,17 @@ void gl_expr(int n) {
         if gl_isd(n) { ir_add(IR_BITS2F, 32, 1, 0, 0, 0); }
         return;
     }
+    if k == AK_FIELD && at_val[n] < 0 {
+        gl_dyn_header(at_a[n]);
+        int fo2 = 0;
+        if at_val[n] == 0 - 3 { fo2 = 8; }
+        gl_load(1, 1, fo2);
+        return;
+    }
+    if k == AK_METHOD && at_val[n] >= 1000 {
+        gl_dynmethod(n);
+        return;
+    }
     if k == AK_INDEX || k == AK_DEREF || k == AK_FIELD {
         gl_addr(n);
         gl_ensure();
@@ -1629,6 +1859,10 @@ void gl_expr(int n) {
     }
     if k == AK_CALL || k == AK_METHOD {
         gl_call(n);
+        return;
+    }
+    if k == AK_BUILTIN && at_val[n] == 7 {
+        gl_fail = 1;                         // arr(n) is only the value of a declaration (gl_stmt)
         return;
     }
     if k == AK_BUILTIN && at_val[n] == 5 {
@@ -2080,6 +2314,26 @@ void gl_stmt(int n) {
         go_site(1, bid);
         return;
     }
+    if k == AK_DECL && as1_dyn(at_ty[n]) {
+        int doff = gl_off[at_val[n]];
+        int dinit = at_a[n];
+        gl_ensure();
+        if dinit == 0 {
+            ir_add(IR_CONST, 1, 0, 0, 0, 0);
+        } else if at_kind[dinit] == AK_VAR {
+            gl_load(1, 30, gl_off[at_val[dinit]]);
+        } else {
+            // arr(n): the routine takes the size of an element and the number
+            gl_expr(at_a[dinit]);
+            gl_ensure();
+            ir_add(IR_COPY, 2, 1, 0, 0, 0);
+            ir_add(IR_CONST, 1, 0, 0, 0, as1_bytes(at_ty[n] % 65536));
+            gl_rt2("__Arr__make", 2);
+        }
+        gl_store(30, doff, 1);
+        go_decl(doff);
+        return;
+    }
     if k == AK_DECL {
         if as1_arr(at_ty[n]) || as1_sarr(at_ty[n]) {
             if at_a[n] != 0 {
@@ -2331,7 +2585,10 @@ void gl_slots(int n) {
         gl_tmps(at_a[n]);
         if at_val[n] >= 0 && at_val[n] < 1024 { gl_off[at_val[n]] = gl_nslot; }
         int own_at = gl_nslot;
-        if as1_arr(at_ty[n]) {
+        if as1_dyn(at_ty[n]) {
+            gl_hint_add2(gl_nslot, 8, 0);
+            gl_nslot += 8;
+        } else if as1_arr(at_ty[n]) {
             int asz = at_b[n] * as1_bytes(at_ty[n] % 65536);
             gl_hint_add2(gl_nslot, asz, 0);
             gl_nslot += (asz + 7) / 8 * 8;

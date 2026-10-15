@@ -1,7 +1,8 @@
-# J2K / Jcmp 0.9.152
+# J2K / Jcmp 0.9.153
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
 
+**0.9.153:** internal: dynamic arrays of numbers (`int[] a = arr(4); a.push(3);` ...) are made from the syntax tree as well.
 **0.9.152:** internal: memory made by `alloc` and freed by the compiler (and structs that free themselves) is handled in the code that is made from the syntax tree.
 **0.9.151:** internal: `switch`, `sizeof(Type)`, the one instruction functions of `Bit` and `__fsqrt` and the others are made from the syntax tree as well.
 **0.9.150:** internal: the compiler builds most functions from the syntax tree by default (hidden `-noast` goes back to the text); lists of initial values (`int a[4] = {1, 2, 3};`) are made from the tree.

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.153
+* **AST A6, ownership layer 2: dynamic arrays of numbers from the tree.** `T[] a = arr(n);` (also `T[] a;` and `T[] b = a;`), `a.len`, `a.cap`, `a[i]` (with the null check of the header), assignment and op-assignment on elements, `a.push(v)`, `a.pop()`, `a.resize(n)`, `a.clear()`, `a.free()`, passing an array to a function (`int[] a` parameters borrow), for `int`, `i8`, `i32`, `char` and `double` elements. The owner records and the frees at the end of blocks come from the parser's events (layer 1). A `-d` build, an array of structs / Strings / pointers, assigning to an array variable, `sort` / `insert` / `index_of` and the other list functions stay on the text path.
+* The gate: 458 tests pass with the default and `-noast`, 300 more fuzz programs, `diffcheck` the same 2 differences, speed equal. 926 of 1421 functions of the corpus are built from the tree.
+* Test: `t416_ast_dyn` (3 functions).
+
 ## 0.9.152
 * **AST A6, ownership layer 1: memory that frees itself (`alloc`, `free`, owners of structs that free themselves) from the tree.** The text parser still decides what is owned and where it is freed; it now records its decisions as a list of events per function (an owner was added, a place where owners are freed: end of a block, `return`, `break`, `continue`, end of the function; a variable became null because it was freed or moved). The tree makes the same record of the cleanup chain (`[x27 + 784]`), the same frees and the same nulls from that list, and **refuses the function when the list does not match exactly what the tree did** (any event left over, any place that was not met): the text path then makes it, as before. Covered: `T^ p = (T^)alloc(n)`, `free(p)`, `Mem::free(p)`, `return p` (the owner is null first), storing an owner into a field / element (it becomes null), owners freed at the end of blocks and loops, structs with `free(self)` as variables and by-value parameters. `-d` builds keep the text path for functions that own memory (the line of every allocation).
 * The frame offsets of the 32-byte cleanup records come from the parser's list and are checked against it.
