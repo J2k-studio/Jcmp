@@ -1760,7 +1760,12 @@ void ir_passes_basic() {
     }
     if (ir_opt & 134217728) != 0 { op_counted_loops(); }
     if (ir_opt & 128) != 0 { op_thread(); }
-    if (ir_opt & 32) != 0 { op_bits_run(); }
+    if (ir_opt & 32) != 0 {
+        int fs0 = fs_changes;
+        op_fslots();
+        if fs_changes != fs0 && (ir_opt & 4) != 0 { op_clean_run(); }
+        op_bits_run();
+    }
 }
 
 // lift the small functions first and keep them, so that the calls to them can be replaced by their bodies

@@ -145,12 +145,21 @@ bool rg_fmov_back(int i, int r) {
     return false;
 }
 
+int rg_isd;                  // 1: the use at the line is ldr dK / str dK (a double, written by the lowering of the IR)
+
 int rg_slot_use(int st) {
     int i = st;
+    rg_isd = 0;
     if rg_has(st, "ldr x") {
         rg_isload = 1;
     } else if rg_has(st, "str x") {
         rg_isload = 0;
+    } else if rg_has(st, "ldr d") {
+        rg_isload = 1;
+        rg_isd = 1;
+    } else if rg_has(st, "str d") {
+        rg_isload = 0;
+        rg_isd = 1;
     } else {
         return 0 - 1;
     }
@@ -780,8 +789,9 @@ void rg_function(int is_main) {
             if n >= 0 {
                 if n % 8 == 0 && n / 8 < 8192 {
                     rg_tot[n / 8] += 1;
-                    if rg_isload == 1 && rg_fmov_ahead(i, rg_reg) { rg_fl[n / 8] += 1; }
-                    if rg_isload == 0 && rg_fmov_back(i, rg_reg) { rg_fl[n / 8] += 1; }
+                    if rg_isd == 1 { rg_fl[n / 8] += 1; }
+                    else if rg_isload == 1 && rg_fmov_ahead(i, rg_reg) { rg_fl[n / 8] += 1; }
+                    else if rg_isload == 0 && rg_fmov_back(i, rg_reg) { rg_fl[n / 8] += 1; }
                     int d = rg_dep[i];
                     if d > 3 { d = 3; }
                     int wgt = 1;
@@ -932,7 +942,37 @@ void rg_function(int is_main) {
             if n >= 0 && n % 8 == 0 && n / 8 < 8192 && (rg_slotreg[n / 8] != 0 || rg_slotd[n / 8] != 0) {
                 int r = rg_reg;
                 int load = rg_isload;
-                if rg_slotreg[n / 8] != 0 {
+                bool isd = rg_isd == 1;
+                if isd {
+                    // a double register is read or written: a move between double registers, or into the whole number register
+                    if rg_slotreg[n / 8] != 0 {
+                        int kx = rg_slotreg[n / 8];
+                        if load == 1 {
+                            rg_text("fmov d");
+                            rg_int(r);
+                            rg_text(", x");
+                            rg_int(kx);
+                        } else {
+                            rg_text("fmov x");
+                            rg_int(kx);
+                            rg_text(", d");
+                            rg_int(r);
+                        }
+                    } else {
+                        int kdd = rg_slotd[n / 8];
+                        if load == 1 {
+                            rg_text("fmov d");
+                            rg_int(r);
+                            rg_text(", d");
+                            rg_int(kdd);
+                        } else {
+                            rg_text("fmov d");
+                            rg_int(kdd);
+                            rg_text(", d");
+                            rg_int(r);
+                        }
+                    }
+                } else if rg_slotreg[n / 8] != 0 {
                     int k = rg_slotreg[n / 8];
                     rg_text("mov x");
                     if load == 1 {
@@ -1673,6 +1713,132 @@ bool pt_branch_over(int i) {
     return true;
 }
 
+// the copy of a double `fmov dT, dV` at the line i: every read of dT in the lines that follow (up to the first label, jump or call, or until
+// dT or dV is written) reads dV instead; the copy goes when dT is not needed after that. Nothing is changed unless all of it works.
+int pt_fc_line[16];
+char pt_fc_txt[1024];
+
+bool pt_op_is_d(int s, int o, int n) {
+    int b = (s * 4 + o) * 40;
+    if pt_o[b] != 'd' { return false; }
+    int v = 0;
+    int c = 1;
+    while pt_o[b + c] >= '0' && pt_o[b + c] <= '9' { v = v * 10 + (pt_o[b + c] - '0'); c += 1; }
+    return c > 1 && pt_o[b + c] == 0 && v == n;
+}
+
+bool pt_fwd_copy(int i) {
+    if !pt_parse(0, i) { return false; }
+    int t = pt_regno(0, 0, 'd');
+    int v = pt_regno(0, 1, 'd');
+    int nrep = 0;
+    int at = pt_next(i);
+    int steps = 0;
+    bool t_dead = false;           // dT is written again, or not needed any more
+    while at >= 0 && steps < 12 && !t_dead {
+        steps += 1;
+        if pt_txt[at * 64] == 0 { at = pt_next(at); continue; }
+        if !pt_parse(2, at) {
+            // a label: the flow comes from elsewhere too
+            return false;
+        }
+        bool barrier = pt_m[32] == 'b' || pt_mn(2, "cbz") || pt_mn(2, "cbnz") || pt_mn(2, "tbz") || pt_mn(2, "tbnz") || pt_mn(2, "ret") || pt_mn(2, "svc") || pt_mn(2, "blr");
+        if barrier {
+            if pt_dead(at, 32 + t, 40) { t_dead = true; }
+            else { return false; }
+            break;
+        }
+        int np = pt_no[2];
+        bool mention_t = false;
+        bool mention_v = false;
+        int o = 0;
+        while o < np {
+            if pt_rd(2, o, 32 + t) { mention_t = true; }
+            if pt_rd(2, o, 32 + v) { mention_v = true; }
+            o += 1;
+        }
+        if !mention_t && !mention_v { at = pt_next(at); continue; }
+        // which form is it
+        bool fp3 = pt_mn(2, "fadd") || pt_mn(2, "fsub") || pt_mn(2, "fmul") || pt_mn(2, "fdiv") || pt_mn(2, "fmadd") || pt_mn(2, "fmsub") || pt_mn(2, "fnmadd") || pt_mn(2, "fnmsub") || pt_mn(2, "fsqrt") || pt_mn(2, "fneg") || pt_mn(2, "fabs") || pt_mn(2, "fmov");
+        bool cmp = pt_mn(2, "fcmp");
+        bool st = pt_mn(2, "str");
+        if !fp3 && !cmp && !st {
+            if mention_t { return false; }
+            // it touches dV only: a write of dV ends the forwarding; a read does not matter
+            // any other line that has dV as its first operand writes it (fmovi, ldr, scvtf ...); stores and compares only read
+            if pt_no[2] >= 1 && pt_rd(2, 0, 32 + v) && !pt_mn(2, "str") && !pt_mn(2, "fcmp") {
+                if pt_dead(at, 32 + t, 40) { t_dead = true; break; }
+                return false;
+            }
+            at = pt_next(at);
+            continue;
+        }
+        // reads of dT: operands other than the first (the first for fcmp and str); an operand that names dT in another way stops it
+        bool writes_t = false;
+        bool writes_v = false;
+        bool changed = false;
+        char nl4[64];
+        int n4 = 0;
+        int mm = 2 * 16;
+        int mi = 0;
+        while pt_m[mm + mi] != 0 { nl4[n4] = pt_m[mm + mi]; n4 += 1; mi += 1; }
+        o = 0;
+        while o < np {
+            nl4[n4] = ',';
+            if o == 0 { nl4[n4] = ' '; }
+            n4 += 1;
+            if o > 0 { nl4[n4] = ' '; n4 += 1; }
+            bool is_dest = o == 0 && !cmp && !st;
+            int ob = (2 * 4 + o) * 40;
+            if pt_op_is_d(2, o, t) {
+                if is_dest { writes_t = true; }
+                else {
+                    nl4[n4] = 'd'; n4 += 1;
+                    if v >= 10 { nl4[n4] = '0' + v / 10; n4 += 1; }
+                    nl4[n4] = '0' + v % 10; n4 += 1;
+                    changed = true;
+                    o += 1;
+                    continue;
+                }
+            } else if pt_rd(2, o, 32 + t) {
+                return false;
+            }
+            if pt_op_is_d(2, o, v) && is_dest { writes_v = true; }
+            if pt_rd(2, o, 32 + v) && !pt_op_is_d(2, o, v) && is_dest { return false; }
+            int c = 0;
+            while pt_o[ob + c] != 0 { nl4[n4] = pt_o[ob + c]; n4 += 1; c += 1; }
+            o += 1;
+        }
+        nl4[n4] = 0;
+        if changed {
+            if nrep >= 14 { return false; }
+            pt_fc_line[nrep] = at;
+            int c2 = 0;
+            while nl4[c2] != 0 { pt_fc_txt[nrep * 64 + c2] = nl4[c2]; c2 += 1; }
+            pt_fc_txt[nrep * 64 + c2] = 0;
+            nrep += 1;
+        }
+        if writes_t { t_dead = true; break; }
+        if writes_v {
+            if pt_dead(pt_next(at), 32 + t, 40) { t_dead = true; break; }
+            return false;
+        }
+        at = pt_next(at);
+    }
+    if nrep == 0 { return false; }
+    if !t_dead {
+        // the end of the window: dT must not be needed after the last line looked at
+        if at < 0 || !pt_dead(at, 32 + t, 40) { return false; }
+    }
+    int r = 0;
+    while r < nrep {
+        pt_set(pt_fc_line[r], @pt_fc_txt + r * 64);
+        r += 1;
+    }
+    pt_set(i, "");
+    return true;
+}
+
 bool pt_rules(int i) {
     if pt_branch_over(i) { return true; }
     int j = pt_next(i);
@@ -2381,6 +2547,12 @@ bool pt_rules(int i) {
             pt_set(i, "");
             return true;
         }
+    }
+    // fmov dT, dV / ... / OP D, ..., dT, ...   ->   (the lines) / OP D, ..., dV, ...      (see pt_fwd_copy)
+    if pt_mn(0, "fmov") && pt_no[0] == 2 && pt_regno(0, 0, 'd') >= 0 && pt_regno(0, 1, 'd') >= 0 && pt_regno(0, 0, 'd') != pt_regno(0, 1, 'd') {
+        if pt_fwd_copy(i) { return true; }
+        pt_parse(0, i);
+        pt_parse(1, j);
     }
     // fmov dA, S / fmov dB, dA   ->   fmov dB, S   (dA is not needed afterwards)
     if pt_mn(0, "fmov") && pt_no[0] == 2 && pt_regno(0, 0, 'd') >= 0 && pt_mn(1, "fmov") && pt_no[1] == 2 && pt_regno(1, 0, 'd') >= 0 && pt_regno(1, 1, 'd') == pt_regno(0, 0, 'd') && pt_regno(1, 0, 'd') != pt_regno(0, 0, 'd') && (pt_regno(0, 1, 'x') >= 0 || pt_regno(0, 1, 'd') >= 0) {

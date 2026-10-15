@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.142
+* **A local `double` is no longer moved through a whole number register** (`op_fslots` in `jcmp/jc_opt.j`). The front end keeps a double in an 8-byte slot with `fmov x0, d0 / str x0, [slot]` and `ldr x0, [slot] / fmov d0, x0`; when the slot became a register the two moves between the register files stayed in the middle of the chain of a loop that carries `x` and `y` (3 - 5 cycles each). A slot whose stores all put in the result of an `f2bits` (or a constant, or a load of another such slot) and whose loads are read by `bits2f` only is a double slot now: its stores and loads work on double registers (`str d`, `ldr d`), and the register pass (`jc_regs.j`) understands them (`rg_isd`).
+* **The copy of a double that waits in another register is forwarded** (`pt_fwd_copy`): `fmov d25, d9 / fmul d16, d25, d25` becomes `fmul d16, d9, d9`; every read of the copy up to the next label, jump or call reads the original, and the copy goes when it is not needed afterwards.
+* `mandel` 45 -> 40 ms, `matmul` 39 -> 36 ms; `nbody` and `vec3` unchanged.
+* Test: `t402_double_slots` (checked against Python; the same output with `-irclr 32`, `-noir`, `-noregs`).
+
 ## 0.9.141
 * **What does not change from turn to turn is made once, in front of the vector loop** (`vz_licm` in `jcmp/jc_opt.j`): the body of a vector loop reused the registers of the scalar body, so the general LICM could not move anything out of it, and the broadcast of `k`, the float `2.0` and the load of a parameter were done again in every chunk. The body is renamed (a new name at every write), the instructions that read only registers that the body does not write are moved into a block that runs once, and the same value computed in two chunks is made once. `widths` 185 -> 101 ms.
 * **Four chunks of 16 bytes in a turn** (two for `char`, so that short arrays still get a vector loop), and **a partial sum of its own for each chunk** (the four additions of a turn do not wait for each other). `arrays` 248 -> 190 ms.

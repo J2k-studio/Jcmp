@@ -1953,6 +1953,244 @@ void op_bits_run() {
     }
 }
 
+// ---------------------------------------------------------------------------------------------- slots that only hold doubles
+// A local `double x` lives in an 8-byte slot, and the code of the front end moves it through whole number registers:
+//     fmov x0, d0 / str x0, [slot]   and   ldr x0, [slot] / fmov d1, x0
+// The IR keeps that as  v1 = f2bits f ; store [slot], v1  and  v1 = load [slot] ; f = bits2f v1. When the slot becomes a register
+// the moves between the two register files stay (3 - 5 cycles each, in the middle of the chain of a loop that carries x and y).
+// A slot is a double slot when every store puts in the result of an f2bits (or a constant, or a load of another double slot) that
+// is read by nothing but such stores and bits2f, and every load is read by nothing but such stores and bits2f. Then the loads
+// and the stores work on double registers: `ldr d, [slot]`, `str d, [slot]`.
+int fs_cand[8192];
+int fs_changes;
+
+int fs_slot_of(int i) {
+    int s = vn_slot(i);
+    if s >= 0 && s < 8192 { return s; }
+    return 0 - 1;
+}
+
+// the instruction that made the value of r at pos, through copies: F2BITS, CONST or a LOAD (-1: something else)
+int fs_root(int b, int pos, int r) {
+    int guard = 0;
+    int at = pos;
+    int v = r;
+    while guard < 8 {
+        int j = rn_find_def(b, at, v);
+        if j < 0 { return 0 - 1; }
+        int op = ir_op[j];
+        if op == IR_COPY {
+            v = ir_a[j];
+            at = j;
+            guard += 1;
+            continue;
+        }
+        if op == IR_F2BITS || op == IR_CONST || (op == IR_LOAD && ir_a[j] == 30 && ir_w[j] == 8 && ir_bi[j] == 0) { return j; }
+        return 0 - 1;
+    }
+    return 0 - 1;
+}
+
+bool fs_uses_ok(int b, int from, int d, int depth) {
+    if depth > 6 || d < 1 { return false; }
+    int j = from;
+    while j < ir_be[b] {
+        int op = ir_op[j];
+        if op == IR_NOP { j += 1; continue; }
+        if op == IR_CALL || op == IR_CALLIND || op == IR_SYSCALL {
+            int g = 0;
+            while g < ir_ac[j] {
+                if ir_args[ir_as[j] + g] == d { return false; }
+                g += 1;
+            }
+            if op == IR_CALLIND && ir_a[j] == d { return false; }
+            if op == IR_SYSCALL && ir_a[j] == d { return false; }
+            return d <= 19;
+        }
+        bool reads = ir_a[j] == d || (ir_uses_b(op) && ir_bi[j] == 0 && ir_b[j] == d);
+        if reads {
+            if op == IR_BITS2F && ir_a[j] == d {
+            } else if op == IR_COPY && ir_a[j] == d {
+                int e = ir_d[j];
+                if e == d {
+                    // a copy onto itself changes nothing: the value goes on in the same register
+                    j += 1;
+                    continue;
+                }
+                if e < 1 || e >= 64 { return false; }
+                if !fs_uses_ok(b, j + 1, e, depth + 1) { return false; }
+            } else if op == IR_STORE && ir_w[j] == 8 && ir_bi[j] == 0 && ir_b[j] == d && ir_a[j] == 30 {
+                int s2 = fs_slot_of(j);
+                if s2 < 0 || fs_cand[s2] != 1 { return false; }
+            } else {
+                return false;
+            }
+        }
+        if ir_d[j] == d && op != IR_STORE { return true; }
+        j += 1;
+    }
+    if d < 64 { return (op_lo[b] & (1 << d)) == 0; }
+    return true;
+}
+
+// a double register (d18 .. d29) that the block b does not mention and that does not live across it, and that this pass did not take
+// in the block yet (bit r of taken); 0 when there is none. The scratch registers of the lowering (d30, d31) and d16, d17 are left alone.
+int fs_pick(int b, int taken) {
+    int r = 61;
+    while r >= 50 {
+        if r != 59 && (taken & (1 << r)) == 0 && (op_li[b] & (1 << r)) == 0 && (op_lo[b] & (1 << r)) == 0 && !bt_mentions(b, r) { return r; }
+        r -= 1;
+    }
+    return 0;
+}
+
+void op_fslots() {
+    if ir_nb > 2000 { return; }
+    op_liveness();
+    int s = 0;
+    while s < 8192 { fs_cand[s] = 0; s += 1; }
+    bool any = false;
+    int b = 0;
+    while b < ir_nb {
+        if op_po[b] >= 0 {
+            int i = ir_bs[b];
+            while i < ir_be[b] {
+                if ir_op[i] == IR_STORE && ir_a[i] == 30 {
+                    int sl = fs_slot_of(i);
+                    if sl >= 0 { fs_cand[sl] = 1; any = true; }
+                }
+                i += 1;
+            }
+        }
+        b += 1;
+    }
+    if !any { return; }
+    // the slots that something else than a double uses go out, until nothing changes
+    bool changed = true;
+    int rounds = 0;
+    while changed && rounds < 12 {
+        changed = false;
+        rounds += 1;
+        b = 0;
+        while b < ir_nb {
+            if op_po[b] >= 0 {
+                int i = ir_bs[b];
+                while i < ir_be[b] {
+                    int op = ir_op[i];
+                    if (op == IR_STORE || op == IR_LOAD) && ir_a[i] == 30 && ir_w[i] == 8 {
+                        int sl = fs_slot_of(i);
+                        if sl >= 0 && fs_cand[sl] == 1 {
+                            bool ok = true;
+                            if op == IR_STORE {
+                                if ir_bi[i] != 0 { ok = false; }
+                                else {
+                                    int rt = fs_root(b, i, ir_b[i]);
+                                    if rt < 0 { ok = false; }
+                                    else {
+                                        if ir_op[rt] == IR_LOAD {
+                                            int s3 = fs_slot_of(rt);
+                                            if s3 < 0 || fs_cand[s3] != 1 { ok = false; }
+                                        }
+                                        // every reader of the value: the register the root wrote, after the root
+                                        if ok && !fs_uses_ok(b, rt + 1, ir_d[rt], 0) { ok = false; }
+                                    }
+                                }
+                            } else {
+                                if ir_vcls[ir_d[i]] != 0 || !fs_uses_ok(b, i + 1, ir_d[i], 0) { ok = false; }
+                            }
+                            if !ok { fs_cand[sl] = 0; changed = true; }
+                        }
+                    }
+                    i += 1;
+                }
+            }
+            b += 1;
+        }
+    }
+    // the slots that stay: stores and loads work on double registers
+    int map_of[64];
+    b = 0;
+    while b < ir_nb {
+        if op_po[b] >= 0 {
+            int z = 0;
+            while z < 64 { map_of[z] = 0; z += 1; }
+            int taken = 0;
+            int i = ir_bs[b];
+            while i < ir_be[b] {
+                int op = ir_op[i];
+                if op == IR_NOP { i += 1; continue; }
+                if op == IR_CALL || op == IR_CALLIND || op == IR_SYSCALL {
+                    z = 0;
+                    while z < 64 { map_of[z] = 0; z += 1; }
+                    i += 1;
+                    continue;
+                }
+                // the uses of a retyped value
+                if op == IR_STORE && ir_bi[i] == 0 && ir_b[i] > 0 && ir_b[i] < 64 && map_of[ir_b[i]] != 0 && ir_a[i] == 30 {
+                    ir_b[i] = map_of[ir_b[i]];
+                    fs_changes += 1;
+                } else if op == IR_BITS2F && ir_a[i] > 0 && ir_a[i] < 64 && map_of[ir_a[i]] != 0 {
+                    ir_op[i] = IR_COPY;
+                    ir_a[i] = map_of[ir_a[i]];
+                    fs_changes += 1;
+                    op = IR_COPY;
+                } else if op == IR_COPY && ir_a[i] > 0 && ir_a[i] < 64 && map_of[ir_a[i]] != 0 && ir_d[i] > 0 && ir_d[i] < 64 {
+                    int nf2 = fs_pick(b, taken);
+                    int od = ir_d[i];
+                    if ir_a[i] == od && nf2 == 0 { i += 1; continue; }
+                    if nf2 != 0 {
+                        taken = taken | (1 << nf2);
+                        ir_a[i] = map_of[ir_a[i]];
+                        ir_d[i] = nf2;
+                        map_of[od] = nf2;
+                    } else {
+                        // no register for the copy: the double goes back to a whole number register
+                        ir_op[i] = IR_F2BITS;
+                        ir_a[i] = map_of[ir_a[i]];
+                        map_of[od] = 0;
+                    }
+                    fs_changes += 1;
+                    i += 1;
+                    continue;
+                }
+                int d = ir_d[i];
+                if d > 0 && d < 64 && op != IR_STORE && ir_vcls[d] == 0 {
+                    map_of[d] = 0;
+                    bool retype = false;
+                    if op == IR_LOAD && ir_a[i] == 30 && ir_w[i] == 8 && ir_bi[i] == 0 {
+                        int sl2 = fs_slot_of(i);
+                        if sl2 >= 0 && fs_cand[sl2] == 1 { retype = true; }
+                    } else if (op == IR_F2BITS || op == IR_CONST) && fs_uses_ok(b, i + 1, d, 0) {
+                        // only when a store of a double slot is among the readers (else nothing is gained)
+                        int j = i + 1;
+                        bool feeds = false;
+                        while j < ir_be[b] && !feeds {
+                            if ir_op[j] == IR_STORE && ir_b[j] == d && ir_bi[j] == 0 && ir_a[j] == 30 { feeds = true; }
+                            if ir_op[j] == IR_COPY && ir_a[j] == d { feeds = true; }
+                            if ir_d[j] == d && ir_op[j] != IR_STORE { j = ir_be[b]; }
+                            j += 1;
+                        }
+                        retype = feeds;
+                    }
+                    if retype {
+                        int nf = fs_pick(b, taken);
+                        if nf != 0 {
+                            taken = taken | (1 << nf);
+                            if op == IR_F2BITS { ir_op[i] = IR_COPY; }
+                            else if op == IR_CONST { ir_op[i] = IR_FCONST; }
+                            ir_d[i] = nf;
+                            map_of[d] = nf;
+                            fs_changes += 1;
+                        }
+                    }
+                }
+                i += 1;
+            }
+        }
+        b += 1;
+    }
+}
+
 // ---------------------------------------------------------------------------------------------- the frame of a function (the last text pass)
 // sub sp, sp, #N / str x29, [sp, #0] / str x30, [sp, #8] / add x29, sp, #0     ->   stp x29, x30, [sp, #-N]! / add x29, sp, #0
 // ldr x29, [sp, #0] / ldr x30, [sp, #8] / add sp, sp, #N                     ->   ldp x29, x30, [sp], #N
