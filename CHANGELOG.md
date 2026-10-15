@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.151
+* **AST A1b, seventh part: `switch`, `sizeof(Type)`, `Bit::clz / ctz / popcount / bswap / rotl / rotr` and `__fsqrt / __ffloor / __fceil / __ftrunc` from the tree.** A `switch` on a whole number, a `char` or an enum with constant patterns (`1, 2:`, `-5:`, `'a':`, `Kind::Plus:`) and `_`: the tests in order, then the bodies; the default runs when nothing matched wherever it is written; `break` / `continue` inside go to the loop around the switch. `sizeof(int)`, `sizeof(P)`, `sizeof(int^)` are numbers in the tree. The functions of `Bit` are the one instruction (`clz`, `rbit` + `clz`, `popcnt`, `rev`, `ror`) and the four functions of the double unit are `fsqrt`, `frintm`, `frintp`, `frintz`, as in the text path. 900 of 1404 functions of the corpus are built from the tree (873 of 1387 in 0.9.150).
+* The gate: 454 tests pass with the default and with `-noast`, 300 more fuzz programs, `diffcheck` (`-noast`, `-noir`, `-noinl`) the same differences as before (an out of range read in `t154_bounds` that depends on what is in the frame), speed equal.
+* Test: `t414_ast_switch` (7 functions).
+
 ## 0.9.150
 * **The tree is the default path (A6, first step): the functions of the subset are built from the syntax tree without any switch.** `-noast` (hidden) makes every function from its text as before; `-ast` is accepted and does nothing. The functions that the tree does not lower yet (Strings and dynamic arrays, `alloc` / `free` / `arr`, `switch`, `try`, lambdas, `float`, structs that free themselves) are still made from the text, one function at a time, and the frame check keeps the two paths consistent. The compiler built with the tree path is byte-identical when it compiles itself again (fixed point). Compile time of the compiler: 6.5 s -> 7.1 s (the tree is read for every function); the program is 0.9 % smaller.
 * **Lists of values from the tree:** `int a[4] = {1, 2, 3};` (the rest is 0), `int b[] = {..}`, `double`, `char`, `i32` arrays, structs `P p = {7, 8};`, nested structs, arrays inside structs.

@@ -222,7 +222,21 @@ bool as1_prefix(char^ nm, char^ pre) {
     return true;
 }
 
+// the functions of the group Bit that are one instruction (the text path does the same): 1 clz, 2 ctz, 3 popcount, 4 bswap, 5 rotl, 6 rotr
+int as1_intrin(char^ nm) {
+    if !as1_prefix(nm, "Bit__") { return 0; }
+    char^ r = nm + 5;
+    if as1_prefix(r, "clz") && r[3] == 0 { return 1; }
+    if as1_prefix(r, "ctz") && r[3] == 0 { return 2; }
+    if as1_prefix(r, "popcount") && r[8] == 0 { return 3; }
+    if as1_prefix(r, "bswap") && r[5] == 0 { return 4; }
+    if as1_prefix(r, "rotl") && r[4] == 0 { return 5; }
+    if as1_prefix(r, "rotr") && r[4] == 0 { return 6; }
+    return 0;
+}
+
 bool as1_special(char^ nm) {
+    if as1_intrin(nm) != 0 { return false; }
     if as1_prefix(nm, "Bit__") || as1_prefix(nm, "Cpu__") || as1_prefix(nm, "Cache__") || as1_prefix(nm, "Atomic__") { return true; }
     if as1_prefix(nm, "Mem__bar") { return true; }
     return nm[0] == '_' && nm[1] == '_';
@@ -261,6 +275,13 @@ bool as1_call(int n) {
     if fnpar[fi] + as1_hidden(fi) > 8 { return false; }
     if fvoid[fi] == 0 && !as1_rtid(fret[fi]) { return false; }
     if fcharret[fi] != 0 || farr[fi] != 0 || as1_special(@fname + fi * 64) { return false; }
+    int ik = as1_intrin(@fname + fi * 64);
+    if ik != 0 {
+        // whole numbers in and out (the text path takes any number of arguments from the call: only the right count is lowered)
+        int want = 1;
+        if ik >= 5 { want = 2; }
+        if fnpar[fi] != want { return false; }
+    }
     return as1_args(fi, ast_a[n], 0);
 }
 
@@ -313,6 +334,7 @@ bool as1_enumv(int n) {
     int keep_val = found_val;
     bool r = false;
     int t = ast_ty[n];
+    if ast_c[n] != 0 { t = ast_c[n]; }          // a pattern of a switch: the type of the value
     if ast_cls[n] == 1 && t / 65536 == 6 {
         if find_member(t % 65536 - 3, @ast_pool + ast_val[n]) { r = true; as1_ev = found_val; }
     } else if ast_cls[n] == 3 {
@@ -331,6 +353,11 @@ bool as1_expr(int n) {
     if k == AK_NUM { return as1_scalar(ty); }
     if k == AK_FNUM { return true; }
     if k == AK_ENUMV { return as1_enumv(n); }
+    if k == AK_BUILTIN {
+        // __fsqrt / __ffloor / __fceil / __ftrunc of a double
+        int a1 = ast_a[n];
+        return ast_fop_of(ast_val[n]) != 0 && a1 != 0 && ast_nx[a1] == 0 && as1_dbl(ast_ty[a1]) && as1_expr(a1);
+    }
     if k == AK_VAR { return as1_scalar(ty) || as1_pt(ty); }
     if k == AK_FIELD {
         int fi = ast_val[n];
@@ -553,6 +580,31 @@ bool as1_stmt(int n) {
         return as1_expr(ast_a[n]);
     }
     if k == AK_BREAK || k == AK_CONT { return true; }
+    if k == AK_SWITCH {
+        // a whole number, a char or an enum; the patterns are constants (a data enum or a name that is bound: the text path)
+        int sv = ast_a[n];
+        if !as1_scalar(ast_ty[sv]) || as1_dbl(ast_ty[sv]) || !as1_expr(sv) { return false; }
+        int cs = ast_b[n];
+        if cs == 0 { return false; }
+        while cs != 0 {
+            if ast_kind[cs] != AK_CASE || ast_val[cs] != 0 { return false; }
+            int pt = ast_a[cs];
+            while pt != 0 {
+                int pk = ast_kind[pt];
+                if pk == AK_NEG { pk = ast_kind[ast_a[pt]]; if pk != AK_NUM { return false; } }
+                else if pk == AK_ENUMV {
+                    // a pattern has no type of its own: it is a member of the enum of the value
+                    if ast_ty[sv] / 65536 == 6 { ast_c[pt] = ast_ty[sv]; }
+                    if !as1_enumv(pt) { return false; }
+                }
+                else if pk != AK_NUM { return false; }
+                pt = ast_nx[pt];
+            }
+            if !as1_stmt(ast_b[cs]) { return false; }
+            cs = ast_nx[cs];
+        }
+        return true;
+    }
     if k == AK_COUT {
         int it = ast_a[n];
         if it == 0 { return false; }
@@ -575,8 +627,8 @@ int at_fields(int k) {
     if k == AK_NEG || k == AK_NOT || k == AK_CALL || k == AK_BLOCK || k == AK_DECL || k == AK_EXPR || k == AK_RET || k == AK_INCDEC || k == AK_CAST { return 1; }
     if k == AK_ASSIGN { return 5; }
     if k == AK_IF || k == AK_FOR { return 7; }
-    if k == AK_METHOD { return 3; }
-    if k == AK_COUT || k == AK_LIST { return 1; }
+    if k == AK_METHOD || k == AK_SWITCH || k == AK_CASE { return 3; }
+    if k == AK_COUT || k == AK_LIST || k == AK_BUILTIN { return 1; }
     return 0;
 }
 
@@ -584,7 +636,7 @@ int at_fields(int k) {
 bool as1_kind_ok(int k) {
     if k == AK_NUM || k == AK_FNUM || k == AK_VAR || k == AK_GVAR || k == AK_INDEX || k == AK_DEREF || k == AK_ADDR || k == AK_FIELD { return true; }
     if k == AK_BIN || k == AK_NEG || k == AK_NOT || k == AK_CAST || k == AK_CALL || k == AK_DECL || k == AK_ASSIGN || k == AK_INCDEC { return true; }
-    if k == AK_STR || k == AK_COUT || k == AK_ENUMV || k == AK_METHOD { return true; }
+    if k == AK_STR || k == AK_COUT || k == AK_ENUMV || k == AK_METHOD || k == AK_SWITCH || k == AK_CASE { return true; }
     return k == AK_EXPR || k == AK_IF || k == AK_WHILE || k == AK_FOR || k == AK_RET || k == AK_BREAK || k == AK_CONT || k == AK_BLOCK;
 }
 
@@ -664,6 +716,7 @@ void at_store(int f_idx) {
         at_val[base + i] = ast_val[i];
         at_ty[base + i] = ast_ty[i];
         if k == AK_METHOD { at_val[base + i] = as1_mfn(i); }
+        if k == AK_BUILTIN { at_val[base + i] = ast_fop_of(ast_val[i]); }
         if k == AK_DECL && ast_b[i] < 0 && ast_a[i] != 0 && ast_kind[ast_a[i]] == AK_LIST { at_b[base + i] = as1_count(ast_a[i]); }
         if k == AK_STR {
             int sl = ast_b[i];
@@ -946,7 +999,7 @@ bool gl_has_call(int n) {
     int k = at_kind[n];
     if k == AK_CALL || k == AK_METHOD { return true; }
     if k == AK_BIN { return gl_has_call(at_a[n]) || gl_has_call(at_b[n]); }
-    if k == AK_NEG || k == AK_NOT || k == AK_CAST || k == AK_DEREF || k == AK_ADDR || k == AK_FIELD { return gl_has_call(at_a[n]); }
+    if k == AK_NEG || k == AK_NOT || k == AK_CAST || k == AK_DEREF || k == AK_ADDR || k == AK_FIELD || k == AK_BUILTIN { return gl_has_call(at_a[n]); }
     if k == AK_INDEX { return gl_has_call(at_a[n]) || gl_has_call(at_b[n]); }
     return false;
 }
@@ -1113,6 +1166,18 @@ void gl_call(int n) {
         k += 1;
     }
     gl_ensure();
+    int ik = as1_intrin(@fname + fi * 64);
+    if ik != 0 {
+        if ik == 1 { ir_add(IR_CLZ, 1, 1, 0, 0, 0); }
+        else if ik == 2 { ir_add(IR_RBIT, 1, 1, 0, 0, 0); ir_add(IR_CLZ, 1, 1, 0, 0, 0); }
+        else if ik == 3 { ir_add(IR_POPCNT, 1, 1, 0, 0, 0); }
+        else if ik == 4 { ir_add(IR_BSWAP, 1, 1, 0, 0, 0); }
+        else {
+            if ik == 5 { ir_add(IR_NEG, 2, 2, 0, 0, 0); }
+            ir_add(IR_ROTR, 1, 1, 2, 0, 0);
+        }
+        return;
+    }
     int e = ir_add(IR_CALL, 1, 0, 0, 0, ir_name_index(@fname + fi * 64));
     int r = 0;
     while r < argn {
@@ -1547,6 +1612,16 @@ void gl_expr(int n) {
         gl_call(n);
         return;
     }
+    if k == AK_BUILTIN {
+        gl_expr_d(at_a[n]);
+        gl_ensure();
+        int fo = at_val[n];
+        if fo == 1 { ir_add(IR_FSQRT, 32, 32, 0, 0, 0); }
+        else if fo == 2 { ir_add(IR_FFLOOR, 32, 32, 0, 0, 0); }
+        else if fo == 3 { ir_add(IR_FCEIL, 32, 32, 0, 0, 0); }
+        else { ir_add(IR_FTRUNC, 32, 32, 0, 0, 0); }
+        return;
+    }
     if k == AK_BIN {
         int ao = at_val[n];
         int a = at_a[n];
@@ -1804,11 +1879,70 @@ void gl_alist(int lst, int code, int count, int base, int off) {
     }
 }
 
+// the value of a constant pattern
+int gl_pat(int p) {
+    if at_kind[p] == AK_NEG { return 0 - at_val[at_a[p]]; }
+    return at_val[p];
+}
+
+// switch: the tests in order, then the bodies; the default runs when nothing matched wherever it is written
+void gl_switch(int n) {
+    int slot = gl_bsl[n];
+    gl_expr(at_a[n]);
+    gl_ensure();
+    gl_store(30, slot, 1);
+    int lend = gl_label();
+    int sdef = 0 - 1;
+    int cs = at_b[n];
+    int nc = 0;
+    while cs != 0 {
+        nc += 1;
+        cs = at_nx[cs];
+    }
+    if nc > 256 { gl_fail = 1; return; }
+    int lbl[256];
+    cs = at_b[n];
+    int ci = 0;
+    while cs != 0 {
+        lbl[ci] = gl_label();
+        if at_a[cs] == 0 {
+            sdef = lbl[ci];
+        } else {
+            int pt = at_a[cs];
+            while pt != 0 {
+                gl_load(1, 30, slot);
+                ir_add(IR_CONST, 2, 0, 0, 0, gl_pat(pt));
+                int lnext = gl_label();
+                gl_br(IR_EQ, 1, 2, 0, lbl[ci], lnext);
+                gl_place(lnext);
+                pt = at_nx[pt];
+            }
+        }
+        ci += 1;
+        cs = at_nx[cs];
+    }
+    if sdef >= 0 { gl_jmp(sdef); } else { gl_jmp(lend); }
+    cs = at_b[n];
+    ci = 0;
+    while cs != 0 {
+        gl_place(lbl[ci]);
+        gl_stmt(at_b[cs]);
+        gl_jmp(lend);
+        ci += 1;
+        cs = at_nx[cs];
+    }
+    gl_place(lend);
+}
+
 void gl_stmt(int n) {
     if n == 0 { return; }
     int k = at_kind[n];
     if k == AK_COUT {
         gl_cout(n);
+        return;
+    }
+    if k == AK_SWITCH {
+        gl_switch(n);
         return;
     }
     if k == AK_BLOCK {
@@ -1993,7 +2127,7 @@ void gl_tmps(int n) {
         return;
     }
     if k == AK_BIN || k == AK_INDEX { gl_tmps(at_a[n]); gl_tmps(at_b[n]); return; }
-    if k == AK_NEG || k == AK_NOT || k == AK_CAST || k == AK_DEREF || k == AK_ADDR || k == AK_FIELD { gl_tmps(at_a[n]); }
+    if k == AK_NEG || k == AK_NOT || k == AK_CAST || k == AK_DEREF || k == AK_ADDR || k == AK_FIELD || k == AK_BUILTIN { gl_tmps(at_a[n]); }
     if k == AK_LIST {
         int li = at_a[n];
         while li != 0 {
@@ -2045,6 +2179,16 @@ void gl_slots(int n) {
     } else if k == AK_WHILE {
         gl_tmps(at_a[n]);
         gl_slots(at_b[n]);
+    } else if k == AK_SWITCH {
+        gl_tmps(at_a[n]);
+        gl_bsl[n] = gl_nslot;
+        gl_hint_add(gl_nslot);
+        gl_nslot += 8;
+        int cs = at_b[n];
+        while cs != 0 {
+            gl_slots(at_b[cs]);
+            cs = at_nx[cs];
+        }
     } else if k == AK_ASSIGN {
         gl_tmps(at_c[n]);
         gl_tmps(at_a[n]);

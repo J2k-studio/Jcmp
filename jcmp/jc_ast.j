@@ -890,6 +890,21 @@ int ast_lambda() {
     return ast_node(AK_LAMBDA, body, 0, 0, 0);
 }
 
+// the name in the pool is one of the instructions of the double unit: 1 sqrt, 2 floor, 3 ceil, 4 trunc (0 for another name)
+int ast_fop_of(int at) {
+    if at < 0 { return 0; }
+    char^ nm = @ast_pool + at;
+    if str_eq(nm, "__fsqrt") { return 1; }
+    if str_eq(nm, "__ffloor") { return 2; }
+    if str_eq(nm, "__fceil") { return 3; }
+    if str_eq(nm, "__ftrunc") { return 4; }
+    return 0;
+}
+
+bool ast_is_fop(int at) {
+    return ast_fop_of(at) != 0;
+}
+
 int ast_primary() {
     if tok_kind == T_NUM {
         int isf = tok_float;
@@ -1047,6 +1062,7 @@ int ast_primary() {
                     if ast_ok == 0 { return 0; }
                 }
                 ast_cur_ty = ast_mkty(0, 0);
+                if ast_is_fop(bp) { ast_cur_ty = ast_mkty(0, 7); }
                 return ast_postfix(ast_node(AK_BUILTIN, bargs2, 0, 0, bp), 0, 0);
             }
             if tok_is("(") {
@@ -1054,6 +1070,17 @@ int ast_primary() {
                 // sizeof(Type) and alloc[...](...) forms: a type name is read as a name or skipped
                 if bp >= 0 && ast_pool[bp] == 's' && ast_pool[bp + 1] == 'i' {
                     next();
+                    if at_type() {
+                        // sizeof(Type): a number
+                        parse_type();
+                        int szv = 8;
+                        if ty_ptr == 0 { szv = size_of(ty_elem); }
+                        if tok_is(")") {
+                            next();
+                            ast_cur_ty = ast_mkty(0, 8);
+                            return ast_postfix(ast_node(AK_NUM, 0, 0, 0, szv), 0, 8);
+                        }
+                    }
                     int depth = 1;
                     while depth > 0 && tok_kind != T_EOF {
                         if tok_is("(") { depth += 1; }
@@ -1065,6 +1092,7 @@ int ast_primary() {
                     if ast_ok == 0 { return 0; }
                 }
                 ast_cur_ty = ast_mkty(0, 0);
+                if ast_is_fop(bp) { ast_cur_ty = ast_mkty(0, 7); }
                 return ast_postfix(ast_node(AK_BUILTIN, bargs, 0, 0, bp), 0, 0);
             }
             ast_fail("a built-in name that is not called");
