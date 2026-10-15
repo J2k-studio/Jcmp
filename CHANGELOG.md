@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.141
+* **What does not change from turn to turn is made once, in front of the vector loop** (`vz_licm` in `jcmp/jc_opt.j`): the body of a vector loop reused the registers of the scalar body, so the general LICM could not move anything out of it, and the broadcast of `k`, the float `2.0` and the load of a parameter were done again in every chunk. The body is renamed (a new name at every write), the instructions that read only registers that the body does not write are moved into a block that runs once, and the same value computed in two chunks is made once. `widths` 185 -> 101 ms.
+* **Four chunks of 16 bytes in a turn** (two for `char`, so that short arrays still get a vector loop), and **a partial sum of its own for each chunk** (the four additions of a turn do not wait for each other). `arrays` 248 -> 190 ms.
+* `bootstrap.sh`: the tests `t4xx` are not compared with the frozen seed (it has no `float`).
+* Test: `t401_vectorize_carry` (a dependence between two elements of one turn: `p[i + 2] = p[i] + 1`, sums, every length).
+
 ## 0.9.140
 * **The vector loops understand elements of 4 bytes (`float`, `i32`) and 1 byte (`char`)**, and whole number arithmetic on them: `fb[i] = fa[i] * k + 2.0;`, `ib[i] = ia[i] + c;`, `cb[i] = ca[i] xor c;`, also `- * & | xor` and `<<` by a number (the lanes keep the low bytes of the result, which is all that a store keeps). A turn handles 2 x 16 bytes: 4 / 8 / 32 elements; the odd tail runs in the scalar loop. `tools/bench/widths.jk`: 1075 -> 185 ms (clang -O2: 80 ms).
 * **A number written in the body of a vector loop is no longer a reason to stay scalar** (`a[i] * 2.0`, `p[i] + 3`): the address of the left side of an assignment was kept in a temporary cell below the frame while the right side was computed; the pass that forwards a stored value to its load did not touch such a cell unless it was written again. Now a temporary cell that exactly one load reads is forwarded (`cf_nloads` in `op_cell_fwd`). This also removes a store and a load in other scalar code.

@@ -4555,7 +4555,7 @@ int vz_ab30;                     // VB: v30 + 8 * i
 int vz_sl_ld[16384];             // loads / stores of each plain frame slot in the body
 int vz_sl_st[16384];
 int vz_acc_slot[8];              // the accumulators: the slot, and the vector that holds its two partial sums
-int vz_acc_q[8];
+int vz_acc_q[32];                // the vectors of the partial sums: accumulator * 4 + chunk
 int vz_nacc2;
 int vz_pk_base[16];              // the pointers that walk along the arrays: base, offset, the stack cell that holds the pointer
 int vz_pk_off[16];
@@ -4769,12 +4769,15 @@ bool vz_scan(int q, int islot, int incl, int inch, bool emit) {
                         if ai >= vz_nacc2 {
                             if emit { return false; }
                             vz_acc_slot[ai] = s;
-                            vz_acc_q[ai] = 0;
+                            vz_acc_q[ai * 4] = 0;
+                            vz_acc_q[ai * 4 + 1] = 0;
+                            vz_acc_q[ai * 4 + 2] = 0;
+                            vz_acc_q[ai * 4 + 3] = 0;
                             vz_nacc2 += 1;
                         }
                         vz_kind[d] = VZ_ACCV;
                         vz_lslot[d] = s;
-                        vz_vec[d] = vz_acc_q[ai];
+                        vz_vec[d] = vz_acc_q[ai * 4 + vz_shift / 16];
                         j2 += 1;
                         continue;
                     }
@@ -5100,6 +5103,222 @@ void vz_hoist(int q) {
     }
 }
 
+// ---- what does not change from one turn to the next goes in front of the vector loop
+// The vector body reuses the registers of the scalar body (v1 .. v14), so the general LICM cannot move anything out of it. Here the
+// body is renamed (every register that is written before it is read gets a new name at each write), then the instructions that
+// read only registers the body does not write, or the results of such instructions, are moved into a new block that runs once:
+// the broadcast of `k`, the float `2.0`, the loads of the slots that the body does not write.
+int vz_rn_to[IR_MAXV];
+int vz_rn_st[IR_MAXV];
+int vz_rn_stamp;
+int vz_inv_def[IR_MAXV];        // stamp: written in the body (after renaming), and the instruction is moved
+int vz_wr_st[IR_MAXV];          // stamp: written in the body
+int vz_rd_first[IR_MAXV];       // stamp: read before it is written
+int vz_hoisted_n;
+
+int vz_rename_of(int v) {
+    if v > 0 && v < IR_MAXV && vz_rn_st[v] == vz_rn_stamp { return vz_rn_to[v]; }
+    return v;
+}
+
+bool vz_hoistable_op(int op) {
+    if op == IR_CONST || op == IR_FCONST || op == IR_COPY || op == IR_F32IN || op == IR_F32OUT || op == IR_FCVT_DS || op == IR_FCVT_SD { return true; }
+    if op == IR_BITS2F || op == IR_F2BITS || op == IR_VDUP || op == IR_VOP || op == IR_EXT || op == IR_NEG || op == IR_NOT { return true; }
+    if op >= IR_ADD && op <= IR_ASHR { return op != IR_SDIV && op != IR_UDIV; }
+    if op == IR_FADD || op == IR_FSUB || op == IR_FMUL || op == IR_FDIV { return true; }
+    if op >= IR_FADD32 && op <= IR_FDIV32 { return true; }
+    return false;
+}
+
+// vb: the vector body (complete, the last instruction is its branch), vh0: its entry
+// returns the number of instructions moved
+int vz_licm(int vb, int br0) {
+    int s = ir_bs[vb];
+    int e = ir_n - 1;
+    if e <= s { return 0; }
+    vz_rn_stamp += 1;
+    // 1. which registers are read before they are written
+    int j = s;
+    while j <= e {
+        int op = ir_op[j];
+        if op != IR_NOP {
+            if ir_a[j] > 0 && ir_a[j] < IR_MAXV && vz_wr_st[ir_a[j]] != vz_rn_stamp { vz_rd_first[ir_a[j]] = vz_rn_stamp; }
+            if ir_uses_b(op) && ir_bi[j] == 0 && ir_b[j] > 0 && ir_b[j] < IR_MAXV && vz_wr_st[ir_b[j]] != vz_rn_stamp { vz_rd_first[ir_b[j]] = vz_rn_stamp; }
+            if ir_d[j] > 0 && ir_d[j] < IR_MAXV { vz_wr_st[ir_d[j]] = vz_rn_stamp; }
+        }
+        j += 1;
+    }
+    // 2. the renaming: a register that is not carried gets a new name at every write
+    j = s;
+    while j <= e {
+        int op = ir_op[j];
+        if op != IR_NOP {
+            if ir_a[j] > 0 { ir_a[j] = vz_rename_of(ir_a[j]); }
+            if ir_uses_b(op) && ir_bi[j] == 0 && ir_b[j] > 0 { ir_b[j] = vz_rename_of(ir_b[j]); }
+            int d = ir_d[j];
+            if d > 0 && d < IR_MAXV && d != 29 && d != 30 && vz_rd_first[d] != vz_rn_stamp {
+                int nv = ir_vreg(ir_vcls[d]);
+                vz_rn_to[d] = nv;
+                vz_rn_st[d] = vz_rn_stamp;
+                ir_d[j] = nv;
+                if nv > 0 && nv < IR_MAXV { vz_wr_st[nv] = vz_rn_stamp; vz_rd_first[nv] = 0; }
+            }
+        }
+        j += 1;
+    }
+    // the frame bytes that the body writes
+    int nst = 0;
+    int sk[64];
+    j = s;
+    while j <= e {
+        if ir_op[j] == IR_STORE && ir_a[j] == 30 && nst < 64 { sk[nst] = ir_k[j]; nst += 1; }
+        if ir_op[j] == IR_STORE && ir_a[j] != 30 && ir_w[j] != 16 { return 0; }
+        if ir_op[j] == IR_CALL || ir_op[j] == IR_CALLIND || ir_op[j] == IR_SYSCALL { return 0; }
+        j += 1;
+    }
+    // 3. what can go: the instruction reads nothing that the body writes except the results of instructions that go
+    int moved[512];
+    int nm = 0;
+    int stamp2 = vz_rn_stamp;
+    j = s;
+    while j < e {
+        int op = ir_op[j];
+        int d = ir_d[j];
+        bool can = false;
+        if op != IR_NOP && d > 0 && d < IR_MAXV && vz_rd_first[d] != stamp2 && nm < 500 {
+            if vz_hoistable_op(op) { can = true; }
+            if op == IR_LOAD && ir_a[j] == 30 && ir_bi[j] == 0 && ir_w[j] != 16 {
+                can = true;
+                int z = 0;
+                while z < nst { if sk[z] < ir_k[j] + 8 && sk[z] + 8 > ir_k[j] { can = false; } z += 1; }
+            }
+        }
+        if can && ir_a[j] > 0 && ir_a[j] < IR_MAXV && vz_wr_st[ir_a[j]] == stamp2 && vz_inv_def[ir_a[j]] != stamp2 { can = false; }
+        if can && ir_uses_b(op) && ir_bi[j] == 0 && ir_b[j] > 0 && ir_b[j] < IR_MAXV && vz_wr_st[ir_b[j]] == stamp2 && vz_inv_def[ir_b[j]] != stamp2 { can = false; }
+        // a register that is written once only (after the renaming) and not carried
+        if can {
+            moved[nm] = j;
+            nm += 1;
+            vz_inv_def[d] = stamp2;
+        }
+        j += 1;
+    }
+    if nm == 0 { return 0; }
+    // a scalar result may be used by moved instructions only (the register pass does not keep a scalar across blocks); a vector may
+    // be used in the body
+    int flagged[512];
+    if nm > 0 {
+        int fi = 0;
+        while fi < nm { flagged[fi] = 1; fi += 1; }
+        bool again = true;
+        while again {
+            again = false;
+            fi = 0;
+            while fi < nm {
+                if flagged[fi] == 1 {
+                    int fj = moved[fi];
+                    int fd = ir_d[fj];
+                    bool ok = true;
+                    // an operand that was in the list but is not any more
+                    int oa = ir_a[fj];
+                    if oa > 0 && oa < IR_MAXV && vz_wr_st[oa] == stamp2 && vz_inv_def[oa] != stamp2 { ok = false; }
+                    if ir_uses_b(ir_op[fj]) && ir_bi[fj] == 0 {
+                        int ob = ir_b[fj];
+                        if ob > 0 && ob < IR_MAXV && vz_wr_st[ob] == stamp2 && vz_inv_def[ob] != stamp2 { ok = false; }
+                    }
+                    if ok && ir_vcls[fd] != 2 {
+                        // the readers that stay in the body
+                        int rj = s;
+                        while rj <= e && ok {
+                            if ir_op[rj] != IR_NOP {
+                                bool is_moved = false;
+                                int mi = 0;
+                                while mi < nm { if moved[mi] == rj && flagged[mi] == 1 { is_moved = true; } mi += 1; }
+                                if !is_moved {
+                                    if ir_a[rj] == fd { ok = false; }
+                                    if ir_uses_b(ir_op[rj]) && ir_bi[rj] == 0 && ir_b[rj] == fd { ok = false; }
+                                }
+                            }
+                            rj += 1;
+                        }
+                    }
+                    if !ok {
+                        flagged[fi] = 0;
+                        vz_inv_def[fd] = 0;
+                        again = true;
+                    }
+                }
+                fi += 1;
+            }
+        }
+        // keep the flagged ones only
+        int kn = 0;
+        fi = 0;
+        while fi < nm {
+            if flagged[fi] == 1 { moved[kn] = moved[fi]; kn += 1; }
+            fi += 1;
+        }
+        nm = kn;
+        if nm == 0 { return 0; }
+    }
+    // the registers that the moved instructions write must be written there only: the renaming made them unique unless a register
+    // was read before its first write in the body (then it was not renamed and cannot be here: vz_rd_first)
+    // the same value computed twice (the two chunks of the body): the second one is dropped, its uses read the first
+    int dup_of[512];
+    int du = 0;
+    while du < nm {
+        dup_of[du] = 0 - 1;
+        int dj = moved[du];
+        int dv = 0;
+        while dv < du && dup_of[du] < 0 {
+            int vj = moved[dv];
+            if dup_of[dv] < 0 && ir_op[vj] == ir_op[dj] && ir_a[vj] == ir_a[dj] && ir_bi[vj] == ir_bi[dj] && ir_k[vj] == ir_k[dj] && ir_w[vj] == ir_w[dj] && (ir_bi[dj] == 1 || !ir_uses_b(ir_op[dj]) || ir_b[vj] == ir_b[dj]) && ir_vcls[ir_d[vj]] == ir_vcls[ir_d[dj]] {
+                dup_of[du] = vj;
+                // every use of the dropped register reads the first one
+                int old_r = ir_d[dj];
+                int new_r = ir_d[vj];
+                int uj = s;
+                while uj <= e {
+                    if ir_op[uj] != IR_NOP {
+                        if ir_a[uj] == old_r { ir_a[uj] = new_r; }
+                        if ir_uses_b(ir_op[uj]) && ir_bi[uj] == 0 && ir_b[uj] == old_r { ir_b[uj] = new_r; }
+                    }
+                    uj += 1;
+                }
+            }
+            dv += 1;
+        }
+        du += 1;
+    }
+    // 4. the new block, that runs once between the test and the body
+    int vk = ir_new_block(0 - 1);
+    ir_set_block(vk);
+    int u = 0;
+    while u < nm {
+        int jj = moved[u];
+        if dup_of[u] >= 0 {
+            ir_op[jj] = IR_NOP;
+            ir_d[jj] = 0;
+            ir_a[jj] = 0;
+            ir_bi[jj] = 1;
+            u += 1;
+            continue;
+        }
+        int ne = ir_add(ir_op[jj], ir_d[jj], ir_a[jj], ir_b[jj], ir_bi[jj], ir_k[jj]);
+        ir_w[ne] = ir_w[jj];
+        ir_op[jj] = IR_NOP;
+        ir_d[jj] = 0;
+        ir_a[jj] = 0;
+        ir_bi[jj] = 1;
+        u += 1;
+    }
+    int jk = ir_add(IR_JMP, 0, 0, 0, 0, 0);
+    ir_t1[jk] = vb;
+    ir_t1[br0] = vk;
+    vz_hoisted_n += nm;
+    return nm;
+}
+
 bool vz_make(int q, int l) {
     int h = cl_head[q];
     int islot = cl_slot[q];
@@ -5200,7 +5419,9 @@ bool vz_make(int q, int l) {
     int vmin = ir_vreg(0);
     int minv = 0;
     int gcc = IR_ULT;
-    int per_turn = 32 / vz_w;                    // elements in one turn of the vector loop (two 16-byte chunks)
+    int nchunks = 4;                             // 16-byte chunks in one turn of the vector loop
+    if vz_w == 1 { nchunks = 2; }
+    int per_turn = 16 * nchunks / vz_w;          // elements in one turn
     if cl_cc[q] == IR_LT { minv = (1 << 63) + per_turn - 1; gcc = IR_LT; } else { minv = per_turn - 1; }
     ir_add(IR_CONST, vmin, 0, 0, 0, minv);
     br_guard = ir_add(IR_BR, 0, vbnd, vmin, 0, gcc);
@@ -5225,10 +5446,14 @@ bool vz_make(int q, int l) {
         while au < vz_nacc2 {
             int zx = ir_vreg(0);
             ir_add(IR_CONST, zx, 0, 0, 0, 0);
-            int zq = ir_vreg(2);
-            int zd = ir_add(IR_VDUP, zq, zx, 0, 0, 0);
-            ir_w[zd] = 1;
-            vz_acc_q[au] = zq;
+            int zch = 0;
+            while zch < nchunks {
+                int zq = ir_vreg(2);
+                int zd = ir_add(IR_VDUP, zq, zx, 0, 0, 0);
+                ir_w[zd] = 1;
+                vz_acc_q[au * 4 + zch] = zq;
+                zch += 1;
+            }
             au += 1;
         }
     }
@@ -5287,7 +5512,7 @@ bool vz_make(int q, int l) {
     ir_set_block(vb);
     {
         int chunk = 0;
-        while chunk < 2 {
+        while chunk < nchunks {
             vz_shift = chunk * 16;
             vz_ab29 = 0;
             vz_ab30 = 0;
@@ -5309,7 +5534,7 @@ bool vz_make(int q, int l) {
             ir_w[lc0] = 8;
             ir_k[lc0] = vz_pk_cell[pv];
             int pnext = ir_vreg(0);
-            ir_add(IR_ADD, pnext, pcur, 32, 1, 0);
+            ir_add(IR_ADD, pnext, pcur, 16 * nchunks, 1, 0);
             int sc0 = ir_add(IR_STORE, 0, 30, pnext, 0, vz_pk_cell[pv]);
             ir_w[sc0] = 8;
             pv += 1;
@@ -5334,6 +5559,8 @@ bool vz_make(int q, int l) {
         ir_t1[vz_br_end] = vb;
         ir_t2[vz_br_end] = h;
     }
+    // what does not change from turn to turn is made once, in front of the body
+    vz_licm(vb, br0);
     // the exit of the vector loop: the two partial sums of every accumulator are added to its slot
     if vz_nacc2 > 0 {
         int vx = ir_new_block(0 - 1);
@@ -5341,21 +5568,27 @@ bool vz_make(int q, int l) {
         int au2 = 0;
         while au2 < vz_nacc2 {
             // two temporaries at a time (the lowering has few scratch registers): slot + lane 0, then + lane 1
-            int l0 = ir_vreg(0);
-            int e0 = ir_add(IR_VLANE, l0, vz_acc_q[au2], 0, 0, 0);
-            ir_w[e0] = 8;
             int ov = ir_vreg(0);
             int lo = ir_add(IR_LOAD, ov, 30, 0, 0, 0);
             ir_w[lo] = 8;
             ir_k[lo] = vz_slot_off(vz_acc_slot[au2]);
-            int s1 = ir_vreg(0);
-            ir_add(IR_ADD, s1, ov, l0, 0, 0);
-            int l1 = ir_vreg(0);
-            int e1 = ir_add(IR_VLANE, l1, vz_acc_q[au2], 0, 0, 8);
-            ir_w[e1] = 8;
-            int s2 = ir_vreg(0);
-            ir_add(IR_ADD, s2, s1, l1, 0, 0);
-            int so = ir_add(IR_STORE, 0, 30, s2, 0, 0);
+            int run = ov;
+            int xch = 0;
+            while xch < nchunks {
+                int l0 = ir_vreg(0);
+                int e0 = ir_add(IR_VLANE, l0, vz_acc_q[au2 * 4 + xch], 0, 0, 0);
+                ir_w[e0] = 8;
+                int s1 = ir_vreg(0);
+                ir_add(IR_ADD, s1, run, l0, 0, 0);
+                int l1 = ir_vreg(0);
+                int e1 = ir_add(IR_VLANE, l1, vz_acc_q[au2 * 4 + xch], 0, 0, 8);
+                ir_w[e1] = 8;
+                int s2 = ir_vreg(0);
+                ir_add(IR_ADD, s2, s1, l1, 0, 0);
+                run = s2;
+                xch += 1;
+            }
+            int so = ir_add(IR_STORE, 0, 30, run, 0, 0);
             ir_w[so] = 8;
             ir_k[so] = vz_slot_off(vz_acc_slot[au2]);
             au2 += 1;
