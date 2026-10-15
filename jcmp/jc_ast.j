@@ -101,6 +101,7 @@ int ast_nl;
 int ast_ok;                      // 0 while reading, set to 0 by the first thing that is not understood
 char ast_why[128];
 int ast_lower_on;                // -ast: the first subset is built from the tree (jc_astlow.j)
+int ast_lower_report;            // -ast2: a line for every function that was tried
 int ast_report;                  // -xast
 int ast_dump;                    // -xastdump: the tree of every body that is in the subset
 int ast_funcs;                   // all bodies read / the ones in the subset (for -xast)
@@ -1262,8 +1263,10 @@ int ast_decl(int base) {
     if base == 0 - 2 {
         tkind = 4;                           // String
         base = 8;
-    } else if base >= 3 && base < 16 && base != 4 && base != 6 && base != 7 && base != 8 && base != 2 && base != 1 && base != 3 {
+    } else if base <= 0 - 10 {
+        // an enum: the caller passes -10 - its number (its type id 3 + n would be mistaken for a width code: bool, i32, double, int)
         tkind = 6;
+        base = 3 + (0 - 10 - base);
     }
     next();                                  // the type
     if tok_is("(") {
@@ -1347,6 +1350,7 @@ int ast_decl(int base) {
         dims += 1;
     }
     if dims > 0 {
+        if kind == 6 { base = 8; }                 // the elements of an array of an enum are whole numbers of 8 bytes
         kind = 2;
         if ptr == 1 { base = 400 + base; }
     }
@@ -1808,7 +1812,7 @@ int ast_stmt() {
             return ast_decl(0);
         }
         if find_enum(@tok_text) >= 0 && ast_find_local(@tok_text) < 0 && ast_decl_follows() {
-            return ast_decl(3 + find_enum(@tok_text));
+            return ast_decl(0 - 10 - find_enum(@tok_text));
         }
         if ast_is_builtin(@tok_text) && ast_find_local(@tok_text) < 0 && find_global(@tok_text) < 0 && (find_func(@tok_text) < 0 || tok_is("alloc") || tok_is("arr") || tok_is("free") || tok_is("move")) {
             int bx = ast_expr(0);
@@ -2349,6 +2353,13 @@ bool ast_probe(int f_idx) {
     pass_no = keep_pass;
     ast_restore();
     ast_funcs += 1;
+    if ast_ok == 0 && ast_lower_report == 1 {
+        write_err("astlow: ");
+        write_err(@fname + f_idx * 64);
+        write_err(" not in the tree: ");
+        write_err(@ast_why);
+        write_err("\n");
+    }
     if ast_ok == 1 {
         ast_funcs_ok += 1;
         ast_root = root;
