@@ -1,7 +1,8 @@
-# J2K / Jcmp 0.9.148
+# J2K / Jcmp 0.9.149
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
 
+**0.9.149:** internal: `cout` is made from the syntax tree as well (switch `-ast`, not on by default); the buffer for the assembly text of the compiler is 16 MB.
 **0.9.148:** internal: structs (fields, arrays of structs, by-value parameters and results), enums and methods are made from the syntax tree as well (switch `-ast`, not on by default).
 **0.9.147:** internal: `char` / `i32` values, arrays and pointers are made from the syntax tree as well (switch `-ast`, not on by default).
 **0.9.146:** internal: functions with pointers and arrays are made from the syntax tree as well (switch `-ast`, not on by default).

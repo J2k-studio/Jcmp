@@ -1225,8 +1225,41 @@ void parse_index_chain() {
 // the text of a string literal goes into the global area (stored at
 // startup); the expression is its address
 // the text (len characters) goes into the global block; x0 = its address
+// the literals that the text path placed in the function being compiled (offset, length, bytes): the lowering from the tree finds its
+// literals here instead of placing them again. ll_on is set by the probe of the tree.
+int ll_on;
+int ll_n;
+int ll_off[16384];
+int ll_len[16384];
+int ll_at[16384];
+int ll_used[16384];
+int ll_fn[16384];                // the function (its number in fname) that placed it
+int ll_cur;                      // the function being compiled
+int ll_tn;
+char ll_txt[1048576];
+int ll_over;
+char at_spool[262144];          // the literals of the trees (the node holds the offset and the length)
+int at_spn;
+
 void place_text(char^ text, int len) {
     int off = (gl_bytes + 7) / 8 * 8;
+    if ll_on == 1 {
+        if ll_n >= 16384 || ll_tn + len + 1 > 1048576 {
+            ll_over = 1;
+        } else {
+            ll_off[ll_n] = off;
+            ll_len[ll_n] = len;
+            ll_fn[ll_n] = ll_cur;
+            ll_at[ll_n] = ll_tn;
+            int q = 0;
+            while q < len {
+                ll_txt[ll_tn + q] = text[q];
+                q += 1;
+            }
+            ll_tn += len;
+            ll_n += 1;
+        }
+    }
     int size = (len + 8) / 8 * 8;
     gl_bytes = off + size;
     int k = 0;

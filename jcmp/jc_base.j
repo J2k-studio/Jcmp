@@ -18,11 +18,11 @@
 
 // --------------------------------------------------------------- the output
 
-char out_buf[8388608];       // the .jasm text being produced
+char out_buf[16777216];       // the .jasm text being produced
 int out_len;
 
 void emit_ch(int c) {
-    if out_len >= 8388600 { die("output too large"); }
+    if out_len >= 16777200 { die("output too large"); }
     out_buf[out_len] = c;
     out_len += 1;
 }

@@ -896,21 +896,25 @@ int ast_primary() {
         int v = tok_num;
         int fmant = tok_mant;
         int fexp = tok_exp;
+        int ischar = tok_char;
         next();
         if isf == 1 {
             ast_cur_ty = ast_mkty(0, 7);
             return ast_node(AK_FNUM, fmant, fexp, 0, 0);           // a = the mantissa, b = the power of ten (not nodes)
         }
         ast_cur_ty = ast_mkty(0, 8);
+        if ischar == 1 { ast_cur_ty = ast_mkty(0, 2); }      // 'a' is a char (cout prints it as a character)
         return ast_node(AK_NUM, 0, 0, 0, v);
     }
     if tok_is("{") {
         return ast_list();
     }
     if tok_kind == T_STR {
+        int sp = ast_pool_add(@tok_str);
+        int sl = tok_str_len;
         next();
         ast_cur_ty = ast_mkty(4, 8);
-        return ast_postfix(ast_node(AK_STR, 0, 0, 0, 0), 4, 8);
+        return ast_postfix(ast_node(AK_STR, 0, sl, 0, sp), 4, 8);
     }
     if tok_is("(") {
         next();
@@ -2348,6 +2352,11 @@ bool ast_probe(int f_idx) {
     ast_loop_depth = 0;
     ast_nuid = 0;                            // the numbers of the locals are those of this body
     ast_load_params();
+    ll_on = 0;
+    if ast_lower_on == 1 && keep_pass == 3 {
+        ll_on = 1;
+        ll_cur = f_idx;
+    }
     int root = 0;
     if ast_ok == 1 { root = ast_block(); }
     pass_no = keep_pass;
