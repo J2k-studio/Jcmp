@@ -1,7 +1,11 @@
-// A1b: the tree of a function body lowered straight to the IR (design 10, 8.1; hidden switch -ast). Part 1: the functions that use only
-// `int` / `bool` parameters, locals and globals, arithmetic, comparisons, && || !, if / while / for a..b, break, continue, return and
-// calls of such functions. Everything else keeps the text path (the function is lifted from its text as before). The frame layout that
-// the tree computes is compared with the hint line of the text parser; when they differ the function is lifted from its text.
+// A1b: the tree of a function body lowered straight to the IR (design 10, 8.1; hidden switch -ast). The functions that use only `int`,
+// `bool` and `double` parameters, locals and globals, arithmetic, comparisons, casts between int and double, && || !, if / while /
+// for a..b, break, continue, return and calls of such functions are built from the tree; everything else keeps the text path (the
+// function is lifted from its text as before). The frame layout that the tree computes is compared with the hint line of the text
+// parser; when they differ the function is lifted from its text.
+//
+// How the values are kept (as the text path does): a whole number in v1 (x0), a double in f32 (d0); a second operand in v2 / f33; in
+// the frame and in the arguments a double is its 64 bits (a whole number register, f2bits / bits2f at the edge).
 
 #define AT_MAX 131072
 #define AT_FUNCS 4096
@@ -11,6 +15,7 @@ int at_b[AT_MAX];
 int at_c[AT_MAX];
 int at_val[AT_MAX];
 int at_nx[AT_MAX];
+int at_ty[AT_MAX];
 int at_n;
 char at_name[262144];            // AT_FUNCS x 64
 int at_root[AT_FUNCS];
@@ -18,45 +23,75 @@ int at_fidx[AT_FUNCS];           // the function number of the parser (fname, fn
 int at_nfn;
 int ast_lower_used;              // the functions that were built from the tree
 int ast_lower_tried;
-int ast_lower_report;            // -ast with a message for every function
+int ast_lower_report;            // -ast2: a line for every function that was tried
 
-// ---------------------------------------------------------------- is the body in the first subset?
-bool as1_type(int t) {
-    return t == 8 || t == 3;      // the base: int, bool (the kind must be 0: scalar)
+// ---------------------------------------------------------------- is the body in the subset?
+// the type of a node: kind 0 (scalar) and base 8 (int), 3 (bool) or 7 (double)
+bool as1_scalar(int t) {
+    if t / 65536 != 0 { return false; }
+    int b = t % 65536;
+    return b == 8 || b == 3 || b == 7;
+}
+
+bool as1_dbl(int t) {
+    return t / 65536 == 0 && t % 65536 == 7;
+}
+
+// the type id of a parameter or a result (fptid / fret): 0 a whole number, 1 bool, 91 double
+bool as1_tid(int t) {
+    return t == 0 || t == 1 || t == 91;
+}
+
+bool as1_arith(int ao) {
+    return ao == AO_ADD || ao == AO_SUB || ao == AO_MUL || ao == AO_DIV;
 }
 
 bool as1_expr(int n) {
     if n == 0 { return false; }
     int k = ast_kind[n];
     int ty = ast_ty[n];
-    if ty / 65536 != 0 || !as1_type(ty % 65536) { return false; }
+    if !as1_scalar(ty) { return false; }
     if k == AK_NUM { return true; }
+    if k == AK_FNUM { return true; }
     if k == AK_VAR { return true; }
     if k == AK_GVAR {
         int gi = ast_val[n];
-        return gi >= 0 && gkind[gi] == 0 && gelem[gi] == 8 && gptr[gi] == 0 && gdyn[gi] == 0 && gtid[gi] < 2;
+        return gi >= 0 && gkind[gi] == 0 && (gelem[gi] == 8 || gelem[gi] == 7) && gptr[gi] == 0 && gdyn[gi] == 0 && as1_tid(gtid[gi]);
     }
     if k == AK_BIN {
-        return as1_expr(ast_a[n]) && as1_expr(ast_b[n]);
+        int a = ast_a[n];
+        int b = ast_b[n];
+        if !as1_expr(a) || !as1_expr(b) { return false; }
+        int ao = ast_val[n];
+        bool any_d = as1_dbl(ast_ty[a]) || as1_dbl(ast_ty[b]);
+        if any_d {
+            // a double with + - * / and the comparisons (the other operand may be a whole number)
+            return as1_arith(ao) || (ao >= AO_LT && ao <= AO_NE);
+        }
+        return true;
     }
-    if k == AK_NEG || k == AK_NOT { return as1_expr(ast_a[n]); }
+    if k == AK_NEG { return as1_expr(ast_a[n]); }
+    if k == AK_NOT { return as1_expr(ast_a[n]) && !as1_dbl(ast_ty[ast_a[n]]); }
+    if k == AK_CAST {
+        int tc = ast_val[n];
+        return (tc == 7 || tc == 8) && as1_expr(ast_a[n]);
+    }
     if k == AK_CALL {
         int fi = ast_val[n];
         if fi < 0 || fi >= fcount || fnpar[fi] > 8 || fvoid[fi] == 1 || fretdyn[fi] != 0 { return false; }
+        if !as1_tid(fret[fi]) || fcharret[fi] != 0 || farr[fi] != 0 { return false; }
+        int a2 = ast_a[n];
         int pk = 0;
-        while pk < fnpar[fi] {
+        while a2 != 0 {
+            if pk >= fnpar[fi] || !as1_expr(a2) { return false; }
             int pt = fptid[fi * 8 + pk];
-            if pt != 0 && pt != 1 { return false; }
+            if !as1_tid(pt) { return false; }
+            // a double goes to a double parameter, a whole number to a whole number one
+            if (pt == 91) != as1_dbl(ast_ty[a2]) { return false; }
             pk += 1;
+            a2 = ast_nx[a2];
         }
-        if fret[fi] != 0 && fret[fi] != 1 { return false; }
-        if fcharret[fi] != 0 || farr[fi] != 0 { return false; }
-        int a = ast_a[n];
-        while a != 0 {
-            if !as1_expr(a) { return false; }
-            a = ast_nx[a];
-        }
-        return true;
+        return pk == fnpar[fi];
     }
     return false;
 }
@@ -64,8 +99,7 @@ bool as1_expr(int n) {
 bool as1_target(int n) {
     if n == 0 { return false; }
     int k = ast_kind[n];
-    int ty = ast_ty[n];
-    if ty / 65536 != 0 || !as1_type(ty % 65536) { return false; }
+    if !as1_scalar(ast_ty[n]) { return false; }
     return k == AK_VAR || (k == AK_GVAR && as1_expr(n));
 }
 
@@ -80,13 +114,25 @@ bool as1_stmt(int n) {
         }
         return true;
     }
-    if k == AK_DECL { return ast_a[n] == 0 || as1_expr(ast_a[n]); }
-    if k == AK_ASSIGN { return as1_target(ast_c[n]) && as1_expr(ast_a[n]) && ast_b[n] >= 0; }
-    if k == AK_INCDEC { return as1_target(ast_a[n]); }
+    if k == AK_DECL {
+        if !as1_scalar(ast_ty[n]) { return false; }
+        if ast_a[n] == 0 { return true; }
+        // the value has the type of the variable
+        return as1_expr(ast_a[n]) && as1_dbl(ast_ty[ast_a[n]]) == as1_dbl(ast_ty[n]);
+    }
+    if k == AK_ASSIGN {
+        int t = ast_c[n];
+        if !as1_target(t) || !as1_expr(ast_a[n]) || ast_b[n] < 0 { return false; }
+        bool td = as1_dbl(ast_ty[t]);
+        int opc = ast_b[n];
+        if td { return (opc == 0 || as1_arith(opc)) && as1_dbl(ast_ty[ast_a[n]]) == (td || true); }
+        return !as1_dbl(ast_ty[ast_a[n]]);
+    }
+    if k == AK_INCDEC { return as1_target(ast_a[n]) && !as1_dbl(ast_ty[ast_a[n]]); }
     if k == AK_EXPR { return ast_kind[ast_a[n]] == AK_CALL && as1_expr(ast_a[n]); }
     if k == AK_IF { return as1_expr(ast_a[n]) && as1_stmt(ast_b[n]) && as1_stmt(ast_c[n]); }
     if k == AK_WHILE { return ast_val[n] == 0 && ast_c[n] == 0 && as1_expr(ast_a[n]) && as1_stmt(ast_b[n]); }
-    if k == AK_FOR { return ast_b[n] != 0 && as1_expr(ast_a[n]) && as1_expr(ast_b[n]) && as1_stmt(ast_c[n]); }
+    if k == AK_FOR { return ast_b[n] != 0 && as1_expr(ast_a[n]) && as1_expr(ast_b[n]) && !as1_dbl(ast_ty[ast_a[n]]) && !as1_dbl(ast_ty[ast_b[n]]) && as1_stmt(ast_c[n]); }
     if k == AK_RET { return ast_a[n] == 0 || as1_expr(ast_a[n]); }
     if k == AK_BREAK || k == AK_CONT { return true; }
     return false;
@@ -95,24 +141,23 @@ bool as1_stmt(int n) {
 // the node fields that hold nodes, by kind: bit 0 a, bit 1 b, bit 2 c
 int at_fields(int k) {
     if k == AK_BIN || k == AK_WHILE { return 3; }
-    if k == AK_NEG || k == AK_NOT || k == AK_CALL || k == AK_BLOCK || k == AK_DECL || k == AK_EXPR || k == AK_RET || k == AK_INCDEC { return 1; }
+    if k == AK_NEG || k == AK_NOT || k == AK_CALL || k == AK_BLOCK || k == AK_DECL || k == AK_EXPR || k == AK_RET || k == AK_INCDEC || k == AK_CAST { return 1; }
     if k == AK_ASSIGN { return 5; }
     if k == AK_IF || k == AK_FOR { return 7; }
     return 0;
 }
 
-// called at the end of ast_probe for a body that is in the tree's subset: keep it when it is in the first subset of the lowering
+// called at the end of ast_probe for a body that is in the tree's subset: keep it when it is in the subset of the lowering
 void at_store(int f_idx) {
     if ast_lower_on == 0 || at_nfn >= AT_FUNCS || at_n + ast_n + 2 >= AT_MAX { return; }
-    // the function: int / bool parameters, a result of int, bool or nothing
+    // the function: parameters of whole numbers, bool or double, a result of those or nothing
     if fnpar[f_idx] > 8 || fretdyn[f_idx] != 0 || fcharret[f_idx] != 0 || farr[f_idx] != 0 { return; }
     int pk = 0;
     while pk < fnpar[f_idx] {
-        int pt = fptid[f_idx * 8 + pk];
-        if pt != 0 && pt != 1 { return; }
+        if !as1_tid(fptid[f_idx * 8 + pk]) { return; }
         pk += 1;
     }
-    if fvoid[f_idx] == 0 && fret[f_idx] != 0 && fret[f_idx] != 1 { return; }
+    if fvoid[f_idx] == 0 && !as1_tid(fret[f_idx]) { return; }
     if !as1_stmt(ast_root) { return; }
     int base = at_n;
     int i = 1;
@@ -127,6 +172,7 @@ void at_store(int f_idx) {
         if (fl & 2) != 0 && ast_b[i] != 0 { at_b[base + i] = ast_b[i] + base; }
         if (fl & 4) != 0 && ast_c[i] != 0 { at_c[base + i] = ast_c[i] + base; }
         at_val[base + i] = ast_val[i];
+        at_ty[base + i] = ast_ty[i];
         at_nx[base + i] = 0;
         if ast_nx[i] != 0 { at_nx[base + i] = ast_nx[i] + base; }
         i += 1;
@@ -146,22 +192,19 @@ int gl_lblock[GL_MAXP];          // label -> block
 int gl_nlab;
 int gl_term;                     // 1: the current block has its last instruction
 int gl_depth;                    // the cells in use below the frame pointer
-int gl_maxdepth;
 int gl_off[1024];                // the unique number of a local -> its offset in the frame
 int gl_nslot;                    // the next offset to give
-int gl_bound[1024];              // for loops: the offset of the hidden bound, by the node
-int gl_bsl[AT_MAX];
+int gl_bsl[AT_MAX];              // for loops: the offset of the hidden bound, by the node
 int gl_nz[8];                    // the local variables known to be not 0 here (after `while b != 0 {`); cleared at every join
 int gl_nzn;
 int gl_fail;
 int gl_why;                      // 1: the frame of the tree is not the frame of the parser
 int gl_ret;                      // the label of the return
+int gl_retd;                     // 1: the function gives a double
 int gl_brk[32];
 int gl_cnt[32];
 int gl_loops;
 int gl_args[8];
-int gl_root;
-int gl_fi;
 
 int gl_label() {
     if gl_nlab >= GL_MAXP { gl_fail = 1; return 0; }
@@ -216,6 +259,15 @@ void gl_br(int cc, int a, int b, int bi, int lt, int lf) {
     gl_term = 1;
 }
 
+void gl_fbr(int cc, int a, int b, int lt, int lf) {
+    gl_ensure();
+    int e = ir_add(IR_FBR, 0, a, b, 0, cc);
+    ir_t1[e] = lt;
+    ir_t2[e] = lf;
+    gl_note(e);
+    gl_term = 1;
+}
+
 void gl_load(int dst, int base, int off) {
     gl_ensure();
     int e = ir_add(IR_LOAD, dst, base, 0, 0, off);
@@ -229,7 +281,6 @@ void gl_store(int base, int off, int val) {
 }
 
 int gl_cell(int d) {
-    if d + 1 > gl_maxdepth { gl_maxdepth = d + 1; }
     return 0 - 8 * (d + 1);
 }
 
@@ -242,31 +293,12 @@ int gl_cc(int ao) {
     return IR_NE;
 }
 
-int gl_neg_cc(int cc) {
-    if cc == IR_LT { return IR_GE; }
-    if cc == IR_LE { return IR_GT; }
-    if cc == IR_GT { return IR_LE; }
-    if cc == IR_GE { return IR_LT; }
-    if cc == IR_EQ { return IR_NE; }
-    return IR_EQ;
-}
-
 bool gl_is_cmp(int ao) {
     return ao >= AO_LT && ao <= AO_NE;
 }
 
-
-// the operands of a binary operator: a in v1, b in v2
-void gl_operands(int a, int b) {
-    gl_expr(a);
-    int c = gl_cell(gl_depth);
-    gl_store(30, c, 1);
-    gl_depth += 1;
-    gl_expr(b);
-    gl_depth -= 1;
-    gl_ensure();
-    ir_add(IR_COPY, 2, 1, 0, 0, 0);
-    gl_load(1, 30, c);
+bool gl_isd(int n) {
+    return as1_dbl(at_ty[n]);
 }
 
 bool gl_is_nz(int n) {
@@ -300,10 +332,103 @@ void gl_nz_from(int c) {
         gl_nz_from(b);
         return;
     }
-    if (ao == AO_NE || ao == AO_GT) && at_kind[a] == AK_VAR && at_kind[b] == AK_NUM && at_val[b] == 0 && gl_nzn < 8 {
+    if (ao == AO_NE || ao == AO_GT) && at_kind[a] == AK_VAR && at_kind[b] == AK_NUM && at_val[b] == 0 && !gl_isd(a) && gl_nzn < 8 {
         gl_nz[gl_nzn] = at_val[a];
         gl_nzn += 1;
     }
+}
+
+// the value of the node as a double in f32: a whole number is converted
+void gl_expr_d(int n) {
+    gl_expr(n);
+    if !gl_isd(n) {
+        gl_ensure();
+        ir_add(IR_I2F, 32, 1, 0, 0, 0);
+    }
+}
+
+// the operands of a binary operator: a in v1, b in v2
+void gl_operands(int a, int b) {
+    gl_expr(a);
+    int c = gl_cell(gl_depth);
+    gl_store(30, c, 1);
+    gl_depth += 1;
+    gl_expr(b);
+    gl_depth -= 1;
+    gl_ensure();
+    ir_add(IR_COPY, 2, 1, 0, 0, 0);
+    gl_load(1, 30, c);
+}
+
+// does the expression contain a call? (a call destroys the double registers d16 .. d31)
+bool gl_has_call(int n) {
+    if n == 0 { return false; }
+    int k = at_kind[n];
+    if k == AK_CALL { return true; }
+    if k == AK_BIN { return gl_has_call(at_a[n]) || gl_has_call(at_b[n]); }
+    if k == AK_NEG || k == AK_NOT || k == AK_CAST { return gl_has_call(at_a[n]); }
+    return false;
+}
+
+// the double registers that hold the left operands while the right ones are worked out (d24 .. d29 without d27, which the
+// instruction popcnt uses)
+int gl_freg(int d) {
+    if d == 0 { return 56; }
+    if d == 1 { return 57; }
+    if d == 2 { return 58; }
+    if d == 3 { return 60; }
+    return 61;
+}
+
+int gl_fdepth;
+int gl_ra;                       // after gl_operands_d: the registers that hold the left and the right operand
+int gl_rb;
+
+// an operand that is worked out without touching f32 (a number, a variable): it goes to f33 while the left one stays in f32
+bool gl_simple_d(int n) {
+    int k = at_kind[n];
+    return k == AK_FNUM || ((k == AK_VAR || k == AK_GVAR) && gl_isd(n));
+}
+
+// the operands of a binary operator on doubles: a in gl_ra (a double register that this keeps for it), b in f32
+void gl_operands_d(int a, int b) {
+    gl_expr_d(a);
+    gl_ensure();
+    if gl_simple_d(b) {
+        // the right operand into f33: the left one stays in f32
+        if at_kind[b] == AK_FNUM {
+            ir_add(IR_FCONST, 33, 0, 0, 0, float_literal_bits(at_a[b], at_b[b]));
+        } else {
+            if at_kind[b] == AK_VAR { gl_load(1, 30, gl_off[at_val[b]]); } else { gl_load(1, 29, goff[at_val[b]]); }
+            ir_add(IR_BITS2F, 33, 1, 0, 0, 0);
+        }
+        gl_ra = 32;
+        gl_rb = 33;
+        return;
+    }
+    if gl_fdepth < 5 && !gl_has_call(b) {
+        // the left operand waits in a double register
+        int fr = gl_freg(gl_fdepth);
+        ir_add(IR_COPY, fr, 32, 0, 0, 0);
+        gl_fdepth += 1;
+        gl_expr_d(b);
+        gl_fdepth -= 1;
+        gl_ensure();
+        gl_ra = fr;
+        gl_rb = 32;
+        return;
+    }
+    int c = gl_cell(gl_depth);
+    ir_add(IR_F2BITS, 1, 32, 0, 0, 0);
+    gl_store(30, c, 1);
+    gl_depth += 1;
+    gl_expr_d(b);
+    gl_depth -= 1;
+    gl_ensure();
+    gl_load(1, 30, c);
+    ir_add(IR_BITS2F, 33, 1, 0, 0, 0);
+    gl_ra = 33;
+    gl_rb = 32;
 }
 
 // a jump on a condition: to lt when it holds, else to lf
@@ -326,8 +451,13 @@ void gl_cond(int n, int lt, int lf) {
             return;
         }
         if gl_is_cmp(ao) {
-            gl_operands(at_a[n], at_b[n]);
-            gl_br(gl_cc(ao), 1, 2, 0, lt, lf);
+            if gl_isd(at_a[n]) || gl_isd(at_b[n]) {
+                gl_operands_d(at_a[n], at_b[n]);
+                gl_fbr(gl_cc(ao), gl_ra, gl_rb, lt, lf);
+            } else {
+                gl_operands(at_a[n], at_b[n]);
+                gl_br(gl_cc(ao), 1, 2, 0, lt, lf);
+            }
             return;
         }
     }
@@ -346,6 +476,8 @@ void gl_call(int n) {
     int base = gl_depth;
     while a != 0 {
         gl_expr(a);
+        gl_ensure();
+        if gl_isd(a) { ir_add(IR_F2BITS, 1, 32, 0, 0, 0); }
         gl_store(30, gl_cell(gl_depth), 1);
         gl_depth += 1;
         argn += 1;
@@ -365,6 +497,7 @@ void gl_call(int n) {
         r += 1;
     }
     ir_set_args(e, argn, @gl_args);
+    if fret[fi] == 91 { ir_add(IR_BITS2F, 32, 1, 0, 0, 0); }
 }
 
 // v1 = v1 / d or v1 % d for a constant d >= 1 (signed), as the text path does (emit_div_const): a shift for a power of two, else the
@@ -435,6 +568,33 @@ void gl_divide(int ao, bool known_nz) {
     }
 }
 
+// f32 = (the left operand) op f32
+void gl_farith(int ao) {
+    gl_ensure();
+    int ra = gl_ra;
+    int rb = gl_rb;
+    if ao == AO_ADD { ir_add(IR_FADD, 32, ra, rb, 0, 0); }
+    else if ao == AO_SUB { ir_add(IR_FSUB, 32, ra, rb, 0, 0); }
+    else if ao == AO_MUL { ir_add(IR_FMUL, 32, ra, rb, 0, 0); }
+    else if ao == AO_DIV { ir_add(IR_FDIV, 32, ra, rb, 0, 0); }
+    else { gl_fail = 1; }
+}
+
+// v1 = v1 op v2 (whole numbers; / and % through gl_divide)
+void gl_iarith(int ao, bool nzk) {
+    gl_ensure();
+    if ao == AO_ADD { ir_add(IR_ADD, 1, 1, 2, 0, 0); }
+    else if ao == AO_SUB { ir_add(IR_SUB, 1, 1, 2, 0, 0); }
+    else if ao == AO_MUL { ir_add(IR_MUL, 1, 1, 2, 0, 0); }
+    else if ao == AO_AND { ir_add(IR_AND, 1, 1, 2, 0, 0); }
+    else if ao == AO_OR { ir_add(IR_OR, 1, 1, 2, 0, 0); }
+    else if ao == AO_XOR { ir_add(IR_XOR, 1, 1, 2, 0, 0); }
+    else if ao == AO_SHL { ir_add(IR_SHL, 1, 1, 2, 0, 0); }
+    else if ao == AO_SHR { ir_add(IR_ASHR, 1, 1, 2, 0, 0); }
+    else if ao == AO_DIV || ao == AO_MOD { gl_divide(ao, nzk); }
+    else { gl_fail = 1; }
+}
+
 void gl_expr(int n) {
     int k = at_kind[n];
     gl_ensure();
@@ -442,22 +602,38 @@ void gl_expr(int n) {
         ir_add(IR_CONST, 1, 0, 0, 0, at_val[n]);
         return;
     }
-    if k == AK_VAR {
-        gl_load(1, 30, gl_off[at_val[n]]);
+    if k == AK_FNUM {
+        ir_add(IR_FCONST, 32, 0, 0, 0, float_literal_bits(at_a[n], at_b[n]));
         return;
     }
-    if k == AK_GVAR {
-        gl_load(1, 29, goff[at_val[n]]);
+    if k == AK_VAR || k == AK_GVAR {
+        if k == AK_VAR { gl_load(1, 30, gl_off[at_val[n]]); } else { gl_load(1, 29, goff[at_val[n]]); }
+        if gl_isd(n) { ir_add(IR_BITS2F, 32, 1, 0, 0, 0); }
         return;
     }
     if k == AK_NEG {
         gl_expr(at_a[n]);
-        ir_add(IR_NEG, 1, 1, 0, 0, 0);
+        gl_ensure();
+        if gl_isd(n) { ir_add(IR_FNEG, 32, 32, 0, 0, 0); } else { ir_add(IR_NEG, 1, 1, 0, 0, 0); }
         return;
     }
     if k == AK_NOT {
         gl_expr(at_a[n]);
+        gl_ensure();
         ir_add(IR_SETCC, 1, 1, 0, 1, IR_EQ);
+        return;
+    }
+    if k == AK_CAST {
+        int src = at_a[n];
+        if at_val[n] == 7 {
+            gl_expr_d(src);
+        } else {
+            gl_expr(src);
+            if gl_isd(src) {
+                gl_ensure();
+                ir_add(IR_F2I, 1, 32, 0, 0, 0);
+            }
+        }
         return;
     }
     if k == AK_CALL {
@@ -466,6 +642,8 @@ void gl_expr(int n) {
     }
     if k == AK_BIN {
         int ao = at_val[n];
+        int a = at_a[n];
+        int b = at_b[n];
         if ao == AO_LAND || ao == AO_LOR {
             int lt = gl_label();
             int lf = gl_label();
@@ -479,33 +657,27 @@ void gl_expr(int n) {
             gl_place(le);
             return;
         }
-        if (ao == AO_DIV || ao == AO_MOD) && gl_const_div(at_b[n]) {
-            gl_expr(at_a[n]);
-            gl_divconst(at_val[at_b[n]], ao == AO_MOD);
+        if gl_isd(a) || gl_isd(b) {
+            gl_operands_d(a, b);
+            gl_ensure();
+            if gl_is_cmp(ao) { ir_add(IR_FSETCC, 1, gl_ra, gl_rb, 0, gl_cc(ao)); }
+            else { gl_farith(ao); }
             return;
         }
-        bool nzk = gl_is_nz(at_b[n]);
-        gl_operands(at_a[n], at_b[n]);
+        if (ao == AO_DIV || ao == AO_MOD) && gl_const_div(b) {
+            gl_expr(a);
+            gl_divconst(at_val[b], ao == AO_MOD);
+            return;
+        }
+        bool nzk = gl_is_nz(b);
+        gl_operands(a, b);
         gl_ensure();
-        if gl_is_cmp(ao) {
-            ir_add(IR_SETCC, 1, 1, 2, 0, gl_cc(ao));
-            return;
-        }
-        if ao == AO_ADD { ir_add(IR_ADD, 1, 1, 2, 0, 0); }
-        else if ao == AO_SUB { ir_add(IR_SUB, 1, 1, 2, 0, 0); }
-        else if ao == AO_MUL { ir_add(IR_MUL, 1, 1, 2, 0, 0); }
-        else if ao == AO_AND { ir_add(IR_AND, 1, 1, 2, 0, 0); }
-        else if ao == AO_OR { ir_add(IR_OR, 1, 1, 2, 0, 0); }
-        else if ao == AO_XOR { ir_add(IR_XOR, 1, 1, 2, 0, 0); }
-        else if ao == AO_SHL { ir_add(IR_SHL, 1, 1, 2, 0, 0); }
-        else if ao == AO_SHR { ir_add(IR_ASHR, 1, 1, 2, 0, 0); }
-        else if ao == AO_DIV || ao == AO_MOD { gl_divide(ao, nzk); }
-        else { gl_fail = 1; }
+        if gl_is_cmp(ao) { ir_add(IR_SETCC, 1, 1, 2, 0, gl_cc(ao)); }
+        else { gl_iarith(ao, nzk); }
         return;
     }
     gl_fail = 1;
 }
-
 
 void gl_block_list(int s) {
     while s != 0 {
@@ -514,40 +686,36 @@ void gl_block_list(int s) {
     }
 }
 
+// the value in v1 / f32 goes to the variable (a local or a global)
+void gl_store_var(int target) {
+    gl_ensure();
+    if gl_isd(target) { ir_add(IR_F2BITS, 1, 32, 0, 0, 0); }
+    if at_kind[target] == AK_VAR {
+        gl_store(30, gl_off[at_val[target]], 1);
+        gl_nz_clear(at_val[target]);
+    } else {
+        gl_store(29, goff[at_val[target]], 1);
+    }
+}
+
 // an assignment `target op= value` or `target = value`
-void gl_assign(int target, int value, int opc) {
-    int ao = opc;
+void gl_assign(int target, int value, int ao) {
+    bool td = gl_isd(target);
     if ao == 0 {
-        gl_expr(value);
+        if td { gl_expr_d(value); } else { gl_expr(value); }
+    } else if td {
+        gl_operands_d(target, value);
+        gl_farith(ao);
     } else if (ao == AO_DIV || ao == AO_MOD) && gl_const_div(value) {
         gl_expr(target);
         gl_divconst(at_val[value], ao == AO_MOD);
     } else {
         // target op value: the same as the binary operator (no node is made: the operands by hand)
-        bool nzk2 = gl_is_nz(value);
-        gl_expr(target);
-        int c = gl_cell(gl_depth);
-        gl_store(30, c, 1);
-        gl_depth += 1;
-        gl_expr(value);
-        gl_depth -= 1;
-        gl_ensure();
-        ir_add(IR_COPY, 2, 1, 0, 0, 0);
-        gl_load(1, 30, c);
-        if ao == AO_ADD { ir_add(IR_ADD, 1, 1, 2, 0, 0); }
-        else if ao == AO_SUB { ir_add(IR_SUB, 1, 1, 2, 0, 0); }
-        else if ao == AO_MUL { ir_add(IR_MUL, 1, 1, 2, 0, 0); }
-        else if ao == AO_AND { ir_add(IR_AND, 1, 1, 2, 0, 0); }
-        else if ao == AO_OR { ir_add(IR_OR, 1, 1, 2, 0, 0); }
-        else if ao == AO_XOR { ir_add(IR_XOR, 1, 1, 2, 0, 0); }
-        else if ao == AO_SHL { ir_add(IR_SHL, 1, 1, 2, 0, 0); }
-        else if ao == AO_SHR { ir_add(IR_ASHR, 1, 1, 2, 0, 0); }
-        else if ao == AO_DIV || ao == AO_MOD { gl_divide(ao, nzk2); }
-        else { gl_fail = 1; }
+        bool nzk = gl_is_nz(value);
+        gl_operands(target, value);
+        gl_iarith(ao, nzk);
     }
-    gl_ensure();
-    if at_kind[target] == AK_VAR { gl_store(30, gl_off[at_val[target]], 1); gl_nz_clear(at_val[target]); }
-    else { gl_store(29, goff[at_val[target]], 1); }
+    gl_store_var(target);
 }
 
 void gl_stmt(int n) {
@@ -559,7 +727,10 @@ void gl_stmt(int n) {
     }
     if k == AK_DECL {
         if at_a[n] != 0 {
-            gl_expr(at_a[n]);
+            bool dd = gl_isd(n);
+            if dd { gl_expr_d(at_a[n]); } else { gl_expr(at_a[n]); }
+            gl_ensure();
+            if dd { ir_add(IR_F2BITS, 1, 32, 0, 0, 0); }
             gl_store(30, gl_off[at_val[n]], 1);
         }
         gl_nz_clear(at_val[n]);
@@ -574,8 +745,7 @@ void gl_stmt(int n) {
         gl_expr(tg);
         gl_ensure();
         ir_add(IR_ADD, 1, 1, at_b[n], 1, 0);
-        if at_kind[tg] == AK_VAR { gl_store(30, gl_off[at_val[tg]], 1); gl_nz_clear(at_val[tg]); }
-        else { gl_store(29, goff[at_val[tg]], 1); }
+        gl_store_var(tg);
         return;
     }
     if k == AK_EXPR {
@@ -645,7 +815,15 @@ void gl_stmt(int n) {
         return;
     }
     if k == AK_RET {
-        if at_a[n] != 0 { gl_expr(at_a[n]); }
+        if at_a[n] != 0 {
+            if gl_retd == 1 {
+                gl_expr_d(at_a[n]);
+                gl_ensure();
+                ir_add(IR_F2BITS, 1, 32, 0, 0, 0);
+            } else {
+                gl_expr(at_a[n]);
+            }
+        }
         gl_jmp(gl_ret);
         return;
     }
@@ -711,30 +889,6 @@ int at_find(char^ name) {
     return 0 - 1;
 }
 
-// build the IR of the function from its tree; 1 when it worked (the IR is complete), 0 when the text path must be used
-int ast_lower(char^ name) {
-    ast_lower_tried += 1;
-    int ti = at_find(name);
-    if ti < 0 { return 0; }
-    int ok = ast_lower_body(ti, name);
-    if ast_lower_report == 1 {
-        write_err("astlow: ");
-        write_err(name);
-        if ok == 1 { write_err(" from the tree\n"); }
-        else if gl_why == 1 {
-            write_err(" the frame of the tree is not the frame of the parser\n  tree:   ");
-            write_err(@gl_hint);
-            write_err("\n  parser: ");
-            int hq = 0;
-            while hq < lf_hint_n { char hc[2]; hc[0] = lf_hint_text[hq]; hc[1] = 0; write_err(@hc); hq += 1; }
-            write_err("\n");
-        }
-        else { write_err(" not lowered\n"); }
-    }
-    return ok;
-}
-
-
 int ast_lower_body(int ti, char^ name) {
     gl_why = 0;
     int fi = at_fidx[ti];
@@ -772,9 +926,12 @@ int ast_lower_body(int ti, char^ name) {
     gl_np = 0;
     gl_nlab = 0;
     gl_depth = 0;
-    gl_maxdepth = 0;
     gl_loops = 0;
     gl_term = 0;
+    gl_nzn = 0;
+    gl_fdepth = 0;
+    gl_retd = 0;
+    if fvoid[fi] == 0 && fret[fi] == 91 { gl_retd = 1; }
     int b0 = ir_new_block(0 - 1);
     ir_set_block(b0);
     int pk = 0;
@@ -808,15 +965,37 @@ int ast_lower_body(int ti, char^ name) {
         int ins = gl_pinstr[q];
         int t1 = ir_t1[ins];
         if t1 >= 0 { ir_t1[ins] = gl_lblock[t1]; }
-        if ir_op[ins] == IR_BR {
+        if ir_op[ins] == IR_BR || ir_op[ins] == IR_FBR {
             int t2 = ir_t2[ins];
             if t2 >= 0 { ir_t2[ins] = gl_lblock[t2]; }
         }
         q += 1;
     }
-    // the number of stack cells the body uses is found by the lowering from the instructions
     if ir_check() == 0 { return 0; }
     ir_lastb = ir_nb - 1;
     ast_lower_used += 1;
     return 1;
+}
+
+// build the IR of the function from its tree; 1 when it worked (the IR is complete), 0 when the text path must be used
+int ast_lower(char^ name) {
+    ast_lower_tried += 1;
+    int ti = at_find(name);
+    if ti < 0 { return 0; }
+    int ok = ast_lower_body(ti, name);
+    if ast_lower_report == 1 {
+        write_err("astlow: ");
+        write_err(name);
+        if ok == 1 { write_err(" from the tree\n"); }
+        else if gl_why == 1 {
+            write_err(" the frame of the tree is not the frame of the parser\n  tree:   ");
+            write_err(@gl_hint);
+            write_err("\n  parser: ");
+            int hq = 0;
+            while hq < lf_hint_n { char hc[2]; hc[0] = lf_hint_text[hq]; hc[1] = 0; write_err(@hc); hq += 1; }
+            write_err("\n");
+        }
+        else { write_err(" not lowered\n"); }
+    }
+    return ok;
 }

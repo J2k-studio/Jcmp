@@ -893,10 +893,12 @@ int ast_primary() {
     if tok_kind == T_NUM {
         int isf = tok_float;
         int v = tok_num;
+        int fmant = tok_mant;
+        int fexp = tok_exp;
         next();
         if isf == 1 {
             ast_cur_ty = ast_mkty(0, 7);
-            return ast_node(AK_FNUM, 0, 0, 0, 0);
+            return ast_node(AK_FNUM, fmant, fexp, 0, 0);           // a = the mantissa, b = the power of ten (not nodes)
         }
         ast_cur_ty = ast_mkty(0, 8);
         return ast_node(AK_NUM, 0, 0, 0, v);
@@ -1377,6 +1379,7 @@ int ast_decl(int base) {
         if dims > 0 { ast_ldims[di] = dims; }
     }
     if di < 0 { return ast_node(AK_DECL, init, 0, 0, 0); }
+    ast_cur_ty = ast_mkty(kind, base);                // the type of the variable
     return ast_node(AK_DECL, init, 0, 0, ast_lid[di]);
 }
 

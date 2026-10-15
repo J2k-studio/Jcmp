@@ -357,15 +357,14 @@ int pow10_bits(int k) {
     return 4936209963552724370;
 }
 
-// the literal being read (tok_mant * 10^tok_exp) -> x0 as f64 bits
-void gen_float_literal() {
-    // worked out here with the same operations that the program would do (an exact integer, one division or product): the
-    // bits of the result are the constant
+// the bits of the double that a literal mant * 10^exp is: worked out with the same operations that the program would do (an exact
+// integer, one division or product)
+int float_literal_bits(int mant, int exp10) {
     double fl[1];
-    fl[0] = (double)tok_mant;
-    if tok_exp != 0 {
+    fl[0] = (double)mant;
+    if exp10 != 0 {
         double pw = 1.0;
-        int ae = tok_exp;
+        int ae = exp10;
         if ae < 0 { ae = 0 - ae; }
         if ae <= 18 {
             int p10 = 1;
@@ -381,14 +380,19 @@ void gen_float_literal() {
             pbi[0] = pow10_bits(ae);
             pw = pb[0];
         }
-        if tok_exp < 0 {
+        if exp10 < 0 {
             fl[0] = fl[0] / pw;
         } else {
             fl[0] = fl[0] * pw;
         }
     }
     int^ fbits = (int^)@fl[0];
-    ins_n("mov x0, ", fbits[0]);
+    return fbits[0];
+}
+
+// the literal being read (tok_mant * 10^tok_exp) -> x0 as f64 bits
+void gen_float_literal() {
+    ins_n("mov x0, ", float_literal_bits(tok_mant, tok_exp));
     ex_w = 7;
     ex_ty = 92;
     next();
