@@ -770,8 +770,9 @@ int lf_function(char^ name) {
     int nblocks = lf_nblocks;
     if nblocks == 0 { return lf_fail("no code"); }
     if nblocks > IR_MAXB - 4 { return lf_fail("too many blocks"); }
-    if ast_lower_on == 1 && lf_epi_line >= 0 {
-        // A1b: the tree of the function (the first subset) gives the IR; when it does not, the text is lifted as before
+    if ast_lower_on == 1 {
+        // A1b: the tree of the function (the first subset) gives the IR; when it does not, the text is lifted as before.
+        // main has no epilogue (it ends with the exit call): the tree makes that too
         char tn[128];
         str_copy(@tn, name, 128);
         int tl = str_len(@tn);
@@ -780,7 +781,7 @@ int lf_function(char^ name) {
         while tn[tl2] != 0 && tn[tl2] != 10 { tl2 += 1; }
         tn[tl2] = 0;
         if tl2 > 0 && tn[tl2 - 1] == ':' { tn[tl2 - 1] = 0; }
-        if ast_lower(@tn) == 1 { return 1; }
+        if (lf_epi_line >= 0 || (ast_main_on == 1 && str_eq(@tn, "main"))) && ast_lower(@tn) == 1 { return 1; }
     }
     ir_reset(name);
     ir_nv = 64;

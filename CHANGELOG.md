@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.156
+* **Vectoriser: one pointer for all arrays that a loop walks together.** A vector loop used one pointer (a cell of the frame, loaded at every access) for each array; now the arrays of the same base whose offsets are equal modulo 16 and within 60000 bytes share one pointer, and the distance between the arrays goes into the offset of each `ldr q` / `str q`. `c[i] = a[i] + b[i] * k` was 3 pointers and 3 steps for each turn: now 1 and 1. The `arrays` benchmark (an `axpy`, a copy and a sum of 2048 elements, 60000 times) is 187 -> 139 ms.
+* `main` made from the tree is behind the hidden switch `-astmain` (it works and passes the tests, but the register pass gives the variables of `main` to other slots than the text path does and the `arrays` benchmark was 172 -> 210 ms, `strings` 72 -> 81 ms); every other function is made from the tree by default as before.
+* The gate: 464 tests pass with the default and `-noast`, 300 fuzz programs, `diffcheck` the same 2 differences.
+
 ## 0.9.155
 * **AST A6, ownership layer 4: Strings and dynamic arrays in struct fields, in globals and through pointers.** `r^.name`, `s.items`, `gname`, `grec.name` as the receiver of every String / dynamic array operation, as the target of `=`, `+=`, `push`, `free()`, as an argument, as the base of `[i]` and `.len`; `d = arr(n)` and `d = other` on a place; a local struct with a String or an array in it starts as zeros (like the text path); `s.free()` on a String. A place may be a chain of fields, derefs and indexes that has no call in it (it is worked out twice).
 * `tools/fuzz_str.py` also uses a struct with two Strings (local and global) and a global String: 150 more programs, 0 differences between the tree and `-noast`.

@@ -1054,6 +1054,7 @@ int gl_np;
 int gl_lblock[GL_MAXP];          // label -> block
 int gl_nlab;
 int gl_term;                     // 1: the current block has its last instruction
+int gl_ismain;                   // 1 while main is made: it ends with the exit call, a `return` gives its status
 int gl_retoff;                   // the slot that holds the address of the result of a function that gives a struct, else -1
 int gl_ab;                       // the base register and the offset that gl_addr / gl_lv give
 int gl_ao;
@@ -3100,6 +3101,9 @@ void gl_stmt(int n) {
             gl_ensure();
             gl_load(3, 30, gl_retoff);
             gl_copy(3, 0, 1, 0, ssize[at_ty[at_a[n]] % 65536 - 16]);
+        } else if at_a[n] == 0 && gl_ismain == 1 {
+            gl_ensure();
+            ir_add(IR_CONST, 1, 0, 0, 0, 0);
         } else if at_a[n] != 0 && at_ty[at_a[n]] / 65536 == 4 {
             // a String result: an owner or a temporary moves out, a text is made into a String, anything else is copied
             int rs = at_a[n];
@@ -3378,7 +3382,10 @@ int at_find(char^ name) {
 
 int ast_lower_body(int ti, char^ name) {
     gl_why = 0;
+    gl_ismain = 0;
+    if str_eq(name, "main") { gl_ismain = 1; }
     int fi = at_fidx[ti];
+    if gl_ismain == 1 && opt_debug == 1 { return 0; }        // the -d report at the end of main: the text path
     int np = fnpar[fi];
     // the frame: what the parser had when the body began (the hidden slots and the parameters), then the locals as it declares them
     gl_nslot = at_fb[ti];
@@ -3469,17 +3476,37 @@ int ast_lower_body(int ti, char^ name) {
     // every event of the parser was used: what the tree did is what the text path did
     if go_pos != go_end { gl_failx(27); }
     if gl_fail == 1 { return 0; }
-    // falling off the end of a function that gives a value: the runtime stops (as the text path does)
-    if gl_term == 0 && fvoid[fi] == 0 {
-        gl_ensure();
-        int ce = ir_add(IR_CALL, 1, 0, 0, 0, ir_name_index("j2k_noret"));
-        ir_set_args(ce, 0, @gl_args);
+    if gl_ismain == 1 {
+        // main: falling off the end gives 0; the end is the exit call (the text path: `mov x0, 0`, the label, `mov x8, 94`, `svc 0`)
+        if gl_term == 0 {
+            gl_ensure();
+            ir_add(IR_CONST, 1, 0, 0, 0, 0);
+        }
+        gl_place(gl_ret);
+        ir_add(IR_CONST, 9, 0, 0, 0, 94);
+        int xe = ir_add(IR_SYSCALL, 1, 9, 0, 0, 0);
+        int xk = 0;
+        while xk < 8 {
+            gl_args[xk] = xk + 1;
+            xk += 1;
+        }
+        ir_set_args(xe, 8, @gl_args);
+        ir_ac[xe] = 1;
         ir_add(IR_TRAP, 0, 0, 0, 0, 0);
         gl_term = 1;
+    } else {
+        // falling off the end of a function that gives a value: the runtime stops (as the text path does)
+        if gl_term == 0 && fvoid[fi] == 0 {
+            gl_ensure();
+            int ce = ir_add(IR_CALL, 1, 0, 0, 0, ir_name_index("j2k_noret"));
+            ir_set_args(ce, 0, @gl_args);
+            ir_add(IR_TRAP, 0, 0, 0, 0, 0);
+            gl_term = 1;
+        }
+        gl_place(gl_ret);
+        ir_add(IR_RET, 0, 1, 0, 0, 0);
+        gl_term = 1;
     }
-    gl_place(gl_ret);
-    ir_add(IR_RET, 0, 1, 0, 0, 0);
-    gl_term = 1;
     // the labels become blocks
     int q = 0;
     while q < gl_np {

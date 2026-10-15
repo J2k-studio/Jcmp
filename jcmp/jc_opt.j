@@ -4857,10 +4857,20 @@ int vz_abase(int base) {
 }
 
 // the index of the pointer for base + off (a new one is made when emit is false)
+int vz_kadd;                     // vz_ptr: what the access adds to the pointer (its offset minus the offset the pointer was made with)
+
+// one pointer serves every access of the same base whose offset is the same modulo 16 and within 60000 bytes (the offset of ldr q is
+// a multiple of 16 and at most 65520): three arrays are one pointer and one step for each turn, not three
 int vz_pk_find(int base, int off, bool make) {
     int u = 0;
     while u < vz_npk {
-        if vz_pk_base[u] == base && vz_pk_off[u] == off { return u; }
+        if vz_pk_base[u] == base {
+            int dd = off - vz_pk_off[u];
+            if (dd & 15) == 0 && dd < 60000 && dd > 0 - 60000 {
+                if make && off < vz_pk_off[u] { vz_pk_off[u] = off; }       // the smallest offset is the anchor: no negative offsets
+                return u;
+            }
+        }
         u += 1;
     }
     if !make || vz_npk >= 16 { return 0 - 1; }
@@ -4877,6 +4887,7 @@ int vz_ptr(int base, int off) {
     int lp = ir_add(IR_LOAD, pt, 30, 0, 0, 0);
     ir_w[lp] = 8;
     ir_k[lp] = vz_pk_cell[u];
+    vz_kadd = off - vz_pk_off[u];
     return pt;
 }
 
@@ -5030,7 +5041,8 @@ bool vz_scan(int q, int islot, int incl, int inch, bool emit) {
                     vz_nacc += 1;
                     if emit {
                         int qv = ir_vreg(2);
-                        int le = ir_add(IR_LOAD, qv, vz_ptr(vz_base[ir_a[j2]], vz_off[ir_a[j2]] + ir_k[j2]), 0, 0, vz_shift);
+                        int lpt = vz_ptr(vz_base[ir_a[j2]], vz_off[ir_a[j2]] + ir_k[j2]);
+                        int le = ir_add(IR_LOAD, qv, lpt, 0, 0, vz_shift + vz_kadd);
                         ir_w[le] = 16;
                         vz_vec[d] = qv;
                     }
@@ -5280,7 +5292,8 @@ bool vz_scan(int q, int islot, int incl, int inch, bool emit) {
                     else {
                         qs = vz_bcast(ir_b[j2]);
                     }
-                    int se = ir_add(IR_STORE, 0, vz_ptr(vz_base[ir_a[j2]], vz_off[ir_a[j2]] + ir_k[j2]), qs, 0, vz_shift);
+                    int spt = vz_ptr(vz_base[ir_a[j2]], vz_off[ir_a[j2]] + ir_k[j2]);
+                    int se = ir_add(IR_STORE, 0, spt, qs, 0, vz_shift + vz_kadd);
                     ir_w[se] = 16;
                 }
             } else {
