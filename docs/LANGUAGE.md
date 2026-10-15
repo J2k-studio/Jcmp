@@ -94,7 +94,7 @@ Operators, highest first: `* / %` · `+ -` · `<< >>` (`shl shr`) · `&` · `xor
 (`a & 1 == 0` means `(a & 1) == 0`). `~x` is bitwise not, `!` is logical not.
 `xor` is a word because `^` means "pointer".
 
-Constants: `#define MAX 100` (text substitution; defined before use).
+Constants: `#define MAX 100` (text substitution; defined before use). When the text is an arithmetic expression of several tokens it is kept in parentheses, so `#define N 2+3` gives `N * 2 == 10`; a text that is not an expression (a type, an argument list, a statement, an assignment, a string) is substituted as written. An array size may be a constant expression: `int a[N * 2 + 1];`.
 
 ## Control flow
 

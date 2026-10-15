@@ -51,6 +51,39 @@ char def_val[524288];         // 256 values x 256
 int def_count;
 int reserve_mask;            // #reserve x18, x19 ...: bit n = register xn is never used by the compiler (x18, x19 .. x25)
 
+// a #define whose text is an arithmetic expression of several tokens (`2+3`, `N * 4 - 1`) is kept in parentheses, so that `N * 2` is
+// `(2+3) * 2`, as everybody reads it (owner, 2026-10-15). Texts that are not an expression (a type, an argument list, a statement, a
+// string, an assignment) stay as written.
+bool define_is_expr(char^ s, int n) {
+    if n < 3 { return false; }
+    bool has_op = false;
+    int depth = 0;
+    int i = 0;
+    while i < n {
+        int c = s[i];
+        if c == ',' || c == ';' || c == '{' || c == '}' || c == '"' || c == 39 || c == '=' || c == '[' || c == ']' || c == '#' || c == '@' || c == '^' || c == ':' || c == '?' { return false; }
+        if c == '(' { depth += 1; }
+        if c == ')' { depth -= 1; if depth < 0 { return false; } }
+        if (c == '+' && i + 1 < n && s[i + 1] == '+') || (c == '-' && i + 1 < n && s[i + 1] == '-') { return false; }
+        if c == '+' || c == '-' || c == '*' || c == '/' || c == '%' || c == '<' || c == '>' || c == '&' || c == '|' { has_op = true; }
+        i += 1;
+    }
+    if depth != 0 || !has_op { return false; }
+    // the first word must not be a keyword of a statement
+    char w[16];
+    int k = 0;
+    int j = 0;
+    while j < n && (s[j] == ' ' || s[j] == 9) { j += 1; }
+    while j < n && k < 15 && ((s[j] >= 'a' && s[j] <= 'z') || (s[j] >= 'A' && s[j] <= 'Z') || s[j] == '_') {
+        w[k] = s[j];
+        k += 1;
+        j += 1;
+    }
+    w[k] = 0;
+    if str_eq(@w, "return") || str_eq(@w, "if") || str_eq(@w, "else") || str_eq(@w, "while") || str_eq(@w, "for") || str_eq(@w, "loop") || str_eq(@w, "switch") || str_eq(@w, "case") || str_eq(@w, "break") || str_eq(@w, "continue") || str_eq(@w, "goto") || str_eq(@w, "defer") || str_eq(@w, "throw") || str_eq(@w, "try") || str_eq(@w, "catch") || str_eq(@w, "cout") || str_eq(@w, "cin") { return false; }
+    return true;
+}
+
 int find_define(char^ name) {
     int i = 0;
     while i < def_count {
@@ -1201,6 +1234,16 @@ void next() {
         }
         while dv > 0 && (def_val[di * 256 + dv - 1] == 32 || def_val[di * 256 + dv - 1] == 9) { dv -= 1; }
         def_val[di * 256 + dv] = 0;
+        if dv < 248 && define_is_expr(@def_val + di * 256, dv) {
+            int mv = dv;
+            while mv > 0 {
+                def_val[di * 256 + mv] = def_val[di * 256 + mv - 1];
+                mv -= 1;
+            }
+            def_val[di * 256] = '(';
+            def_val[di * 256 + dv + 1] = ')';
+            def_val[di * 256 + dv + 2] = 0;
+        }
         def_count += 1;
         next();
         return;

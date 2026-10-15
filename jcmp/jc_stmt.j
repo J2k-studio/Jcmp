@@ -1191,12 +1191,11 @@ int parse_dims() {
             pd_total = 0 - 1;
             nd = 1;
         } else {
-            if tok_kind != T_NUM { die("an array size (a number) was expected"); }
-            if tok_num <= 0 { die("bad array size"); }
-            dims[nd] = tok_num;
-            if pd_total >= 0 { pd_total = pd_total * tok_num; }
+            int dsz = const_int_expr("an array size (a number) was expected");
+            if dsz <= 0 { die("bad array size"); }
+            dims[nd] = dsz;
+            if pd_total >= 0 { pd_total = pd_total * dsz; }
             nd += 1;
-            next();
             expect("]");
         }
     }
@@ -1377,6 +1376,60 @@ void parse_using() {
         }
     }
     expect(";");
+}
+
+// ---- a constant whole number expression: numbers, ( ), unary - and ~, * / % + - << >> & xor | (the array sizes: `int a[N * 2 + 1];`)
+int ci_primary(char^ what) {
+    if tok_is("(") {
+        next();
+        int v = ci_level(0, what);
+        expect(")");
+        return v;
+    }
+    if tok_is("-") {
+        next();
+        return 0 - ci_primary(what);
+    }
+    if tok_is("~") {
+        next();
+        return ~ci_primary(what);
+    }
+    if tok_kind != T_NUM || tok_float == 1 { die(what); }
+    int n = tok_num;
+    next();
+    return n;
+}
+
+// level 0: |   1: xor   2: &   3: << >>   4: + -   5: * / %
+int ci_level(int lvl, char^ what) {
+    if lvl > 5 { return ci_primary(what); }
+    int v = ci_level(lvl + 1, what);
+    while true {
+        if lvl == 0 && tok_is("|") { next(); v = v | ci_level(1, what); }
+        else if lvl == 1 && tok_is("xor") { next(); v = v xor ci_level(2, what); }
+        else if lvl == 2 && tok_is("&") { next(); v = v & ci_level(3, what); }
+        else if lvl == 3 && tok_is("<<") { next(); int sh = ci_level(4, what); if sh < 0 || sh > 62 { die("a shift is 0 .. 63 places"); } v = v << sh; }
+        else if lvl == 3 && tok_is(">>") { next(); int sh2 = ci_level(4, what); if sh2 < 0 || sh2 > 62 { die("a shift is 0 .. 63 places"); } v = v >> sh2; }
+        else if lvl == 4 && tok_is("+") { next(); v = v + ci_level(5, what); }
+        else if lvl == 4 && tok_is("-") { next(); v = v - ci_level(5, what); }
+        else if lvl == 5 && tok_is("*") { next(); v = v * ci_level(6, what); }
+        else if lvl == 5 && tok_is("/") {
+            next();
+            int dv = ci_level(6, what);
+            if dv == 0 { die("division by zero in a constant"); }
+            v = v / dv;
+        } else if lvl == 5 && tok_is("%") {
+            next();
+            int dm = ci_level(6, what);
+            if dm == 0 { die("division by zero in a constant"); }
+            v = v % dm;
+        } else { break; }
+    }
+    return v;
+}
+
+int const_int_expr(char^ what) {
+    return ci_level(0, what);
 }
 
 // the value of a case label or global initializer: a number, 'c', -n, an enum

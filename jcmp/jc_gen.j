@@ -1663,6 +1663,7 @@ bool gen_bare_variant(char^ enum_name, char^ sc_full) {
 
 // accessors for jc_stmt (it is read before this file, so it cannot name these tables)
 char^ dv_name_of(int d) { return @dv_name + d * 64; }
+int dv_count_of() { return dv_count; }
 int dv_nvar_of(int d) { return dv_nvar[d]; }
 int dv_first_of(int d) { return dv_first[d]; }
 char^ dv_vname(int g) { return @dvv_name + g * 64; }

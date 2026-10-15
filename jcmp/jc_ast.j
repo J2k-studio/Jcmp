@@ -49,6 +49,9 @@
 #define AK_ENUMV 36          // an enum member: val = the name (pool), a = the first value (data enums)
 #define AK_RAW 37            // a block of the low level (register { }, an `_.name { }` block): the tokens are skipped
 #define AK_CIN 38            // `cin >> a >> b;`
+#define AK_LAMBDA 39         // a = the body (a block); the parameters are locals of the body
+#define AK_USING 40          // using enum Name;  using name;  (nothing runs)
+#define AK_REG 41            // Reg::x0 : a register of the low level, val = the name (pool)
 #define AK_LIST 27           // an initial list `{a, b, ...}`: a = the first item, the items are a chain through c
 
 // operator codes
@@ -77,6 +80,8 @@ int ast_b[AST_MAXN];
 int ast_c[AST_MAXN];
 int ast_val[AST_MAXN];
 int ast_nx[AST_MAXN];
+int ast_ue[64];                  // the enums that `using enum` made visible in the body read now
+int ast_cls[AST_MAXN];           // AK_ENUMV: what the name is (ast_classify), 0 when it is not resolved
 char ast_pool[65536];            // names that nodes keep (methods, members, built-in names), 0 ended
 int ast_plen;            // the next one in a list (the arguments of a call, the items of a list or cout, the statements of a block)
 int ast_ty[AST_MAXN];            // the type of an expression node: base + 65536 * kind (kind 0 scalar, 1 pointer to, 2 array of, 3 struct)
@@ -217,12 +222,27 @@ int ast_arith_ty(int ta, int tb) {
     return ast_mkty(0, 8);
 }
 
+// the element of a dynamic array T[]: kept in the base of a kind 5 type as  element kind * 1000 + element code  (the packed type of the
+// parser says it: dyn_code, dyn_ptr, dyn_tid); 0 when it is not known
+int ast_dyn_base(int info) {
+    if info == 0 { return 0; }
+    if is_strarr_dyn(info) { return 4008; }
+    int code = dyn_code(info);
+    int ptr = dyn_ptr(info);
+    int tid = dyn_tid(info);
+    if ptr >= 2 { return 1400 + code; }
+    if ptr == 1 { return 1000 + code; }
+    if tid >= 3 && tid < 90 { return 6000 + tid; }
+    if code >= 16 { return 3000 + code; }
+    return code;
+}
+
 // the type of the result of a function (fret is the type id: 0 a number, 1 a bool, 90 float, 91 double, 93 u8, 94 u32, 95 u64, 100 + n a struct)
 int ast_fn_ty(int fi) {
     int t = fret[fi];
     if fretdyn[fi] != 0 {
         if is_str_dyn(fretdyn[fi]) { return ast_mkty(4, 8); }
-        return ast_mkty(5, 8);
+        return ast_mkty(5, ast_dyn_base(fretdyn[fi]));
     }
     if t >= 3 && t < 90 { return ast_mkty(6, t); }
     if t == 1 { return ast_mkty(0, 3); }
@@ -255,9 +275,10 @@ void ast_load_params() {
     while i < lcount {
         int li = ast_add_local(@lname + i * 64);
         if li < 0 { return; }
-        if ldyn[i] != 0 {
-            if is_str_dyn(ldyn[i]) { ast_lkind[li] = 4; } else { ast_lkind[li] = 5; }
-            ast_lbase[li] = 8;
+        // `self` of a method of a generic instance (Option<String>) carries the dynamic type of T: it is still the address of the struct
+        bool self_ptr = str_eq(@lname + i * 64, "self") && ldyn[i] != 0 && (lptr[i] != 0 || lelem[i] >= 16);
+        if ldyn[i] != 0 && !self_ptr {
+            if is_str_dyn(ldyn[i]) { ast_lkind[li] = 4; ast_lbase[li] = 8; } else { ast_lkind[li] = 5; ast_lbase[li] = ast_dyn_base(ldyn[i]); }
             i += 1;
             continue;
         }
@@ -318,8 +339,7 @@ int ast_gbase;
 int ast_gdims;
 bool ast_global_ok(int gi) {
     if gdyn[gi] != 0 {
-        if is_str_dyn(gdyn[gi]) { ast_gkind = 4; } else { ast_gkind = 5; }
-        ast_gbase = 8;
+        if is_str_dyn(gdyn[gi]) { ast_gkind = 4; ast_gbase = 8; } else { ast_gkind = 5; ast_gbase = ast_dyn_base(gdyn[gi]); }
         return true;
     }
     if gtid[gi] >= 3 && gtid[gi] < 90 && gkind[gi] == 0 && gptr[gi] == 0 {
@@ -375,6 +395,33 @@ int ast_call(int fidx) {
 
 // `[index]`, `^`, `?`, `.field` and `.method(args)` after a name, with the type that the chain has: kind 0 scalar, 1 pointer, 2 array,
 // 3 struct, 4 String, 5 dynamic array, 6 enum; base: the width code of the scalar / pointee / element, 16 + n for the struct n
+// the type of the result of a method of a String (kind 4) or a dynamic array (kind 5, element in base): void is kind 7; kind 8 when not known
+int ast_member_ty(int kind, int base, char^ n) {
+    int unknown = ast_mkty(8, 0);
+    if kind == 4 {
+        if str_eq(n, "push") || str_eq(n, "append") || str_eq(n, "clear") || str_eq(n, "free") || str_eq(n, "insert") { return ast_mkty(7, 0); }
+        if str_eq(n, "slice") || str_eq(n, "trim") || str_eq(n, "upper") || str_eq(n, "lower") || str_eq(n, "replace") || str_eq(n, "repeat") { return ast_mkty(4, 8); }
+        if str_eq(n, "find") || str_eq(n, "count") || str_eq(n, "to_int") { return ast_mkty(0, 8); }
+        if str_eq(n, "to_double") { return ast_mkty(0, 7); }
+        if str_eq(n, "starts_with") || str_eq(n, "ends_with") || str_eq(n, "contains") { return ast_mkty(0, 3); }
+        if str_eq(n, "c") { return ast_mkty(1, 2); }
+        if str_eq(n, "char_at") || str_eq(n, "pop") { return ast_mkty(0, 2); }
+        if str_eq(n, "split") { return ast_mkty(5, 4008); }
+        return unknown;
+    }
+    if kind == 5 {
+        if str_eq(n, "push") || str_eq(n, "clear") || str_eq(n, "free") || str_eq(n, "resize") || str_eq(n, "sort") || str_eq(n, "insert") { return ast_mkty(7, 0); }
+        if str_eq(n, "contains") { return ast_mkty(0, 3); }
+        if str_eq(n, "index_of") { return ast_mkty(0, 8); }
+        if str_eq(n, "join") { return ast_mkty(4, 8); }
+        if (str_eq(n, "pop") || str_eq(n, "get") || str_eq(n, "at") || str_eq(n, "remove")) && base >= 1 {
+            return ast_mkty(base / 1000, base % 1000);
+        }
+        return unknown;
+    }
+    return unknown;
+}
+
 int ast_pkind;
 int ast_pbase;
 
@@ -444,9 +491,15 @@ int ast_postfix(int base, int kind, int tb) {
             if ast_pkind == 4 {
                 ast_pkind = 0;
                 ast_pbase = 2;
+            } else if ast_pkind == 5 && ast_pbase >= 1 {
+                // the element of a dynamic array
+                int ek = ast_pbase / 1000;
+                ast_pbase = ast_pbase % 1000;
+                ast_pkind = ek;
+                ast_pdims = 1;
             } else if ast_pkind == 5 || ast_pkind == 8 {
                 ast_pkind = 8;
-                ast_pbase = 0;                       // the element type of a dynamic array is not kept
+                ast_pbase = 0;                       // the element type of a dynamic array is not known
             } else if ast_pkind == 2 && ast_pdims > 1 {
                 ast_pdims -= 1;                      // a row of a table: still an array
             } else if ast_pbase >= 400 {
@@ -475,6 +528,11 @@ int ast_postfix(int base, int kind, int tb) {
                 ast_pkind = 0;
             }
             ast_cur_ty = ast_mkty(ast_pkind, ast_pbase);
+            cur = ast_node(AK_DEREF, cur, 0, 0, 0);
+        } else if tok_is("^") && ast_pkind == 6 {
+            // `self^` in a method of a data enum: self is the address of the enum value
+            next();
+            ast_cur_ty = ast_mkty(6, ast_pbase);
             cur = ast_node(AK_DEREF, cur, 0, 0, 0);
         } else if tok_is("(") && (ast_pkind == 0 || ast_pkind == 1 || ast_pkind == 8) && (ast_kind[cur] == AK_VAR || ast_kind[cur] == AK_GVAR || ast_kind[cur] == AK_FIELD || ast_kind[cur] == AK_INDEX || ast_kind[cur] == AK_CALL || ast_kind[cur] == AK_METHOD) {
             // a call through a pointer to a function: f(a, b)
@@ -536,6 +594,7 @@ int ast_postfix(int base, int kind, int tb) {
                     int mf = find_func(@full);
                     if mf >= 0 { rty = ast_fn_ty(mf); }
                 }
+                if rty / 65536 == 8 && (ast_pkind == 4 || ast_pkind == 5) { rty = ast_member_ty(ast_pkind, ast_pbase, @mn); }
                 int kb2 = ast_pkind;
                 int bb2 = ast_pbase;
                 int db2 = ast_pdims;
@@ -559,8 +618,7 @@ int ast_postfix(int base, int kind, int tb) {
                     ast_pbase = fldcode[fi];
                     ast_pdims = fldnd[fi];
                 } else if flddyn[fi] != 0 {
-                    if is_str_dyn(flddyn[fi]) { ast_pkind = 4; } else { ast_pkind = 5; }
-                    ast_pbase = 8;
+                    if is_str_dyn(flddyn[fi]) { ast_pkind = 4; ast_pbase = 8; } else { ast_pkind = 5; ast_pbase = ast_dyn_base(flddyn[fi]); }
                 } else if fldptr[fi] != 0 {
                     if !ast_value_code(fldptr[fi]) {
                         ast_fail("a field that is a pointer to a pointer");
@@ -627,7 +685,9 @@ int ast_name_node() {
     ast_nbase = 8;
     ast_ndims = 1;
     ast_cur_ty = ast_mkty(0, 8);
-    return ast_node(AK_ENUMV, 0, 0, 0, poolat);
+    char noq[4];
+    noq[0] = 0;
+    return ast_enumv(0, 0, ast_classify(@noq, @ast_pool + poolat), poolat);
 }
 // the next characters after the current token (without reading): `::`
 bool ast_colons_follow() {
@@ -643,9 +703,52 @@ bool ast_colons_follow() {
 }
 
 // `Name::function(args)`, `Enum::Member`, `Enum::Member(values)`, `Reg::x5`: the current token is Name. A function is named Name__function
+int ast_enumv(int a, int b, int cls, int val) {
+    int n = ast_node(AK_ENUMV, a, b, 0, val);
+    if n > 0 { ast_cls[n] = cls; }
+    return n;
+}
+
+// what a name is that the tree keeps by its text (an AK_ENUMV node; the code goes to the field c):
+// 1 a member of an enum, 2 a member of a data enum, 3 a member made visible by `using enum`, 4 a function used as a value,
+// 5 a qualified name of the library (`Math::pi`), 6 a device, 0 not resolved
+int ast_classify(char^ qual, char^ name) {
+    if qual[0] != 0 {
+        int en = find_enum(qual);
+        if en >= 0 {
+            if find_member(en, name) { return 1; }
+            return 0;
+        }
+        if gen_is_template(qual) || find_struct(qual) >= 0 { return 2; }
+        return 5;
+    }
+    int dvi = 0;
+    while dvi < dv_count_of() {
+        if dv_variant(dvi, name) >= 0 { return 3; }
+        dvi += 1;
+    }
+    int uen2 = 0;
+    while uen2 < ecount && uen2 < 64 {
+        if ast_ue[uen2] == 1 && find_member(uen2, name) { return 3; }
+        uen2 += 1;
+    }
+    int keep_ty = ex_ty;
+    int keep_val = found_val;
+    bool um = find_using_member(name);
+    ex_ty = keep_ty;
+    found_val = keep_val;
+    if um { return 3; }
+    if find_device(name) >= 0 { return 6; }
+    if find_func(name) >= 0 || gen_is_template(name) { return 4; }
+    if ast_resolve_func(name) != 0 - 1 { return 4; }
+    return 0;
+}
+
 int ast_static_call(bool as_value) {
     char full[128];
+    char full_q[64];
     str_copy(@full, @tok_text, 64);
+    str_copy(@full_q, @tok_text, 64);
     int is_enum = find_enum(@full);
     bool is_reg = str_eq(@full, "Reg");
     next();                                  // Name
@@ -655,9 +758,10 @@ int ast_static_call(bool as_value) {
         return 0;
     }
     if is_reg {
+        int rpool = ast_pool_add(@tok_text);
         next();
         ast_cur_ty = ast_mkty(0, 8);
-        return ast_node(AK_RAW, 0, 0, 0, 0);
+        return ast_node(AK_REG, 0, 0, 0, rpool);
     }
     int k = str_len(@full);
     full[k] = '_';
@@ -683,7 +787,7 @@ int ast_static_call(bool as_value) {
         } else {
             ast_cur_ty = ast_mkty(0, 0);
         }
-        return ast_node(AK_ENUMV, args, 0, 0, poolat);
+        return ast_enumv(args, 0, ast_classify(@full_q, @ast_pool + poolat), poolat);
     }
     if fop[fi] == 1 {
         ast_fail("a static function that is an operator");
@@ -698,7 +802,7 @@ int ast_static_call(bool as_value) {
     if !tok_is("(") {
         // a member of a data enum written without values (`Option::None`): the library makes it with a function
         ast_cur_ty = ast_mkty(0, 0);
-        return ast_node(AK_ENUMV, 0, 0, 0, pool2);
+        return ast_enumv(0, 0, ast_classify(@full_q, @ast_pool + pool2), pool2);
     }
     int cn = ast_call(fi);
     if ast_ok == 0 { return 0; }
@@ -781,7 +885,7 @@ int ast_lambda() {
     ast_loop_depth = saved_loop;
     if ast_ok == 0 { return 0; }
     ast_cur_ty = ast_mkty(0, 8);
-    return ast_node(AK_RAW, body, 0, 0, 0);
+    return ast_node(AK_LAMBDA, body, 0, 0, 0);
 }
 
 int ast_primary() {
@@ -889,12 +993,14 @@ int ast_primary() {
             ast_cur_ty = ast_mkty(1, 8);
             return ast_node(AK_NUM, 0, 0, 0, 0);
         }
-        if ast_is_builtin(@tok_text) && ast_find_local(@tok_text) < 0 && (find_func(@tok_text) < 0 || tok_is("alloc") || tok_is("arr") || tok_is("free") || tok_is("move")) {
+        if ast_is_builtin(@tok_text) && ast_find_local(@tok_text) < 0 && find_global(@tok_text) < 0 && (find_func(@tok_text) < 0 || tok_is("alloc") || tok_is("arr") || tok_is("free") || tok_is("move")) {
             int bp = ast_pool_add(@tok_text);
             next();
             if tok_is("[") {
                 // alloc[n]  arr[n]  pool[T, n]: the brackets are read as they are
                 int depth2 = 0;
+                int prev_code = 0;
+                bool saw_caret = false;
                 while tok_kind != T_EOF {
                     if tok_is("[") { depth2 += 1; }
                     if tok_is("]") {
@@ -903,6 +1009,27 @@ int ast_primary() {
                             next();
                             break;
                         }
+                    }
+                    if tok_is("^") {
+                        saw_caret = true;
+                    } else if saw_caret && tok_kind == T_IDENT {
+                        // alloc[int^ p = n]: a pointer variable is declared here
+                        char pn[64];
+                        str_copy(@pn, @tok_text, 64);
+                        saw_caret = false;
+                        next();
+                        if tok_is("=") || tok_is("]") {
+                            int pli = ast_add_local(@pn);
+                            if pli >= 0 {
+                                ast_lkind[pli] = 1;
+                                ast_lbase[pli] = prev_code;
+                                if prev_code == 0 { ast_lbase[pli] = 8; }
+                            }
+                        }
+                        continue;
+                    } else if tok_kind == T_IDENT {
+                        int tc = ast_type_kw();
+                        if tc != 0 { prev_code = tc; }
                     }
                     next();
                 }
@@ -1186,6 +1313,16 @@ int ast_decl(int base) {
     else if tkind != 0 { kind = tkind; }
     else if base >= 16 { kind = 3; }
     if dynarr == 1 { kind = 5; }
+    if dynarr == 1 {
+        // the element of the dynamic array (see ast_dyn_base)
+        int eb = base;
+        if tkind == 4 { eb = 4008; }
+        else if ptr >= 2 { eb = 1400 + (base % 400); }
+        else if ptr == 1 { eb = 1000 + base; }
+        else if tkind == 6 { eb = 6000 + base; }
+        else if base >= 16 { eb = 3000 + base; }
+        base = eb;
+    }
     int dims = 0;
     while tok_is("[") {
         next();
@@ -1297,6 +1434,8 @@ int ast_case_patterns() {
         if tok_kind == T_IDENT && tok_is("_") {
             next();
         } else if tok_kind == T_IDENT && ast_colons_follow() {
+            char pq[64];
+            str_copy(@pq, @tok_text, 64);
             next();                          // the enum
             next();                          // ::
             int pa = ast_pool_add(@tok_text);
@@ -1322,7 +1461,7 @@ int ast_case_patterns() {
                 }
                 next();
             }
-            item = ast_node(AK_ENUMV, 0, bound, 0, pa);
+            item = ast_enumv(0, bound, ast_classify(@pq, @ast_pool + pa), pa);
         } else if tok_kind == T_IDENT && ast_find_local(@tok_text) < 0 && find_global(@tok_text) < 0 && find_func(@tok_text) < 0 {
             // a member of an enum written without its name (`using enum`)
             int pa2 = ast_pool_add(@tok_text);
@@ -1348,7 +1487,9 @@ int ast_case_patterns() {
                 }
                 next();
             }
-            item = ast_node(AK_ENUMV, 0, bound2, 0, pa2);
+            char noq2[4];
+            noq2[0] = 0;
+            item = ast_enumv(0, bound2, ast_classify(@noq2, @ast_pool + pa2), pa2);
         } else {
             item = ast_expr(0);
             if ast_ok == 0 { return 0; }
@@ -1584,9 +1725,16 @@ int ast_stmt() {
         }
         if tok_is("cout") { return ast_cout(); }
         if tok_is("using") {
+            next();
+            if tok_is("enum") {
+                // using enum Name;  its members are visible in the rest of the block
+                next();
+                int uen = find_enum(@tok_text);
+                if uen >= 0 && uen < 64 { ast_ue[uen] = 1; }
+            }
             while !tok_is(";") && tok_kind != T_EOF { next(); }
             next();
-            return ast_node(AK_RAW, 0, 0, 0, 0);
+            return ast_node(AK_USING, 0, 0, 0, 0);
         }
         if tok_is("switch") { return ast_switch(); }
         if tok_is("try") { return ast_try(); }
@@ -1654,7 +1802,7 @@ int ast_stmt() {
         if find_enum(@tok_text) >= 0 && ast_find_local(@tok_text) < 0 && ast_decl_follows() {
             return ast_decl(3 + find_enum(@tok_text));
         }
-        if ast_is_builtin(@tok_text) && ast_find_local(@tok_text) < 0 && (find_func(@tok_text) < 0 || tok_is("alloc") || tok_is("arr") || tok_is("free") || tok_is("move")) {
+        if ast_is_builtin(@tok_text) && ast_find_local(@tok_text) < 0 && find_global(@tok_text) < 0 && (find_func(@tok_text) < 0 || tok_is("alloc") || tok_is("arr") || tok_is("free") || tok_is("move")) {
             int bx = ast_expr(0);
             if ast_ok == 0 { return 0; }
             if !tok_is(";") {
@@ -1869,6 +2017,10 @@ void ast_pty(int t) {
         ast_ps("enum");
         return;
     }
+    if k == 7 {
+        ast_ps("void");
+        return;
+    }
     if k == 8 || t % 65536 == 0 {
         ast_ps("?");
         return;
@@ -1975,7 +2127,7 @@ void ast_pexpr(int n) {
         ast_pc(')');
     } else if k == AK_ENUMV {
         ast_ps(@ast_pool + ast_val[n]);
-    } else if k == AK_RAW {
+    } else if k == AK_RAW || k == AK_LAMBDA || k == AK_REG {
         ast_ps("<raw>");
     } else if k == AK_LIST {
         ast_pc('{');
@@ -2102,7 +2254,7 @@ void ast_pstmt(int n, int d) {
         ast_indent(d);
         ast_ps("catch\n");
         ast_pstmt(ast_b[n], d + 1);
-    } else if k == AK_RAW {
+    } else if k == AK_RAW || k == AK_USING {
         ast_ps("<raw>\n");
     } else if k == AK_CIN {
         ast_ps("cin");
@@ -2171,6 +2323,8 @@ bool ast_probe(int f_idx) {
     pass_no = 0;                             // the lexer's warnings were given (or will be) by the real reading
     ast_n = 0;
     ast_ok = 1;
+    int ue0 = 0;
+    while ue0 < 64 { ast_ue[ue0] = 0; ue0 += 1; }
     ast_why[0] = 0;
     ast_loop_depth = 0;
     ast_load_params();
@@ -2191,11 +2345,43 @@ bool ast_probe(int f_idx) {
         ast_pstmt(root, 1);
         syscall(64, 2, @ast_obuf, ast_olen);
     }
-    if ast_report == 1 {
+    if ast_report >= 1 {
         write_err("ast: ");
         write_err(@fname + f_idx * 64);
         if ast_ok == 1 {
-            write_err(" is in the subset\n");
+            write_err(" is in the subset");
+            // what the tree holds without having understood it (A2 brings these to zero)
+            int ne = 0;
+            int nr = 0;
+            int nu = 0;
+            int nn = 1;
+            while nn <= ast_n {
+                if ast_kind[nn] == AK_ENUMV && ast_cls[nn] == 0 {
+                    ne += 1;
+                    if ast_report == 2 { write_err("enumv "); write_err(@ast_pool + ast_val[nn]); write_err("\n"); }
+                }
+                if ast_kind[nn] == AK_RAW { nr += 1; }
+                if ast_ty[nn] / 65536 == 8 {
+                    nu += 1;
+                    if ast_report == 2 {
+                        write_err("unk ");
+                        write_err_int(ast_kind[nn]);
+                        if ast_kind[nn] == AK_METHOD || ast_kind[nn] == AK_BUILTIN { write_err(" "); write_err(@ast_pool + ast_val[nn]); }
+                        write_err("\n");
+                    }
+                }
+
+                nn += 1;
+            }
+            write_err("  nodes ");
+            write_err_int(ast_n);
+            write_err(" enumv ");
+            write_err_int(ne);
+            write_err(" raw ");
+            write_err_int(nr);
+            write_err(" unknown ");
+            write_err_int(nu);
+            write_err("\n");
         } else {
             write_err(" is not: ");
             write_err(@ast_why);
