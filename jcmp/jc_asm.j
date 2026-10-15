@@ -318,9 +318,11 @@ void as_h_dup() {
     as_expect_comma();
     int rn = 0;
     int base = 0x4E080C00;
-    if as_vec_arr == 3 { as_fail(); }
     if as_vec_arr == 1 {
         rn = as_parse_reg();
+    } else if as_vec_arr == 3 {
+        base = 0x4E010C00;
+        rn = as_parse_wreg();
     } else {
         base = 0x4E040C00;
         rn = as_parse_wreg();
@@ -330,6 +332,12 @@ void as_h_dup() {
 
 // vD.T, vN.T, vM.T with the opcode for .2d (op2d) or .4s (op4s); 0 = not allowed
 void as_h_vec3(int op2d, int op4s) {
+    as_h_vec3b(op2d, op4s, 0);
+}
+
+// the same with a third encoding for the 16 bytes (.16b); 0 = the arrangement is not allowed
+void as_h_vec3b(int op2d, int op4s, int op16b) {
+    as_skip_spaces();
     int rd = as_parse_vreg();
     int arr = as_vec_arr;
     as_expect_comma();
@@ -340,7 +348,8 @@ void as_h_vec3(int op2d, int op4s) {
     if as_vec_arr != arr { as_fail(); }
     int base = op4s;
     if arr == 1 { base = op2d; }
-    if base == 0 || arr == 3 { as_fail(); }
+    if arr == 3 { base = op16b; }
+    if base == 0 { as_fail(); }
     as_put32(base | (rm << 16) | (rn << 5) | rd);
 }
 
@@ -1635,19 +1644,21 @@ void as_instruction() {
     }
     as_read_mnemonic();
     if as_mn_is("mov") { if as_at_vreg() { as_h_vmov(); return; } as_h_mov(); return; }
-    if as_mn_is("add") { if as_at_vreg() { as_h_vec3(0x4EE08400, 0x4EA08400); return; } as_h_addsub(true); return; }
-    if as_mn_is("sub") { if as_at_vreg() { as_h_vec3(0x6EE08400, 0x6EA08400); return; } as_h_addsub(false); return; }
+    if as_mn_is("add") { if as_at_vreg() { as_h_vec3b(0x4EE08400, 0x4EA08400, 0x4E208400); return; } as_h_addsub(true); return; }
+    if as_mn_is("sub") { if as_at_vreg() { as_h_vec3b(0x6EE08400, 0x6EA08400, 0x6E208400); return; } as_h_addsub(false); return; }
     if as_mn_is("cmp") { as_h_cmp(); return; }
     if as_mn_is("dup") { as_h_dup(); return; }
     if as_mn_is("umov") { as_h_umov(false); return; }
     if as_mn_is("smov") { as_h_umov(true); return; }
     if as_mn_is("ins") { as_h_ins(); return; }
-    if as_mn_is("mul") { if as_at_vreg() { as_h_vec3(0, 0x4EA09C00); return; } as_h_rrr(0x9B007C00); return; }
+    if as_mn_is("mul") { if as_at_vreg() { as_h_vec3b(0, 0x4EA09C00, 0x4E209C00); return; } as_h_rrr(0x9B007C00); return; }
     if as_mn_is("udiv") { as_h_rrr(0x9AC00800); return; }
     if as_mn_is("sdiv") { as_h_rrr(0x9AC00C00); return; }
-    if as_mn_is("and") { as_h_logic(0x8A000000, 0x92000000); return; }
-    if as_mn_is("orr") { as_h_logic(0xAA000000, 0xB2000000); return; }
-    if as_mn_is("eor") { as_h_logic(0xCA000000, 0xD2000000); return; }
+    if as_mn_is("ushl") { as_h_vec3b(0x6EE04400, 0x6EA04400, 0x6E204400); return; }
+    // the bitwise vector instructions work on the 128 bits: every arrangement gives the same code
+    if as_mn_is("and") { if as_at_vreg() { as_h_vec3b(0x4E201C00, 0x4E201C00, 0x4E201C00); return; } as_h_logic(0x8A000000, 0x92000000); return; }
+    if as_mn_is("orr") { if as_at_vreg() { as_h_vec3b(0x4EA01C00, 0x4EA01C00, 0x4EA01C00); return; } as_h_logic(0xAA000000, 0xB2000000); return; }
+    if as_mn_is("eor") { if as_at_vreg() { as_h_vec3b(0x6E201C00, 0x6E201C00, 0x6E201C00); return; } as_h_logic(0xCA000000, 0xD2000000); return; }
     if as_mn_is("lsl") { as_h_shift(0x9AC02000, 0); return; }
     if as_mn_is("lsr") { as_h_shift(0x9AC02400, 1); return; }
     if as_mn_is("asr") { as_h_shift(0x9AC02800, 2); return; }

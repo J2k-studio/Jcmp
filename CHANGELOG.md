@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.140
+* **The vector loops understand elements of 4 bytes (`float`, `i32`) and 1 byte (`char`)**, and whole number arithmetic on them: `fb[i] = fa[i] * k + 2.0;`, `ib[i] = ia[i] + c;`, `cb[i] = ca[i] xor c;`, also `- * & | xor` and `<<` by a number (the lanes keep the low bytes of the result, which is all that a store keeps). A turn handles 2 x 16 bytes: 4 / 8 / 32 elements; the odd tail runs in the scalar loop. `tools/bench/widths.jk`: 1075 -> 185 ms (clang -O2: 80 ms).
+* **A number written in the body of a vector loop is no longer a reason to stay scalar** (`a[i] * 2.0`, `p[i] + 3`): the address of the left side of an assignment was kept in a temporary cell below the frame while the right side was computed; the pass that forwards a stored value to its load did not touch such a cell unless it was written again. Now a temporary cell that exactly one load reads is forwarded (`cf_nloads` in `op_cell_fwd`). This also removes a store and a load in other scalar code.
+* NEON in the assembler: `add sub mul` with `.16b`, `and orr eor` on vectors, `ushl`, `dup vD.16b, wN` (checked against llvm-mc: `test/asm_check_neon.txt`).
+* Tests: `t399_vectorize_const`, `t400_vectorize_widths` (the same result with the vectoriser off and with `-noir`, for every length 0 .. 70).
+
 ## 0.9.139
 * **More messages say what was found and how to go on.** "an expression was expected, but found ';'", "a type was expected, but found ...", "a statement was expected, but found ...", "the name of the function was expected, but found the number 5" (a number is named as a number, not by an old word), each with a `help:` line. `unknown escape sequence` names the character and lists the known ones; `^` on a value that is not a pointer, `.len` on a value without a length and an array argument that is not an array explain the rule. (`write_found` / `die_found` in `jcmp/jc_lex.j`.)
 * Tests: `t394` .. `t398`.

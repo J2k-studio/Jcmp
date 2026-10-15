@@ -1312,7 +1312,9 @@ bool lw_instr(int i, int b) {
         if op == IR_VDUP {
             rg_text("dup v");
             rg_int(lw_tmp_reg[d]);
-            if ir_w[i] == 1 { rg_text(".2d, "); lw_reg(ir_a[i]); } else { rg_text(".4s, "); lw_wreg(ir_a[i]); }
+            if ir_w[i] == 1 { rg_text(".2d, "); lw_reg(ir_a[i]); }
+            else if ir_w[i] == 3 { rg_text(".16b, "); lw_wreg(ir_a[i]); }
+            else { rg_text(".4s, "); lw_wreg(ir_a[i]); }
             rg_put(10);
             return true;
         }
@@ -1323,10 +1325,15 @@ bool lw_instr(int i, int b) {
         else if vk == 3 { rg_text("fdiv v"); }
         else if vk == 4 { rg_text("add v"); }
         else if vk == 5 { rg_text("sub v"); }
+        else if vk == 7 { rg_text("and v"); }
+        else if vk == 8 { rg_text("orr v"); }
+        else if vk == 9 { rg_text("eor v"); }
+        else if vk == 10 { rg_text("ushl v"); }
         else { rg_text("mul v"); }
         rg_int(lw_tmp_reg[d]);
         char^ ar = ".2d";
         if ir_w[i] == 2 { ar = ".4s"; }
+        if ir_w[i] == 3 { ar = ".16b"; }
         rg_text(ar);
         rg_text(", v");
         rg_int(lw_tmp_reg[ir_a[i]]);

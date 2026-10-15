@@ -1,7 +1,8 @@
-# J2K / Jcmp 0.9.139
+# J2K / Jcmp 0.9.140
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
 
+**0.9.140:** vector loops for `float`, `i32` and `char` arrays (5 times faster than the scalar loop) and for loops that have a number in the body (`a[i] * 2.0`).
 **0.9.139:** clearer error messages: they say what was found (`an expression was expected, but found ';'`) and how to go on.
 **0.9.138:** programs that use `throw` / `try` / `cin` (Map.get, unwrap, to_int ...) keep their variables in registers again: 25 - 45 % faster on the standard library; faster `alloc` / `free` and one allocation for a new array.
 **0.9.137:** new in the standard library: `Fmt`, `Regex`, `Date`, `Csv`, `Toml`, `Log`, `Net` (TCP sockets), `Arena`.

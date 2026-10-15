@@ -67,7 +67,7 @@
 #define IR_POPCNT 52         // d = the number of bits 1 in a
 #define IR_NOP 53            // nothing (an instruction that a pass removed)
 #define IR_FCONST 54         // d (double) = the double whose bits are k
-#define IR_VOP 55            // d (a 128-bit vector, class 2) = a op b (vectors); ir_k: 0 fadd 1 fsub 2 fmul 3 fdiv 4 add 5 sub 6 mul; ir_w: 1 = .2d, 2 = .4s
+#define IR_VOP 55            // d (a 128-bit vector, class 2) = a op b (vectors); ir_k: 0 fadd 1 fsub 2 fmul 3 fdiv 4 add 5 sub 6 mul 7 and 8 orr 9 eor 10 ushl (shift left by the lane of b); ir_w: 1 = .2d, 2 = .4s, 3 = .16b
 #define IR_VDUP 56           // d (a vector) = the whole number a in every lane (ir_w as for IR_VOP: a 64-bit or a 32-bit lane)
 #define IR_F32IN 59          // d (a double register that holds a 32-bit float) = the float whose bits are the low 32 bits of a (fmov sD, wA)
 #define IR_F32OUT 60         // d (a whole number) = the 32 bits of the float a, other bits 0 (fmov wD, sA)
