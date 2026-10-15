@@ -3238,6 +3238,7 @@ void str_adopt() {
             int ti = 0 - 1;
             if rv_valid == 1 { ti = own_find(rv_off); }
             if ti >= 0 && own_kind[ti] == 2 {
+                ow_nk = 5;
                 emit_owner_null(ti);
                 own_moved[ti] = 1;
             } else {
@@ -3269,17 +3270,25 @@ bool is_temp_kind(int k) {
 void str_flush(int t0, int keep) {
     int i = t0;
     int any = 0;
+    int nfree = 0;
     int first_tmp = 0 - 1;
     while i < own_count {
-        if is_temp_kind(own_kind[i]) && own_moved[i] == 0 { any = 1; }
+        if is_temp_kind(own_kind[i]) && own_moved[i] == 0 {
+            any = 1;
+            nfree += 1;
+        }
         if is_temp_kind(own_kind[i]) && first_tmp < 0 { first_tmp = i; }
         i += 1;
     }
+    if first_tmp >= 0 { ow_add(2, 6, keep, own_rec[first_tmp], nfree); }
     if any == 1 {
         if keep == 1 { push_x0(); }
         i = own_count - 1;
         while i >= t0 {
-            if is_temp_kind(own_kind[i]) && own_moved[i] == 0 { emit_owner_free(i); }
+            if is_temp_kind(own_kind[i]) && own_moved[i] == 0 {
+                ow_add(3, own_off[i], own_kind[i], own_aux[i], 0);
+                emit_owner_free(i);
+            }
             i -= 1;
         }
         if keep == 1 {

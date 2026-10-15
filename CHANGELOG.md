@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.154
+* **AST A6, ownership layer 3: Strings from the tree.** String variables and parameters (borrowed), `String s;` / `= "text"` / `= other` (a copy) / `= a + b` (taken over), `s = ...` (the old content goes), `s += String | text | char`, `a + b` and `+` chains (a new String is a temporary owner that is freed at the end of the statement, or before the jump of an `if` / `while` condition), `== != < <= > >=`, `s.len`, `s.cap`, `s[i]`, `cout << s`, `push` / `pop` / `clear` / `append`, `find` / `contains` / `starts_with` / `ends_with` / `count` / `to_int` / `to_double`, `slice` / `trim` / `upper` / `lower` / `repeat`, a text given to a String parameter (a temporary String is made), functions that return a String (an owner or a temporary moves out, anything else is copied), calls used as statements. The text parser records its decisions (temporaries added, the places where they are freed, what was moved) and the tree follows them; any difference stops the tree for that function.
+* `tools/fuzz_str.py`: random String programs compiled both ways must do the same (100 programs, 0 differences).
+* The gate: 462 tests pass with the default and with `-noast`, 300 fuzz programs, `diffcheck` the same 2 differences, speed equal. 964 of 1443 functions of the corpus are built from the tree.
+* Tests: `t417_ast_string` (3 functions), `t418_ast_string2` (7).
+
 ## 0.9.153
 * **AST A6, ownership layer 2: dynamic arrays of numbers from the tree.** `T[] a = arr(n);` (also `T[] a;` and `T[] b = a;`), `a.len`, `a.cap`, `a[i]` (with the null check of the header), assignment and op-assignment on elements, `a.push(v)`, `a.pop()`, `a.resize(n)`, `a.clear()`, `a.free()`, passing an array to a function (`int[] a` parameters borrow), for `int`, `i8`, `i32`, `char` and `double` elements. The owner records and the frees at the end of blocks come from the parser's events (layer 1). A `-d` build, an array of structs / Strings / pointers, assigning to an array variable, `sort` / `insert` / `index_of` and the other list functions stay on the text path.
 * The gate: 458 tests pass with the default and `-noast`, 300 more fuzz programs, `diffcheck` the same 2 differences, speed equal. 926 of 1421 functions of the corpus are built from the tree.

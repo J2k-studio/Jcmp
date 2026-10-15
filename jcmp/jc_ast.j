@@ -1206,6 +1206,8 @@ int ast_expr(int level) {
         if ast_ok == 0 { return 0; }
         if code >= AO_LT {
             ast_cur_ty = ast_mkty(0, 3);
+        } else if code == AO_ADD && (ast_ty[lhs] / 65536 == 4 || ast_ty[rhs] / 65536 == 4) {
+            ast_cur_ty = ast_mkty(4, 8);               // a String joined with something
         } else {
             ast_cur_ty = ast_arith_ty(ast_ty[lhs], ast_ty[rhs]);
         }

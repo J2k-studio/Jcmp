@@ -124,6 +124,11 @@ bool as1_dyn(int t) {
     return t / 65536 == 5 && as1_el(t % 65536);
 }
 
+// a String or a dynamic array of numbers: both have the header [length, capacity, data]
+bool as1_dynlike(int t) {
+    return as1_dyn(t) || t / 65536 == 4;
+}
+
 bool as1_dbl(int t) {
     return t / 65536 == 0 && t % 65536 == 7;
 }
@@ -209,7 +214,7 @@ bool as1_base(int n) {
     if n == 0 { return false; }
     int k = ast_kind[n];
     int t = ast_ty[n];
-    if as1_dyn(t) { return k == AK_VAR && opt_debug == 0; }
+    if as1_dynlike(t) { return k == AK_VAR && opt_debug == 0 && (t / 65536 != 4 || as1_svarn(n)); }
     if as1_arr(t) || as1_sarr(t) { return as1_lv(n); }
     if as1_pt(t) {
         if k == AK_VAR || k == AK_GVAR { return as1_var_ok(n); }
@@ -253,7 +258,10 @@ bool as1_args(int fi, int a2, int pk) {
     while a2 != 0 {
         if pk >= fnpar[fi] { return false; }
         int pt = fptid[fi * 8 + pk];
-        if pt == 99 {
+        if pt == 99 && fpstr[fi * 8 + pk] == 1 {
+            // a String parameter (borrowed): a String variable, a text (a temporary String is made) or a new String
+            if ast_ty[a2] / 65536 != 4 || !as1_sval(a2) { return false; }
+        } else if pt == 99 {
             // a dynamic array: the variable (the callee borrows it)
             if ast_kind[a2] != AK_VAR || !as1_dyn(ast_ty[a2]) { return false; }
         } else if pt >= 100 {
@@ -280,9 +288,9 @@ int as1_hidden(int fi) {
 // only as a statement)
 bool as1_call(int n) {
     int fi = ast_val[n];
-    if fi < 0 || fi >= fcount || fretdyn[fi] != 0 { return false; }
+    if fi < 0 || fi >= fcount || (fretdyn[fi] != 0 && fretstr[fi] != 1) { return false; }
     if fnpar[fi] + as1_hidden(fi) > 8 { return false; }
-    if fvoid[fi] == 0 && !as1_rtid(fret[fi]) { return false; }
+    if fvoid[fi] == 0 && !as1_rtid(fret[fi]) && fretstr[fi] != 1 { return false; }
     if fcharret[fi] != 0 || farr[fi] != 0 || as1_special(@fname + fi * 64) { return false; }
     int ik = as1_intrin(@fname + fi * 64);
     if ik != 0 {
@@ -321,6 +329,103 @@ int as1_mfn(int n) {
     }
     full[k + 2 + j] = 0;
     return find_func(@full);
+}
+
+// ---- Strings: a String is the address of a header that is built like the header of a dynamic array of chars
+// a String variable (a local or a parameter)
+bool as1_svarn(int n) {
+    return ast_kind[n] == AK_VAR && ast_ty[n] / 65536 == 4;
+}
+
+// an operand of the String routines: a String value (a variable, a text, a new String) or a char
+bool as1_sop(int n) {
+    if n == 0 { return false; }
+    if ast_ty[n] / 65536 == 4 { return as1_sval(n); }
+    return as1_scalar(ast_ty[n]) && ast_ty[n] % 65536 == 2 && as1_expr(n);
+}
+
+// does an operand make a text, a char or a String (not an operation of the String routines): only these two are never both on one side of a +
+bool as1_stext(int n) {
+    return ast_kind[n] == AK_STR || (ast_ty[n] / 65536 != 4);
+}
+
+// a String value that the tree lowers: a variable, a text, a join (+) of those, slice / trim / upper / lower / repeat of a variable
+bool as1_sval(int n) {
+    if n == 0 || opt_debug == 1 { return false; }
+    int k = ast_kind[n];
+    if ast_ty[n] / 65536 != 4 { return false; }
+    if k == AK_STR { return ast_b[n] < 1000; }
+    if k == AK_VAR { return true; }
+    if k == AK_CALL { return ast_val[n] >= 0 && fretstr[ast_val[n]] == 1 && as1_call(n); }
+    if k == AK_BIN {
+        if ast_val[n] != AO_ADD { return false; }
+        int a = ast_a[n];
+        int b = ast_b[n];
+        // at least one side is a String that is not a text (a text and a char are not joined by the String routines)
+        if as1_stext(a) && as1_stext(b) { return false; }
+        return as1_sop(a) && as1_sop(b);
+    }
+    if k == AK_METHOD {
+        int r = ast_a[n];
+        if !as1_svarn(r) { return false; }
+        char^ nm = @ast_pool + ast_val[n];
+        int a2 = ast_b[n];
+        int na = 0;
+        int e = a2;
+        while e != 0 {
+            na += 1;
+            e = ast_nx[e];
+        }
+        if str_eq(nm, "trim") || str_eq(nm, "upper") || str_eq(nm, "lower") { return na == 0; }
+        if str_eq(nm, "repeat") { return na == 1 && as1_scalar(ast_ty[a2]) && !as1_dbl(ast_ty[a2]) && as1_expr(a2); }
+        if str_eq(nm, "slice") {
+            return na == 2 && as1_scalar(ast_ty[a2]) && !as1_dbl(ast_ty[a2]) && as1_expr(a2) && as1_scalar(ast_ty[ast_nx[a2]]) && !as1_dbl(ast_ty[ast_nx[a2]]) && as1_expr(ast_nx[a2]);
+        }
+        return false;
+    }
+    return false;
+}
+
+// does the String value make a new String (a temporary that the compiler frees at the end of the statement)?
+bool as1_smk(int n) {
+    int k = ast_kind[n];
+    return k == AK_BIN || k == AK_METHOD || k == AK_CALL;
+}
+
+// a comparison with a String on a side
+bool as1_scmp(int n) {
+    int ao = ast_val[n];
+    if !(ao >= AO_LT && ao <= AO_NE) { return false; }
+    return as1_sop(ast_a[n]) && as1_sop(ast_b[n]) && !(as1_stext(ast_a[n]) && as1_stext(ast_b[n]));
+}
+
+// a member function of a String variable that is a statement or gives a number or a char: 1 push(c), 2 pop(), 3 clear(), 4 append(x); 0 else
+int as1_strmethod(int n) {
+    int r = ast_a[n];
+    if opt_debug == 1 || !as1_svarn(r) { return 0; }
+    char^ nm = @ast_pool + ast_val[n];
+    int a = ast_b[n];
+    int na = 0;
+    int e = a;
+    while e != 0 {
+        na += 1;
+        e = ast_nx[e];
+    }
+    if str_eq(nm, "push") {
+        if na != 1 || !as1_scalar(ast_ty[a]) || as1_dbl(ast_ty[a]) || !as1_expr(a) { return 0; }
+        return 1;
+    }
+    if str_eq(nm, "pop") { if na == 0 { return 2; } return 0; }
+    if str_eq(nm, "clear") { if na == 0 { return 3; } return 0; }
+    if str_eq(nm, "append") { if na == 1 && as1_sop(a) { return 4; } return 0; }
+    if str_eq(nm, "find") { if na == 1 && as1_sop(a) { return 10; } return 0; }
+    if str_eq(nm, "contains") { if na == 1 && as1_sop(a) { return 11; } return 0; }
+    if str_eq(nm, "starts_with") { if na == 1 && as1_sop(a) { return 12; } return 0; }
+    if str_eq(nm, "ends_with") { if na == 1 && as1_sop(a) { return 13; } return 0; }
+    if str_eq(nm, "count") { if na == 0 { return 14; } return 0; }
+    if str_eq(nm, "to_int") { if na == 0 { return 15; } return 0; }
+    if str_eq(nm, "to_double") { if na == 0 { return 16; } return 0; }
+    return 0;
 }
 
 // a member function of a dynamic array variable of numbers: 1 push(v), 2 pop(), 3 resize(n), 4 clear(), 5 free(); 0 when it is not one
@@ -403,7 +508,9 @@ bool as1_expr(int n) {
     if k == AK_FIELD && ast_val[n] < 0 {
         // a.len, a.cap of a dynamic array variable
         int dr = ast_a[n];
-        if ast_kind[dr] != AK_VAR || !as1_dyn(ast_ty[dr]) || !as1_scalar(ty) { return false; }
+        if opt_debug == 1 || !as1_scalar(ty) { return false; }
+        // a variable of a dynamic array or a String, or a String that is made (a call, a join ...)
+        if !(ast_kind[dr] == AK_VAR && as1_dynlike(ast_ty[dr])) && !(ast_ty[dr] / 65536 == 4 && ast_kind[dr] != AK_STR && as1_sval(dr)) { return false; }
         char^ dm = @ast_pool + ast_b[n] - 1;
         return str_eq(dm, "len") || str_eq(dm, "cap");
     }
@@ -445,6 +552,7 @@ bool as1_expr(int n) {
         if tk == AK_INDEX { return as1_expr(t); }
         return false;
     }
+    if k == AK_BIN && (ast_ty[ast_a[n]] / 65536 == 4 || ast_ty[ast_b[n]] / 65536 == 4) { return as1_scmp(n); }
     if k == AK_BIN {
         int a = ast_a[n];
         int b = ast_b[n];
@@ -473,6 +581,10 @@ bool as1_expr(int n) {
     if k == AK_CALL { return as1_call(n); }
     if k == AK_METHOD {
         if as1_dyn(ast_ty[ast_a[n]]) { return as1_dynmethod(n) == 2; }
+        if ast_ty[ast_a[n]] / 65536 == 4 {
+            int sm2 = as1_strmethod(n);
+            return sm2 == 2 || sm2 >= 10;
+        }
         return as1_method(n) && fvoid[as1_mfn(n)] == 0;
     }
     return false;
@@ -554,6 +666,10 @@ bool as1_decl(int n) {
             }
             return true;
         }
+        if dt / 65536 == 4 && dt % 65536 == 8 {
+            // a String: empty, or from a text, another String (a copy) or a new String (taken over)
+            return opt_debug == 0 && (init == 0 || as1_sval(init));
+        }
         if as1_dyn(dt) {
             // no value (null), a new array arr(n), or another dynamic array variable (the same array)
             if init == 0 { return true; }
@@ -596,6 +712,13 @@ bool as1_decl(int n) {
 
 bool as1_assign(int n) {
     int k = ast_kind[n];
+        if ast_ty[ast_c[n]] / 65536 == 4 {
+            // = a String / text / new String, += a String, a text or a char; the target is a local String that owns its memory
+            int sv = ast_a[n];
+            if !as1_svarn(ast_c[n]) || opt_debug == 1 { return false; }
+            if ast_b[n] == 0 { return as1_sval(sv); }
+            return ast_b[n] == AO_ADD && as1_sop(sv);
+        }
         if as1_dyn(ast_ty[ast_c[n]]) { return false; }
         int t = ast_c[n];
         if as1_sty(ast_ty[t]) {
@@ -616,6 +739,7 @@ bool as1_assign(int n) {
     return false;
 }
 
+int as1_fretstr;                 // 1 when the function being looked at returns a String
 int as1_fret;                    // the struct that the function being looked at returns (its number), else -1
 
 bool as1_stmt(int n) {
@@ -640,6 +764,7 @@ bool as1_stmt(int n) {
             return opt_debug == 0 && fa != 0 && ast_nx[fa] == 0 && as1_pt(ast_ty[fa]) && as1_expr(fa) && find_func("Mem__free") >= 0;
         }
         if ast_kind[ex] == AK_METHOD && as1_dyn(ast_ty[ast_a[ex]]) { return as1_dynmethod(ex) != 0; }
+        if ast_kind[ex] == AK_METHOD && ast_ty[ast_a[ex]] / 65536 == 4 { return as1_strmethod(ex) != 0; }
         return (ast_kind[ex] == AK_CALL && as1_call(ex)) || (ast_kind[ex] == AK_METHOD && as1_method(ex));
     }
     if k == AK_IF { return as1_expr(ast_a[n]) && as1_stmt(ast_b[n]) && as1_stmt(ast_c[n]); }
@@ -648,6 +773,7 @@ bool as1_stmt(int n) {
     if k == AK_RET {
         if ast_a[n] == 0 { return true; }
         if as1_sty(ast_ty[ast_a[n]]) { return as1_fret >= 0 && ast_ty[ast_a[n]] == 3 * 65536 + 16 + as1_fret && as1_sx(ast_a[n]); }
+        if ast_ty[ast_a[n]] / 65536 == 4 { return as1_fretstr == 1 && as1_sval(ast_a[n]); }
         return as1_expr(ast_a[n]);
     }
     if k == AK_BREAK || k == AK_CONT { return true; }
@@ -680,7 +806,9 @@ bool as1_stmt(int n) {
         int it = ast_a[n];
         if it == 0 { return false; }
         while it != 0 {
-            if ast_kind[it] != AK_STR {
+            if ast_kind[it] != AK_STR && ast_ty[it] / 65536 == 4 {
+                if !as1_sval(it) { return false; }
+            } else if ast_kind[it] != AK_STR {
                 // a number, a bool, a char or a double (a pointer, a String, an array: the text path)
                 if !as1_scalar(ast_ty[it]) || !as1_expr(it) { return false; }
             }
@@ -757,7 +885,7 @@ void at_reject(int f_idx, char^ why) {
 bool as1_dynparams() {
     int i = 0;
     while i < lcount && i < ast_nl {
-        if ast_lkind[i] == 4 || (ast_lkind[i] == 5 && !as1_el(ast_lbase[i])) { return false; }
+        if (ast_lkind[i] == 4 && opt_debug == 1) || (ast_lkind[i] == 5 && !as1_el(ast_lbase[i])) { return false; }
         i += 1;
     }
     return true;
@@ -767,7 +895,7 @@ bool as1_dynparams() {
 void at_store(int f_idx) {
     if ast_lower_on == 0 || at_nfn >= AT_FUNCS || at_n + ast_n + 2 >= AT_MAX { return; }
     // the function: parameters of whole numbers, bool or double, a result of those or nothing
-    if fnpar[f_idx] + as1_hidden(f_idx) > 8 || fretdyn[f_idx] != 0 || fcharret[f_idx] != 0 || farr[f_idx] != 0 {
+    if fnpar[f_idx] + as1_hidden(f_idx) > 8 || (fretdyn[f_idx] != 0 && fretstr[f_idx] != 1) || fcharret[f_idx] != 0 || farr[f_idx] != 0 {
         at_rej_n = fnpar[f_idx] * 1000 + fretdyn[f_idx] * 100 + fcharret[f_idx] * 10 + farr[f_idx];
         at_reject(f_idx, "signature");
         return;
@@ -778,9 +906,11 @@ void at_store(int f_idx) {
         if !as1_ptid(fptid[f_idx * 8 + pk]) { at_rej_n = fptid[f_idx * 8 + pk]; at_reject(f_idx, "parameter"); return; }
         pk += 1;
     }
-    if fvoid[f_idx] == 0 && !as1_rtid(fret[f_idx]) { at_rej_n = fret[f_idx]; at_reject(f_idx, "result"); return; }
+    if fvoid[f_idx] == 0 && !as1_rtid(fret[f_idx]) && fretstr[f_idx] != 1 { at_rej_n = fret[f_idx]; at_reject(f_idx, "result"); return; }
     if lcount > 32 || hint_len > 250 || hint_len >= 16383 { at_rej_n = lcount; at_reject(f_idx, "signature"); return; }
     as1_fret = 0 - 1;
+    as1_fretstr = 0;
+    if fvoid[f_idx] == 0 && fretstr[f_idx] == 1 { as1_fretstr = 1; }
     if fvoid[f_idx] == 0 && fret[f_idx] >= 100 { as1_fret = fret[f_idx] - 100; }
     if !as1_stmt(ast_root) { at_reject(f_idx, "node or type"); return; }
     int base = at_n;
@@ -801,7 +931,20 @@ void at_store(int f_idx) {
         if k == AK_METHOD && as1_dyn(ast_ty[ast_a[i]]) {
             at_val[base + i] = 1000 + as1_dynmethod(i);
         }
-        if k == AK_FIELD && ast_val[i] < 0 && as1_dyn(ast_ty[ast_a[i]]) {
+        if k == AK_METHOD && ast_ty[ast_a[i]] / 65536 == 4 {
+            // 2000 + 1..4 the statements and pop, 2005 slice, 2006 trim, 2007 upper, 2008 lower, 2009 repeat
+            int sm = as1_strmethod(i);
+            if sm == 0 && as1_sval(i) {
+                char^ smn = @ast_pool + ast_val[i];
+                if str_eq(smn, "slice") { sm = 5; }
+                if str_eq(smn, "trim") { sm = 6; }
+                if str_eq(smn, "upper") { sm = 7; }
+                if str_eq(smn, "lower") { sm = 8; }
+                if str_eq(smn, "repeat") { sm = 9; }
+            }
+            at_val[base + i] = 2000 + sm;
+        }
+        if k == AK_FIELD && ast_val[i] < 0 && as1_dynlike(ast_ty[ast_a[i]]) {
             at_val[base + i] = 0 - 2;                                 // .len
             if str_eq(@ast_pool + ast_b[i] - 1, "cap") { at_val[base + i] = 0 - 3; }
         }
@@ -853,6 +996,8 @@ int gl_term;                     // 1: the current block has its last instructio
 int gl_retoff;                   // the slot that holds the address of the result of a function that gives a struct, else -1
 int gl_ab;                       // the base register and the offset that gl_addr / gl_lv give
 int gl_ao;
+int gl_nstemps;                  // the new Strings made so far (the slots)
+int gl_hastmp[AT_MAX];           // for an if / while: its condition makes new Strings (they are freed before the jump)
 int gl_depth;                    // the cells in use below the frame pointer
 int gl_off[1024];                // the unique number of a local -> its offset in the frame
 int gl_nslot;                    // the next offset to give
@@ -860,6 +1005,11 @@ int gl_bsl[AT_MAX];              // for loops: the offset of the hidden bound, b
 int gl_nz[8];                    // the local variables known to be not 0 here (after `while b != 0 {`); cleared at every join
 int gl_nzn;
 int gl_fail;
+int gl_fcode;                    // which place of the lowering gave up first (the number of the call of gl_failx)
+void gl_failx(int code) {
+    gl_fail = 1;
+    if gl_fcode == 0 { gl_fcode = code; }
+}
 int gl_why;                      // 1: the frame of the tree is not the frame of the parser
 int gl_ret;                      // the label of the return
 int gl_retd;                     // 1: the function gives a double
@@ -869,14 +1019,14 @@ int gl_loops;
 int gl_args[8];
 
 int gl_label() {
-    if gl_nlab >= GL_MAXP { gl_fail = 1; return 0; }
+    if gl_nlab >= GL_MAXP { gl_failx(1); return 0; }
     gl_lblock[gl_nlab] = 0 - 1;
     gl_nlab += 1;
     return gl_nlab - 1;
 }
 
 void gl_note(int ins) {
-    if gl_np >= GL_MAXP { gl_fail = 1; return; }
+    if gl_np >= GL_MAXP { gl_failx(2); return; }
     gl_pinstr[gl_np] = ins;
     gl_np += 1;
 }
@@ -1178,7 +1328,7 @@ void gl_cond(int n, int lt, int lf) {
             gl_cond(at_b[n], lt, lf);
             return;
         }
-        if gl_is_cmp(ao) {
+        if gl_is_cmp(ao) && at_ty[at_a[n]] / 65536 != 4 && at_ty[at_b[n]] / 65536 != 4 {
             if gl_isd(at_a[n]) || gl_isd(at_b[n]) {
                 gl_operands_d(at_a[n], at_b[n]);
                 gl_fbr(gl_cc(ao), gl_ra, gl_rb, lt, lf);
@@ -1237,6 +1387,13 @@ void gl_call(int n) {
     while a != 0 {
         if fptid[fi * 8 + argn - hn] >= 100 {
             gl_saddr(a);
+        } else if fptid[fi * 8 + argn - hn] == 99 && fpstr[fi * 8 + argn - hn] == 1 {
+            // a String parameter borrows: the String, or a temporary String made from a text
+            gl_sval(a);
+            if at_kind[a] == AK_STR {
+                gl_rt2("__Str__from", 1);
+                gl_skeep(a);
+            }
         } else {
             gl_expr(a);
             gl_ensure();
@@ -1401,7 +1558,7 @@ void gl_farith(int ao) {
     else if ao == AO_SUB { ir_add(IR_FSUB, 32, ra, rb, 0, 0); }
     else if ao == AO_MUL { ir_add(IR_FMUL, 32, ra, rb, 0, 0); }
     else if ao == AO_DIV { ir_add(IR_FDIV, 32, ra, rb, 0, 0); }
-    else { gl_fail = 1; }
+    else { gl_failx(3); }
 }
 
 // v1 = v1 op v2 (whole numbers; / and % through gl_divide)
@@ -1416,7 +1573,7 @@ void gl_iarith(int ao, bool nzk) {
     else if ao == AO_SHL { ir_add(IR_SHL, 1, 1, 2, 0, 0); }
     else if ao == AO_SHR { ir_add(IR_ASHR, 1, 1, 2, 0, 0); }
     else if ao == AO_DIV || ao == AO_MOD { gl_divide(ao, nzk); }
-    else { gl_fail = 1; }
+    else { gl_failx(4); }
 }
 
 // the address of an element (a[i], p[i]) or of what a pointer points to (p^): the base register and the offset go to gl_ab and
@@ -1568,8 +1725,8 @@ void gl_addr(int n) {
     }
     int b = at_a[n];
     int ix = at_b[n];
-    if at_kind[b] == AK_VAR && as1_dyn(at_ty[b]) {
-        // an element of a dynamic array: the data pointer is at [header + 16]; the header is checked first and waits while the index is worked out
+    if at_kind[b] == AK_VAR && as1_dynlike(at_ty[b]) {
+        // an element of a dynamic array (or a char of a String): the data pointer is at [header + 16]; the header is checked first and waits while the index is worked out
         int des = as1_bytes(at_ty[n] % 65536);
         int dp2 = 1;
         int dsh = 0;
@@ -1805,14 +1962,27 @@ void gl_expr(int n) {
         return;
     }
     if k == AK_FIELD && at_val[n] < 0 {
-        gl_dyn_header(at_a[n]);
+        if at_kind[at_a[n]] == AK_VAR {
+            gl_dyn_header(at_a[n]);
+        } else {
+            gl_sval(at_a[n]);
+            gl_nullchk();
+        }
         int fo2 = 0;
         if at_val[n] == 0 - 3 { fo2 = 8; }
         gl_load(1, 1, fo2);
         return;
     }
+    if k == AK_METHOD && at_val[n] >= 2000 {
+        gl_strmethod(n);
+        return;
+    }
     if k == AK_METHOD && at_val[n] >= 1000 {
         gl_dynmethod(n);
+        return;
+    }
+    if k == AK_BIN && (at_ty[at_a[n]] / 65536 == 4 || at_ty[at_b[n]] / 65536 == 4) {
+        gl_scmp(n);
         return;
     }
     if k == AK_INDEX || k == AK_DEREF || k == AK_FIELD {
@@ -1862,7 +2032,7 @@ void gl_expr(int n) {
         return;
     }
     if k == AK_BUILTIN && at_val[n] == 7 {
-        gl_fail = 1;                         // arr(n) is only the value of a declaration (gl_stmt)
+        gl_failx(5);                         // arr(n) is only the value of a declaration (gl_stmt)
         return;
     }
     if k == AK_BUILTIN && at_val[n] == 5 {
@@ -1916,12 +2086,13 @@ void gl_expr(int n) {
         else { gl_iarith(ao, nzk); }
         return;
     }
-    gl_fail = 1;
+    gl_failx(6);
 }
 
 void gl_block_list(int s) {
     while s != 0 {
         gl_stmt(s);
+        go_flush(false);                 // the new Strings of the statement are freed at its end (parse_statement)
         s = at_nx[s];
     }
 }
@@ -1990,9 +2161,19 @@ int gl_lastw;
 
 void gl_cout_str(int it) {
     int off = gl_lit(at_val[it], at_b[it]);
-    if off < 0 { gl_fail = 1; return; }
+    if off < 0 { gl_failx(7); return; }
     gl_ensure();
     ir_add(IR_ADD, 1, 29, off, 1, 0);
+    gl_rt1("j2k_print_str", 1);
+    gl_lastw = 9;
+}
+
+// a String value (a variable or a new String): the characters are at [header + 16]
+void gl_cout_string(int it) {
+    gl_sval(it);
+    gl_nullchk();
+    gl_ensure();
+    gl_load(1, 1, 16);
     gl_rt1("j2k_print_str", 1);
     gl_lastw = 9;
 }
@@ -2023,6 +2204,8 @@ void gl_cout(int n) {
     while it != 0 {
         if at_kind[it] == AK_STR {
             gl_cout_str(it);
+        } else if at_ty[it] / 65536 == 4 {
+            gl_cout_string(it);
         } else if gl_isd(it) {
             gl_cout_dbl(it);
         } else {
@@ -2054,7 +2237,7 @@ void gl_for(int n) {
         gl_load(2, 30, bv);
         gl_br(IR_LT, 1, 2, 0, lb2, le3);
         gl_place(lb2);
-        if gl_loops >= 32 { gl_fail = 1; return; }
+        if gl_loops >= 32 { gl_failx(8); return; }
         gl_brk[gl_loops] = le3;
         gl_cnt[gl_loops] = ls;
         gl_loops += 1;
@@ -2159,7 +2342,7 @@ bool go_fn(int kind, int aux) {
         str_copy(@gl_ofn, "Mem__free", 128);
         return true;
     }
-    if kind == 1 {
+    if kind == 1 || kind == 2 {
         str_copy(@gl_ofn, "__Arr__free", 128);
         return true;
     }
@@ -2183,18 +2366,19 @@ void go_decl(int off) {
     int aux = ow_c[go_pos];
     int rec = ow_d[go_pos];
     go_pos += 1;
-    if !go_fn(kind, aux) { gl_fail = 1; return; }
+    if !go_fn(kind, aux) { gl_failx(9); return; }
+    // the registers are those of the text path (x1, x2): the value in x0 of an expression stays
     gl_ensure();
-    ir_add(IR_ADD, 1, 30, rec, 1, 0);                       // add x1, x29, #rec
-    gl_load(2, 28, 784);                                   // ldr x2, [x27, #784]
-    gl_store(1, 0, 2);
-    ir_add(IR_ADD, 2, 30, off, 1, 0);
-    gl_store(1, 8, 2);
-    ir_add(IR_ADDR_FUNC, 2, 0, 0, 0, ir_name_index(@gl_ofn));
-    gl_store(1, 16, 2);
-    ir_add(IR_CONST, 2, 0, 0, 0, gl_omode);
-    gl_store(1, 24, 2);
-    gl_store(28, 784, 1);
+    ir_add(IR_ADD, 2, 30, rec, 1, 0);                       // add x1, x29, #rec
+    gl_load(3, 28, 784);                                   // ldr x2, [x27, #784]
+    gl_store(2, 0, 3);
+    ir_add(IR_ADD, 3, 30, off, 1, 0);
+    gl_store(2, 8, 3);
+    ir_add(IR_ADDR_FUNC, 3, 0, 0, 0, ir_name_index(@gl_ofn));
+    gl_store(2, 16, 3);
+    ir_add(IR_CONST, 3, 0, 0, 0, gl_omode);
+    gl_store(2, 24, 3);
+    gl_store(28, 784, 2);
 }
 
 // the variables that the statement just made null (their memory went into a field, an element ...)
@@ -2209,8 +2393,8 @@ bool go_null(int off, int why) {
     if go_peek() != 4 || ow_a[go_pos] != off || ow_b[go_pos] != why { return false; }
     go_pos += 1;
     gl_ensure();
-    ir_add(IR_CONST, 1, 0, 0, 0, 0);
-    gl_store(30, off, 1);
+    ir_add(IR_CONST, 2, 0, 0, 0, 0);                        // mov x1, 0
+    gl_store(30, off, 2);
     return true;
 }
 
@@ -2222,12 +2406,12 @@ bool go_site(int site, int id) {
     go_pos += 1;
     int k = 0;
     while k < cnt {
-        if go_peek() != 3 { gl_fail = 1; return true; }
+        if go_peek() != 3 { gl_failx(10); return true; }
         int off = ow_a[go_pos];
         int kind = ow_b[go_pos];
         int aux = ow_c[go_pos];
         go_pos += 1;
-        if !go_fn(kind, aux) { gl_fail = 1; return true; }
+        if !go_fn(kind, aux) { gl_failx(11); return true; }
         gl_ensure();
         if gl_omode == 1 { ir_add(IR_ADD, 1, 30, off, 1, 0); } else { gl_load(1, 30, off); }
         int e = ir_add(IR_CALL, 1, 0, 0, 0, ir_name_index(@gl_ofn));
@@ -2236,11 +2420,275 @@ bool go_site(int site, int id) {
         k += 1;
     }
     gl_ensure();
-    gl_load(1, 30, rec);                                    // the chain goes back to what it was before
-    gl_store(28, 784, 1);
+    gl_load(2, 30, rec);                                    // the chain goes back to what it was before
+    gl_store(28, 784, 2);
     return true;
 }
 
+// the temporary Strings of a statement or a condition are freed (str_flush): the owners that the parser freed there, then the chain
+// goes back; live: v1 holds a value that must be kept
+void go_flush(bool live) {
+    if go_peek() != 2 || ow_a[go_pos] != 6 { return; }
+    int rec = ow_c[go_pos];
+    int cnt = ow_d[go_pos];
+    go_pos += 1;
+    int cc = 0;
+    if live {
+        gl_ensure();
+        cc = gl_cell(gl_depth);
+        gl_store(30, cc, 1);
+        gl_depth += 1;
+    }
+    int k = 0;
+    while k < cnt {
+        if go_peek() != 3 { gl_failx(12); return; }
+        int off = ow_a[go_pos];
+        int kind = ow_b[go_pos];
+        int aux = ow_c[go_pos];
+        go_pos += 1;
+        if !go_fn(kind, aux) { gl_failx(13); return; }
+        gl_ensure();
+        if gl_omode == 1 { ir_add(IR_ADD, 1, 30, off, 1, 0); } else { gl_load(1, 30, off); }
+        int e = ir_add(IR_CALL, 1, 0, 0, 0, ir_name_index(@gl_ofn));
+        gl_args[0] = 1;
+        ir_set_args(e, 1, @gl_args);
+        k += 1;
+    }
+    gl_ensure();
+    gl_load(2, 30, rec);
+    gl_store(28, 784, 2);
+    if live {
+        gl_depth -= 1;
+        gl_load(1, 30, cc);
+    }
+}
+
+// ---------------------------------------------------------------- Strings
+// the kind of an operand for the String routines: 1 a String, 0 a text, 2 a char
+int gl_skind(int n) {
+    if at_ty[n] / 65536 == 4 {
+        if at_kind[n] == AK_STR { return 0; }
+        return 1;
+    }
+    return 2;
+}
+
+// the new String in v1 is kept in the hidden slot of the node and becomes an owner until the end of the statement (str_temp)
+void gl_skeep(int n) {
+    gl_ensure();
+    gl_store(30, at_c[n], 1);
+    go_decl(at_c[n]);
+}
+
+// v1 = the value of a String operand: the header of a String, the address of a text, the code of a char
+void gl_sval(int n) {
+    int k = at_kind[n];
+    if k == AK_STR {
+        int off = gl_lit(at_val[n], at_b[n]);
+        if off < 0 { gl_failx(14); return; }
+        gl_ensure();
+        ir_add(IR_ADD, 1, 29, off, 1, 0);
+        return;
+    }
+    if at_ty[n] / 65536 != 4 {
+        gl_expr(n);
+        return;
+    }
+    if k == AK_VAR {
+        gl_load(1, 30, gl_off[at_val[n]]);
+        return;
+    }
+    if k == AK_CALL {
+        gl_call(n);
+        gl_skeep(n);
+        return;
+    }
+    if k == AK_BIN {
+        int a = at_a[n];
+        int b = at_b[n];
+        gl_sval(a);
+        gl_ensure();
+        int c0 = gl_cell(gl_depth);
+        gl_store(30, c0, 1);
+        gl_depth += 1;
+        gl_sval(b);
+        gl_ensure();
+        ir_add(IR_COPY, 3, 1, 0, 0, 0);
+        gl_load(1, 30, c0);
+        gl_depth -= 1;
+        ir_add(IR_CONST, 2, 0, 0, 0, gl_skind(a));
+        ir_add(IR_CONST, 4, 0, 0, 0, gl_skind(b));
+        int e = ir_add(IR_CALL, 1, 0, 0, 0, ir_name_index("__Str__cat"));
+        gl_args[0] = 1;
+        gl_args[1] = 2;
+        gl_args[2] = 3;
+        gl_args[3] = 4;
+        ir_set_args(e, 4, @gl_args);
+        gl_skeep(n);
+        return;
+    }
+    // slice / trim / upper / lower / repeat of a String variable (at_val 2005 .. 2009)
+    int mo = at_val[n] - 2000;
+    int r = at_a[n];
+    int a1 = at_b[n];
+    gl_load(1, 30, gl_off[at_val[r]]);
+    if mo == 5 {
+        gl_ensure();
+        int c1 = gl_cell(gl_depth);
+        gl_store(30, c1, 1);
+        gl_depth += 1;
+        gl_expr(a1);
+        gl_ensure();
+        int c2 = gl_cell(gl_depth);
+        gl_store(30, c2, 1);
+        gl_depth += 1;
+        gl_expr(at_nx[a1]);
+        gl_ensure();
+        ir_add(IR_COPY, 3, 1, 0, 0, 0);
+        gl_load(1, 30, c1);
+        gl_load(2, 30, c2);
+        gl_depth -= 2;
+        int e = ir_add(IR_CALL, 1, 0, 0, 0, ir_name_index("__Str__slice"));
+        gl_args[0] = 1;
+        gl_args[1] = 2;
+        gl_args[2] = 3;
+        ir_set_args(e, 3, @gl_args);
+    } else if mo == 9 {
+        gl_ensure();
+        int c3 = gl_cell(gl_depth);
+        gl_store(30, c3, 1);
+        gl_depth += 1;
+        gl_expr(a1);
+        gl_ensure();
+        ir_add(IR_COPY, 2, 1, 0, 0, 0);
+        gl_load(1, 30, c3);
+        gl_depth -= 1;
+        gl_rt2("__Str__repeat", 2);
+    } else if mo == 6 {
+        gl_rt2("__Str__trim", 1);
+    } else if mo == 7 {
+        gl_rt2("__Str__upper", 1);
+    } else {
+        gl_rt2("__Str__lower", 1);
+    }
+    gl_skeep(n);
+}
+
+// a comparison with a String: v1 = 0 / 1
+void gl_scmp(int n) {
+    int ao = at_val[n];
+    int a = at_a[n];
+    int b = at_b[n];
+    gl_sval(a);
+    gl_ensure();
+    int c0 = gl_cell(gl_depth);
+    gl_store(30, c0, 1);
+    gl_depth += 1;
+    gl_sval(b);
+    gl_ensure();
+    ir_add(IR_COPY, 3, 1, 0, 0, 0);
+    gl_load(1, 30, c0);
+    gl_depth -= 1;
+    ir_add(IR_CONST, 2, 0, 0, 0, gl_skind(a));
+    ir_add(IR_CONST, 4, 0, 0, 0, gl_skind(b));
+    char^ rt = "__Str__eq";
+    if ao != AO_EQ && ao != AO_NE { rt = "__Str__order"; }
+    int e = ir_add(IR_CALL, 1, 0, 0, 0, ir_name_index(rt));
+    gl_args[0] = 1;
+    gl_args[1] = 2;
+    gl_args[2] = 3;
+    gl_args[3] = 4;
+    ir_set_args(e, 4, @gl_args);
+    if ao == AO_NE {
+        ir_add(IR_CONST, 2, 0, 0, 0, 1);
+        ir_add(IR_XOR, 1, 1, 2, 0, 0);
+    } else if ao != AO_EQ {
+        ir_add(IR_CONST, 2, 0, 0, 0, 0);
+        ir_add(IR_SETCC, 1, 1, 2, 0, gl_cc(ao));
+    }
+}
+
+// the member functions of a String variable: at_val 2001 push, 2002 pop, 2003 clear, 2004 append
+void gl_strmethod(int n) {
+    int mo = at_val[n] - 2000;
+    int off = gl_off[at_val[at_a[n]]];
+    int a = at_b[n];
+    gl_ensure();
+    if mo == 2 || mo == 3 || mo >= 14 || mo == 14 {
+        gl_load(1, 30, off);
+        if mo == 2 { gl_rt2("__Str__pop", 1); }
+        else if mo == 3 { gl_rt2("__Str__clear", 1); }
+        else if mo == 14 { gl_rt2("__Str__count", 1); }
+        else if mo == 15 { gl_rt2("__Str__to_int", 1); }
+        else {
+            gl_rt2("__Str__to_double", 1);
+            ir_add(IR_BITS2F, 32, 1, 0, 0, 0);
+        }
+        return;
+    }
+    gl_load(1, 30, off);
+    int c0 = gl_cell(gl_depth);
+    gl_store(30, c0, 1);
+    gl_depth += 1;
+    if mo == 1 {
+        gl_expr(a);
+        gl_ensure();
+        ir_add(IR_COPY, 2, 1, 0, 0, 0);
+        gl_load(1, 30, c0);
+        gl_depth -= 1;
+        gl_rt2("__Str__push", 2);
+        return;
+    }
+    // append(x) / find(x) / contains(x) / starts_with(x) / ends_with(x): x0 = the String, x1 = the value, x2 = its kind
+    gl_sval(a);
+    gl_ensure();
+    ir_add(IR_COPY, 2, 1, 0, 0, 0);
+    gl_load(1, 30, c0);
+    gl_depth -= 1;
+    ir_add(IR_CONST, 3, 0, 0, 0, gl_skind(a));
+    char^ rn = "__Str__append";
+    if mo == 10 || mo == 11 { rn = "__Str__find"; }
+    if mo == 12 { rn = "__Str__starts_with"; }
+    if mo == 13 { rn = "__Str__ends_with"; }
+    int e = ir_add(IR_CALL, 1, 0, 0, 0, ir_name_index(rn));
+    gl_args[0] = 1;
+    gl_args[1] = 2;
+    gl_args[2] = 3;
+    ir_set_args(e, 3, @gl_args);
+    if mo == 11 {
+        // contains: the place is 0 or more
+        ir_add(IR_CONST, 2, 0, 0, 0, 0);
+        ir_add(IR_SETCC, 1, 1, 2, 0, IR_GE);
+    }
+}
+
+// the value of a String expression that a variable takes: v1 = a String that the variable owns (str_adopt)
+void gl_sadopt(int n) {
+    int k = at_kind[n];
+    gl_sval(n);
+    gl_ensure();
+    if k == AK_STR {
+        gl_rt2("__Str__from", 1);
+    } else if k == AK_BIN || k == AK_CALL || (k == AK_METHOD && at_val[n] >= 2005) {
+        // a new String: taken over, the temporary is null
+        if !go_null(at_c[n], 5) { gl_failx(15); }
+    } else {
+        gl_rt2("__Str__clone", 1);
+    }
+}
+
+// the value of the node (at_c) that is an owner of the kind 2 when v1 is saved: used by calls for a text given to a String parameter
+void gl_cond_top(int cond, int lt, int lf, int hastmp) {
+    if hastmp == 0 {
+        gl_cond(cond, lt, lf);
+        return;
+    }
+    gl_expr(cond);
+    go_flush(true);
+    gl_br(IR_NE, 1, 0, 1, lt, lf);
+}
+
+// the value of a text or char operand for the routines
 // the value of a constant pattern
 int gl_pat(int p) {
     if at_kind[p] == AK_NEG { return 0 - at_val[at_a[p]]; }
@@ -2261,7 +2709,7 @@ void gl_switch(int n) {
         nc += 1;
         cs = at_nx[cs];
     }
-    if nc > 256 { gl_fail = 1; return; }
+    if nc > 256 { gl_failx(16); return; }
     int lbl[256];
     cs = at_b[n];
     int ci = 0;
@@ -2312,6 +2760,25 @@ void gl_stmt(int n) {
         int bid = gl_blkn;
         gl_block_list(at_a[n]);
         go_site(1, bid);
+        return;
+    }
+    if k == AK_DECL && at_ty[n] / 65536 == 4 {
+        int soff = gl_off[at_val[n]];
+        int sinit = at_a[n];
+        gl_ensure();
+        if sinit == 0 {
+            // String name;  : the String of the empty text
+            int eo = gl_lit(0, 0);
+            if eo < 0 { gl_failx(17); return; }
+            ir_add(IR_ADD, 1, 29, eo, 1, 0);
+            gl_rt2("__Str__from", 1);
+        } else {
+            gl_sadopt(sinit);
+        }
+        gl_ensure();
+        gl_store(30, soff, 1);
+        go_flush(false);                // own_add frees the new Strings of the statement first
+        go_decl(soff);
         return;
     }
     if k == AK_DECL && as1_dyn(at_ty[n]) {
@@ -2369,6 +2836,37 @@ void gl_stmt(int n) {
         go_decl(gl_off[at_val[n]]);
         return;
     }
+    if k == AK_ASSIGN && at_ty[at_c[n]] / 65536 == 4 {
+        int sv2 = at_c[n];
+        int soff2 = gl_off[at_val[sv2]];
+        int sval = at_a[n];
+        if at_b[n] == 0 {
+            // = : the new String is made (a copy or taken over), the old content goes, the variable gets the new one
+            gl_sadopt(sval);
+            gl_ensure();
+            int c5 = gl_cell(gl_depth);
+            gl_store(30, c5, 1);
+            gl_depth += 1;
+            gl_load(1, 30, soff2);
+            gl_rt2("__Arr__free", 1);
+            gl_depth -= 1;
+            gl_load(1, 30, c5);
+            gl_store(30, soff2, 1);
+        } else {
+            // += : append a String, a text or a char
+            gl_sval(sval);
+            gl_ensure();
+            ir_add(IR_COPY, 2, 1, 0, 0, 0);
+            gl_load(1, 30, soff2);
+            ir_add(IR_CONST, 3, 0, 0, 0, gl_skind(sval));
+            int ea = ir_add(IR_CALL, 1, 0, 0, 0, ir_name_index("__Str__append"));
+            gl_args[0] = 1;
+            gl_args[1] = 2;
+            gl_args[2] = 3;
+            ir_set_args(ea, 3, @gl_args);
+        }
+        return;
+    }
     if k == AK_ASSIGN {
         int tgt = at_c[n];
         if as1_sty(at_ty[tgt]) {
@@ -2403,6 +2901,7 @@ void gl_stmt(int n) {
             return;
         }
         gl_expr(ex);
+        if at_kind[ex] == AK_CALL && at_val[ex] >= 0 && fretstr[at_val[ex]] == 1 { gl_skeep(ex); }       // the String that came back is freed at the end of the statement
         // Mem::free(p) on an owner: null afterwards
         if (at_kind[ex] == AK_CALL) && at_a[ex] != 0 && at_kind[at_a[ex]] == AK_VAR && go_peek() == 4 { go_null(gl_off[at_val[at_a[ex]]], 2); }
         return;
@@ -2411,7 +2910,7 @@ void gl_stmt(int n) {
         int lt = gl_label();
         int lf = gl_label();
         int le = gl_label();
-        gl_cond(at_a[n], lt, lf);
+        gl_cond_top(at_a[n], lt, lf, gl_hastmp[n]);
         gl_place(lt);
         gl_nz_from(at_a[n]);
         gl_stmt(at_b[n]);
@@ -2426,10 +2925,10 @@ void gl_stmt(int n) {
         int lb = gl_label();
         int le2 = gl_label();
         gl_place(lc);
-        gl_cond(at_a[n], lb, le2);
+        gl_cond_top(at_a[n], lb, le2, gl_hastmp[n]);
         gl_place(lb);
         gl_nz_from(at_a[n]);
-        if gl_loops >= 32 { gl_fail = 1; return; }
+        if gl_loops >= 32 { gl_failx(18); return; }
         gl_brk[gl_loops] = le2;
         gl_cnt[gl_loops] = lc;
         gl_loops += 1;
@@ -2452,6 +2951,16 @@ void gl_stmt(int n) {
             gl_ensure();
             gl_load(3, 30, gl_retoff);
             gl_copy(3, 0, 1, 0, ssize[at_ty[at_a[n]] % 65536 - 16]);
+        } else if at_a[n] != 0 && at_ty[at_a[n]] / 65536 == 4 {
+            // a String result: an owner or a temporary moves out, a text is made into a String, anything else is copied
+            int rs = at_a[n];
+            gl_sval(rs);
+            gl_ensure();
+            if at_kind[rs] == AK_STR {
+                gl_rt2("__Str__from", 1);
+            } else if at_kind[rs] == AK_VAR && !(go_peek() == 4 && ow_b[go_pos] == 1 && ow_a[go_pos] == gl_off[at_val[rs]]) {
+                gl_rt2("__Str__clone", 1);
+            }
         } else if at_a[n] != 0 {
             if gl_retd == 1 {
                 gl_expr_d(at_a[n]);
@@ -2469,9 +2978,12 @@ void gl_stmt(int n) {
             gl_depth += 1;
             if go_peek() == 4 {
                 int rv = at_a[n];
-                if rv == 0 || at_kind[rv] != AK_VAR || !go_null(gl_off[at_val[rv]], 1) { gl_fail = 1; return; }
+                int rvoff = 0 - 1;
+                if rv != 0 && at_kind[rv] == AK_VAR { rvoff = gl_off[at_val[rv]]; }
+                if rv != 0 && at_kind[rv] != AK_VAR && at_ty[rv] / 65536 == 4 { rvoff = at_c[rv]; }
+                if rvoff < 0 || !go_null(rvoff, 1) { gl_failx(19); return; }
             }
-            if !go_site(2, rid) { gl_fail = 1; return; }
+            if !go_site(2, rid) { gl_failx(20); return; }
             gl_depth -= 1;
             gl_load(1, 30, vc);
         }
@@ -2479,20 +2991,20 @@ void gl_stmt(int n) {
         return;
     }
     if k == AK_BREAK {
-        if gl_loops == 0 { gl_fail = 1; return; }
+        if gl_loops == 0 { gl_failx(21); return; }
         gl_brkn += 1;
         go_site(3, gl_brkn);
         gl_jmp(gl_brk[gl_loops - 1]);
         return;
     }
     if k == AK_CONT {
-        if gl_loops == 0 { gl_fail = 1; return; }
+        if gl_loops == 0 { gl_failx(22); return; }
         gl_brkn += 1;
         go_site(4, gl_brkn);
         gl_jmp(gl_cnt[gl_loops - 1]);
         return;
     }
-    gl_fail = 1;
+    gl_failx(23);
 }
 
 // the offsets of the locals in the order of the declarations; the text of the hint line that this makes goes to the buffer
@@ -2504,7 +3016,7 @@ void gl_hint_add(int off) {
 }
 
 void gl_hint_add2(int off, int size, int flag) {
-    if gl_hint_n > 8000 { gl_fail = 1; return; }
+    if gl_hint_n > 8000 { gl_failx(24); return; }
     gl_hint[gl_hint_n] = 0;
     append_int(@gl_hint, off);
     gl_hint_n = str_len(@gl_hint);
@@ -2544,9 +3056,46 @@ int go_find_add(int off) {
 
 // the hidden slots of the results of calls that give a struct, in the order the parser makes them: a call makes its slot when its name
 // is read (before its arguments); a method call after its object. The offset goes to the field c of the node.
+// the hidden slot of a new String (a temporary owner: `.t`, 8 bytes, then its record of 32 bytes); its offset goes to the field c
+
+void gl_stemp(int n) {
+    gl_nstemps += 1;
+    at_c[n] = gl_nslot;
+    gl_hint_add(gl_nslot);
+    gl_nslot += 8;
+    int oe = go_find_add(at_c[n]);
+    if oe < 0 || ow_d[oe] != gl_nslot { gl_failx(25); return; }
+    gl_nslot += 32;
+}
+
 void gl_tmps(int n) {
     if n == 0 { return; }
     int k = at_kind[n];
+    if at_ty[n] / 65536 == 4 && (k == AK_BIN || k == AK_METHOD) {
+        // a new String: the operands first, then the temporary
+        if k == AK_BIN {
+            gl_tmps(at_a[n]);
+            gl_tmps(at_b[n]);
+        } else {
+            gl_tmps(at_a[n]);
+            int sa = at_b[n];
+            while sa != 0 {
+                gl_tmps(sa);
+                sa = at_nx[sa];
+            }
+        }
+        gl_stemp(n);
+        return;
+    }
+    if k == AK_METHOD && at_val[n] >= 1000 {
+        // a member function of a dynamic array or a String: the arguments only
+        int ma = at_b[n];
+        while ma != 0 {
+            gl_tmps(ma);
+            ma = at_nx[ma];
+        }
+        return;
+    }
     if k == AK_CALL || k == AK_METHOD {
         int fi = at_val[n];
         if k == AK_METHOD { gl_tmps(at_a[n]); }
@@ -2557,11 +3106,20 @@ void gl_tmps(int n) {
             gl_nslot += (sz + 7) / 8 * 8;
         }
         int a = at_a[n];
-        if k == AK_METHOD { a = at_b[n]; }
+        int pidx = 0;
+        if k == AK_METHOD {
+            a = at_b[n];
+            pidx = 1;
+        }
         while a != 0 {
             gl_tmps(a);
+            // a text for a String parameter: a temporary String is made
+            if fi >= 0 && at_kind[a] == AK_STR && pidx < 8 && fpstr[fi * 8 + pidx] == 1 { gl_stemp(a); }
+            pidx += 1;
             a = at_nx[a];
         }
+        // a String that comes back is a temporary owner
+        if fi >= 0 && fretstr[fi] == 1 && k == AK_CALL { gl_stemp(n); }
         return;
     }
     if k == AK_BIN || k == AK_INDEX { gl_tmps(at_a[n]); gl_tmps(at_b[n]); return; }
@@ -2585,7 +3143,7 @@ void gl_slots(int n) {
         gl_tmps(at_a[n]);
         if at_val[n] >= 0 && at_val[n] < 1024 { gl_off[at_val[n]] = gl_nslot; }
         int own_at = gl_nslot;
-        if as1_dyn(at_ty[n]) {
+        if as1_dyn(at_ty[n]) || at_ty[n] / 65536 == 4 {
             gl_hint_add2(gl_nslot, 8, 0);
             gl_nslot += 8;
         } else if as1_arr(at_ty[n]) {
@@ -2607,7 +3165,7 @@ void gl_slots(int n) {
         // a variable that owns memory has a record of the cleanup chain after it (32 bytes, not in the hint line)
         int oe = go_find_add(own_at);
         if oe >= 0 {
-            if ow_d[oe] != gl_nslot { gl_fail = 1; }
+            if ow_d[oe] != gl_nslot { gl_failx(26); }
             gl_nslot += 32;
         }
     } else if k == AK_FOR {
@@ -2621,11 +3179,17 @@ void gl_slots(int n) {
         gl_nslot += 8;
         gl_slots(at_c[n]);
     } else if k == AK_IF {
+        int ns0 = gl_nstemps;
         gl_tmps(at_a[n]);
+        gl_hastmp[n] = 0;
+        if gl_nstemps != ns0 { gl_hastmp[n] = 1; }
         gl_slots(at_b[n]);
         gl_slots(at_c[n]);
     } else if k == AK_WHILE {
+        int ns1 = gl_nstemps;
         gl_tmps(at_a[n]);
+        gl_hastmp[n] = 0;
+        if gl_nstemps != ns1 { gl_hastmp[n] = 1; }
         gl_slots(at_b[n]);
     } else if k == AK_SWITCH {
         gl_tmps(at_a[n]);
@@ -2672,6 +3236,7 @@ int ast_lower_body(int ti, char^ name) {
     str_copy(@gl_hint, @at_hint + ti * 256, 8000);
     gl_hint_n = str_len(@gl_hint);
     gl_fail = 0;
+    gl_fcode = 0;
     int nl = at_nl[ti];
     int p = 0;
     while p < nl {
@@ -2753,7 +3318,7 @@ int ast_lower_body(int ti, char^ name) {
     gl_stmt(at_root[ti]);
     go_site(5, 0);
     // every event of the parser was used: what the tree did is what the text path did
-    if go_pos != go_end { gl_fail = 1; }
+    if go_pos != go_end { gl_failx(27); }
     if gl_fail == 1 { return 0; }
     // falling off the end of a function that gives a value: the runtime stops (as the text path does)
     if gl_term == 0 && fvoid[fi] == 0 {
@@ -2802,7 +3367,27 @@ int ast_lower(char^ name) {
             while hq < lf_hint_n { char hc[2]; hc[0] = lf_hint_text[hq]; hc[1] = 0; write_err(@hc); hq += 1; }
             write_err("\n");
         }
-        else { write_err(" not lowered\n"); }
+        else {
+            write_err(" not lowered [");
+            write_err_int(gl_fcode);
+            write_err("]");
+            if go_pos < go_end {
+                write_err(" (the next event: ");
+                write_err_int(ow_ty[go_pos]);
+                write_err(" ");
+                write_err_int(ow_a[go_pos]);
+                write_err(" ");
+                write_err_int(ow_b[go_pos]);
+                write_err(" ");
+                write_err_int(ow_c[go_pos]);
+                write_err(" ");
+                write_err_int(ow_d[go_pos]);
+                write_err(" at ");
+                write_err_int(go_pos - ow_lo);
+                write_err(")");
+            }
+            write_err("\n");
+        }
         // the ownership events of the function (the text parser's decisions)
         int oe = 0;
         while oe < ow_n {
