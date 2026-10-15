@@ -33,6 +33,24 @@ bool as1_scalar(int t) {
     return b == 8 || b == 3 || b == 7;
 }
 
+// a pointer to a whole number or a double
+bool as1_ptr(int t) {
+    if t / 65536 != 1 { return false; }
+    int b = t % 65536;
+    return b == 8 || b == 7;
+}
+
+// a fixed array of whole numbers or doubles
+bool as1_arr(int t) {
+    if t / 65536 != 2 { return false; }
+    int b = t % 65536;
+    return b == 8 || b == 7;
+}
+
+bool as1_val(int t) {
+    return as1_scalar(t) || as1_ptr(t);
+}
+
 bool as1_dbl(int t) {
     return t / 65536 == 0 && t % 65536 == 7;
 }
@@ -46,23 +64,106 @@ bool as1_arith(int ao) {
     return ao == AO_ADD || ao == AO_SUB || ao == AO_MUL || ao == AO_DIV;
 }
 
+// the base of an index: an array or a pointer, a local or a global
+bool as1_base(int n) {
+    if n == 0 { return false; }
+    int k = ast_kind[n];
+    int t = ast_ty[n];
+    if k == AK_VAR { return as1_ptr(t) || as1_arr(t); }
+    if k == AK_GVAR {
+        int gi = ast_val[n];
+        if gi < 0 || gdyn[gi] != 0 { return false; }
+        if gkind[gi] == 1 { return (gelem[gi] == 8 || gelem[gi] == 7) && gptr[gi] == 0 && gnd[gi] == 1 && as1_arr(t); }
+        // a pointer variable: gptr is the width code of what it points to
+        return gkind[gi] == 0 && gelem[gi] == 8 && (gptr[gi] == 8 || gptr[gi] == 7) && as1_ptr(t) && t % 65536 == gptr[gi];
+    }
+    return false;
+}
+
+// the calls that the text path turns into an instruction of the CPU (Bit::, Cpu::, Cache::, Mem::barrier*, Atomic::): no call is made
+bool as1_prefix(char^ nm, char^ pre) {
+    int i = 0;
+    while pre[i] != 0 {
+        if nm[i] != pre[i] { return false; }
+        i += 1;
+    }
+    return true;
+}
+
+bool as1_special(char^ nm) {
+    if as1_prefix(nm, "Bit__") || as1_prefix(nm, "Cpu__") || as1_prefix(nm, "Cache__") || as1_prefix(nm, "Atomic__") { return true; }
+    if as1_prefix(nm, "Mem__bar") { return true; }
+    return nm[0] == '_' && nm[1] == '_';
+}
+
+// a call of a function with parameters and a result of whole numbers, pointers, bools or doubles (a void function only as a statement)
+bool as1_call(int n) {
+    int fi = ast_val[n];
+    if fi < 0 || fi >= fcount || fnpar[fi] > 8 || fretdyn[fi] != 0 { return false; }
+    if fvoid[fi] == 0 && !as1_tid(fret[fi]) { return false; }
+    if fcharret[fi] != 0 || farr[fi] != 0 || as1_special(@fname + fi * 64) { return false; }
+    int a2 = ast_a[n];
+    int pk = 0;
+    while a2 != 0 {
+        if pk >= fnpar[fi] || !as1_expr(a2) { return false; }
+        int pt = fptid[fi * 8 + pk];
+        if !as1_tid(pt) { return false; }
+        // a double goes to a double parameter, a whole number (or a pointer) to a whole number one
+        if (pt == 91) != as1_dbl(ast_ty[a2]) { return false; }
+        pk += 1;
+        a2 = ast_nx[a2];
+    }
+    return pk == fnpar[fi];
+}
+
 bool as1_expr(int n) {
     if n == 0 { return false; }
     int k = ast_kind[n];
     int ty = ast_ty[n];
-    if !as1_scalar(ty) { return false; }
-    if k == AK_NUM { return true; }
+    if !as1_val(ty) { return false; }
+    if k == AK_NUM { return as1_scalar(ty); }
     if k == AK_FNUM { return true; }
-    if k == AK_VAR { return true; }
+    if k == AK_VAR { return as1_scalar(ty) || as1_ptr(ty); }
     if k == AK_GVAR {
         int gi = ast_val[n];
-        return gi >= 0 && gkind[gi] == 0 && (gelem[gi] == 8 || gelem[gi] == 7) && gptr[gi] == 0 && gdyn[gi] == 0 && as1_tid(gtid[gi]);
+        if gi < 0 { return false; }
+        if as1_ptr(ty) { return as1_base(n); }
+        return gkind[gi] == 0 && (gelem[gi] == 8 || gelem[gi] == 7) && gptr[gi] == 0 && gdyn[gi] == 0 && as1_tid(gtid[gi]);
+    }
+    if k == AK_INDEX {
+        if opt_debug == 1 || ast_c[n] != 0 || !as1_scalar(ty) { return false; }
+        int ix = ast_b[n];
+        return as1_base(ast_a[n]) && as1_expr(ix) && !as1_dbl(ast_ty[ix]) && as1_scalar(ast_ty[ix]);
+    }
+    if k == AK_DEREF {
+        if opt_debug == 1 || !as1_scalar(ty) { return false; }
+        return as1_ptr(ast_ty[ast_a[n]]) && as1_expr(ast_a[n]);
+    }
+    if k == AK_ADDR {
+        if !as1_ptr(ty) { return false; }
+        int t = ast_a[n];
+        int tk = ast_kind[t];
+        if tk == AK_VAR || tk == AK_GVAR {
+            // a scalar or an array of the width of the pointer
+            int tt = ast_ty[t];
+            if tk == AK_VAR { return (as1_scalar(tt) && !(tt % 65536 == 3)) || as1_arr(tt); }
+            int gi2 = ast_val[t];
+            if gi2 < 0 || gdyn[gi2] != 0 || gptr[gi2] != 0 || (gelem[gi2] != 8 && gelem[gi2] != 7) { return false; }
+            return (gkind[gi2] == 0 && as1_scalar(tt) && as1_tid(gtid[gi2])) || (gkind[gi2] == 1 && gnd[gi2] == 1);
+        }
+        if tk == AK_INDEX { return as1_expr(t); }
+        return false;
     }
     if k == AK_BIN {
         int a = ast_a[n];
         int b = ast_b[n];
         if !as1_expr(a) || !as1_expr(b) { return false; }
         int ao = ast_val[n];
+        bool any_p = as1_ptr(ast_ty[a]) || as1_ptr(ast_ty[b]);
+        if any_p {
+            // pointers are only compared for equality (with a pointer or a whole number)
+            return (ao == AO_EQ || ao == AO_NE) && !as1_dbl(ast_ty[a]) && !as1_dbl(ast_ty[b]);
+        }
         bool any_d = as1_dbl(ast_ty[a]) || as1_dbl(ast_ty[b]);
         if any_d {
             // a double with + - * / and the comparisons (the other operand may be a whole number)
@@ -70,37 +171,22 @@ bool as1_expr(int n) {
         }
         return true;
     }
-    if k == AK_NEG { return as1_expr(ast_a[n]); }
+    if k == AK_NEG { return as1_scalar(ast_ty[ast_a[n]]) && as1_expr(ast_a[n]); }
     if k == AK_NOT { return as1_expr(ast_a[n]) && !as1_dbl(ast_ty[ast_a[n]]); }
     if k == AK_CAST {
         int tc = ast_val[n];
-        return (tc == 7 || tc == 8) && as1_expr(ast_a[n]);
+        return (tc == 7 || tc == 8) && as1_scalar(ast_ty[ast_a[n]]) && as1_expr(ast_a[n]);
     }
-    if k == AK_CALL {
-        int fi = ast_val[n];
-        if fi < 0 || fi >= fcount || fnpar[fi] > 8 || fvoid[fi] == 1 || fretdyn[fi] != 0 { return false; }
-        if !as1_tid(fret[fi]) || fcharret[fi] != 0 || farr[fi] != 0 { return false; }
-        int a2 = ast_a[n];
-        int pk = 0;
-        while a2 != 0 {
-            if pk >= fnpar[fi] || !as1_expr(a2) { return false; }
-            int pt = fptid[fi * 8 + pk];
-            if !as1_tid(pt) { return false; }
-            // a double goes to a double parameter, a whole number to a whole number one
-            if (pt == 91) != as1_dbl(ast_ty[a2]) { return false; }
-            pk += 1;
-            a2 = ast_nx[a2];
-        }
-        return pk == fnpar[fi];
-    }
+    if k == AK_CALL { return as1_call(n); }
     return false;
 }
 
 bool as1_target(int n) {
     if n == 0 { return false; }
     int k = ast_kind[n];
-    if !as1_scalar(ast_ty[n]) { return false; }
-    return k == AK_VAR || (k == AK_GVAR && as1_expr(n));
+    if !as1_val(ast_ty[n]) { return false; }
+    if k == AK_VAR { return true; }
+    return (k == AK_GVAR || k == AK_INDEX || k == AK_DEREF) && as1_expr(n);
 }
 
 bool as1_stmt(int n) {
@@ -115,21 +201,37 @@ bool as1_stmt(int n) {
         return true;
     }
     if k == AK_DECL {
-        if !as1_scalar(ast_ty[n]) { return false; }
+        int dt = ast_ty[n];
+        if as1_arr(dt) {
+            // a fixed array of one dimension with a number as its size, no initial values
+            return ast_a[n] == 0 && ast_b[n] > 0 && ast_b[n] < 4096;
+        }
+        if as1_ptr(dt) {
+            if ast_a[n] == 0 { return true; }
+            int pv = ast_a[n];
+            return as1_expr(pv) && (as1_ptr(ast_ty[pv]) || (ast_kind[pv] == AK_NUM && ast_val[pv] == 0));
+        }
+        if !as1_scalar(dt) { return false; }
         if ast_a[n] == 0 { return true; }
         // the value has the type of the variable
-        return as1_expr(ast_a[n]) && as1_dbl(ast_ty[ast_a[n]]) == as1_dbl(ast_ty[n]);
+        return as1_expr(ast_a[n]) && as1_val(ast_ty[ast_a[n]]) && !as1_ptr(ast_ty[ast_a[n]]) && as1_dbl(ast_ty[ast_a[n]]) == as1_dbl(dt);
     }
     if k == AK_ASSIGN {
         int t = ast_c[n];
         if !as1_target(t) || !as1_expr(ast_a[n]) || ast_b[n] < 0 { return false; }
         bool td = as1_dbl(ast_ty[t]);
         int opc = ast_b[n];
+        if as1_ptr(ast_ty[t]) {
+            // a pointer gets a pointer of the same kind or 0
+            int pv2 = ast_a[n];
+            return opc == 0 && as1_expr(pv2) && (as1_ptr(ast_ty[pv2]) || (ast_kind[pv2] == AK_NUM && ast_val[pv2] == 0));
+        }
+        if as1_ptr(ast_ty[ast_a[n]]) { return false; }
         if td { return (opc == 0 || as1_arith(opc)) && as1_dbl(ast_ty[ast_a[n]]) == (td || true); }
         return !as1_dbl(ast_ty[ast_a[n]]);
     }
-    if k == AK_INCDEC { return as1_target(ast_a[n]) && !as1_dbl(ast_ty[ast_a[n]]); }
-    if k == AK_EXPR { return ast_kind[ast_a[n]] == AK_CALL && as1_expr(ast_a[n]); }
+    if k == AK_INCDEC { return as1_target(ast_a[n]) && as1_scalar(ast_ty[ast_a[n]]) && !as1_dbl(ast_ty[ast_a[n]]); }
+    if k == AK_EXPR { return ast_kind[ast_a[n]] == AK_CALL && as1_call(ast_a[n]); }
     if k == AK_IF { return as1_expr(ast_a[n]) && as1_stmt(ast_b[n]) && as1_stmt(ast_c[n]); }
     if k == AK_WHILE { return ast_val[n] == 0 && ast_c[n] == 0 && as1_expr(ast_a[n]) && as1_stmt(ast_b[n]); }
     if k == AK_FOR { return ast_b[n] != 0 && as1_expr(ast_a[n]) && as1_expr(ast_b[n]) && !as1_dbl(ast_ty[ast_a[n]]) && !as1_dbl(ast_ty[ast_b[n]]) && as1_stmt(ast_c[n]); }
@@ -140,7 +242,8 @@ bool as1_stmt(int n) {
 
 // the node fields that hold nodes, by kind: bit 0 a, bit 1 b, bit 2 c
 int at_fields(int k) {
-    if k == AK_BIN || k == AK_WHILE { return 3; }
+    if k == AK_BIN || k == AK_WHILE || k == AK_INDEX { return 3; }
+    if k == AK_DEREF || k == AK_ADDR { return 1; }
     if k == AK_NEG || k == AK_NOT || k == AK_CALL || k == AK_BLOCK || k == AK_DECL || k == AK_EXPR || k == AK_RET || k == AK_INCDEC || k == AK_CAST { return 1; }
     if k == AK_ASSIGN { return 5; }
     if k == AK_IF || k == AK_FOR { return 7; }
@@ -350,6 +453,34 @@ void gl_expr_d(int n) {
 // the operands of a binary operator: a in v1, b in v2
 void gl_operands(int a, int b) {
     gl_expr(a);
+    gl_operands_l(b);
+}
+
+// the same when the left operand is in v1 already. A number or a variable goes straight to v2; the left operand waits in a register
+// (v9 ..) while the right one is worked out, when that has no call; else in a cell of the frame
+int gl_rdepth;
+void gl_operands_l(int b) {
+    int k = at_kind[b];
+    gl_ensure();
+    if k == AK_NUM {
+        ir_add(IR_CONST, 2, 0, 0, 0, at_val[b]);
+        return;
+    }
+    if (k == AK_VAR || k == AK_GVAR) && !gl_isd(b) {
+        if k == AK_VAR { gl_load(2, 30, gl_off[at_val[b]]); } else { gl_load(2, 29, goff[at_val[b]]); }
+        return;
+    }
+    if gl_rdepth < 7 && !gl_has_call(b) {
+        int r = 9 + gl_rdepth;
+        ir_add(IR_COPY, r, 1, 0, 0, 0);
+        gl_rdepth += 1;
+        gl_expr(b);
+        gl_rdepth -= 1;
+        gl_ensure();
+        ir_add(IR_COPY, 2, 1, 0, 0, 0);
+        ir_add(IR_COPY, 1, r, 0, 0, 0);
+        return;
+    }
     int c = gl_cell(gl_depth);
     gl_store(30, c, 1);
     gl_depth += 1;
@@ -366,7 +497,8 @@ bool gl_has_call(int n) {
     int k = at_kind[n];
     if k == AK_CALL { return true; }
     if k == AK_BIN { return gl_has_call(at_a[n]) || gl_has_call(at_b[n]); }
-    if k == AK_NEG || k == AK_NOT || k == AK_CAST { return gl_has_call(at_a[n]); }
+    if k == AK_NEG || k == AK_NOT || k == AK_CAST || k == AK_DEREF || k == AK_ADDR { return gl_has_call(at_a[n]); }
+    if k == AK_INDEX { return gl_has_call(at_a[n]) || gl_has_call(at_b[n]); }
     return false;
 }
 
@@ -393,6 +525,11 @@ bool gl_simple_d(int n) {
 // the operands of a binary operator on doubles: a in gl_ra (a double register that this keeps for it), b in f32
 void gl_operands_d(int a, int b) {
     gl_expr_d(a);
+    gl_operands_dl(b);
+}
+
+// the same when the left operand is in f32 already
+void gl_operands_dl(int b) {
     gl_ensure();
     if gl_simple_d(b) {
         // the right operand into f33: the left one stays in f32
@@ -595,6 +732,133 @@ void gl_iarith(int ao, bool nzk) {
     else { gl_fail = 1; }
 }
 
+// the address of an element (a[i], p[i]) or of what a pointer points to (p^): the base register and the offset go to gl_ab and
+// gl_ao (the base is v30 or v29 for an array with a number as index, else v1). May use v1 and v2.
+int gl_ab;
+int gl_ao;
+
+void gl_addr(int n) {
+    gl_ensure();
+    int k = at_kind[n];
+    if k == AK_DEREF {
+        gl_expr(at_a[n]);
+        gl_ab = 1;
+        gl_ao = 0;
+        return;
+    }
+    int b = at_a[n];
+    int ix = at_b[n];
+    bool is_arr = as1_arr(at_ty[b]);
+    int bk = at_kind[b];
+    int boff = 0;
+    int bvr = 30;
+    if bk == AK_VAR { boff = gl_off[at_val[b]]; } else { boff = goff[at_val[b]]; bvr = 29; }
+    if at_kind[ix] == AK_NUM && at_val[ix] >= 0 && at_val[ix] < 4096 {
+        int eo = at_val[ix] * 8;
+        if is_arr {
+            gl_ab = bvr;
+            gl_ao = boff + eo;
+        } else {
+            gl_load(1, bvr, boff);
+            gl_ab = 1;
+            gl_ao = eo;
+        }
+        return;
+    }
+    gl_expr(ix);
+    gl_ensure();
+    ir_add(IR_SHL, 1, 1, 3, 1, 0);
+    if is_arr && bvr == 29 {
+        // a global array: the offset of the array goes to the load (`add x0, x28, x1, lsl #3` then `ldr x0, [x0, #off]`)
+        ir_add(IR_ADD, 1, 1, 29, 0, 0);
+        gl_ab = 1;
+        gl_ao = boff;
+        return;
+    }
+    if is_arr {
+        ir_add(IR_ADD, 2, bvr, boff, 1, 0);
+    } else {
+        gl_load(2, bvr, boff);
+    }
+    ir_add(IR_ADD, 1, 1, 2, 0, 0);
+    gl_ab = 1;
+    gl_ao = 0;
+}
+
+// v1 = the address of a variable or an element (@x, @a, @a[i])
+void gl_addr_of(int t) {
+    gl_ensure();
+    int tk = at_kind[t];
+    if tk == AK_VAR {
+        ir_add(IR_ADD, 1, 30, gl_off[at_val[t]], 1, 0);
+    } else if tk == AK_GVAR {
+        ir_add(IR_ADD, 1, 29, goff[at_val[t]], 1, 0);
+    } else {
+        gl_addr(t);
+        gl_ensure();
+        if gl_ab != 1 || gl_ao != 0 { ir_add(IR_ADD, 1, gl_ab, gl_ao, 1, 0); }
+    }
+}
+
+// target op= value, target = value or target += step for an element or a pointer's target. v1 / f32 hold the value at the end of
+// the computation (the store goes last).
+void gl_assign_mem(int target, int value, int ao, int step) {
+    gl_addr(target);
+    bool fixed = gl_ab == 30 || gl_ab == 29;
+    int fb = gl_ab;
+    int fo = gl_ao;
+    // the address waits in a register (v9 ..) when the value has no call, else in a cell
+    int ar = 0;
+    if !fixed && gl_rdepth < 7 && (value == 0 || !gl_has_call(value)) { ar = 9 + gl_rdepth; }
+    int c = gl_cell(gl_depth);
+    if !fixed {
+        if ar != 0 {
+            ir_add(IR_COPY, ar, 1, 0, 0, 0);
+            gl_rdepth += 1;
+        } else {
+            gl_store(30, c, 1);
+            gl_depth += 1;
+        }
+    }
+    bool td = gl_isd(target);
+    if ao == 0 && step == 0 {
+        if td { gl_expr_d(value); } else { gl_expr(value); }
+        gl_ensure();
+    } else {
+        // the value of the target now
+        gl_ensure();
+        if !fixed {
+            if ar != 0 { ir_add(IR_COPY, 2, ar, 0, 0, 0); } else { gl_load(2, 30, c); }
+            fb = 2;
+        }
+        int le = ir_add(IR_LOAD, 1, fb, 0, 0, fo);
+        ir_w[le] = 8;
+        if step != 0 {
+            ir_add(IR_ADD, 1, 1, step, 1, 0);
+        } else if td {
+            ir_add(IR_BITS2F, 32, 1, 0, 0, 0);
+            gl_operands_dl(value);
+            gl_farith(ao);
+        } else if (ao == AO_DIV || ao == AO_MOD) && gl_const_div(value) {
+            gl_divconst(at_val[value], ao == AO_MOD);
+        } else {
+            bool nzk = gl_is_nz(value);
+            gl_operands_l(value);
+            gl_iarith(ao, nzk);
+        }
+    }
+    if !fixed {
+        if ar != 0 { gl_rdepth -= 1; } else { gl_depth -= 1; }
+    }
+    gl_ensure();
+    if td { ir_add(IR_F2BITS, 1, 32, 0, 0, 0); }
+    if !fixed {
+        if ar != 0 { ir_add(IR_COPY, 2, ar, 0, 0, 0); } else { gl_load(2, 30, c); }
+        fb = 2;
+    }
+    gl_store(fb, fo, 1);
+}
+
 void gl_expr(int n) {
     int k = at_kind[n];
     gl_ensure();
@@ -609,6 +873,18 @@ void gl_expr(int n) {
     if k == AK_VAR || k == AK_GVAR {
         if k == AK_VAR { gl_load(1, 30, gl_off[at_val[n]]); } else { gl_load(1, 29, goff[at_val[n]]); }
         if gl_isd(n) { ir_add(IR_BITS2F, 32, 1, 0, 0, 0); }
+        return;
+    }
+    if k == AK_INDEX || k == AK_DEREF {
+        gl_addr(n);
+        gl_ensure();
+        int le = ir_add(IR_LOAD, 1, gl_ab, 0, 0, gl_ao);
+        ir_w[le] = 8;
+        if gl_isd(n) { ir_add(IR_BITS2F, 32, 1, 0, 0, 0); }
+        return;
+    }
+    if k == AK_ADDR {
+        gl_addr_of(at_a[n]);
         return;
     }
     if k == AK_NEG {
@@ -726,6 +1002,7 @@ void gl_stmt(int n) {
         return;
     }
     if k == AK_DECL {
+        if as1_arr(at_ty[n]) { return; }
         if at_a[n] != 0 {
             bool dd = gl_isd(n);
             if dd { gl_expr_d(at_a[n]); } else { gl_expr(at_a[n]); }
@@ -737,11 +1014,17 @@ void gl_stmt(int n) {
         return;
     }
     if k == AK_ASSIGN {
-        gl_assign(at_c[n], at_a[n], at_b[n]);
+        int tgt = at_c[n];
+        if at_kind[tgt] == AK_INDEX || at_kind[tgt] == AK_DEREF { gl_assign_mem(tgt, at_a[n], at_b[n], 0); }
+        else { gl_assign(tgt, at_a[n], at_b[n]); }
         return;
     }
     if k == AK_INCDEC {
         int tg = at_a[n];
+        if at_kind[tg] == AK_INDEX || at_kind[tg] == AK_DEREF {
+            gl_assign_mem(tg, 0, 0, at_b[n]);
+            return;
+        }
         gl_expr(tg);
         gl_ensure();
         ir_add(IR_ADD, 1, 1, at_b[n], 1, 0);
@@ -845,12 +1128,25 @@ char gl_hint[8192];
 int gl_hint_n;
 
 void gl_hint_add(int off) {
+    gl_hint_add2(off, 8, 1);
+}
+
+void gl_hint_add2(int off, int size, int flag) {
     if gl_hint_n > 8000 { gl_fail = 1; return; }
     gl_hint[gl_hint_n] = 0;
     append_int(@gl_hint, off);
     gl_hint_n = str_len(@gl_hint);
-    str_copy(@gl_hint + gl_hint_n, ":8:1 ", 8);
-    gl_hint_n += 5;
+    gl_hint[gl_hint_n] = ':';
+    gl_hint[gl_hint_n + 1] = 0;
+    append_int(@gl_hint, size);
+    gl_hint_n = str_len(@gl_hint);
+    gl_hint[gl_hint_n] = ':';
+    gl_hint[gl_hint_n + 1] = 0;
+    append_int(@gl_hint, flag);
+    gl_hint_n = str_len(@gl_hint);
+    gl_hint[gl_hint_n] = ' ';
+    gl_hint[gl_hint_n + 1] = 0;
+    gl_hint_n += 1;
 }
 
 void gl_slots(int n) {
@@ -861,8 +1157,13 @@ void gl_slots(int n) {
         while s != 0 { gl_slots(s); s = at_nx[s]; }
     } else if k == AK_DECL {
         if at_val[n] >= 0 && at_val[n] < 1024 { gl_off[at_val[n]] = gl_nslot; }
-        gl_hint_add(gl_nslot);
-        gl_nslot += 8;
+        if as1_arr(at_ty[n]) {
+            gl_hint_add2(gl_nslot, at_b[n] * 8, 0);
+            gl_nslot += at_b[n] * 8;
+        } else {
+            gl_hint_add(gl_nslot);
+            gl_nslot += 8;
+        }
     } else if k == AK_FOR {
         if at_val[n] >= 0 && at_val[n] < 1024 { gl_off[at_val[n]] = gl_nslot; }
         gl_hint_add(gl_nslot);
@@ -930,6 +1231,7 @@ int ast_lower_body(int ti, char^ name) {
     gl_term = 0;
     gl_nzn = 0;
     gl_fdepth = 0;
+    gl_rdepth = 0;
     gl_retd = 0;
     if fvoid[fi] == 0 && fret[fi] == 91 { gl_retd = 1; }
     int b0 = ir_new_block(0 - 1);

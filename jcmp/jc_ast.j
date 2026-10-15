@@ -24,7 +24,7 @@
 #define AK_FOR 10            // val = the local, a = from, b = to, c = body
 #define AK_RET 11            // a = value (0: none)
 #define AK_BLOCK 12          // a = first statement, the statements are a chain through ast_nx
-#define AK_DECL 13           // val = the local, a = initial value (0: none)
+#define AK_DECL 13           // val = the local, a = initial value (0: none); b = the number of elements of a fixed array of one dimension (-1: not known)
 #define AK_EXPR 14           // a = the expression (a call)
 #define AK_BREAK 15
 #define AK_CONT 16
@@ -1327,11 +1327,13 @@ int ast_decl(int base) {
         base = eb;
     }
     int dims = 0;
+    int dcount = 0 - 1;                      // the number of elements of a one dimensional array with a number as its size
     while tok_is("[") {
         next();
         if tok_is("]") {
             // an array whose size comes from its initial list
         } else if tok_kind == T_NUM && tok_float == 0 {
+            if dims == 0 { dcount = tok_num; }
             next();
         } else {
             int sz = ast_expr(0);
@@ -1380,7 +1382,9 @@ int ast_decl(int base) {
     }
     if di < 0 { return ast_node(AK_DECL, init, 0, 0, 0); }
     ast_cur_ty = ast_mkty(kind, base);                // the type of the variable
-    return ast_node(AK_DECL, init, 0, 0, ast_lid[di]);
+    int dn2 = ast_node(AK_DECL, init, 0, 0, ast_lid[di]);
+    if dn2 != 0 && kind == 2 && dims == 1 { ast_b[dn2] = dcount; } else if dn2 != 0 { ast_b[dn2] = 0 - 1; }
+    return dn2;
 }
 
 // the character after the current token is `)` or `^`: a type in a cast, not a name in an expression
