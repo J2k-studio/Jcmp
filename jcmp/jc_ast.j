@@ -898,11 +898,18 @@ int ast_fop_of(int at) {
     if str_eq(nm, "__ffloor") { return 2; }
     if str_eq(nm, "__fceil") { return 3; }
     if str_eq(nm, "__ftrunc") { return 4; }
+    if str_eq(nm, "alloc") { return 5; }            // alloc(n): the address of a block (typed as a whole number, a cast gives the pointer)
+    if str_eq(nm, "free") { return 6; }
     return 0;
 }
 
 bool ast_is_fop(int at) {
-    return ast_fop_of(at) != 0;
+    int o = ast_fop_of(at);
+    return o >= 1 && o <= 4;
+}
+
+bool ast_is_alloc(int at) {
+    return ast_fop_of(at) == 5;
 }
 
 int ast_primary() {
@@ -1063,6 +1070,7 @@ int ast_primary() {
                 }
                 ast_cur_ty = ast_mkty(0, 0);
                 if ast_is_fop(bp) { ast_cur_ty = ast_mkty(0, 7); }
+                if ast_is_alloc(bp) { ast_cur_ty = ast_mkty(0, 8); }
                 return ast_postfix(ast_node(AK_BUILTIN, bargs2, 0, 0, bp), 0, 0);
             }
             if tok_is("(") {
@@ -1093,6 +1101,7 @@ int ast_primary() {
                 }
                 ast_cur_ty = ast_mkty(0, 0);
                 if ast_is_fop(bp) { ast_cur_ty = ast_mkty(0, 7); }
+                if ast_is_alloc(bp) { ast_cur_ty = ast_mkty(0, 8); }
                 return ast_postfix(ast_node(AK_BUILTIN, bargs, 0, 0, bp), 0, 0);
             }
             ast_fail("a built-in name that is not called");
@@ -2380,11 +2389,6 @@ bool ast_probe(int f_idx) {
     ast_loop_depth = 0;
     ast_nuid = 0;                            // the numbers of the locals are those of this body
     ast_load_params();
-    ll_on = 0;
-    if ast_lower_on == 1 && keep_pass == 3 {
-        ll_on = 1;
-        ll_cur = f_idx;
-    }
     int root = 0;
     if ast_ok == 1 { root = ast_block(); }
     pass_no = keep_pass;

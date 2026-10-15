@@ -556,6 +556,7 @@ void parse_assign_core(char^ target) {
         bool borrow = a_fresh == 1 && a_base_local == 1 && tgt_own < 0;
         if borrow && blk_encloses(local_blk(a_base_off), own_blk[src_owner]) { borrow = false; }
         if !borrow {
+            ow_nk = 3;
             emit_owner_null(src_owner);
             if own_blk[src_owner] == cur_blk { own_moved[src_owner] = 1; }
         }
@@ -644,6 +645,8 @@ void parse_block() {
     }
     expect("}");
     warn_unused(scope_mark);
+    ow_site = 1;
+    ow_id = cur_blk;
     own_free_from(own_mark, 1);          // the memory that this block owns is given back here
     own_ok = saved_ok;
     cur_blk = saved_blk;
@@ -2375,6 +2378,9 @@ void parse_statement_inner() {
         if in_defer > 0 && loop_depth <= defer_loop_base { die("a deferred statement cannot break out of a loop around it"); }
         if mt_active == 1 && loop_depth - 1 == mt_base { die("break cannot be used in a #multithread loop (every iteration runs on its own)"); }
         leave_tries(try_depth - loop_try[loop_depth - 1]);
+        ow_brkn += 1;
+        ow_site = 3;
+        ow_id = ow_brkn;
         own_free_from(loop_own[loop_depth - 1], 0);
         jump(brk_stack[loop_depth - 1]);
         return;
@@ -2385,6 +2391,9 @@ void parse_statement_inner() {
         expect(";");
         if in_defer > 0 && loop_depth <= defer_loop_base { die("a deferred statement cannot continue a loop around it"); }
         leave_tries(try_depth - loop_try[loop_depth - 1]);
+        ow_brkn += 1;
+        ow_site = 4;
+        ow_id = ow_brkn;
         own_free_from(loop_own[loop_depth - 1], 0);
         jump(cont_stack[loop_depth - 1]);
         return;
@@ -2393,6 +2402,7 @@ void parse_statement_inner() {
         if in_defer > 0 { die("a deferred statement cannot return"); }
         if mt_active == 1 { die("return cannot be used inside a #multithread loop"); }
         next();
+        ow_retn += 1;
         int ret_mv = 0 - 1;
         if tok_is(";") {
             next();
@@ -2460,7 +2470,12 @@ void parse_statement_inner() {
         if ret_mv >= 0 && cur_fidx >= 0 { fowned[cur_fidx] = 1; }     // this function hands memory out
         if own_count > 0 {
             push_x0();                   // keep the result while the owned memory is given back
-            if ret_mv >= 0 { emit_owner_null(ret_mv); }
+            if ret_mv >= 0 {
+                ow_nk = 1;
+                emit_owner_null(ret_mv);
+            }
+            ow_site = 2;
+            ow_id = ow_retn;
             own_free_from(0, 0);
             emit_line("ldr x0, [sp, #0]");
             emit_line("add sp, sp, #16");
@@ -2597,6 +2612,15 @@ void parse_function() {
     int sv_up = used_uprint;
     int sv_thr = used_thread;
     if pass_no == 3 && freach[f_idx] == 0 { f_skip = 1; }
+    // the ownership events of this function are kept from here (the owners of the parameters are made before the body)
+    ll_on = 0;
+    if pass_no == 3 && ast_lower_on == 1 && f_skip == 0 { ll_on = 1; }
+    ll_cur = f_idx;
+    ow_retn = 0;
+    ow_brkn = 0;
+    ow_site = 0;
+    ow_id = 0;
+    ow_nk = 0;
     if f_oper == 1 { fop[f_idx] = 1; }
     cur_fidx = f_idx;
     int f_self = fn_self_struct;
@@ -2837,6 +2861,8 @@ void parse_function() {
     if cur_is_main == 1 && opt_debug == 1 { rt_call("Mem__debug_on"); }       // the checks of the heap are on
     if pass_no == 3 && f_skip == 0 && f_naked == 0 && f_interrupt == 0 && (ast_report != 0 || ast_lower_on != 0) && lvl_lib[lx_depth] == 0 { ast_probe(f_idx); }
     parse_block();
+    ow_site = 5;
+    ow_id = 0;
     own_free_from(0, 1);                 // what the parameters own (the body's own variables were given back at its end)
     if hint_len > 0 && hint_len < 16383 {
         emit_str(";H ");

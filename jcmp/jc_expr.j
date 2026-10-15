@@ -1598,6 +1598,55 @@ void free_thunk_name(char^ fn, int sidx) {
     note_call("__Arr__free_each");
 }
 
+// The ownership events of the function being compiled (pass 3, while ll_on is 1), kept for the lowering from the tree: the text parser
+// decides what is owned and where it is freed; the tree path makes the same frees from this list and refuses the function when the
+// list does not match what it sees. Types: 1 an owner was added (a off, b kind, c aux, d the cleanup record), 2 a place where the
+// owners are freed (a: 1 end of a block, 2 return, 3 break, 4 continue, 5 end of the function; b the number of the block / statement;
+// c the cleanup record to go back to; d how many owners), 3 one owner freed there (a off, b kind, c aux), 4 a variable became null (a off).
+int ow_n;
+int ow_fn[16384];
+int ow_ty[16384];
+int ow_a[16384];
+int ow_b[16384];
+int ow_c[16384];
+int ow_d[16384];
+int ow_trace;                    // -ast2: say every event
+int ow_nk;                       // set before emit_owner_null: why (1 returned, 2 freed by a call, 3 stored somewhere, 4 move(p)); 0 = other
+int ow_site;                     // set by the caller of own_free_from: the kind of place, 0 = not one the tree knows
+int ow_id;
+int ow_retn;                     // the return statements / the break and continue statements seen so far in this function
+int ow_brkn;
+
+void ow_add(int ty, int a, int b, int c, int d) {
+    if ll_on != 1 { return; }
+    if ow_n >= 16384 {
+        ll_over = 1;
+        return;
+    }
+    if ow_trace == 1 {
+        write_err("own ");
+        write_err(@fname + ll_cur * 64);
+        write_err(": ");
+        write_err_int(ty);
+        write_err(" ");
+        write_err_int(a);
+        write_err(" ");
+        write_err_int(b);
+        write_err(" ");
+        write_err_int(c);
+        write_err(" ");
+        write_err_int(d);
+        write_err("\n");
+    }
+    ow_fn[ow_n] = ll_cur;
+    ow_ty[ow_n] = ty;
+    ow_a[ow_n] = a;
+    ow_b[ow_n] = b;
+    ow_c[ow_n] = c;
+    ow_d[ow_n] = d;
+    ow_n += 1;
+}
+
 void own_add(int off, int kind, int aux) {
     if own_count >= 256 { die("too many owning variables in one function"); }
     if kind != 2 && kind != 6 && kind != 7 && kind != 9 { str_flush(stmt_t0, 1); }       // Strings made by this statement go first: the records must be in order
@@ -1607,6 +1656,7 @@ void own_add(int off, int kind, int aux) {
     own_blk[own_count] = cur_blk;
     own_moved[own_count] = 0;
     own_rec[own_count] = frame_bytes;
+    ow_add(1, off, kind, aux, frame_bytes);
     frame_bytes += 32;
     char fn[128];
     int mode = 0;
@@ -1686,6 +1736,8 @@ void emit_owner_free(int i) {
 
 // the variable no longer owns anything (it is null)
 void emit_owner_null(int i) {
+    ow_add(4, own_off[i], ow_nk, 0, 0);
+    ow_nk = 0;
     emit_line("mov x1, 0");
     ins_mem("str", "x1", "x29", own_off[i]);
 }
@@ -1694,12 +1746,16 @@ void emit_owner_null(int i) {
 void own_free_from(int from, int pop) {
     int i = own_count - 1;
     if from < own_count {
+        ow_add(2, ow_site, ow_id, own_rec[from], own_count - from);
         while i >= from {
+            ow_add(3, own_off[i], own_kind[i], own_aux[i], 0);
             emit_owner_free(i);
             i -= 1;
         }
         own_unlink(from);
     }
+    ow_site = 0;
+    ow_id = 0;
     if pop == 1 { own_count = from; }
 }
 
@@ -2011,6 +2067,7 @@ void gen_call() {
         if tmp_off != 0 { ins_n("add x0, x29, #", tmp_off); }
     }
     if free_owner >= 0 {
+        ow_nk = 2;
         emit_owner_null(free_owner);                          // Mem::free(p) on an owner: p is null afterwards
         if own_blk[free_owner] == cur_blk && own_moved[free_owner] == 0 { own_moved[free_owner] = 2; }     // 2: freed (a use after it is reported)
     }

@@ -356,7 +356,12 @@ bool as1_expr(int n) {
     if k == AK_BUILTIN {
         // __fsqrt / __ffloor / __fceil / __ftrunc of a double
         int a1 = ast_a[n];
-        return ast_fop_of(ast_val[n]) != 0 && a1 != 0 && ast_nx[a1] == 0 && as1_dbl(ast_ty[a1]) && as1_expr(a1);
+        int bo = ast_fop_of(ast_val[n]);
+        if bo == 5 {
+            // alloc(bytes): a call of Mem__alloc (the -d build tells where the block was made: the text path)
+            return opt_debug == 0 && a1 != 0 && ast_nx[a1] == 0 && as1_scalar(ast_ty[a1]) && !as1_dbl(ast_ty[a1]) && as1_expr(a1) && find_func("Mem__alloc") >= 0;
+        }
+        return bo >= 1 && bo <= 4 && a1 != 0 && ast_nx[a1] == 0 && as1_dbl(ast_ty[a1]) && as1_expr(a1);
     }
     if k == AK_VAR { return as1_scalar(ty) || as1_pt(ty); }
     if k == AK_FIELD {
@@ -418,6 +423,8 @@ bool as1_expr(int n) {
     if k == AK_NOT { return as1_expr(ast_a[n]) && !as1_dbl(ast_ty[ast_a[n]]); }
     if k == AK_CAST {
         int tc = ast_val[n];
+        // (T^)x : a pointer from a pointer or a whole number (the address is the same)
+        if as1_pt(ty) { return (as1_pt(ast_ty[ast_a[n]]) || (as1_scalar(ast_ty[ast_a[n]]) && !as1_dbl(ast_ty[ast_a[n]]))) && as1_expr(ast_a[n]); }
         return (tc == 7 || as1_el(tc)) && as1_scalar(ast_ty[ast_a[n]]) && as1_expr(ast_a[n]);
     }
     if k == AK_CALL { return as1_call(n); }
@@ -436,7 +443,7 @@ bool as1_target(int n) {
 // a call whose result is a pointer (the tree types it as a whole number: the result type id of a pointer is 0)
 bool as1_callptr(int n) {
     int k = ast_kind[n];
-    return (k == AK_CALL || k == AK_METHOD) && as1_scalar(ast_ty[n]) && !as1_dbl(ast_ty[n]);
+    return (k == AK_CALL || k == AK_METHOD || k == AK_BUILTIN) && as1_scalar(ast_ty[n]) && !as1_dbl(ast_ty[n]);
 }
 
 // one value of a list: an expression (not a list) of the kind of the element
@@ -570,7 +577,15 @@ bool as1_stmt(int n) {
     if k == AK_DECL { return as1_decl(n); }
     if k == AK_ASSIGN { return as1_assign(n); }
     if k == AK_INCDEC { return as1_target(ast_a[n]) && as1_scalar(ast_ty[ast_a[n]]) && !as1_dbl(ast_ty[ast_a[n]]); }
-    if k == AK_EXPR { return (ast_kind[ast_a[n]] == AK_CALL && as1_call(ast_a[n])) || (ast_kind[ast_a[n]] == AK_METHOD && as1_method(ast_a[n])); }
+    if k == AK_EXPR {
+        int ex = ast_a[n];
+        if ast_kind[ex] == AK_BUILTIN && ast_fop_of(ast_val[ex]) == 6 {
+            // free(p)
+            int fa = ast_a[ex];
+            return opt_debug == 0 && fa != 0 && ast_nx[fa] == 0 && as1_pt(ast_ty[fa]) && as1_expr(fa) && find_func("Mem__free") >= 0;
+        }
+        return (ast_kind[ex] == AK_CALL && as1_call(ex)) || (ast_kind[ex] == AK_METHOD && as1_method(ex));
+    }
     if k == AK_IF { return as1_expr(ast_a[n]) && as1_stmt(ast_b[n]) && as1_stmt(ast_c[n]); }
     if k == AK_WHILE { return ast_val[n] == 0 && ast_c[n] == 0 && as1_expr(ast_a[n]) && as1_stmt(ast_b[n]); }
     if k == AK_FOR { return ast_b[n] != 0 && as1_expr(ast_a[n]) && as1_expr(ast_b[n]) && !as1_dbl(ast_ty[ast_a[n]]) && !as1_dbl(ast_ty[ast_b[n]]) && as1_stmt(ast_c[n]); }
@@ -1594,6 +1609,10 @@ void gl_expr(int n) {
         ir_add(IR_SETCC, 1, 1, 0, 1, IR_EQ);
         return;
     }
+    if k == AK_CAST && as1_pt(at_ty[n]) {
+        gl_expr(at_a[n]);
+        return;
+    }
     if k == AK_CAST {
         int src = at_a[n];
         if at_val[n] == 7 {
@@ -1610,6 +1629,11 @@ void gl_expr(int n) {
     }
     if k == AK_CALL || k == AK_METHOD {
         gl_call(n);
+        return;
+    }
+    if k == AK_BUILTIN && at_val[n] == 5 {
+        gl_expr(at_a[n]);
+        gl_rt1("Mem__alloc", 1);
         return;
     }
     if k == AK_BUILTIN {
@@ -1879,6 +1903,110 @@ void gl_alist(int lst, int code, int count, int base, int off) {
     }
 }
 
+// ---------------------------------------------------------------- ownership (the events that the text parser recorded: jc_expr.j, ow_*)
+int go_pos;                      // the next event of this function
+int go_end;                      // one past its last event
+int gl_blkn;                     // the blocks, the return statements, the break and continue statements seen so far (as the parser counts)
+int gl_retn;
+int gl_brkn;
+
+// the type of the next event, 0 when there is none
+int go_peek() {
+    if go_pos >= go_end { return 0; }
+    return ow_ty[go_pos];
+}
+
+// the routine that frees an owner of the kind, in gl_ofn (1 when the mode is the address of the slot); false when the tree does not know it
+char gl_ofn[128];
+int gl_omode;
+bool go_fn(int kind, int aux) {
+    gl_omode = 0;
+    if kind == 0 {
+        str_copy(@gl_ofn, "Mem__free", 128);
+        return true;
+    }
+    if kind == 1 {
+        str_copy(@gl_ofn, "__Arr__free", 128);
+        return true;
+    }
+    if kind == 3 || kind == 9 {
+        str_copy(@gl_ofn, "__Str__free_all", 128);
+        return true;
+    }
+    if kind == 4 || kind == 6 {
+        str_copy(@gl_ofn, @sname + aux * 64, 64);
+        append_text(@gl_ofn, "__free");
+        gl_omode = 1;
+        return true;
+    }
+    return false;
+}
+
+// a variable that owns memory was declared at the frame offset off: the record of the cleanup chain is made (own_add)
+void go_decl(int off) {
+    if go_peek() != 1 || ow_a[go_pos] != off { return; }
+    int kind = ow_b[go_pos];
+    int aux = ow_c[go_pos];
+    int rec = ow_d[go_pos];
+    go_pos += 1;
+    if !go_fn(kind, aux) { gl_fail = 1; return; }
+    gl_ensure();
+    ir_add(IR_ADD, 1, 30, rec, 1, 0);                       // add x1, x29, #rec
+    gl_load(2, 28, 784);                                   // ldr x2, [x27, #784]
+    gl_store(1, 0, 2);
+    ir_add(IR_ADD, 2, 30, off, 1, 0);
+    gl_store(1, 8, 2);
+    ir_add(IR_ADDR_FUNC, 2, 0, 0, 0, ir_name_index(@gl_ofn));
+    gl_store(1, 16, 2);
+    ir_add(IR_CONST, 2, 0, 0, 0, gl_omode);
+    gl_store(1, 24, 2);
+    gl_store(28, 784, 1);
+}
+
+// the variables that the statement just made null (their memory went into a field, an element ...)
+void go_drain() {
+    while go_peek() == 4 && ow_b[go_pos] == 3 {
+        if !go_null(ow_a[go_pos], 3) { return; }
+    }
+}
+
+// the variable at off became null (it was freed or its memory moved): `mov x1, 0; str x1, [x29, #off]`
+bool go_null(int off, int why) {
+    if go_peek() != 4 || ow_a[go_pos] != off || ow_b[go_pos] != why { return false; }
+    go_pos += 1;
+    gl_ensure();
+    ir_add(IR_CONST, 1, 0, 0, 0, 0);
+    gl_store(30, off, 1);
+    return true;
+}
+
+// a place where the owners of a block / function are freed: the frees are those that the parser made there. v1 is not kept.
+bool go_site(int site, int id) {
+    if go_peek() != 2 || ow_a[go_pos] != site || ow_b[go_pos] != id { return false; }
+    int rec = ow_c[go_pos];
+    int cnt = ow_d[go_pos];
+    go_pos += 1;
+    int k = 0;
+    while k < cnt {
+        if go_peek() != 3 { gl_fail = 1; return true; }
+        int off = ow_a[go_pos];
+        int kind = ow_b[go_pos];
+        int aux = ow_c[go_pos];
+        go_pos += 1;
+        if !go_fn(kind, aux) { gl_fail = 1; return true; }
+        gl_ensure();
+        if gl_omode == 1 { ir_add(IR_ADD, 1, 30, off, 1, 0); } else { gl_load(1, 30, off); }
+        int e = ir_add(IR_CALL, 1, 0, 0, 0, ir_name_index(@gl_ofn));
+        gl_args[0] = 1;
+        ir_set_args(e, 1, @gl_args);
+        k += 1;
+    }
+    gl_ensure();
+    gl_load(1, 30, rec);                                    // the chain goes back to what it was before
+    gl_store(28, 784, 1);
+    return true;
+}
+
 // the value of a constant pattern
 int gl_pat(int p) {
     if at_kind[p] == AK_NEG { return 0 - at_val[at_a[p]]; }
@@ -1946,7 +2074,10 @@ void gl_stmt(int n) {
         return;
     }
     if k == AK_BLOCK {
+        gl_blkn += 1;
+        int bid = gl_blkn;
         gl_block_list(at_a[n]);
+        go_site(1, bid);
         return;
     }
     if k == AK_DECL {
@@ -1961,6 +2092,7 @@ void gl_stmt(int n) {
         if as1_sty(at_ty[n]) {
             if at_a[n] != 0 && at_kind[at_a[n]] == AK_LIST {
                 gl_slist(at_a[n], at_ty[n] % 65536 - 16, 30, gl_off[at_val[n]]);
+                go_decl(gl_off[at_val[n]]);
                 return;
             }
             if at_a[n] != 0 {
@@ -1968,6 +2100,7 @@ void gl_stmt(int n) {
                 gl_ensure();
                 gl_copy(30, gl_off[at_val[n]], 1, 0, ssize[at_ty[n] % 65536 - 16]);
             }
+            go_decl(gl_off[at_val[n]]);
             return;
         }
         if at_a[n] != 0 {
@@ -1979,6 +2112,7 @@ void gl_stmt(int n) {
             gl_store(30, gl_off[at_val[n]], 1);
         }
         gl_nz_clear(at_val[n]);
+        go_decl(gl_off[at_val[n]]);
         return;
     }
     if k == AK_ASSIGN {
@@ -1989,6 +2123,7 @@ void gl_stmt(int n) {
         }
         if at_kind[tgt] == AK_INDEX || at_kind[tgt] == AK_DEREF || at_kind[tgt] == AK_FIELD { gl_assign_mem(tgt, at_a[n], at_b[n], 0); }
         else { gl_assign(tgt, at_a[n], at_b[n]); }
+        go_drain();
         return;
     }
     if k == AK_INCDEC {
@@ -2004,7 +2139,18 @@ void gl_stmt(int n) {
         return;
     }
     if k == AK_EXPR {
-        gl_expr(at_a[n]);
+        int ex = at_a[n];
+        if at_kind[ex] == AK_BUILTIN && at_val[ex] == 6 {
+            // free(p): the call, then the variable is null when it was an owner
+            gl_expr(at_a[ex]);
+            gl_rt1("Mem__free", 1);
+            int pv = at_a[ex];
+            if at_kind[pv] == AK_VAR { go_null(gl_off[at_val[pv]], 2); }
+            return;
+        }
+        gl_expr(ex);
+        // Mem::free(p) on an owner: null afterwards
+        if (at_kind[ex] == AK_CALL) && at_a[ex] != 0 && at_kind[at_a[ex]] == AK_VAR && go_peek() == 4 { go_null(gl_off[at_val[at_a[ex]]], 2); }
         return;
     }
     if k == AK_IF {
@@ -2044,16 +2190,15 @@ void gl_stmt(int n) {
         return;
     }
     if k == AK_RET {
+        gl_retn += 1;
+        int rid = gl_retn;
         if at_a[n] != 0 && as1_sty(at_ty[at_a[n]]) {
             // a struct result is written through the address that came in the hidden first parameter
             gl_saddr(at_a[n]);
             gl_ensure();
             gl_load(3, 30, gl_retoff);
             gl_copy(3, 0, 1, 0, ssize[at_ty[at_a[n]] % 65536 - 16]);
-            gl_jmp(gl_ret);
-            return;
-        }
-        if at_a[n] != 0 {
+        } else if at_a[n] != 0 {
             if gl_retd == 1 {
                 gl_expr_d(at_a[n]);
                 gl_ensure();
@@ -2062,16 +2207,34 @@ void gl_stmt(int n) {
                 gl_expr(at_a[n]);
             }
         }
+        // the owners are freed here (what the parser did): the value waits in a cell; a returned owner is null first
+        if (go_peek() == 4 && ow_b[go_pos] == 1) || (go_peek() == 2 && ow_a[go_pos] == 2 && ow_b[go_pos] == rid) {
+            gl_ensure();
+            int vc = gl_cell(gl_depth);
+            gl_store(30, vc, 1);
+            gl_depth += 1;
+            if go_peek() == 4 {
+                int rv = at_a[n];
+                if rv == 0 || at_kind[rv] != AK_VAR || !go_null(gl_off[at_val[rv]], 1) { gl_fail = 1; return; }
+            }
+            if !go_site(2, rid) { gl_fail = 1; return; }
+            gl_depth -= 1;
+            gl_load(1, 30, vc);
+        }
         gl_jmp(gl_ret);
         return;
     }
     if k == AK_BREAK {
         if gl_loops == 0 { gl_fail = 1; return; }
+        gl_brkn += 1;
+        go_site(3, gl_brkn);
         gl_jmp(gl_brk[gl_loops - 1]);
         return;
     }
     if k == AK_CONT {
         if gl_loops == 0 { gl_fail = 1; return; }
+        gl_brkn += 1;
+        go_site(4, gl_brkn);
         gl_jmp(gl_cnt[gl_loops - 1]);
         return;
     }
@@ -2102,6 +2265,27 @@ void gl_hint_add2(int off, int size, int flag) {
     gl_hint[gl_hint_n] = ' ';
     gl_hint[gl_hint_n + 1] = 0;
     gl_hint_n += 1;
+}
+
+// the events of the function fi are ow_lo .. go_end: ow_lo is the first
+int ow_lo;
+void go_range(int fi) {
+    int i = 0;
+    while i < ow_n && ow_fn[i] != fi { i += 1; }
+    ow_lo = i;
+    while i < ow_n && ow_fn[i] == fi { i += 1; }
+    go_pos = ow_lo;
+    go_end = i;
+}
+
+// the event that added an owner at the frame offset off, or -1
+int go_find_add(int off) {
+    int i = ow_lo;
+    while i < go_end {
+        if ow_ty[i] == 1 && ow_a[i] == off { return i; }
+        i += 1;
+    }
+    return 0 - 1;
 }
 
 // the hidden slots of the results of calls that give a struct, in the order the parser makes them: a call makes its slot when its name
@@ -2146,6 +2330,7 @@ void gl_slots(int n) {
     } else if k == AK_DECL {
         gl_tmps(at_a[n]);
         if at_val[n] >= 0 && at_val[n] < 1024 { gl_off[at_val[n]] = gl_nslot; }
+        int own_at = gl_nslot;
         if as1_arr(at_ty[n]) {
             int asz = at_b[n] * as1_bytes(at_ty[n] % 65536);
             gl_hint_add2(gl_nslot, asz, 0);
@@ -2161,6 +2346,12 @@ void gl_slots(int n) {
         } else {
             gl_hint_add(gl_nslot);
             gl_nslot += 8;
+        }
+        // a variable that owns memory has a record of the cleanup chain after it (32 bytes, not in the hint line)
+        int oe = go_find_add(own_at);
+        if oe >= 0 {
+            if ow_d[oe] != gl_nslot { gl_fail = 1; }
+            gl_nslot += 32;
         }
     } else if k == AK_FOR {
         gl_tmps(at_a[n]);
@@ -2230,6 +2421,8 @@ int ast_lower_body(int ti, char^ name) {
         gl_off[p] = at_loff[ti * 32 + p];
         p += 1;
     }
+    go_range(fi);
+    if opt_debug == 1 && go_end > ow_lo { return 0; }       // a -d build keeps the line of every allocation: the text path
     gl_slots(at_root[ti]);
     if gl_fail == 1 { return 0; }
     // the hint line of the parser is ";H off:size:flag ..." (lf_hint_text)
@@ -2293,8 +2486,17 @@ int ast_lower_body(int ti, char^ name) {
     }
     gl_retoff = 0 - 1;
     if fvoid[fi] == 0 && fret[fi] >= 100 { gl_retoff = gl_off[0]; }
+    // the owners that the parameters are (a struct by value that frees itself): their records come first
+    go_pos = ow_lo;
+    while go_peek() == 1 && ow_a[go_pos] < at_fb[ti] { go_decl(ow_a[go_pos]); }
     gl_ret = gl_label();
+    gl_blkn = 0;
+    gl_retn = 0;
+    gl_brkn = 0;
     gl_stmt(at_root[ti]);
+    go_site(5, 0);
+    // every event of the parser was used: what the tree did is what the text path did
+    if go_pos != go_end { gl_fail = 1; }
     if gl_fail == 1 { return 0; }
     // falling off the end of a function that gives a value: the runtime stops (as the text path does)
     if gl_term == 0 && fvoid[fi] == 0 {
@@ -2344,6 +2546,24 @@ int ast_lower(char^ name) {
             write_err("\n");
         }
         else { write_err(" not lowered\n"); }
+        // the ownership events of the function (the text parser's decisions)
+        int oe = 0;
+        while oe < ow_n {
+            if ow_fn[oe] == at_fidx[ti] {
+                write_err("  own ");
+                write_err_int(ow_ty[oe]);
+                write_err(" ");
+                write_err_int(ow_a[oe]);
+                write_err(" ");
+                write_err_int(ow_b[oe]);
+                write_err(" ");
+                write_err_int(ow_c[oe]);
+                write_err(" ");
+                write_err_int(ow_d[oe]);
+                write_err("\n");
+            }
+            oe += 1;
+        }
     }
     return ok;
 }
