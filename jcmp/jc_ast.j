@@ -100,6 +100,7 @@ int ast_lbase[256];              // the width code of the scalar / the pointee /
 int ast_nl;
 int ast_ok;                      // 0 while reading, set to 0 by the first thing that is not understood
 char ast_why[128];
+int ast_lower_on;                // -ast: the first subset is built from the tree (jc_astlow.j)
 int ast_report;                  // -xast
 int ast_dump;                    // -xastdump: the tree of every body that is in the subset
 int ast_funcs;                   // all bodies read / the ones in the subset (for -xast)
@@ -2288,6 +2289,7 @@ int aq_pos; int aq_line; int aq_ls; int aq_base; int aq_len; int aq_depth;
 int aq_kind; int aq_num; int aq_float; int aq_mant; int aq_exp; int aq_char; int aq_strlen; int aq_seq;
 int aq_ptl; int aq_pel; int aq_pec; int aq_peb; int aq_pels;
 int aq_eline; int aq_ecol; int aq_ebase; int aq_els;
+int aq_mt; int aq_ro_next; int aq_ro_block; int aq_ro_file;
 char aq_text[256];
 char aq_str[1024];
 
@@ -2297,16 +2299,22 @@ void ast_save() {
     aq_strlen = tok_str_len; aq_seq = tok_seq;
     aq_ptl = prev_tok_line; aq_pel = prev_end_line; aq_pec = prev_end_col; aq_peb = prev_end_base; aq_pels = prev_end_ls;
     aq_eline = err_line; aq_ecol = err_col; aq_ebase = err_base; aq_els = err_ls;
+    aq_mt = mt_pending; aq_ro_next = ro_next; aq_ro_block = ro_block; aq_ro_file = ro_file;
     str_copy(@aq_text, @tok_text, 256);
     str_copy(@aq_str, @tok_str, 1024);
 }
 
 void ast_restore() {
+    // a[lo..hi] is rewritten to span(a, lo, hi) in the buffer while it is read: the text is longer now and must stay so
+    int len_now = cur_len;
+    bool same_level = lx_depth == aq_depth && cur_base == aq_base;
     cur_pos = aq_pos; cur_line = aq_line; cur_line_start = aq_ls; cur_base = aq_base; cur_len = aq_len; lx_depth = aq_depth;
+    if same_level { cur_len = len_now; }
     tok_kind = aq_kind; tok_num = aq_num; tok_float = aq_float; tok_mant = aq_mant; tok_exp = aq_exp; tok_char = aq_char;
     tok_str_len = aq_strlen; tok_seq = aq_seq;
     prev_tok_line = aq_ptl; prev_end_line = aq_pel; prev_end_col = aq_pec; prev_end_base = aq_peb; prev_end_ls = aq_pels;
     err_line = aq_eline; err_col = aq_ecol; err_base = aq_ebase; err_ls = aq_els;
+    mt_pending = aq_mt; ro_next = aq_ro_next; ro_block = aq_ro_block; ro_file = aq_ro_file;
     str_copy(@tok_text, @aq_text, 256);
     str_copy(@tok_str, @aq_str, 1024);
 }
@@ -2314,7 +2322,7 @@ void ast_restore() {
 // the current token is the `{` of the body of the function f_idx. Returns true when the body is in the subset (ast_root is its block).
 bool ast_probe(int f_idx) {
     ast_root = 0;
-    if ast_report == 0 { return false; }
+    if ast_report == 0 && ast_lower_on == 0 { return false; }
     ast_save();
     if tok_is("[") {
         while !tok_is("{") && tok_kind != T_EOF { next(); }
@@ -2327,6 +2335,7 @@ bool ast_probe(int f_idx) {
     while ue0 < 64 { ast_ue[ue0] = 0; ue0 += 1; }
     ast_why[0] = 0;
     ast_loop_depth = 0;
+    ast_nuid = 0;                            // the numbers of the locals are those of this body
     ast_load_params();
     int root = 0;
     if ast_ok == 1 { root = ast_block(); }
@@ -2336,6 +2345,7 @@ bool ast_probe(int f_idx) {
     if ast_ok == 1 {
         ast_funcs_ok += 1;
         ast_root = root;
+        if ast_lower_on == 1 { at_store(f_idx); }
     }
     if ast_ok == 1 && ast_dump == 1 {
         ast_olen = 0;

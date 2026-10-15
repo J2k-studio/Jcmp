@@ -4284,6 +4284,43 @@ void emit_divzero_check() {
     note_call("__panic");
 }
 
+// the magic number of the division by the constant d (Hacker's Delight, chapter 10): M as a signed 64-bit number in div_mg_m and the shift
+// in div_mg_s; used by the text path (emit_div_const) and by the lowering of the tree (jc_astlow.j)
+int div_mg_m;
+int div_mg_s;
+void div_magic(int d) {
+    u64 two63 = (u64)1 << 63;
+    u64 ad = (u64)d;
+    u64 anc = two63 - 1 - two63 % ad;
+    int p = 63;
+    u64 q1 = two63 / anc;
+    u64 r1 = two63 - q1 * anc;
+    u64 q2 = two63 / ad;
+    u64 r2 = two63 - q2 * ad;
+    u64 delta = 0;
+    bool again = true;
+    while again {
+        p += 1;
+        q1 = q1 * 2;
+        r1 = r1 * 2;
+        if r1 >= anc {
+            q1 = q1 + 1;
+            r1 = r1 - anc;
+        }
+        q2 = q2 * 2;
+        r2 = r2 * 2;
+        if r2 >= ad {
+            q2 = q2 + 1;
+            r2 = r2 - ad;
+        }
+        delta = ad - r2;
+        again = q1 < delta || (q1 == delta && r1 == 0);
+    }
+    int m = (int)(q2 + 1);                       // the bits of M, read as a signed number
+    div_mg_m = (int)(q2 + 1);
+    div_mg_s = p - 64;
+}
+
 // x0 = x0 / d or x0 % d for a whole number d >= 1 known now (signed): without the slow sdiv instruction. A power of two is a shift;
 // any other number d is a multiplication by a "magic" number and a shift (Hacker's Delight, chapter 10): the high half of
 // x0 * M (smulh), a correction, a shift, and the sign bit added. x1..x4 are used.
@@ -4325,36 +4362,9 @@ void emit_div_const(int d, bool is_mod) {
         }
         return;
     }
-    // the magic number: M (as a signed 64-bit number) and the shift s
-    u64 two63 = (u64)1 << 63;
-    u64 ad = (u64)d;
-    u64 anc = two63 - 1 - two63 % ad;
-    int p = 63;
-    u64 q1 = two63 / anc;
-    u64 r1 = two63 - q1 * anc;
-    u64 q2 = two63 / ad;
-    u64 r2 = two63 - q2 * ad;
-    u64 delta = 0;
-    bool again = true;
-    while again {
-        p += 1;
-        q1 = q1 * 2;
-        r1 = r1 * 2;
-        if r1 >= anc {
-            q1 = q1 + 1;
-            r1 = r1 - anc;
-        }
-        q2 = q2 * 2;
-        r2 = r2 * 2;
-        if r2 >= ad {
-            q2 = q2 + 1;
-            r2 = r2 - ad;
-        }
-        delta = ad - r2;
-        again = q1 < delta || (q1 == delta && r1 == 0);
-    }
-    int m = (int)(q2 + 1);                       // the bits of M, read as a signed number
-    int sh = p - 64;
+    div_magic(d);
+    int m = div_mg_m;
+    int sh = div_mg_s;
     ins_n("mov x4, ", m);
     emit_line("smulh x2, x0, x4");
     if m < 0 { emit_line("add x2, x2, x0"); }

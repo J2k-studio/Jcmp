@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.144
+* **AST A1b, first part: a function body can be built straight from the tree** (hidden switch `-ast`; `-ast2` also says which functions were built from the tree). The functions that use only `int` / `bool` parameters, locals and globals, arithmetic and comparisons, `&& || !`, `if` / `while` / `for a..b`, `break`, `continue`, `return` and calls of such functions get their IR from the tree (`jcmp/jc_astlow.j`: `ast_lower`); every other function is lifted from its text as before. Division and remainder by a constant use the magic number (shared with the text path: `div_magic`), by a variable they stop for 0 unless the variable was tested against 0 by the loop or `if` that holds the division. The frame that the tree computes (offsets of the parameters and locals, the hidden bound of a `for`) is compared with the hint line of the text parser, and the text path is used when they differ.
+* The gate: all 436 tests pass with `-ast` on (every test built both ways), `tools/diffcheck.sh` has `-ast` among its variants (164 programs, 0 differences), 150 fuzz programs with `-ast`. Speed: `fib` 72 -> 74 ms, `gcd` 276 -> 287 ms (the same code; noise of the phone).
+* Bugs of the tree probe found by running it on real builds (it only ran with `-xast` before): `#multithread` and `#pragma read` were left switched on after the probe read ahead; `a[lo..hi]` is rewritten to `span(a, lo, hi)` in the buffer while it is read, and the probe put the old length back (the file seemed to end early). The numbers of the locals are those of the body now.
+* Test: `t405_ast_lower` (7 functions from the tree; checked against Python).
+
 ## 0.9.143
 * **`#define` is right now** (the owner: "fix define"): a text that is an arithmetic expression of several tokens is kept in parentheses, so `#define N 2+3` and `N * 2` give 10, not 8. A text that is not an expression (a type, an argument list, a statement, an assignment, a string, a keyword statement) is substituted as written, as before.
 * **An array size may be a constant expression**: `int a[N * 2 + 1];`, `char b[1 << 8];` (numbers, `( )`, unary `-` and `~`, `* / % + - << >> & xor |`; a division by zero is an error). Before, only a single number was accepted.

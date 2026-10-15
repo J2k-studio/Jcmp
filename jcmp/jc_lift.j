@@ -770,6 +770,18 @@ int lf_function(char^ name) {
     int nblocks = lf_nblocks;
     if nblocks == 0 { return lf_fail("no code"); }
     if nblocks > IR_MAXB - 4 { return lf_fail("too many blocks"); }
+    if ast_lower_on == 1 && lf_epi_line >= 0 {
+        // A1b: the tree of the function (the first subset) gives the IR; when it does not, the text is lifted as before
+        char tn[128];
+        str_copy(@tn, name, 128);
+        int tl = str_len(@tn);
+        if tl > 0 && tn[tl - 1] == ':' { tn[tl - 1] = 0; }
+        int tl2 = 0;
+        while tn[tl2] != 0 && tn[tl2] != 10 { tl2 += 1; }
+        tn[tl2] = 0;
+        if tl2 > 0 && tn[tl2 - 1] == ':' { tn[tl2 - 1] = 0; }
+        if ast_lower(@tn) == 1 { return 1; }
+    }
     ir_reset(name);
     ir_nv = 64;
     int cv = 1;
