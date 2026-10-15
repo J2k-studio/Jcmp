@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.9.158
+* **AST A6: `try` / `catch` / `throw` from the tree** (the 120-byte snapshot of `x19` .. `x25` and `d8` .. `d15`, `j2k_try_enter`, the reload in the catch; `break` / `continue` / `return` inside a `try` leave the tries first). The name in `catch (e)` is a `char^` in the tree now (it was typed like a String), so `cout << e` prints a text.
+* **Dynamic arrays of pointers and of enum members** (`Node^[] list = arr(2);`, `list.push(p)` moves an owner into the array, `list[i]^.v`), **arrays that are returned and passed on** (`int[] f()`, `return a;`, `int[] b = f();`), **`a == null` / `a != null`**, `a = null`.
+* **Arrays of Strings** (`String[]`): `push`, `pop`, `insert`, `remove`, `clear`, `sort`, `contains`, `index_of`, `join`, `resize`, `free`, `len`, `names[i]` as a String place (read, `=`, `+=`, a method).
+* Statement tags: a variable that the parser made null (its memory moved) is looked at only when it is the value of the statement being lowered (a push no longer takes the null of the next statement).
+* `-ast2` prints the first statement or condition that the lowering does not take (`stmt: ...` / `cond: ...`), in the syntax of the tree.
+* `tools/fuzz_str.py` uses an array of Strings too (270 more programs, 0 differences).
+* The gate: 468 tests pass with the default and `-noast`, 300 fuzz programs, `diffcheck` the same 2 differences. 1367 of 1743 functions of the corpus are built from the tree.
+* Tests: `t420_ast_try` (6), `t421_ast_arrays` (9).
+
 ## 0.9.157
 * **`main` is made from the syntax tree too** (hidden `-noastmain` goes back). The reason it was off in 0.9.156 was the layout of blocks, not the register pass: the text path writes a loop as test, body (falls through), jump back; the tree wrote test, exit, ... and the body at the end of the function, so the live range of a variable of the loop spanned everything in between and the variables of the later loops found no register. **The layout puts the side of a branch that leads back to the test (the body of a loop) next to the test now**, for all code (the benchmarks `arrays`, `strings`, `mandel`, `sha256` of the tree are at the speed of the text path again).
 * `-rgdbg` (hidden): what the register pass thinks of every slot of `main` (state, uses, weight).

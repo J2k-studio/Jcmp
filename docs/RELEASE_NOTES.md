@@ -1,7 +1,8 @@
-# J2K / Jcmp 0.9.157
+# J2K / Jcmp 0.9.158
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
 
+**0.9.158:** internal: `try` / `catch` / `throw`, arrays of pointers, returned arrays and arrays of Strings are made from the syntax tree.
 **0.9.157:** internal: `main` is made from the syntax tree too; loops are written test, body, jump back.
 **0.9.156:** vector loops use one pointer for arrays that are walked together (the `arrays` benchmark 187 -> 139 ms).
 **0.9.155:** internal: Strings and arrays in struct fields and globals are made from the syntax tree as well.

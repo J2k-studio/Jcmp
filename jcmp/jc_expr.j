@@ -3919,6 +3919,7 @@ void dyn_member() {
             store_through(code);
         }
         if push_owner >= 0 && push_src < 0 {
+            ow_nk = 3;
             emit_owner_null(push_owner);       // the array owns the pointer now
             if own_blk[push_owner] == cur_blk { own_moved[push_owner] = 1; }
         }

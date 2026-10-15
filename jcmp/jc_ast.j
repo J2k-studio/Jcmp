@@ -1617,8 +1617,8 @@ int ast_try() {
     int saved_nl = ast_nl;
     int el = ast_add_local(@tok_text);
     if el >= 0 {
-        ast_lkind[el] = 4;
-        ast_lbase[el] = 8;
+        ast_lkind[el] = 1;                   // the thrown text: a char^ (it was typed like a String before the lowering needed it)
+        ast_lbase[el] = 2;
     }
     next();
     if !tok_is(")") {
