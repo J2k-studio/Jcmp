@@ -1944,3 +1944,13 @@ Proposal only, nothing decided: see `docs/design/11-libraries.md` (what a librar
 "Not `.sj`, it is `.so`, only that it works with our language." Recorded: the J2K library extension is `.so`
 (J2K programs only). The form inside (IR / real ELF) stays as the proposal of design 11. Also: the owner wants the other
 plans finished first, because there is no real GPU module yet (design 12).
+
+## 72. Logic gates written short (owner asked 2026-10-15: a `switch` of AND / OR / XOR / NAND / NOR; "how to write it shorter for bool"). A proposal, nothing decided
+What works today: `!(a & b)` for NAND and `!(a | b)` for NOR (`!` gives 0 / 1), `a xor b`; on `bool` values `&&`, `||`, `!` and `a != b` for XOR.
+| Option | Form | Pros | Cons |
+|---|---|---|---|
+| A nothing new | `return !(a & b);` | no new word; already works | NAND / NOR are two words of symbols |
+| B words `nand` `nor` `xnor` as operators (like `xor`) | `a nand b`, `a nor b` | reads like the table of a gate; one rule with `xor` | three more reserved words; on whole numbers it is bitwise (`~(a & b)`), which is not what `!(a & b)` gives: needs a rule |
+| C functions in the library | `Logic::nand(a, b)` | no new words, the inliner makes it one instruction | longer than A |
+| D a table | `gate(g, a, b)` = bit `a*2+b` of a constant per gate | one expression for any gate; branch free | hard to read |
+Assistant's view: A for now (it is already short); if the owner wants words, B with the bitwise meaning (`nand` = `~(a & b)`, a `bool` operand gives a `bool`). Question: A, B or C?

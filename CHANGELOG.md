@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.150
+* **The tree is the default path (A6, first step): the functions of the subset are built from the syntax tree without any switch.** `-noast` (hidden) makes every function from its text as before; `-ast` is accepted and does nothing. The functions that the tree does not lower yet (Strings and dynamic arrays, `alloc` / `free` / `arr`, `switch`, `try`, lambdas, `float`, structs that free themselves) are still made from the text, one function at a time, and the frame check keeps the two paths consistent. The compiler built with the tree path is byte-identical when it compiles itself again (fixed point). Compile time of the compiler: 6.5 s -> 7.1 s (the tree is read for every function); the program is 0.9 % smaller.
+* **Lists of values from the tree:** `int a[4] = {1, 2, 3};` (the rest is 0), `int b[] = {..}`, `double`, `char`, `i32` arrays, structs `P p = {7, 8};`, nested structs, arrays inside structs.
+* `-ast2` names the first builtin that keeps a function on the text path (`kind 35 arr`).
+* The gate: 452 tests pass with the default and with `-noast`, 300 more fuzz programs, `diffcheck` with the default as the base; `tools/diffcheck.sh` has `-noast` among its variants now. Speed equal to the text path.
+* Test: `t413_ast_list` (2 functions).
+
 ## 0.9.149
 * **AST A1b, sixth part: `cout` in the lowering from the tree** (`-ast`): texts, whole numbers, `char`, `bool`, enum values, doubles, expressions; one value alone ends the line, as the text path does. The literals are the ones the text path placed in the data area (the compiler keeps a list per function and the tree finds its literal there; nothing is placed twice). A call to a function that returns a pointer can start a pointer variable (`P^ r = pick(@a, @b, 0);`). 847 of 1385 functions of the corpus are built from the tree (835 of 1373 before the count of this release's tool; 727 in 0.9.148).
 * The text of a character literal is a `char` in the tree now (`cout << 'z'` prints `z`; it was typed as a number).

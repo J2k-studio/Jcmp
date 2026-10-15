@@ -100,7 +100,7 @@ int ast_lbase[256];              // the width code of the scalar / the pointee /
 int ast_nl;
 int ast_ok;                      // 0 while reading, set to 0 by the first thing that is not understood
 char ast_why[128];
-int ast_lower_on;                // -ast: the first subset is built from the tree (jc_astlow.j)
+int ast_lower_on = 1;            // the functions of the subset are built from the tree (jc_astlow.j); -noast: all from the text
 int ast_lower_report;            // -ast2: a line for every function that was tried
 int ast_report;                  // -xast
 int ast_dump;                    // -xastdump: the tree of every body that is in the subset

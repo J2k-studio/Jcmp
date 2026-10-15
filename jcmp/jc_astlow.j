@@ -412,19 +412,88 @@ bool as1_callptr(int n) {
     return (k == AK_CALL || k == AK_METHOD) && as1_scalar(ast_ty[n]) && !as1_dbl(ast_ty[n]);
 }
 
+// one value of a list: an expression (not a list) of the kind of the element
+bool as1_item(int e, int code) {
+    return ast_kind[e] != AK_LIST && as1_scalar(ast_ty[e]) && as1_expr(e) && as1_dbl(ast_ty[e]) == (code == 7);
+}
+
+// a list of values for the struct s: the fields in order, a list for a field that is a struct or an array
+bool as1_slist(int lst, int s) {
+    if lst == 0 || ast_kind[lst] != AK_LIST || !as1_splain(s) { return false; }
+    int it = ast_a[lst];
+    int k = 0;
+    while k < snf[s] {
+        int fi = sfirst[s] + k;
+        if it == 0 || fldptr[fi] != 0 || flddyn[fi] != 0 { return false; }
+        if fldkind[fi] == 1 {
+            if fldnd[fi] != 1 || !as1_el(fldcode[fi]) || ast_kind[it] != AK_LIST { return false; }
+            int e = ast_a[it];
+            int c = 0;
+            while e != 0 {
+                if !as1_item(e, fldcode[fi]) { return false; }
+                c += 1;
+                e = ast_nx[e];
+            }
+            if c != fldcnt[fi] { return false; }
+        } else if fldcode[fi] >= 16 {
+            if fldcode[fi] >= 16 + scount || !as1_slist(it, fldcode[fi] - 16) { return false; }
+        } else {
+            if !(as1_el(fldcode[fi]) || fldcode[fi] == 3) || !as1_item(it, fldcode[fi]) { return false; }
+        }
+        it = ast_nx[it];
+        k += 1;
+    }
+    return it == 0;
+}
+
+// the number of values of a list
+int as1_count(int lst) {
+    int c = 0;
+    int e = ast_a[lst];
+    while e != 0 {
+        c += 1;
+        e = ast_nx[e];
+    }
+    return c;
+}
+
 bool as1_decl(int n) {
     int k = ast_kind[n];
         int dt = ast_ty[n];
+        int init = ast_a[n];
         if as1_arr(dt) {
-            // a fixed array of one dimension with a number as its size, no initial values
-            return ast_a[n] == 0 && ast_b[n] > 0 && ast_b[n] < 65536;
+            // a fixed array of one dimension with a number as its size, no initial values or a list that fits
+            if init == 0 { return ast_b[n] > 0 && ast_b[n] < 65536; }
+            if ast_kind[init] != AK_LIST { return false; }
+            int cnt = as1_count(init);
+            if cnt == 0 || cnt >= 65536 || (ast_b[n] > 0 && cnt > ast_b[n]) || ast_b[n] == 0 { return false; }
+            int e = ast_a[init];
+            while e != 0 {
+                if !as1_item(e, dt % 65536) { return false; }
+                e = ast_nx[e];
+            }
+            return true;
         }
         if as1_sty(dt) {
-            if !as1_splain(dt % 65536 - 16) || ssize[dt % 65536 - 16] > 128 && ast_a[n] != 0 { return false; }
-            // no value, or a struct of the same type (a variable, a field, an element or a call)
-            return ast_a[n] == 0 || (ast_ty[ast_a[n]] == dt && as1_sx(ast_a[n]));
+            if !as1_splain(dt % 65536 - 16) || ssize[dt % 65536 - 16] > 128 && init != 0 { return false; }
+            // no value, a list, or a struct of the same type (a variable, a field, an element or a call)
+            if init != 0 && ast_kind[init] == AK_LIST { return as1_slist(init, dt % 65536 - 16); }
+            return init == 0 || (ast_ty[init] == dt && as1_sx(init));
         }
-        if as1_sarr(dt) { return ast_a[n] == 0 && ast_b[n] > 0 && ast_b[n] * ssize[dt % 65536 - 16] < 65536 && as1_splain(dt % 65536 - 16); }
+        if as1_sarr(dt) {
+            int ss = dt % 65536 - 16;
+            if !as1_splain(ss) { return false; }
+            if init == 0 { return ast_b[n] > 0 && ast_b[n] * ssize[ss] < 65536; }
+            if ast_kind[init] != AK_LIST { return false; }
+            int cnt2 = as1_count(init);
+            if cnt2 == 0 || ast_b[n] == 0 || (ast_b[n] > 0 && cnt2 > ast_b[n]) || cnt2 * ssize[ss] >= 65536 { return false; }
+            int e2 = ast_a[init];
+            while e2 != 0 {
+                if !as1_slist(e2, ss) { return false; }
+                e2 = ast_nx[e2];
+            }
+            return true;
+        }
         if as1_pt(dt) {
             if ast_a[n] == 0 { return true; }
             int pv = ast_a[n];
@@ -507,7 +576,7 @@ int at_fields(int k) {
     if k == AK_ASSIGN { return 5; }
     if k == AK_IF || k == AK_FOR { return 7; }
     if k == AK_METHOD { return 3; }
-    if k == AK_COUT { return 1; }
+    if k == AK_COUT || k == AK_LIST { return 1; }
     return 0;
 }
 
@@ -539,6 +608,7 @@ void at_reject(int f_idx, char^ why) {
             if !as1_kind_ok(ast_kind[i]) {
                 write_err(" kind ");
                 write_err_int(ast_kind[i]);
+                if ast_kind[i] == AK_BUILTIN { write_err(" "); write_err(@ast_pool + ast_val[i]); }
                 said = true;
             } else {
                 int ty2 = ast_ty[i];
@@ -594,6 +664,7 @@ void at_store(int f_idx) {
         at_val[base + i] = ast_val[i];
         at_ty[base + i] = ast_ty[i];
         if k == AK_METHOD { at_val[base + i] = as1_mfn(i); }
+        if k == AK_DECL && ast_b[i] < 0 && ast_a[i] != 0 && ast_kind[ast_a[i]] == AK_LIST { at_b[base + i] = as1_count(ast_a[i]); }
         if k == AK_STR {
             int sl = ast_b[i];
             if at_spn + sl + 1 > 262144 { at_n = base; at_reject(f_idx, "literals"); return; }
@@ -1665,6 +1736,74 @@ void gl_for(int n) {
         return;
 }
 
+// store the value of the expression e (v1 / f32) as a field or element of the code, at base + off
+void gl_put(int base, int off, int e, int code) {
+    if code == 7 {
+        gl_expr_d(e);
+        gl_ensure();
+        ir_add(IR_F2BITS, 1, 32, 0, 0, 0);
+    } else {
+        gl_expr(e);
+        gl_ensure();
+    }
+    int se = ir_add(IR_STORE, 0, base, 1, 0, off);
+    ir_w[se] = as1_fbytes(code);
+}
+
+// the values of a list for the struct s go to base + off
+void gl_slist(int lst, int s, int base, int off) {
+    int it = at_a[lst];
+    int k = 0;
+    while k < snf[s] {
+        int fi = sfirst[s] + k;
+        if fldkind[fi] == 1 {
+            int e = at_a[it];
+            int c = 0;
+            while e != 0 {
+                gl_put(base, off + fldoff[fi] + c * as1_fbytes(fldcode[fi]), e, fldcode[fi]);
+                c += 1;
+                e = at_nx[e];
+            }
+        } else if fldcode[fi] >= 16 {
+            gl_slist(it, fldcode[fi] - 16, base, off + fldoff[fi]);
+        } else {
+            gl_put(base, off + fldoff[fi], it, fldcode[fi]);
+        }
+        it = at_nx[it];
+        k += 1;
+    }
+}
+
+// the values of a list for an array of count elements of the width code (structs when code >= 16); what the list does not name is 0
+void gl_alist(int lst, int code, int count, int base, int off) {
+    int e = at_a[lst];
+    int c = 0;
+    int es = 8;
+    if code >= 16 { es = ssize[code - 16]; } else { es = as1_fbytes(code); }
+    while e != 0 {
+        if code >= 16 { gl_slist(e, code - 16, base, off + c * es); } else { gl_put(base, off + c * es, e, code); }
+        c += 1;
+        e = at_nx[e];
+    }
+    if c < count {
+        gl_ensure();
+        ir_add(IR_CONST, 1, 0, 0, 0, 0);
+        while c < count {
+            if code >= 16 {
+                int w = 0;
+                while w < es {
+                    gl_store(base, off + c * es + w, 1);
+                    w += 8;
+                }
+            } else {
+                int se = ir_add(IR_STORE, 0, base, 1, 0, off + c * es);
+                ir_w[se] = es;
+            }
+            c += 1;
+        }
+    }
+}
+
 void gl_stmt(int n) {
     if n == 0 { return; }
     int k = at_kind[n];
@@ -1677,8 +1816,19 @@ void gl_stmt(int n) {
         return;
     }
     if k == AK_DECL {
-        if as1_arr(at_ty[n]) || as1_sarr(at_ty[n]) { return; }
+        if as1_arr(at_ty[n]) || as1_sarr(at_ty[n]) {
+            if at_a[n] != 0 {
+                int ecode = at_ty[n] % 65536;
+                int ecnt = at_b[n];
+                gl_alist(at_a[n], ecode, ecnt, 30, gl_off[at_val[n]]);
+            }
+            return;
+        }
         if as1_sty(at_ty[n]) {
+            if at_a[n] != 0 && at_kind[at_a[n]] == AK_LIST {
+                gl_slist(at_a[n], at_ty[n] % 65536 - 16, 30, gl_off[at_val[n]]);
+                return;
+            }
             if at_a[n] != 0 {
                 gl_saddr(at_a[n]);
                 gl_ensure();
@@ -1844,6 +1994,13 @@ void gl_tmps(int n) {
     }
     if k == AK_BIN || k == AK_INDEX { gl_tmps(at_a[n]); gl_tmps(at_b[n]); return; }
     if k == AK_NEG || k == AK_NOT || k == AK_CAST || k == AK_DEREF || k == AK_ADDR || k == AK_FIELD { gl_tmps(at_a[n]); }
+    if k == AK_LIST {
+        int li = at_a[n];
+        while li != 0 {
+            gl_tmps(li);
+            li = at_nx[li];
+        }
+    }
 }
 
 void gl_slots(int n) {

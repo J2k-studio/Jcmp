@@ -2,7 +2,7 @@
 // Build:  bin/jcmp jcmp/jcmp.jk -o jcmp1        (see bootstrap.sh)
 // Use:    jcmp1 input.jk -o program
 // the version of the compiler (also in the file VERSION; release.sh checks that they agree)
-#define JCMP_VERSION "0.9.149"
+#define JCMP_VERSION "0.9.150"
 
 #import "jc_base"
 #import "jc_asm"
@@ -234,7 +234,9 @@ void main() {
             ast_lower_on = 1;
             ast_lower_report = 1;        // hidden: -ast, and a line for every function that was tried
         } else if str_eq(a, "-ast") {
-            ast_lower_on = 1;            // hidden: functions of the first subset are built from the tree (A1b)
+            ast_lower_on = 1;            // hidden: the default now (kept so that old command lines work)
+        } else if str_eq(a, "-noast") {
+            ast_lower_on = 0;            // hidden: every function is made from its text (the path that the tree replaces)
         } else if str_eq(a, "-xast2") {
             ast_report = 2;              // hidden: like -xast, and every node that the tree does not understand
         } else if str_eq(a, "-xast") {
