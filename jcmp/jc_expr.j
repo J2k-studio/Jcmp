@@ -1270,7 +1270,7 @@ void parse_array_arg() {
     str_copy(@aa_name, @tok_text, 256);
     next();
     if !lookup_var(@aa_name) { die_name("unknown name", @aa_name); }
-    if v_kind != 1 { die_name("not an array", @aa_name); }
+    if v_kind != 1 { die_name("this argument must be an array, but this is not one:", @aa_name); }
     addr_of_var();
     push_x0();
     ins_n("mov x0, ", v_cnt);
@@ -2284,7 +2284,7 @@ void lvalue_loop() {
             lv_nd = 1;
         } else if tok_is("^") {
             check_moved_use();
-            if lv_ptr == 0 || lv_kind == 1 { die("not a pointer"); }
+            if lv_ptr == 0 || lv_kind == 1 { die_help("this value is not a pointer, so ^ cannot follow it", "only a pointer (int^ p) can be followed by ^ to reach the value it points to"); }
             if lv_ptr == 10 { die("a void^ cannot be dereferenced (cast it to a typed pointer first)"); }
             next();
             lv_fresh = 0;
@@ -2311,7 +2311,7 @@ void lvalue_loop() {
                 char ln_name[300];
                 str_copy(@ln_name, @lv_base, 256);
                 str_copy(@ln_name + str_len(@ln_name), "__len", 8);
-                if !lookup_var(@ln_name) { die("len is only for arrays"); }
+                if !lookup_var(@ln_name) { die_help("this value has no length: .len works on arrays, Strings and dynamic arrays only", "for a char^ text use str_len(p)"); }
                 load_scalar();
             }
             ex_w = 8;
@@ -4252,7 +4252,7 @@ void parse_unary_core() {
         ex_ty = 0;
         return;
     }
-    die("expression expected");
+    die_found("an expression", "a value is a number, a name, a call, a text, or an expression in ( ); check for a missing value before an operator or a stray ; ) ]");
 }
 
 // -------------------------------------------------- binary operator levels

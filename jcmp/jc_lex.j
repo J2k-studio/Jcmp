@@ -205,6 +205,37 @@ void die_help(char^ msg, char^ help) {
     syscall(93, 1);
 }
 
+// what the parser sees now, for a message:  the end of the file / a text / 'token'
+void write_found() {
+    if tok_kind == T_EOF {
+        write_err("the end of the file");
+    } else if tok_kind == T_STR {
+        write_err("a text");
+    } else if tok_kind == T_NUM {
+        write_err("the number ");
+        write_err_int(tok_num);
+    } else {
+        write_err("'");
+        write_err(@tok_text);
+        write_err("'");
+    }
+}
+
+// "<what> was expected, but found <token>" with a help line
+void die_found(char^ what, char^ help) {
+    begin_msg("error");
+    write_err(what);
+    write_err(" was expected, but found ");
+    write_found();
+    end_msg();
+    write_err("  help: ");
+    write_err(help);
+    write_err("\n");
+    err_count += 1;
+    err_summary();
+    syscall(93, 1);
+}
+
 // the closest known name to `name` (at most 1 edit away, 2 for names of 5+ letters): in sug_buf, 1 if there is one
 char sug_buf[64];
 int sug_best;                // the distance of the best one so far
@@ -952,7 +983,13 @@ int read_escape() {
     if c == 92 { return 92; }
     if c == 39 { return 39; }
     if c == '"' { return 34; }
-    die("unknown escape sequence");
+    char em[80];
+    str_copy(@em, "unknown escape sequence: a backslash followed by '", 80);
+    int el = str_len(@em);
+    em[el] = c;
+    em[el + 1] = 0;
+    append_text(@em, "' (the known ones are \\n \\t \\r \\0 \\\\ \\' \\\")");
+    die(@em);
     return 0;
 }
 

@@ -236,7 +236,7 @@ void parse_type() {
         ty_elem = 16 + st;
         ty_width = 16 + st;
     } else {
-        die("a type was expected");
+        die_found("a type", "a type is int, char, bool, double, float, String, a struct name, or one of these followed by ^ or []");
     }
     next();
     if tok_is("^") {
@@ -2427,7 +2427,7 @@ void parse_statement_inner() {
         parse_local_decl();
         return;
     }
-    if tok_kind != T_IDENT { die("a statement was expected"); }
+    if tok_kind != T_IDENT { die_found("a statement", "a statement starts with a name, a type (a declaration), or one of if while for loop switch return; check for a stray ; } or ) before this place"); }
     char s_name[256];
     str_copy(@s_name, @tok_text, 256);
     str_copy(@id_name, @tok_text, 256);
@@ -3171,7 +3171,7 @@ void parse_top_item() {
         next();
     }
     parse_type();
-    if tok_kind != T_IDENT { die("a name was expected"); }
+    if tok_kind != T_IDENT { die_found("the name of the function", "write the name after the return type:  int name(...) { ... }"); }
     str_copy(@d_fname, @tok_text, 256);
     next();
     if tok_is("(") {

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.139
+* **More messages say what was found and how to go on.** "an expression was expected, but found ';'", "a type was expected, but found ...", "a statement was expected, but found ...", "the name of the function was expected, but found the number 5" (a number is named as a number, not by an old word), each with a `help:` line. `unknown escape sequence` names the character and lists the known ones; `^` on a value that is not a pointer, `.len` on a value without a length and an array argument that is not an array explain the rule. (`write_found` / `die_found` in `jcmp/jc_lex.j`.)
+* Tests: `t394` .. `t398`.
+
 ## 0.9.138
 * **A program that uses `try`, `throw` or `cin` has its variables in registers again** (the biggest speed gain of the standard library: 25 - 45 %). Until now `used_try` switched the register pass off for the whole program, because a throw jumps over the frames in between without giving their registers back; but `Map.get`, `Option.unwrap`, `String.to_int`, `Result` and `cin` all throw, so every program that used them ran with all its variables in memory. Now only a function that has a `try` itself keeps its variables in the frame, and it saves x19 .. x25 / d8 .. d15 into its frame when the try begins and puts them back where it catches (`try_regs` in `jcmp/jc_stmt.j`). Measured with `tools/bench/stdlib_speed.jk` (new; ms for the same work, before -> after): Map<int,int> 131 -> 90, Map<String,int> 129 -> 97, sort_by 133 -> 91, Json::parse 37 -> 26, Sha256 15 -> 8, Fmt::fixed 45 -> 32, Csv::split_line 58 -> 37, String append 42 -> 28.
 * **The caller-saved registers x8 and x9 for the variables that live between two calls** (`rg_callpre` in `jcmp/jc_regs.j`): in a function that is not a leaf, a variable whose interval has no call inside may take them when the text does not mention them.
