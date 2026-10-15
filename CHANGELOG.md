@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.155
+* **AST A6, ownership layer 4: Strings and dynamic arrays in struct fields, in globals and through pointers.** `r^.name`, `s.items`, `gname`, `grec.name` as the receiver of every String / dynamic array operation, as the target of `=`, `+=`, `push`, `free()`, as an argument, as the base of `[i]` and `.len`; `d = arr(n)` and `d = other` on a place; a local struct with a String or an array in it starts as zeros (like the text path); `s.free()` on a String. A place may be a chain of fields, derefs and indexes that has no call in it (it is worked out twice).
+* `tools/fuzz_str.py` also uses a struct with two Strings (local and global) and a global String: 150 more programs, 0 differences between the tree and `-noast`.
+* The gate: 464 tests pass with the default and `-noast`, 300 fuzz programs, `diffcheck` the same 2 differences, speed equal. 1041 of 1483 functions of the corpus are built from the tree.
+* Test: `t419_ast_fields` (3 functions).
+
 ## 0.9.154
 * **AST A6, ownership layer 3: Strings from the tree.** String variables and parameters (borrowed), `String s;` / `= "text"` / `= other` (a copy) / `= a + b` (taken over), `s = ...` (the old content goes), `s += String | text | char`, `a + b` and `+` chains (a new String is a temporary owner that is freed at the end of the statement, or before the jump of an `if` / `while` condition), `== != < <= > >=`, `s.len`, `s.cap`, `s[i]`, `cout << s`, `push` / `pop` / `clear` / `append`, `find` / `contains` / `starts_with` / `ends_with` / `count` / `to_int` / `to_double`, `slice` / `trim` / `upper` / `lower` / `repeat`, a text given to a String parameter (a temporary String is made), functions that return a String (an owner or a temporary moves out, anything else is copied), calls used as statements. The text parser records its decisions (temporaries added, the places where they are freed, what was moved) and the tree follows them; any difference stops the tree for that function.
 * `tools/fuzz_str.py`: random String programs compiled both ways must do the same (100 programs, 0 differences).

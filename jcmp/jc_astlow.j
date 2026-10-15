@@ -82,6 +82,29 @@ bool as1_splain(int s) {
     return find_func(@hn) < 0;
 }
 
+// a struct (or one inside it) with a free(self) method
+bool as1_sfree(int s) {
+    if struct_has_free(s) { return true; }
+    int f = sfirst[s];
+    int last = sfirst[s] + snf[s];
+    while f < last {
+        if fldcode[f] >= 16 && fldcode[f] < 400 && fldptr[f] == 0 && fldcode[f] - 16 != s && fldkind[f] == 0 {
+            if as1_sfree(fldcode[f] - 16) { return true; }
+        }
+        f += 1;
+    }
+    return false;
+}
+
+// a struct that a local variable can be: not freeing itself, no init(); a String or a dynamic array inside it starts as zeros
+bool as1_sdecl(int s) {
+    if s < 0 || s >= scount || as1_sfree(s) { return false; }
+    char hn[64];
+    str_copy(@hn, @sname + s * 64, 64);
+    str_copy(@hn + str_len(@hn), "__init", 8);
+    return find_func(@hn) < 0;
+}
+
 bool as1_scode(int b) {
     return b >= 16 && b < 16 + scount;
 }
@@ -163,7 +186,7 @@ bool as1_var_ok(int n) {
     if n == 0 { return false; }
     int k = ast_kind[n];
     int t = ast_ty[n];
-    if k == AK_VAR { return as1_pt(t) || as1_arr(t) || as1_sarr(t) || (as1_sty(t) && as1_splain(t % 65536 - 16)); }
+    if k == AK_VAR { return as1_pt(t) || as1_arr(t) || as1_sarr(t) || (as1_sty(t) && as1_sdecl(t % 65536 - 16)); }
     if k == AK_GVAR {
         int gi = ast_val[n];
         if gi < 0 || gdyn[gi] != 0 { return false; }
@@ -214,7 +237,7 @@ bool as1_base(int n) {
     if n == 0 { return false; }
     int k = ast_kind[n];
     int t = ast_ty[n];
-    if as1_dynlike(t) { return k == AK_VAR && opt_debug == 0 && (t / 65536 != 4 || as1_svarn(n)); }
+    if as1_dynlike(t) { return opt_debug == 0 && as1_dplace(n); }
     if as1_arr(t) || as1_sarr(t) { return as1_lv(n); }
     if as1_pt(t) {
         if k == AK_VAR || k == AK_GVAR { return as1_var_ok(n); }
@@ -263,7 +286,7 @@ bool as1_args(int fi, int a2, int pk) {
             if ast_ty[a2] / 65536 != 4 || !as1_sval(a2) { return false; }
         } else if pt == 99 {
             // a dynamic array: the variable (the callee borrows it)
-            if ast_kind[a2] != AK_VAR || !as1_dyn(ast_ty[a2]) { return false; }
+            if !as1_dyn(ast_ty[a2]) || !as1_dplace(a2) { return false; }
         } else if pt >= 100 {
             // a struct by value: a struct of that type that has an address, or a call that makes one
             if !as1_ptid(pt) || ast_ty[a2] != 3 * 65536 + 16 + pt - 100 || !as1_sx(a2) { return false; }
@@ -332,9 +355,37 @@ int as1_mfn(int n) {
 }
 
 // ---- Strings: a String is the address of a header that is built like the header of a dynamic array of chars
-// a String variable (a local or a parameter)
+// an expression whose value is the same wherever it is worked out and that has no call in it: variables, fields, derefs, indexes by a
+// number or a variable (a place is used twice: to read the header and to write it)
+bool as1_pure(int n) {
+    int k = ast_kind[n];
+    if k == AK_VAR || k == AK_GVAR || k == AK_NUM { return true; }
+    if k == AK_DEREF || k == AK_FIELD { return as1_pure(ast_a[n]); }
+    if k == AK_INDEX { return as1_pure(ast_a[n]) && as1_pure(ast_b[n]); }
+    return false;
+}
+
+// a place that holds a String or a dynamic array of numbers: a variable (local or global) or a field of a struct
+bool as1_dplace(int n) {
+    int t = ast_ty[n];
+    int k = ast_kind[n];
+    if !(t / 65536 == 4 && t % 65536 == 8) && !as1_dyn(t) { return false; }
+    if k == AK_VAR { return true; }
+    if k == AK_GVAR {
+        int gi = ast_val[n];
+        return gi >= 0 && gdyn[gi] != 0;
+    }
+    if k == AK_FIELD {
+        int fi = ast_val[n];
+        if fi < 0 || flddyn[fi] == 0 || fldkind[fi] != 3 || fldptr[fi] != 0 || opt_debug == 1 { return false; }
+        return as1_pure(ast_a[n]) && as1_sty(ast_ty[ast_a[n]]) && as1_lv(ast_a[n]);
+    }
+    return false;
+}
+
+// a String place
 bool as1_svarn(int n) {
-    return ast_kind[n] == AK_VAR && ast_ty[n] / 65536 == 4;
+    return ast_ty[n] / 65536 == 4 && as1_dplace(n);
 }
 
 // an operand of the String routines: a String value (a variable, a text, a new String) or a char
@@ -355,7 +406,7 @@ bool as1_sval(int n) {
     int k = ast_kind[n];
     if ast_ty[n] / 65536 != 4 { return false; }
     if k == AK_STR { return ast_b[n] < 1000; }
-    if k == AK_VAR { return true; }
+    if k == AK_VAR || k == AK_GVAR || k == AK_FIELD { return as1_dplace(n); }
     if k == AK_CALL { return ast_val[n] >= 0 && fretstr[ast_val[n]] == 1 && as1_call(n); }
     if k == AK_BIN {
         if ast_val[n] != AO_ADD { return false; }
@@ -425,13 +476,14 @@ int as1_strmethod(int n) {
     if str_eq(nm, "count") { if na == 0 { return 14; } return 0; }
     if str_eq(nm, "to_int") { if na == 0 { return 15; } return 0; }
     if str_eq(nm, "to_double") { if na == 0 { return 16; } return 0; }
+    if str_eq(nm, "free") { if na == 0 { return 17; } return 0; }
     return 0;
 }
 
 // a member function of a dynamic array variable of numbers: 1 push(v), 2 pop(), 3 resize(n), 4 clear(), 5 free(); 0 when it is not one
 int as1_dynmethod(int n) {
     int r = ast_a[n];
-    if opt_debug == 1 || ast_kind[r] != AK_VAR || !as1_dyn(ast_ty[r]) { return 0; }
+    if opt_debug == 1 || !as1_dyn(ast_ty[r]) || !as1_dplace(r) { return 0; }
     char^ nm = @ast_pool + ast_val[n];
     int a = ast_b[n];
     int na = 0;
@@ -510,7 +562,7 @@ bool as1_expr(int n) {
         int dr = ast_a[n];
         if opt_debug == 1 || !as1_scalar(ty) { return false; }
         // a variable of a dynamic array or a String, or a String that is made (a call, a join ...)
-        if !(ast_kind[dr] == AK_VAR && as1_dynlike(ast_ty[dr])) && !(ast_ty[dr] / 65536 == 4 && ast_kind[dr] != AK_STR && as1_sval(dr)) { return false; }
+        if !(as1_dynlike(ast_ty[dr]) && as1_dplace(dr)) && !(ast_ty[dr] / 65536 == 4 && ast_kind[dr] != AK_STR && as1_sval(dr)) { return false; }
         char^ dm = @ast_pool + ast_b[n] - 1;
         return str_eq(dm, "len") || str_eq(dm, "cap");
     }
@@ -583,7 +635,7 @@ bool as1_expr(int n) {
         if as1_dyn(ast_ty[ast_a[n]]) { return as1_dynmethod(n) == 2; }
         if ast_ty[ast_a[n]] / 65536 == 4 {
             int sm2 = as1_strmethod(n);
-            return sm2 == 2 || sm2 >= 10;
+            return sm2 == 2 || (sm2 >= 10 && sm2 <= 16);
         }
         return as1_method(n) && fvoid[as1_mfn(n)] == 0;
     }
@@ -673,12 +725,13 @@ bool as1_decl(int n) {
         if as1_dyn(dt) {
             // no value (null), a new array arr(n), or another dynamic array variable (the same array)
             if init == 0 { return true; }
-            if ast_kind[init] == AK_VAR { return as1_dyn(ast_ty[init]); }
+            if as1_dyn(ast_ty[init]) && as1_dplace(init) { return true; }
             if ast_kind[init] != AK_BUILTIN || ast_fop_of(ast_val[init]) != 7 { return false; }
             int na0 = ast_a[init];
             return opt_debug == 0 && na0 != 0 && ast_nx[na0] == 0 && as1_scalar(ast_ty[na0]) && !as1_dbl(ast_ty[na0]) && as1_expr(na0);
         }
         if as1_sty(dt) {
+            if init == 0 { return as1_sdecl(dt % 65536 - 16); }
             if !as1_splain(dt % 65536 - 16) || ssize[dt % 65536 - 16] > 128 && init != 0 { return false; }
             // no value, a list, or a struct of the same type (a variable, a field, an element or a call)
             if init != 0 && ast_kind[init] == AK_LIST { return as1_slist(init, dt % 65536 - 16); }
@@ -719,7 +772,15 @@ bool as1_assign(int n) {
             if ast_b[n] == 0 { return as1_sval(sv); }
             return ast_b[n] == AO_ADD && as1_sop(sv);
         }
-        if as1_dyn(ast_ty[ast_c[n]]) { return false; }
+        if as1_dyn(ast_ty[ast_c[n]]) {
+            // a dynamic array place gets another place (the same array) or a new array arr(n); nothing is freed
+            int dv = ast_a[n];
+            if !as1_dplace(ast_c[n]) || ast_b[n] != 0 || opt_debug == 1 { return false; }
+            if as1_dyn(ast_ty[dv]) && as1_dplace(dv) { return true; }
+            if ast_kind[dv] != AK_BUILTIN || ast_fop_of(ast_val[dv]) != 7 { return false; }
+            int na1 = ast_a[dv];
+            return na1 != 0 && ast_nx[na1] == 0 && as1_scalar(ast_ty[na1]) && !as1_dbl(ast_ty[na1]) && as1_expr(na1);
+        }
         int t = ast_c[n];
         if as1_sty(ast_ty[t]) {
             // a struct is copied: the target has an address, the value is a struct of the same type
@@ -1579,10 +1640,64 @@ void gl_iarith(int ao, bool nzk) {
 // the address of an element (a[i], p[i]) or of what a pointer points to (p^): the base register and the offset go to gl_ab and
 // gl_ao (the base is v30 or v29 for an array with a number as index, else v1). May use v1 and v2.
 
+// v1 = the header that a place holds (a String or a dynamic array: a variable, a global or a field)
+void gl_pload(int r) {
+    gl_ensure();
+    int k = at_kind[r];
+    if k == AK_VAR {
+        gl_load(1, 30, gl_off[at_val[r]]);
+        return;
+    }
+    if k == AK_GVAR {
+        gl_load(1, 29, goff[at_val[r]]);
+        return;
+    }
+    gl_addr(r);
+    gl_ensure();
+    int le = ir_add(IR_LOAD, 1, gl_ab, 0, 0, gl_ao);
+    ir_w[le] = 8;
+}
+
+// the place r gets the value that waits in the cell c (v1, v2, v3 are used)
+void gl_pstore(int r, int c) {
+    gl_ensure();
+    int k = at_kind[r];
+    if k == AK_VAR {
+        gl_load(3, 30, c);
+        gl_store(30, gl_off[at_val[r]], 3);
+        return;
+    }
+    if k == AK_GVAR {
+        gl_load(3, 30, c);
+        gl_store(29, goff[at_val[r]], 3);
+        return;
+    }
+    gl_addr(r);
+    gl_ensure();
+    gl_load(3, 30, c);
+    int se = ir_add(IR_STORE, 0, gl_ab, 3, 0, gl_ao);
+    ir_w[se] = 8;
+}
+
+// the place is null
+void gl_pnull(int r) {
+    gl_ensure();
+    int k = at_kind[r];
+    if k == AK_VAR || k == AK_GVAR {
+        ir_add(IR_CONST, 3, 0, 0, 0, 0);
+        if k == AK_VAR { gl_store(30, gl_off[at_val[r]], 3); } else { gl_store(29, goff[at_val[r]], 3); }
+        return;
+    }
+    gl_addr(r);
+    gl_ensure();
+    ir_add(IR_CONST, 3, 0, 0, 0, 0);
+    int se = ir_add(IR_STORE, 0, gl_ab, 3, 0, gl_ao);
+    ir_w[se] = 8;
+}
+
 // v1 = the header of the dynamic array that the variable holds, stops with an exception when it is null (dyn_null_check)
 void gl_dyn_header(int var) {
-    gl_ensure();
-    gl_load(1, 30, gl_off[at_val[var]]);
+    gl_pload(var);
     gl_nullchk();
 }
 
@@ -1617,13 +1732,11 @@ void gl_dyn_load(int code) {
 void gl_dynmethod(int n) {
     int op = at_val[n] - 1000;
     int r = at_a[n];
-    int off = gl_off[at_val[r]];
     int code = at_ty[r] % 65536;
     int a = at_b[n];
     if op == 1 {
         // push(v): the header, then the value, then the place of the new element
-        gl_ensure();
-        gl_load(1, 30, off);
+        gl_pload(r);
         int c0 = gl_cell(gl_depth);
         gl_store(30, c0, 1);
         gl_depth += 1;
@@ -1648,15 +1761,13 @@ void gl_dynmethod(int n) {
         return;
     }
     if op == 2 {
-        gl_ensure();
-        gl_load(1, 30, off);
+        gl_pload(r);
         gl_rt2("__Arr__pop", 1);
         gl_dyn_load(code);
         return;
     }
     if op == 3 {
-        gl_ensure();
-        gl_load(1, 30, off);
+        gl_pload(r);
         int c2 = gl_cell(gl_depth);
         gl_store(30, c2, 1);
         gl_depth += 1;
@@ -1675,11 +1786,9 @@ void gl_dynmethod(int n) {
         return;
     }
     // free()
-    gl_ensure();
-    gl_load(1, 30, off);
+    gl_pload(r);
     gl_rt2("__Arr__free", 1);
-    ir_add(IR_CONST, 1, 0, 0, 0, 0);
-    gl_store(30, off, 1);
+    gl_pnull(r);
 }
 
 // the address of an object: a variable that is an array or a struct (v30 / v29 and its offset), or what gl_addr gives
@@ -1725,7 +1834,7 @@ void gl_addr(int n) {
     }
     int b = at_a[n];
     int ix = at_b[n];
-    if at_kind[b] == AK_VAR && as1_dynlike(at_ty[b]) {
+    if as1_dynlike(at_ty[b]) {
         // an element of a dynamic array (or a char of a String): the data pointer is at [header + 16]; the header is checked first and waits while the index is worked out
         int des = as1_bytes(at_ty[n] % 65536);
         int dp2 = 1;
@@ -2494,8 +2603,8 @@ void gl_sval(int n) {
         gl_expr(n);
         return;
     }
-    if k == AK_VAR {
-        gl_load(1, 30, gl_off[at_val[n]]);
+    if k == AK_VAR || k == AK_GVAR || k == AK_FIELD {
+        gl_pload(n);
         return;
     }
     if k == AK_CALL {
@@ -2531,7 +2640,7 @@ void gl_sval(int n) {
     int mo = at_val[n] - 2000;
     int r = at_a[n];
     int a1 = at_b[n];
-    gl_load(1, 30, gl_off[at_val[r]]);
+    gl_pload(r);
     if mo == 5 {
         gl_ensure();
         int c1 = gl_cell(gl_depth);
@@ -2611,11 +2720,16 @@ void gl_scmp(int n) {
 // the member functions of a String variable: at_val 2001 push, 2002 pop, 2003 clear, 2004 append
 void gl_strmethod(int n) {
     int mo = at_val[n] - 2000;
-    int off = gl_off[at_val[at_a[n]]];
     int a = at_b[n];
     gl_ensure();
     if mo == 2 || mo == 3 || mo >= 14 || mo == 14 {
-        gl_load(1, 30, off);
+        gl_pload(at_a[n]);
+        if mo == 17 {
+            // free(): the memory goes and the place is null
+            gl_rt2("__Arr__free", 1);
+            gl_pnull(at_a[n]);
+            return;
+        }
         if mo == 2 { gl_rt2("__Str__pop", 1); }
         else if mo == 3 { gl_rt2("__Str__clear", 1); }
         else if mo == 14 { gl_rt2("__Str__count", 1); }
@@ -2626,7 +2740,7 @@ void gl_strmethod(int n) {
         }
         return;
     }
-    gl_load(1, 30, off);
+    gl_pload(at_a[n]);
     int c0 = gl_cell(gl_depth);
     gl_store(30, c0, 1);
     gl_depth += 1;
@@ -2787,8 +2901,8 @@ void gl_stmt(int n) {
         gl_ensure();
         if dinit == 0 {
             ir_add(IR_CONST, 1, 0, 0, 0, 0);
-        } else if at_kind[dinit] == AK_VAR {
-            gl_load(1, 30, gl_off[at_val[dinit]]);
+        } else if at_kind[dinit] != AK_BUILTIN {
+            gl_pload(dinit);
         } else {
             // arr(n): the routine takes the size of an element and the number
             gl_expr(at_a[dinit]);
@@ -2820,6 +2934,16 @@ void gl_stmt(int n) {
                 gl_saddr(at_a[n]);
                 gl_ensure();
                 gl_copy(30, gl_off[at_val[n]], 1, 0, ssize[at_ty[n] % 65536 - 16]);
+            } else if struct_needs_zero(at_ty[n] % 65536 - 16) {
+                // a String or a dynamic array inside starts null: the struct starts as zeros
+                gl_ensure();
+                ir_add(IR_CONST, 2, 0, 0, 0, 0);
+                int zk = 0;
+                int zsz = ssize[at_ty[n] % 65536 - 16];
+                while zk < zsz {
+                    gl_store(30, gl_off[at_val[n]] + zk, 2);
+                    zk += 8;
+                }
             }
             go_decl(gl_off[at_val[n]]);
             return;
@@ -2836,9 +2960,30 @@ void gl_stmt(int n) {
         go_decl(gl_off[at_val[n]]);
         return;
     }
+    if k == AK_ASSIGN && as1_dyn(at_ty[at_c[n]]) {
+        // a dynamic array place gets the same array as another place, or a new one
+        int dp = at_c[n];
+        int dv2 = at_a[n];
+        if at_kind[dv2] == AK_BUILTIN {
+            gl_expr(at_a[dv2]);
+            gl_ensure();
+            ir_add(IR_COPY, 2, 1, 0, 0, 0);
+            ir_add(IR_CONST, 1, 0, 0, 0, as1_bytes(at_ty[dp] % 65536));
+            gl_rt2("__Arr__make", 2);
+        } else {
+            gl_pload(dv2);
+        }
+        gl_ensure();
+        int c7 = gl_cell(gl_depth);
+        gl_store(30, c7, 1);
+        gl_depth += 1;
+        gl_pstore(dp, c7);
+        gl_depth -= 1;
+        go_drain();
+        return;
+    }
     if k == AK_ASSIGN && at_ty[at_c[n]] / 65536 == 4 {
         int sv2 = at_c[n];
-        int soff2 = gl_off[at_val[sv2]];
         int sval = at_a[n];
         if at_b[n] == 0 {
             // = : the new String is made (a copy or taken over), the old content goes, the variable gets the new one
@@ -2847,17 +2992,21 @@ void gl_stmt(int n) {
             int c5 = gl_cell(gl_depth);
             gl_store(30, c5, 1);
             gl_depth += 1;
-            gl_load(1, 30, soff2);
+            gl_pload(sv2);
             gl_rt2("__Arr__free", 1);
             gl_depth -= 1;
-            gl_load(1, 30, c5);
-            gl_store(30, soff2, 1);
+            gl_pstore(sv2, c5);
+            go_drain();
         } else {
             // += : append a String, a text or a char
             gl_sval(sval);
             gl_ensure();
-            ir_add(IR_COPY, 2, 1, 0, 0, 0);
-            gl_load(1, 30, soff2);
+            int c6 = gl_cell(gl_depth);
+            gl_store(30, c6, 1);
+            gl_depth += 1;
+            gl_pload(sv2);
+            gl_load(2, 30, c6);
+            gl_depth -= 1;
             ir_add(IR_CONST, 3, 0, 0, 0, gl_skind(sval));
             int ea = ir_add(IR_CALL, 1, 0, 0, 0, ir_name_index("__Str__append"));
             gl_args[0] = 1;
