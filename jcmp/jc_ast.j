@@ -101,7 +101,7 @@ int ast_nl;
 int ast_ok;                      // 0 while reading, set to 0 by the first thing that is not understood
 char ast_why[128];
 int ast_lower_on = 1;            // the functions of the subset are built from the tree (jc_astlow.j); -noast: all from the text
-int ast_main_on;                 // -astmain: main is made from the tree too (it is a little slower than the text: its variables get the registers by other weights)
+int ast_main_on = 1;             // main is made from the tree too (-noastmain: from the text)
 int ast_lower_report;            // -ast2: a line for every function that was tried
 int ast_report;                  // -xast
 int ast_dump;                    // -xastdump: the tree of every body that is in the subset

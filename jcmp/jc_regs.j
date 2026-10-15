@@ -240,7 +240,26 @@ void rg_lv_set(int line, int c) {
 
 // the live variable analysis for the candidates, then a linear scan: the slots that are live at the same time get different
 // registers, slots whose lives do not meet may share one
+int rg_debug;                    // -rgdbg: say what the register pass thinks of every slot of main (state, uses, weight)
+
 void rg_allocate(int epi, int is_main) {
+    if rg_debug == 1 && is_main == 1 {
+        int dw = 0;
+        while dw < 8192 {
+            if rg_tot[dw] > 0 {
+                write_err("slot ");
+                write_err_int(dw * 8);
+                write_err(" state ");
+                write_err_int(rg_state[dw]);
+                write_err(" uses ");
+                write_err_int(rg_tot[dw]);
+                write_err(" weight ");
+                write_err_int(rg_wt[dw]);
+                write_err("\n");
+            }
+            dw += 1;
+        }
+    }
     // the candidates: the slots that may move and are used often enough, the busiest 256
     rg_ncand = 0;
     int w = 0;

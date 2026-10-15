@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.157
+* **`main` is made from the syntax tree too** (hidden `-noastmain` goes back). The reason it was off in 0.9.156 was the layout of blocks, not the register pass: the text path writes a loop as test, body (falls through), jump back; the tree wrote test, exit, ... and the body at the end of the function, so the live range of a variable of the loop spanned everything in between and the variables of the later loops found no register. **The layout puts the side of a branch that leads back to the test (the body of a loop) next to the test now**, for all code (the benchmarks `arrays`, `strings`, `mandel`, `sha256` of the tree are at the speed of the text path again).
+* `-rgdbg` (hidden): what the register pass thinks of every slot of `main` (state, uses, weight).
+* The gate: 464 tests pass with the default and with `-noast`, 300 fuzz programs, `diffcheck` the same 2 differences, benchmarks equal within the noise of the phone. 1227 of 1671 functions of the corpus are built from the tree (the mains count now).
+* Counts of the lowering tests (`t405` .. `t419`) are one more each (the `main` of the test).
+
 ## 0.9.156
 * **Vectoriser: one pointer for all arrays that a loop walks together.** A vector loop used one pointer (a cell of the frame, loaded at every access) for each array; now the arrays of the same base whose offsets are equal modulo 16 and within 60000 bytes share one pointer, and the distance between the arrays goes into the offset of each `ldr q` / `str q`. `c[i] = a[i] + b[i] * k` was 3 pointers and 3 steps for each turn: now 1 and 1. The `arrays` benchmark (an `axpy`, a copy and a sum of 2048 elements, 60000 times) is 187 -> 139 ms.
 * `main` made from the tree is behind the hidden switch `-astmain` (it works and passes the tests, but the register pass gives the variables of `main` to other slots than the text path does and the `arrays` benchmark was 172 -> 210 ms, `strings` 72 -> 81 ms); every other function is made from the tree by default as before.

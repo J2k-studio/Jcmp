@@ -1137,6 +1137,41 @@ int lw_next(int b) {
 
 // the order of the blocks: a block is followed by the block it goes to when that has not been written yet (the false side of a branch
 // first), the last block of the function (the exit) is written at the end
+// can the flow get from the block s back to the block target without passing the exit block (a few blocks are looked at)? Used to
+// find the side of a branch that is the body of a loop: it is written next to the test, not the exit
+int lw_seen[IR_MAXB];
+int lw_seen_stamp;
+int lw_stack[256];
+
+bool lw_reaches(int s, int target) {
+    lw_seen_stamp += 1;
+    int sp = 0;
+    int visited = 0;
+    lw_stack[sp] = s;
+    sp += 1;
+    while sp > 0 && visited < 48 {
+        sp -= 1;
+        int cur = lw_stack[sp];
+        if cur == target { return true; }
+        if cur == ir_lastb || lw_seen[cur] == lw_seen_stamp { continue; }
+        lw_seen[cur] = lw_seen_stamp;
+        visited += 1;
+        int t = ir_be[cur] - 1;
+        int tk = ir_op[t];
+        if tk == IR_JMP {
+            if sp < 250 { lw_stack[sp] = ir_t1[t]; sp += 1; }
+        } else if tk == IR_BR || tk == IR_FBR {
+            if sp < 249 {
+                lw_stack[sp] = ir_t1[t];
+                sp += 1;
+                lw_stack[sp] = ir_t2[t];
+                sp += 1;
+            }
+        }
+    }
+    return false;
+}
+
 void lw_layout() {
     int b = 0;
     while b < ir_nb {
@@ -1159,6 +1194,9 @@ void lw_layout() {
                     if tk == IR_JMP { nx = ir_t1[t]; }
                     else if tk == IR_BR || tk == IR_FBR {
                         nx = ir_t2[t];
+                        // the side that comes back to this block is the body of a loop: it follows the test (the exit is written later)
+                        int tb = ir_t1[t];
+                        if tb != nx && lw_pos[tb] < 0 && tb != ir_lastb && lw_pos[nx] < 0 && lw_reaches(tb, cur) && !lw_reaches(nx, cur) { nx = tb; }
                         if nx == ir_lastb || lw_pos[nx] >= 0 { nx = ir_t1[t]; }
                     }
                 }
