@@ -1,7 +1,8 @@
-# J2K / Jcmp 0.9.146
+# J2K / Jcmp 0.9.147
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
 
+**0.9.147:** internal: `char` / `i32` values, arrays and pointers are made from the syntax tree as well (switch `-ast`, not on by default).
 **0.9.146:** internal: functions with pointers and arrays are made from the syntax tree as well (switch `-ast`, not on by default).
 **0.9.145:** internal: functions with `double` values are made from the syntax tree as well (switch `-ast`, not on by default).
 **0.9.144:** internal: a first part of the code of the compiler is made from the syntax tree instead of the text (switch `-ast`, not on by default).

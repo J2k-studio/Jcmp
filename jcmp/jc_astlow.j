@@ -27,24 +27,43 @@ int ast_lower_report;            // -ast2: a line for every function that was tr
 
 // ---------------------------------------------------------------- is the body in the subset?
 // the type of a node: kind 0 (scalar) and base 8 (int), 3 (bool) or 7 (double)
+// the width codes of the elements that are handled: 8 int, 7 double, 1 i8, 2 char, 4 i32 (the narrow ones are read and written with
+// their own width, as the text path does)
+bool as1_el(int b) {
+    return b == 8 || b == 7 || b == 1 || b == 2 || b == 4;
+}
+
+// bytes of one value of the width code, and the width that a load uses (negative: signed)
+int as1_bytes(int b) {
+    if b == 1 || b == 2 { return 1; }
+    if b == 4 { return 4; }
+    return 8;
+}
+
+int as1_lw(int b) {
+    if b == 1 { return 0 - 1; }
+    if b == 4 { return 0 - 4; }
+    return as1_bytes(b);
+}
+
 bool as1_scalar(int t) {
     if t / 65536 != 0 { return false; }
     int b = t % 65536;
-    return b == 8 || b == 3 || b == 7;
+    return b == 3 || as1_el(b);
 }
 
 // a pointer to a whole number or a double
 bool as1_ptr(int t) {
     if t / 65536 != 1 { return false; }
     int b = t % 65536;
-    return b == 8 || b == 7;
+    return as1_el(b);
 }
 
 // a fixed array of whole numbers or doubles
 bool as1_arr(int t) {
     if t / 65536 != 2 { return false; }
     int b = t % 65536;
-    return b == 8 || b == 7;
+    return as1_el(b);
 }
 
 bool as1_val(int t) {
@@ -73,9 +92,9 @@ bool as1_base(int n) {
     if k == AK_GVAR {
         int gi = ast_val[n];
         if gi < 0 || gdyn[gi] != 0 { return false; }
-        if gkind[gi] == 1 { return (gelem[gi] == 8 || gelem[gi] == 7) && gptr[gi] == 0 && gnd[gi] == 1 && as1_arr(t); }
+        if gkind[gi] == 1 { return as1_el(gelem[gi]) && gptr[gi] == 0 && gnd[gi] == 1 && as1_arr(t); }
         // a pointer variable: gptr is the width code of what it points to
-        return gkind[gi] == 0 && gelem[gi] == 8 && (gptr[gi] == 8 || gptr[gi] == 7) && as1_ptr(t) && t % 65536 == gptr[gi];
+        return gkind[gi] == 0 && gelem[gi] == 8 && as1_el(gptr[gi]) && as1_ptr(t) && t % 65536 == gptr[gi];
     }
     return false;
 }
@@ -128,7 +147,7 @@ bool as1_expr(int n) {
         int gi = ast_val[n];
         if gi < 0 { return false; }
         if as1_ptr(ty) { return as1_base(n); }
-        return gkind[gi] == 0 && (gelem[gi] == 8 || gelem[gi] == 7) && gptr[gi] == 0 && gdyn[gi] == 0 && as1_tid(gtid[gi]);
+        return gkind[gi] == 0 && (as1_el(gelem[gi]) || gelem[gi] == 3) && gptr[gi] == 0 && gdyn[gi] == 0 && as1_tid(gtid[gi]);
     }
     if k == AK_INDEX {
         if opt_debug == 1 || ast_c[n] != 0 || !as1_scalar(ty) { return false; }
@@ -148,7 +167,7 @@ bool as1_expr(int n) {
             int tt = ast_ty[t];
             if tk == AK_VAR { return (as1_scalar(tt) && !(tt % 65536 == 3)) || as1_arr(tt); }
             int gi2 = ast_val[t];
-            if gi2 < 0 || gdyn[gi2] != 0 || gptr[gi2] != 0 || (gelem[gi2] != 8 && gelem[gi2] != 7) { return false; }
+            if gi2 < 0 || gdyn[gi2] != 0 || gptr[gi2] != 0 || !as1_el(gelem[gi2]) { return false; }
             return (gkind[gi2] == 0 && as1_scalar(tt) && as1_tid(gtid[gi2])) || (gkind[gi2] == 1 && gnd[gi2] == 1);
         }
         if tk == AK_INDEX { return as1_expr(t); }
@@ -175,7 +194,7 @@ bool as1_expr(int n) {
     if k == AK_NOT { return as1_expr(ast_a[n]) && !as1_dbl(ast_ty[ast_a[n]]); }
     if k == AK_CAST {
         int tc = ast_val[n];
-        return (tc == 7 || tc == 8) && as1_scalar(ast_ty[ast_a[n]]) && as1_expr(ast_a[n]);
+        return (tc == 7 || as1_el(tc)) && as1_scalar(ast_ty[ast_a[n]]) && as1_expr(ast_a[n]);
     }
     if k == AK_CALL { return as1_call(n); }
     return false;
@@ -204,7 +223,7 @@ bool as1_stmt(int n) {
         int dt = ast_ty[n];
         if as1_arr(dt) {
             // a fixed array of one dimension with a number as its size, no initial values
-            return ast_a[n] == 0 && ast_b[n] > 0 && ast_b[n] < 4096;
+            return ast_a[n] == 0 && ast_b[n] > 0 && ast_b[n] < 65536;
         }
         if as1_ptr(dt) {
             if ast_a[n] == 0 { return true; }
@@ -377,6 +396,29 @@ void gl_load(int dst, int base, int off) {
     ir_w[e] = 8;
 }
 
+void gl_loadw(int dst, int base, int off, int w) {
+    gl_ensure();
+    int e = ir_add(IR_LOAD, dst, base, 0, 0, off);
+    ir_w[e] = w;
+}
+
+// the width of a load of the value of the node (a narrow variable or element: its own width)
+int gl_vw(int n) {
+    int t = at_ty[n];
+    if t / 65536 != 0 { return 8; }
+    return as1_lw(t % 65536);
+}
+
+// v1 = v1 wrapped to the width code (a store into a narrow variable wraps first, as store_scalar does)
+void gl_wrap(int code) {
+    if code != 1 && code != 2 && code != 4 { return; }
+    gl_ensure();
+    int bits = 8;
+    if code == 4 { bits = 32; }
+    int e = ir_add(IR_EXT, 1, 1, 0, 0, bits);
+    if code != 2 { ir_w[e] = 1; }
+}
+
 void gl_store(int base, int off, int val) {
     gl_ensure();
     int e = ir_add(IR_STORE, 0, base, val, 0, off);
@@ -467,7 +509,7 @@ void gl_operands_l(int b) {
         return;
     }
     if (k == AK_VAR || k == AK_GVAR) && !gl_isd(b) {
-        if k == AK_VAR { gl_load(2, 30, gl_off[at_val[b]]); } else { gl_load(2, 29, goff[at_val[b]]); }
+        if k == AK_VAR { gl_loadw(2, 30, gl_off[at_val[b]], gl_vw(b)); } else { gl_loadw(2, 29, goff[at_val[b]], gl_vw(b)); }
         return;
     }
     if gl_rdepth < 7 && !gl_has_call(b) {
@@ -753,8 +795,12 @@ void gl_addr(int n) {
     int boff = 0;
     int bvr = 30;
     if bk == AK_VAR { boff = gl_off[at_val[b]]; } else { boff = goff[at_val[b]]; bvr = 29; }
+    int es = as1_bytes(at_ty[n] % 65536);
+    int esh = 3;
+    if es == 4 { esh = 2; }
+    if es == 1 { esh = 0; }
     if at_kind[ix] == AK_NUM && at_val[ix] >= 0 && at_val[ix] < 4096 {
-        int eo = at_val[ix] * 8;
+        int eo = at_val[ix] * es;
         if is_arr {
             gl_ab = bvr;
             gl_ao = boff + eo;
@@ -767,7 +813,7 @@ void gl_addr(int n) {
     }
     gl_expr(ix);
     gl_ensure();
-    ir_add(IR_SHL, 1, 1, 3, 1, 0);
+    if esh != 0 { ir_add(IR_SHL, 1, 1, esh, 1, 0); }
     if is_arr && bvr == 29 {
         // a global array: the offset of the array goes to the load (`add x0, x28, x1, lsl #3` then `ldr x0, [x0, #off]`)
         ir_add(IR_ADD, 1, 1, 29, 0, 0);
@@ -832,7 +878,7 @@ void gl_assign_mem(int target, int value, int ao, int step) {
             fb = 2;
         }
         int le = ir_add(IR_LOAD, 1, fb, 0, 0, fo);
-        ir_w[le] = 8;
+        ir_w[le] = gl_vw(target);
         if step != 0 {
             ir_add(IR_ADD, 1, 1, step, 1, 0);
         } else if td {
@@ -856,7 +902,9 @@ void gl_assign_mem(int target, int value, int ao, int step) {
         if ar != 0 { ir_add(IR_COPY, 2, ar, 0, 0, 0); } else { gl_load(2, 30, c); }
         fb = 2;
     }
-    gl_store(fb, fo, 1);
+    gl_ensure();
+    int se = ir_add(IR_STORE, 0, fb, 1, 0, fo);
+    ir_w[se] = as1_bytes(at_ty[target] % 65536);
 }
 
 void gl_expr(int n) {
@@ -871,7 +919,7 @@ void gl_expr(int n) {
         return;
     }
     if k == AK_VAR || k == AK_GVAR {
-        if k == AK_VAR { gl_load(1, 30, gl_off[at_val[n]]); } else { gl_load(1, 29, goff[at_val[n]]); }
+        if k == AK_VAR { gl_loadw(1, 30, gl_off[at_val[n]], gl_vw(n)); } else { gl_loadw(1, 29, goff[at_val[n]], gl_vw(n)); }
         if gl_isd(n) { ir_add(IR_BITS2F, 32, 1, 0, 0, 0); }
         return;
     }
@@ -879,7 +927,7 @@ void gl_expr(int n) {
         gl_addr(n);
         gl_ensure();
         int le = ir_add(IR_LOAD, 1, gl_ab, 0, 0, gl_ao);
-        ir_w[le] = 8;
+        ir_w[le] = gl_vw(n);
         if gl_isd(n) { ir_add(IR_BITS2F, 32, 1, 0, 0, 0); }
         return;
     }
@@ -909,6 +957,7 @@ void gl_expr(int n) {
                 gl_ensure();
                 ir_add(IR_F2I, 1, 32, 0, 0, 0);
             }
+            gl_wrap(at_val[n]);
         }
         return;
     }
@@ -966,6 +1015,7 @@ void gl_block_list(int s) {
 void gl_store_var(int target) {
     gl_ensure();
     if gl_isd(target) { ir_add(IR_F2BITS, 1, 32, 0, 0, 0); }
+    if at_ty[target] / 65536 == 0 { gl_wrap(at_ty[target] % 65536); }
     if at_kind[target] == AK_VAR {
         gl_store(30, gl_off[at_val[target]], 1);
         gl_nz_clear(at_val[target]);
@@ -1008,6 +1058,7 @@ void gl_stmt(int n) {
             if dd { gl_expr_d(at_a[n]); } else { gl_expr(at_a[n]); }
             gl_ensure();
             if dd { ir_add(IR_F2BITS, 1, 32, 0, 0, 0); }
+            if at_ty[n] / 65536 == 0 { gl_wrap(at_ty[n] % 65536); }
             gl_store(30, gl_off[at_val[n]], 1);
         }
         gl_nz_clear(at_val[n]);
@@ -1158,8 +1209,9 @@ void gl_slots(int n) {
     } else if k == AK_DECL {
         if at_val[n] >= 0 && at_val[n] < 1024 { gl_off[at_val[n]] = gl_nslot; }
         if as1_arr(at_ty[n]) {
-            gl_hint_add2(gl_nslot, at_b[n] * 8, 0);
-            gl_nslot += at_b[n] * 8;
+            int asz = at_b[n] * as1_bytes(at_ty[n] % 65536);
+            gl_hint_add2(gl_nslot, asz, 0);
+            gl_nslot += (asz + 7) / 8 * 8;
         } else {
             gl_hint_add(gl_nslot);
             gl_nslot += 8;
