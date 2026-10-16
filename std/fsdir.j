@@ -155,3 +155,36 @@ struct Dir {
         return Result<String, Error>::Ok(s);
     }
 }
+
+// fs, dir: the short names of the library (Fs::fs.read(p), with  using Fs;  fs.read(p)). A failure is thrown as a text (try / catch);
+// try_name returns the Result. The long names above (Fs::read_text ...) keep working.
+struct __Fs {
+    static String read(String path) { return Fs::read_text(path).take(); }
+    static Result<String, Error> try_read(String path) { return Fs::read_text(path); }
+    static String[] lines(String path) { return Fs::read_lines(path).take(); }
+    static Result<String[], Error> try_lines(String path) { return Fs::read_lines(path); }
+    static int write(String path, String text) { return Fs::write_text(path, text).take(); }
+    static Result<int, Error> try_write(String path, String text) { return Fs::write_text(path, text); }
+    static int append(String path, String text) { return Fs::append_text(path, text).take(); }
+    static Result<int, Error> try_append(String path, String text) { return Fs::append_text(path, text); }
+    static bool exists(String path) { return Fs::exists(path); }
+    static int size(String path) { return Fs::size(path).take(); }
+    static Result<int, Error> try_size(String path) { return Fs::size(path); }
+    static int remove(String path) { return Fs::remove(path).take(); }
+    static Result<int, Error> try_remove(String path) { return Fs::remove(path); }
+    static int rename(String from, String to) { return Fs::rename(from, to).take(); }
+    static Result<int, Error> try_rename(String from, String to) { return Fs::rename(from, to); }
+}
+struct __Dir {
+    static bool exists(String path) { return Dir::exists(path); }
+    static int make(String path) { return Dir::make(path).take(); }
+    static Result<int, Error> try_make(String path) { return Dir::make(path); }
+    static int make_all(String path) { return Dir::make_all(path).take(); }
+    static Result<int, Error> try_make_all(String path) { return Dir::make_all(path); }
+    static int remove(String path) { return Dir::remove(path).take(); }
+    static Result<int, Error> try_remove(String path) { return Dir::remove(path); }
+    static String[] list(String path) { return Dir::list(path).take(); }
+    static Result<String[], Error> try_list(String path) { return Dir::list(path); }
+    static String current() { return Dir::current().take(); }
+    static Result<String, Error> try_current() { return Dir::current(); }
+}

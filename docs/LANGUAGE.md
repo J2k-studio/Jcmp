@@ -25,6 +25,8 @@ void main() {
 called `f32` and `f64`; the old names still work with a warning).
 
 `main` may be `void main()` or `int main()` (the returned number is the exit code).
+A new line is written `"\n"` (a backslash and n; not `"/n"`, which is a slash and the letter n and gets a warning) or with the word `nl`,
+which needs no backslash: `cout << x << nl;`. A single value, `cout << x;`, gets its new line by itself.
 Statements end with `;`. Blocks use `{ }` and are always required. `//` and `/* */` are comments.
 
 ## Types

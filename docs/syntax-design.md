@@ -2068,3 +2068,6 @@ Rules:
 4. The old names (`Fs::read_text`, `Net::tcp_listen`) keep working until 1.0.0.0.
 5. The syntax tree reads all of these forms (not only the text path), with tests for each.
 Work list: docs/design/14-modules.md section 6.
+
+## 78. `nl`: a new line without a backslash (owner, 2026-10-17: "have both `nl` and `\n`")
+Asked because `\` is awkward to type on a phone keyboard. Owner's answer: **both** `\n` (as before) and a word `nl`. `nl` is the character 10 and is used like any value: `cout << x << nl;`, `cout << "a" << nl << "b";`. A variable or function named `nl` hides it. `endl` is not added. Test: `t439_nl`. Also noted: `cout << x;` with one item adds the new line by itself (rule from earlier), `(char)10` always worked.

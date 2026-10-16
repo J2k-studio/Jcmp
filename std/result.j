@@ -5,6 +5,8 @@
 
 enum class ErrorKind { Other, NotFound, Denied, Invalid, Parse, Io };
 
+char error_text_buf[256];          // the text of a thrown error stays alive while the stack is unwound
+
 // the usual error: what went wrong (kind) and a message
 struct Error {
     ErrorKind kind;
@@ -14,6 +16,16 @@ struct Error {
         e.kind = kind;
         e.message = message;
         return e;
+    }
+    // throw a text (the short forms of the library throw instead of returning a Result; catch with try { } catch (e) { })
+    static void raise(char^ msg) {
+        int n = 0;
+        while msg[n] != 0 && n < 255 {
+            error_text_buf[n] = msg[n];
+            n += 1;
+        }
+        error_text_buf[n] = 0;
+        throw (char^)@error_text_buf;
     }
     // the reason of a system error number in words (a negative number from a system call is fine)
     static String reason(int e) {
@@ -83,6 +95,14 @@ enum class Option<T> { Some(T value), None;
 };
 
 enum class Result<T, E> { Ok(T value), Err(E error);
+    // the value, or the error is thrown as a text (the short forms of the library: fs.read(path), json.parse(text) ...)
+    T take(self) {
+        switch self^ {
+            Result::Ok(v): return v;
+            Result::Err(e): Error::raise(e.message.c());
+        }
+        Error::raise("take of an Err");
+    }
     bool is_ok(self) { return self.__tag == 0; }
     bool is_err(self) { return self.__tag == 1; }
     // the value (throws if it is an error)

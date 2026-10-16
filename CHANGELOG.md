@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.168
+* **Short names for nine modules (docs/syntax-design.md 75, 77):** with `using Fs;` (or the full name `Fs::fs.read(p)`): `fs.read`, `fs.lines`, `fs.write`, `fs.append`, `fs.exists`, `fs.size`, `fs.remove`, `fs.rename`; `dir.make`, `dir.make_all`, `dir.remove`, `dir.list`, `dir.current`, `dir.exists`; `path.join`, `path.name`, `path.parent`, `path.ext`, `path.stem`; `json.parse`, `json.quote`; `env.get`, `env.get_or`, `env.args`; `proc.run`, `proc.output`; `term.cols`; `time.now_ms`, `time.sleep_ms`; `random.range` ... A failure is **thrown** as a text (`try { } catch (e) { }`); `try_name(...)` returns the `Result`. The long names (`Fs::read_text`, ...) keep working. New: `Result::take()` and `Error::raise(text)`.
+* **`nl`** is a new line without a backslash: `cout << x << nl;` (`"\n"` still works).
+* **Fix: a dynamic array returned from a name that does not own it** (a name taken out of a data enum, a borrowed parameter) is returned as a copy. `Result<String[], Error>.unwrap()` freed the same array twice.
+* Gate: 496 tests pass (default and `-noast`), 300 fuzz programs, `diffcheck` the same 2 differences; 1790 of 2024 corpus functions from the tree. Tests: `t439_nl`, `t440_fs_module`, `t441_modules_misc`.
+
 ## 0.9.167
 * **All the mistakes of a file are shown, not only the first one.** After an error the compiler skips to the end of the statement (or the item) and goes on reading; at most 20 errors, then `too many errors`. `N errors generated.` closes the list. (`die_end` throws to `recover_statement` / `parse_program` in passes 1 and 2.)
 * **Clearer messages for common slips:** a statement outside a function (`while`, `if`, `cout`, `x = 5;` at the top of the file) says `a statement cannot be written here, outside a function` with the fix; `int main {` says the ( ) are missing and still reads the body; `while x = 2 {` says that = stores and == compares; the error about a file that cannot be read no longer starts with `:0:0:`.

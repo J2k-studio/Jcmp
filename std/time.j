@@ -48,3 +48,16 @@ struct Random {
         return (double)(Random::next() shr 10) / 9.007199254740992e15;
     }
 }
+
+// time, random: the short names (Time::time.now_ms(), with  using Time;  time.now_ms()  and  random.range(1, 6))
+struct __Time {
+    static int now_ms() { return Time::now_ms(); }
+    static int mono_ns() { return Time::mono_ns(); }
+    static void sleep_ms(int ms) { Time::sleep_ms(ms); }
+}
+struct __Random {
+    static void seed(int s) { Random::seed(s); }
+    static int next() { return Random::next(); }
+    static int range(int lo, int hi) { return Random::range(lo, hi); }
+    static double unit() { return Random::unit(); }
+}

@@ -1,6 +1,8 @@
-# J2K / Jcmp 0.9.167
+# J2K / Jcmp 0.9.168
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
+
+**0.9.168:** short names for `fs`, `dir`, `path`, `json`, `env`, `proc`, `term`, `time`, `random` (throw, `try_` for a Result); `nl`; a double-free fix for arrays returned out of a Result.
 
 **0.9.167:** every mistake in a file is shown (up to 20), clearer messages for a statement outside a function, a missing ( ) after a function name and `=` in a condition; warning for "/n".
 

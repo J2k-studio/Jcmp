@@ -152,3 +152,28 @@ struct Term {
         return n > 0;                                 // 0 is the end of the input: no key
     }
 }
+
+// env, proc, term: the short names (Env::env.get(name), with  using Env;  env.get(name))
+struct __Env {
+    static Option<String> get(String name) { return Env::get(name); }
+    static String get_or(String name, String fallback) {
+        Option<String> v = Env::get(name);
+        switch v {
+            Option::Some(s): return s;
+            Option::None: return fallback;
+        }
+        return fallback;
+    }
+    static String[] args() { return Env::args(); }
+}
+struct __Proc {
+    static int run(String cmd, String[] args) { return Proc::run(cmd, args).take(); }
+    static Result<int, Error> try_run(String cmd, String[] args) { return Proc::run(cmd, args); }
+    static String output(String cmd, String[] args) { return Proc::output(cmd, args).take(); }
+    static Result<String, Error> try_output(String cmd, String[] args) { return Proc::output(cmd, args); }
+}
+struct __Term {
+    static int cols() { return Term::cols(); }
+    static int rows() { return Term::rows(); }
+    static bool key_pressed() { return Term::key_pressed(); }
+}

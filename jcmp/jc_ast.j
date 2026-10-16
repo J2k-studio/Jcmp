@@ -1109,6 +1109,11 @@ int ast_primary() {
         return ast_node(AK_ADDR, tgt, 0, 0, 0);
     }
     if tok_kind == T_IDENT {
+        if tok_is("nl") && ast_find_local(@tok_text) < 0 && find_global(@tok_text) < 0 && find_func(@tok_text) < 0 {
+            next();
+            ast_cur_ty = ast_mkty(0, 2);
+            return ast_node(AK_NUM, 0, 0, 0, 10);               // nl : a new line, a char
+        }
         if tok_is("true") || tok_is("false") {
             int tv = 0;
             if tok_is("true") { tv = 1; }

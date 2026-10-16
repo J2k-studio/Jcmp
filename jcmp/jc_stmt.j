@@ -2542,6 +2542,18 @@ void parse_statement_inner() {
                     die_end();
                 }
             }
+            if cur_ret_isptr == 1 && cur_ret_str == 0 && ex_ty == 99 && rv_valid == 1 && pass_no >= 2 && own_find(rv_off) < 0 {
+                // a dynamic array that is only a name (taken out of a data enum, or a borrowed parameter) does not own its memory:
+                // the caller gets a copy, so that the memory is freed once (by the enum / by the owner of the parameter)
+                if is_strarr_dyn(ex_dyn) {
+                    rt_call("__Str__aclone");
+                } else if !(dyn_code(ex_dyn) >= 16 && dyn_code(ex_dyn) < 400 && dyn_ptr(ex_dyn) == 0 && struct_has_free(dyn_code(ex_dyn) - 16)) {
+                    rt_call("__Arr__clone");
+                }
+                ex_ty = 99;
+                last_call_owning = 1;
+                if cur_fidx >= 0 { fowned[cur_fidx] = 1; }      // this function hands a new array out
+            }
             check_assign(cur_ret_tid);
             if cur_ret_isptr == 0 { no_text_for_int(cur_ret_tid); } else { no_num_for_ptr(); }
             if rv_valid == 1 && cur_ret_isptr == 1 { ret_mv = own_find(rv_off); }

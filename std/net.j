@@ -135,17 +135,10 @@ struct Net {
 // an uncaught one stops the program with the text). The functions that return a Result instead are try_listen, try_accept, ...
 //   int l = tcp.listen(8080);   int c = tcp.accept(l);   String req = tcp.recv(c);   tcp.send(c, "hello");   tcp.close(c);
 //   int s = tcp.connect("127.0.0.1", 8080);
-char tcp_error_text[256];
 struct Tcp {
     // throw the message of the error (copied to a buffer that stays alive while the stack is unwound)
     static void fail(char^ msg) {
-        int n = 0;
-        while msg[n] != 0 && n < 255 {
-            tcp_error_text[n] = msg[n];
-            n += 1;
-        }
-        tcp_error_text[n] = 0;
-        throw (char^)@tcp_error_text;
+        Error::raise(msg);
     }
     static int take(Result<int, Error> r) {
         switch r {

@@ -45,3 +45,12 @@ struct Path {
         return n.slice(0, dot);
     }
 }
+
+// path: the module name of Path (Path::path.join(a, b), with  using Path;  path.join(a, b))
+struct __Path {
+    static String join(String a, String b) { return Path::join(a, b); }
+    static String name(String p) { return Path::name(p); }
+    static String parent(String p) { return Path::parent(p); }
+    static String ext(String p) { return Path::ext(p); }
+    static String stem(String p) { return Path::stem(p); }
+}

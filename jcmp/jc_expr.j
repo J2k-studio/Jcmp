@@ -116,16 +116,16 @@ char^ mod_row(int i, int col) {
     char^ ns = "";
     char^ md = "";
     char^ st = "";
-    if i == 0 { ns = "Fs"; md = "fs"; st = "Fs"; }
-    else if i == 1 { ns = "Fs"; md = "dir"; st = "Dir"; }
-    else if i == 2 { ns = "Path"; md = "path"; st = "Path"; }
-    else if i == 3 { ns = "Json"; md = "json"; st = "Json"; }
+    if i == 0 { ns = "Fs"; md = "fs"; st = "__Fs"; }
+    else if i == 1 { ns = "Fs"; md = "dir"; st = "__Dir"; }
+    else if i == 2 { ns = "Path"; md = "path"; st = "__Path"; }
+    else if i == 3 { ns = "Json"; md = "json"; st = "__Json"; }
     else if i == 4 { ns = "Net"; md = "tcp"; st = "Tcp"; }
-    else if i == 5 { ns = "Env"; md = "env"; st = "Env"; }
-    else if i == 6 { ns = "Proc"; md = "proc"; st = "Proc"; }
-    else if i == 7 { ns = "Term"; md = "term"; st = "Term"; }
-    else if i == 8 { ns = "Time"; md = "time"; st = "Time"; }
-    else if i == 9 { ns = "Time"; md = "random"; st = "Random"; }
+    else if i == 5 { ns = "Env"; md = "env"; st = "__Env"; }
+    else if i == 6 { ns = "Proc"; md = "proc"; st = "__Proc"; }
+    else if i == 7 { ns = "Term"; md = "term"; st = "__Term"; }
+    else if i == 8 { ns = "Time"; md = "time"; st = "__Time"; }
+    else if i == 9 { ns = "Time"; md = "random"; st = "__Random"; }
     else if i == 10 { ns = "Csv"; md = "csv"; st = "Csv"; }
     else if i == 11 { ns = "Toml"; md = "toml"; st = "Toml"; }
     else if i == 12 { ns = "Regex"; md = "regex"; st = "Regex"; }
@@ -4368,6 +4368,14 @@ void parse_unary_core() {
             emit_line("mov x0, 0");
             ex_w = 8;
             ex_ty = 97;
+            next();
+            return;
+        }
+        if tok_is("nl") && !lookup_var(@tok_text) && find_func(@tok_text) < 0 {
+            // nl : a new line (the character 10), for  cout << x << nl;  without typing a backslash
+            emit_line("mov x0, 10");
+            ex_w = 2;
+            ex_ty = 96;
             next();
             return;
         }
