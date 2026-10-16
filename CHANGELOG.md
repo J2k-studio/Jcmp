@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.165
+* **Keyboard input errors say what is wrong:** `cin >> x` with a wrong word throws `invalid input: a whole number was expected, but found 'n'` (was `invalid input`); a number followed by letters says where the number should have ended; the end of the input says what was expected.  The wrong word stays in the input, as before (a program that catches the error skips it with `cin >> word;`).
+* (The source of 0.9.164 on `main` already held this change by mistake while its binary did not; 0.9.165 makes them agree. A release now waits until nothing in the repository is edited.)
+* Gate: 489 tests pass (default and `-noast`), 300 fuzz programs, `diffcheck` the same 2 differences.
+
 ## 0.9.164
 * **`module.function(...)` for every library:** the lower-case name of a module (the struct with a capital letter) and a dot reach its static functions: `fs.read_text(p)`, `json.parse(t)`, `math.sqrt(x)`, `path.join(a, b)`. `Struct::function` and `using` keep working. A variable, a global, a function or an enum of the same name wins. (docs/syntax-design.md 75)
 * **New module `tcp`** (struct `Tcp` in `<net>`): `tcp.listen(8080)`, `tcp.accept(l)`, `tcp.connect(ip, port)`, `tcp.recv(c)`, `tcp.send(c, text)`, `tcp.close(c)`. An error is thrown as a text (`try { } catch (e) { }`); `tcp.try_listen` ... return a `Result` for `?`. The old `Net::` functions stay.

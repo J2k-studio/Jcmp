@@ -6166,8 +6166,8 @@ void push_prelude() {
     put("        }");
     put("        std_in_err[std_in_en] = 0;");
     put("    }");
-    put("    // throw \"invalid input: <what> was expected, but found 'x'\": c is the character that was found; the rest of the line is dropped");
-    put("    // so that a program that catches the error and asks again does not read the same wrong word twice");
+    put("    // throw \"invalid input: <what> was expected, but found 'x'\": c is the character that was found. The wrong word stays in the input");
+    put("    // (a program that catches the error skips it with  cin >> word;  see test t173)");
     put("    static void bad(char^ what, int c) {");
     put("        std_in_en = 0;");
     put("        __In::err_put(\"invalid input: \");");
@@ -6182,11 +6182,6 @@ void push_prelude() {
     put("            one[2] = 39;");
     put("            one[3] = 0;");
     put("            __In::err_put((char^)@one);");
-    put("        }");
-    put("        int d = __In::peek();");
-    put("        while d >= 0 && d != 10 {");
-    put("            std_in_pos += 1;");
-    put("            d = __In::peek();");
     put("        }");
     put("        throw (char^)@std_in_err;");
     put("    }");

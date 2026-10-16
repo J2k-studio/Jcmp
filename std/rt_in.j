@@ -28,8 +28,8 @@ struct __In {
         }
         std_in_err[std_in_en] = 0;
     }
-    // throw "invalid input: <what> was expected, but found 'x'": c is the character that was found; the rest of the line is dropped
-    // so that a program that catches the error and asks again does not read the same wrong word twice
+    // throw "invalid input: <what> was expected, but found 'x'": c is the character that was found. The wrong word stays in the input
+    // (a program that catches the error skips it with  cin >> word;  see test t173)
     static void bad(char^ what, int c) {
         std_in_en = 0;
         __In::err_put("invalid input: ");
@@ -44,11 +44,6 @@ struct __In {
             one[2] = 39;
             one[3] = 0;
             __In::err_put((char^)@one);
-        }
-        int d = __In::peek();
-        while d >= 0 && d != 10 {
-            std_in_pos += 1;
-            d = __In::peek();
         }
         throw (char^)@std_in_err;
     }

@@ -1,6 +1,8 @@
-# J2K / Jcmp 0.9.164
+# J2K / Jcmp 0.9.165
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
+
+**0.9.165:** input errors of `cin` say what was expected and what was found.
 
 **0.9.164:** `module.function(...)` for every library (`fs.read_text`, `math.sqrt`), new module `tcp` (`tcp.listen(8080)`).
 
