@@ -1594,12 +1594,17 @@ int ast_decl(int base) {
     }
     int dims = 0;
     int dcount = 0 - 1;                      // the number of elements of a one dimensional array with a number as its size
+    int dsz0 = 0;                            // the sizes of the first dimensions (0: not a number)
+    int dsz1 = 0;
+    int dsz2 = 0;
     while tok_is("[") {
         next();
         if tok_is("]") {
             // an array whose size comes from its initial list
         } else if tok_kind == T_NUM && tok_float == 0 {
-            if dims == 0 { dcount = tok_num; }
+            if dims == 0 { dcount = tok_num; dsz0 = tok_num; }
+            if dims == 1 { dsz1 = tok_num; }
+            if dims == 2 { dsz2 = tok_num; }
             next();
         } else {
             int sz = ast_expr(0);
@@ -1651,6 +1656,21 @@ int ast_decl(int base) {
     ast_cur_ty = ast_mkty(kind, base);                // the type of the variable
     int dn2 = ast_node(AK_DECL, init, 0, 0, ast_lid[di]);
     if dn2 != 0 && kind == 2 && dims == 1 { ast_b[dn2] = dcount; } else if dn2 != 0 { ast_b[dn2] = 0 - 1; }
+    if dn2 != 0 && kind == 2 && (dims == 2 || dims == 3) && dsz0 > 0 && dsz1 > 0 && (dims == 2 || dsz2 > 0) && init == 0 {
+        // a table: the number of elements, and the elements that one step of the first and of the second index skips
+        int tot = dsz0 * dsz1;
+        int s1 = dsz1;
+        int s2 = 0;
+        if dims == 3 {
+            tot = tot * dsz2;
+            s1 = dsz1 * dsz2;
+            s2 = dsz2;
+        }
+        if tot < 65536 && s1 < 65536 {
+            ast_b[dn2] = tot;
+            ast_c[dn2] = s1 + s2 * 65536;
+        }
+    }
     return dn2;
 }
 

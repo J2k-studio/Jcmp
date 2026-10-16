@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.174
+* **AST A6:** tables of two and three dimensions (local and global: `grid[i][j]`, `cube[i][j][k]`), `a.len` of fixed arrays (the first dimension for a table), `text.split(sep)`, functions that return a `char` or a `char^`, and the methods of structs that give a String list are made from the tree. 1942 of 2099 corpus functions (92.5%).
+* Fix (inside the tree lowering): a call of a runtime routine with three or more arguments could pass a stale register as the third one (`gl_rt2`).
+* Gate: 515 tests pass (default and `-noast`), 300 fuzz programs, `diffcheck` the same 2 differences. Tests: `t451_ast_tables`, `t452_ast_split`.
+
 ## 0.9.173
 * **AST A6:** `for x in things { }` (arrays of numbers, pointers and Strings, the chars of a String, fixed arrays, lists that a call made), `move(p)`, `alloc[...]` / `free[...]` / `grow[...]` / `arr[n]` (the tree now reads the parser's own rewriting), `sizeof(expression)`, pointers to `void`, casts of a pointer to a number, the call `alloc(n)` whose result is not used, String methods on a new String (`(a + b).trim()`), `c()` and `replace`, methods of arrays of numbers (`sort` `remove` `insert` `contains` `index_of`), methods of structs that give a list, arrays of `bool` (local, global, parameter), `cout` of a global array of chars. 1908 of 2088 corpus functions (91%).
 * `-ast2` names the smallest part of a statement that the tree lowering does not take (`culprit:`).
