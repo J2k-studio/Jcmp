@@ -826,8 +826,8 @@ int lam_params() {
             parse_type();
             int pt = ty_tid;
             if ty_ptr != 0 { pt = 0; }
-            if ty_void == 1 && ty_ptr == 0 { die("a parameter type cannot be void"); }
-            if tok_kind != T_IDENT { die("a parameter name was expected"); }
+            if ty_void == 1 && ty_ptr == 0 { die_help("a parameter type cannot be void", "void is only for functions that give no value; use int, double, ... for a parameter"); }
+            if tok_kind != T_IDENT { die_help("a parameter name was expected", "write the type and then the name: int count"); }
             if pn >= 8 { die("a lambda has at most 8 parameters"); }
             lam_ptmp[pn] = pt;
             pn += 1;
@@ -1466,7 +1466,7 @@ int gen_data_enum(char^ b, int s, int n, int line) {
             methods = q + 1;
             break;
         }
-        if !is_letter(b[q]) { die("an enum member name was expected"); }
+        if !is_letter(b[q]) { die_help("an enum member name was expected", "write the names of the members: enum class Color { Red, Green }"); }
         if m_n >= 64 { die("too many members in a data enum"); }
         int we = gen_word(b, q, close, @m_name + m_n * 64);
         m_ps[m_n] = 0 - 1;

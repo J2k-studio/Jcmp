@@ -803,7 +803,12 @@ int ast_static_call(bool as_value) {
     int pool2 = ast_pool_add(@tok_text);
     next();                                  // the function name; the current token is (
     if !tok_is("(") {
-        // a member of a data enum written without values (`Option::None`): the library makes it with a function
+        // a member of a data enum written without values (`Option::None`): the library makes it with a function that has no
+        // parameter: a call
+        if fnpar[fi] == 0 && fvoid[fi] == 0 && fop[fi] == 0 {
+            ast_cur_ty = ast_fn_ty(fi);
+            return ast_postfix(ast_node(AK_CALL, 0, 0, 0, fi), ast_cur_ty / 65536, ast_cur_ty % 65536);
+        }
         ast_cur_ty = ast_mkty(0, 0);
         return ast_enumv(0, 0, ast_classify(@full_q, @ast_pool + pool2), pool2);
     }
@@ -1560,10 +1565,129 @@ int ast_case_patterns() {
     return first;
 }
 
+// the cases of a switch on a data enum (a struct with a tag): `Enum::Member` or `Enum::Member(a, b)`; `_`. Each case: the patterns are
+// numbers (the index of the member in its enum), the names that it binds go to a chain of AK_VAR nodes (val = the local, b = the field of
+// the struct, the type is the type of the local) in the field c of the case; the cases are returned
+int ast_cbinds;
+int ast_data_case(int sd, int d) {
+    int first = 0;
+    int last = 0;
+    ast_cbinds = 0;
+    int bfirst = 0;
+    int blast = 0;
+    int bound_gv = 0 - 1;
+    while true {
+        int item = 0;
+        if tok_kind == T_IDENT && tok_is("_") {
+            next();
+        } else if tok_kind == T_IDENT {
+            int gv = 0 - 1;
+            if dv_using(d) && dv_variant(d, @tok_text) >= 0 && !dv_label_ok(d, @tok_text) {
+                gv = dv_variant(d, @tok_text);
+                next();
+            } else {
+                if !dv_label_ok(d, @tok_text) {
+                    ast_fail("a case of a data enum that is not Enum::Member");
+                    return 0;
+                }
+                next();
+                if !tok_is("::") {
+                    ast_fail("a case of a data enum that is not Enum::Member");
+                    return 0;
+                }
+                next();
+                if tok_kind != T_IDENT {
+                    ast_fail("a name of a member was expected");
+                    return 0;
+                }
+                gv = dv_variant(d, @tok_text);
+                next();
+            }
+            if gv < 0 {
+                ast_fail("a member that is not in the enum");
+                return 0;
+            }
+            ast_cur_ty = ast_mkty(0, 8);
+            item = ast_node(AK_NUM, 0, 0, 0, gv - dv_first_of(d));
+            if tok_is("(") {
+                next();
+                bound_gv = gv;
+                int k = 0;
+                while !tok_is(")") {
+                    if tok_kind != T_IDENT {
+                        ast_fail("a name of a pattern was expected");
+                        return 0;
+                    }
+                    if !tok_is("_") {
+                        // the field of the member and the type of the name (as the text parser makes the local)
+                        char^ want = dv_pfield(gv, k);
+                        int fi = 0 - 1;
+                        int fk = sfirst[sd];
+                        while fk < sfirst[sd] + snf[sd] {
+                            if str_eq(@fldname + fk * 64, want) { fi = fk; }
+                            fk += 1;
+                        }
+                        if fi < 0 {
+                            ast_fail("a member of a data enum without its field");
+                            return 0;
+                        }
+                        int bl = ast_add_local(@tok_text);
+                        if bl < 0 { return 0; }
+                        int bk = 0;
+                        int bb = 8;
+                        if flddyn[fi] != 0 {
+                            if is_str_dyn(flddyn[fi]) { bk = 4; bb = 8; } else { bk = 5; bb = ast_dyn_base(flddyn[fi]); }
+                        } else if fldcode[fi] >= 16 && fldptr[fi] == 0 && fldcode[fi] < 400 {
+                            if struct_has_free(fldcode[fi] - 16) { bk = 1; bb = fldcode[fi]; } else { bk = 3; bb = fldcode[fi]; }
+                        } else if fldptr[fi] != 0 {
+                            bk = 1;
+                            bb = fldptr[fi];
+                        } else if fldtid[fi] >= 3 && fldtid[fi] < 90 {
+                            bk = 6;
+                            bb = fldtid[fi];
+                        } else {
+                            bk = 0;
+                            bb = fldcode[fi];
+                        }
+                        ast_lkind[bl] = bk;
+                        ast_lbase[bl] = bb;
+                        ast_cur_ty = ast_mkty(bk, bb);
+                        int bn = ast_node(AK_VAR, 0, fi, 0, ast_lid[bl]);
+                        if bfirst == 0 { bfirst = bn; } else { ast_nx[blast] = bn; }
+                        blast = bn;
+                    }
+                    k += 1;
+                    next();
+                    if tok_is(",") { next(); }
+                }
+                next();
+            }
+        } else {
+            ast_fail("a case of a data enum that is not understood");
+            return 0;
+        }
+        if item != 0 {
+            if first == 0 { first = item; } else { ast_nx[last] = item; }
+            last = item;
+        }
+        if tok_is(",") { next(); } else { break; }
+    }
+    ast_cbinds = bfirst;
+    return first;
+}
+
 int ast_switch() {
     next();                                  // switch
     int v = ast_expr(0);
     if ast_ok == 0 { return 0; }
+    // a data enum: a struct that dv_find knows by its name
+    int data_sd = 0 - 1;
+    int data_d = 0 - 1;
+    if ast_ty[v] / 65536 == 3 && ast_ty[v] % 65536 >= 16 && ast_ty[v] % 65536 < 16 + scount {
+        int sd0 = ast_ty[v] % 65536 - 16;
+        int d0 = dv_find(@sname + sd0 * 64);
+        if d0 >= 0 { data_sd = sd0; data_d = d0; }
+    }
     if !tok_is("{") {
         ast_fail("a switch that is not understood");
         return 0;
@@ -1577,7 +1701,14 @@ int ast_switch() {
             return 0;
         }
         int saved_nl = ast_nl;
-        int pats = ast_case_patterns();
+        int pats = 0;
+        int cbinds = 0;
+        if data_sd >= 0 {
+            pats = ast_data_case(data_sd, data_d);
+            cbinds = ast_cbinds;
+        } else {
+            pats = ast_case_patterns();
+        }
         if ast_ok == 0 { return 0; }
         if !tok_is(":") {
             ast_fail("a case that is not understood");
@@ -1588,12 +1719,14 @@ int ast_switch() {
         if tok_is("{") { body = ast_block(); } else { body = ast_stmt(); }
         ast_nl = saved_nl;
         if ast_ok == 0 { return 0; }
-        int cs = ast_node(AK_CASE, pats, body, 0, 0);
+        int cs = ast_node(AK_CASE, pats, body, cbinds, 0);
         if first == 0 { first = cs; } else { ast_nx[last] = cs; }
         last = cs;
     }
     next();
-    return ast_node(AK_SWITCH, v, first, 0, 0);
+    int sw_data = 0;
+    if data_sd >= 0 { sw_data = 1; }
+    return ast_node(AK_SWITCH, v, first, 0, sw_data);
 }
 
 int ast_try() {

@@ -264,7 +264,7 @@ void parse_type() {
                 parse_type();
                 int pt = ty_tid;
                 if ty_ptr != 0 { pt = 0; }
-                if ty_void == 1 && ty_ptr == 0 { die("a parameter type cannot be void"); }
+                if ty_void == 1 && ty_ptr == 0 { die_help("a parameter type cannot be void", "void is only for functions that give no value; use int, double, ... for a parameter"); }
                 if pn >= 8 { die("a function pointer type has at most 8 parameters"); }
                 ptmp[pn] = pt;
                 pn += 1;
@@ -366,7 +366,7 @@ void parse_assign_core(char^ target) {
         if for_step == 0 { expect(";"); }
         return;
     }
-    if lv_swz == 1 { die("a swizzle with several components can only be read (assign the parts one by one: v.x = ...)"); }
+    if lv_swz == 1 { die_help("a swizzle with several components can only be read", "assign the parts one by one: v.x = ..."); }
     if lv_base_local == 0 && pass_no >= 2 {
         // a write to a global variable that is read-only (#pragma read): the plain variable, or an element / field of it
         int ro_g = find_global(@id_name);
@@ -740,9 +740,9 @@ void parse_for_each(char^ f_name, int lstart, int lbody, int lstep, int lend, in
         count = ex_arr_cnt;
         code = ex_arr_code;
     } else if pass_no >= 2 {
-        die("for x in ... needs an array, a dynamic array, a String or a range a..b");
+        die_help("for x in ... needs an array, a dynamic array, a String or a range a..b", "write for i in 0..n { }, or for x in list { }");
     }
-    if code >= 16 && eptr == 0 && pass_no >= 2 { die("for x in ... does not work on an array of structs (use an index)"); }
+    if code >= 16 && eptr == 0 && pass_no >= 2 { die_help("for x in ... does not work on an array of structs", "use an index"); }
     int elem_str = 0;
     if is_strarr_dyn(info) { elem_str = 1; }
     int seq_new = 0;
@@ -1079,7 +1079,7 @@ void parse_cout() {
         }
         c_count += 1;
     }
-    if c_count == 0 { die("<< expected after cout"); }
+    if c_count == 0 { die_help("<< expected after cout", "write cout << value;"); }
     if !tok_is(";") {
         if err_line > prev_tok_line && prev_tok_line > 0 { missing_semicolon(1); return; }
         die("expected ';' or '<<' here (is a '<<' missing between two values?)");
@@ -1113,7 +1113,7 @@ void read_into_object(int is_f) {
         return;
     }
     if lv_kind != 0 || lv_ptr != 0 || lv_code >= 16 || lv_tid == 1 || (lv_tid >= 3 && lv_tid < 90) {
-        die("cin cannot read into this variable (use a number, a char, a float, a String or a char array)");
+        die_help("cin cannot read into this variable", "use a number, a char, a float, a String or a char array");
     }
     int code = lv_code;
     bool is_float_code = code == 6 || code == 7;
@@ -1162,11 +1162,11 @@ void parse_cin() {
         if !lookup_var(@ci_name) { die_name("unknown name", @ci_name); }
         uninit_clear(@ci_name);
         parse_lvalue();
-        if lv_done == 1 { die("cin needs a variable to read into"); }
+        if lv_done == 1 { die_help("cin needs a variable to read into", "write cin >> name;"); }
         read_into_object(is_f);
         count += 1;
     }
-    if count == 0 { die(">> expected after cin"); }
+    if count == 0 { die_help(">> expected after cin", "write cin >> name;"); }
     if !tok_is(";") {
         if err_line > prev_tok_line && prev_tok_line > 0 { missing_semicolon(1); return; }
         die("expected ';' or '>>' here (is a '>>' missing between two variables?)");
@@ -1195,7 +1195,7 @@ int parse_dims() {
             nd = 1;
         } else {
             int dsz = const_int_expr("an array size (a number) was expected");
-            if dsz <= 0 { die("bad array size"); }
+            if dsz <= 0 { die_help("bad array size", "the size must be a number (or a #define of a number) greater than 0"); }
             dims[nd] = dsz;
             if pd_total >= 0 { pd_total = pd_total * dsz; }
             nd += 1;
@@ -1243,7 +1243,7 @@ void parse_enum() {
     expect("{");
     int next_val = 0;
     while !tok_is("}") {
-        if tok_kind != T_IDENT { die("an enum member name was expected"); }
+        if tok_kind != T_IDENT { die_help("an enum member name was expected", "write the names of the members: enum class Color { Red, Green }"); }
         int mi = emcount;
         if register_members == 1 {
             if emcount >= 8192 { die("too many enum members"); }
@@ -1411,20 +1411,20 @@ int ci_level(int lvl, char^ what) {
         if lvl == 0 && tok_is("|") { next(); v = v | ci_level(1, what); }
         else if lvl == 1 && tok_is("xor") { next(); v = v xor ci_level(2, what); }
         else if lvl == 2 && tok_is("&") { next(); v = v & ci_level(3, what); }
-        else if lvl == 3 && tok_is("<<") { next(); int sh = ci_level(4, what); if sh < 0 || sh > 62 { die("a shift is 0 .. 63 places"); } v = v << sh; }
-        else if lvl == 3 && tok_is(">>") { next(); int sh2 = ci_level(4, what); if sh2 < 0 || sh2 > 62 { die("a shift is 0 .. 63 places"); } v = v >> sh2; }
+        else if lvl == 3 && tok_is("<<") { next(); int sh = ci_level(4, what); if sh < 0 || sh > 62 { die_help("a shift is 0 .. 63 places", "write a number from 0 to 63 after << or >>"); } v = v << sh; }
+        else if lvl == 3 && tok_is(">>") { next(); int sh2 = ci_level(4, what); if sh2 < 0 || sh2 > 62 { die_help("a shift is 0 .. 63 places", "write a number from 0 to 63 after << or >>"); } v = v >> sh2; }
         else if lvl == 4 && tok_is("+") { next(); v = v + ci_level(5, what); }
         else if lvl == 4 && tok_is("-") { next(); v = v - ci_level(5, what); }
         else if lvl == 5 && tok_is("*") { next(); v = v * ci_level(6, what); }
         else if lvl == 5 && tok_is("/") {
             next();
             int dv = ci_level(6, what);
-            if dv == 0 { die("division by zero in a constant"); }
+            if dv == 0 { die_help("division by zero in a constant", "the right side of / or % is 0"); }
             v = v / dv;
         } else if lvl == 5 && tok_is("%") {
             next();
             int dm = ci_level(6, what);
-            if dm == 0 { die("division by zero in a constant"); }
+            if dm == 0 { die_help("division by zero in a constant", "the right side of / or % is 0"); }
             v = v % dm;
         } else { break; }
     }
@@ -1483,10 +1483,10 @@ int parse_const() {
         } else if find_using_member(@cn) {
             v = found_val;
         } else {
-            die("a constant was expected");
+            die_help("a constant was expected", "write a number, a character or an enum member here");
         }
     } else {
-        die("a constant was expected");
+        die_help("a constant was expected", "write a number, a character or an enum member here");
     }
     if neg == 1 { v = 0 - v; }
     return v;
@@ -1507,7 +1507,7 @@ void parse_switch_data(int sw_off, int sd, int sv_line, int sv_col, int sv_base,
     int ldef = 0;
     expect("{");
     while !tok_is("}") {
-        if tok_kind == T_EOF { die("} expected"); }
+        if tok_kind == T_EOF { die_help("} expected", "a '{' was opened and is not closed; check the braces above this place"); }
         int lbody = new_label();
         int lnext = new_label();
         int mark = lcount;
@@ -1534,7 +1534,7 @@ void parse_switch_data(int sw_off, int sd, int sv_line, int sv_col, int sv_base,
                     }
                     next();
                     expect("::");
-                    if tok_kind != T_IDENT { die("a member name was expected"); }
+                    if tok_kind != T_IDENT { die_help("a member name was expected", "write the name of a field or a method after the dot"); }
                     gv = dv_variant(d, @tok_text);
                     if gv < 0 { die_name("not a member of the enum", @tok_text); }
                     next();
@@ -1698,7 +1698,7 @@ void parse_switch() {
     int ldef = 0;
     expect("{");
     while !tok_is("}") {
-        if tok_kind == T_EOF { die("} expected"); }
+        if tok_kind == T_EOF { die_help("} expected", "a '{' was opened and is not closed; check the braces above this place"); }
         int lbody = new_label();
         int lnext = new_label();
         if tok_is("_") {
@@ -1913,7 +1913,7 @@ void parse_try() {
     jump(lend);
     place_label(lcatch);
     try_regs("ldr", snap);
-    if !tok_is("catch") { die("catch expected after the try block"); }
+    if !tok_is("catch") { die_help("catch expected after the try block", "write catch (e) { ... } right after the block of try"); }
     next();
     expect("(");
     if tok_kind != T_IDENT { die("a name for the thrown text was expected"); }
@@ -1937,7 +1937,7 @@ void parse_throw() {
     fn_returns = 1;
     next();                              // "throw"
     parse_expr();
-    if ex_w != 9 && pass_no >= 2 { die("throw needs text (a string or a char array)"); }
+    if ex_w != 9 && pass_no >= 2 { die_help("throw needs text (a string or a char array)", "write throw \"what went wrong\";"); }
     expect(";");
     emit_line("bl j2k_throw");
 }
@@ -1997,7 +1997,7 @@ void parse_local_decl_core() {
         expect(";");
         return;
     }
-    if ty_void == 1 && ty_ptr == 0 { die("a variable cannot be void"); }
+    if ty_void == 1 && ty_ptr == 0 { die_help("a variable cannot be void", "void is only for functions that give no value; use int, double, ... for a variable"); }
     int d_elem = ty_elem;
     int d_width = ty_width;
     int d_ptr = ty_ptr;
@@ -2040,19 +2040,19 @@ void parse_local_decl_core() {
                 if d_nd != 1 { die("only a one-dimensional array can start from a list of values"); }
                 if d_elem >= 16 && d_ptr == 0 { die("an array of structs cannot start from a list of values yet"); }
                 d_list = count_values_from(0);                  // the current token is the {: its characters are already read
-                if d_list < 0 { die("a } was expected"); }
+                if d_list < 0 { die_help("a } was expected", "a '{' was opened and is not closed; check the braces above this place"); }
                 if d_count < 0 { d_count = d_list; }
-                if d_list > d_count { die("more values than the array can hold"); }
+                if d_list > d_count { die_help("more values than the array can hold", "make the array bigger or give fewer values"); }
             } else {
             if tok_kind != T_STR { die("a string was expected"); }
-            if size_of(d_elem) != 1 { die("only a char array can start from a string"); }
+            if size_of(d_elem) != 1 { die_help("only a char array can start from a string", "write char name[N] = \"text\"; for other arrays give a list {a, b, c}"); }
             if d_nd != 1 { die("only a one-dimensional array can start from a string"); }
             d_str = 1;
             if d_count < 0 { d_count = tok_str_len + 1; }
-            if tok_str_len + 1 > d_count { die("the string does not fit in the array"); }
+            if tok_str_len + 1 > d_count { die_help("the string does not fit in the array", "make the char array bigger: the text and its end mark (0) must fit"); }
             }
         } else {
-            if d_count < 0 { die("an array size (a number) was expected"); }
+            if d_count < 0 { die_help("an array size (a number) was expected", "write the number of elements between [ ]: int a[10]"); }
             expect(";");
         }
         ty_tid = d_tid;
@@ -2068,7 +2068,7 @@ void parse_local_decl_core() {
             next();                      // the {
             int l_i = 0;
             while !tok_is("}") {
-                if l_i >= d_count { die("more values than the array can hold"); }
+                if l_i >= d_count { die_help("more values than the array can hold", "make the array bigger or give fewer values"); }
                 parse_expr();
                 check_assign(l_tid);
                 emit_line("mov x1, x0");
@@ -2410,7 +2410,7 @@ void parse_statement_inner() {
         } else {
             fn_returns = 1;
             if cur_fidx >= 0 && fvoid[cur_fidx] == 1 && cur_is_main == 0 && pass_no >= 2 {
-                die("a void function cannot return a value (remove the value, or declare a return type)");
+                die_help("a void function cannot return a value", "remove the value, or declare a return type");
             }
             parse_expr();
             if cur_ret_str == 1 && pass_no >= 2 {
@@ -2749,8 +2749,8 @@ void parse_function() {
         while true {
             parse_type();
             if ty_void == 1 && ty_ptr == 0 { die("a parameter cannot be void"); }
-            if tok_kind != T_IDENT { die("a parameter name was expected"); }
-            if nparams >= 16 { die("too many parameters (16 at most)"); }
+            if tok_kind != T_IDENT { die_help("a parameter name was expected", "write the type and then the name: int count"); }
+            if nparams >= 16 { die_help("too many parameters (16 at most)", "pass a struct or a pointer to a struct instead of many values"); }
             char p_name[256];
             str_copy(@p_name, @tok_text, 256);
             int p_tid = ty_tid;
@@ -2763,7 +2763,7 @@ void parse_function() {
                 // T name[] : an address and a length (name__len) arrive together
                 next();
                 expect("]");
-                if nparams >= 15 { die("too many parameters (16 at most)"); }
+                if nparams >= 15 { die_help("too many parameters (16 at most)", "pass a struct or a pointer to a struct instead of many values"); }
                 ty_tid = 0;
                 add_local(@p_name, 0, 8, 8, ty_elem);
                 emit_param_store(nparams, loff[lcount - 1]);
@@ -2982,21 +2982,21 @@ void parse_global(char^ name) {
                 // double dist[3] = {1.0, 2.0, 3.0};   constants only
                 if g_nd != 1 { die("only a one-dimensional array can start from a list of values"); }
                 if g_elem >= 16 && g_ptr == 0 { die("an array of structs cannot start from a list of values yet"); }
-                if g_elem == 6 { die("a global float array cannot start from a list of values (use double, or set it in main)"); }
+                if g_elem == 6 { die_help("a global float array cannot start from a list of values", "use double, or set it in main"); }
                 g_list = count_values_from(0);
-                if g_list < 0 { die("a } was expected"); }
+                if g_list < 0 { die_help("a } was expected", "a '{' was opened and is not closed; check the braces above this place"); }
                 if g_count < 0 { g_count = g_list; }
-                if g_list > g_count { die("more values than the array can hold"); }
+                if g_list > g_count { die_help("more values than the array can hold", "make the array bigger or give fewer values"); }
             } else {
             if tok_kind != T_STR { die("a string was expected"); }
-            if size_of(g_elem) != 1 { die("only a char array can start from a string"); }
+            if size_of(g_elem) != 1 { die_help("only a char array can start from a string", "write char name[N] = \"text\"; for other arrays give a list {a, b, c}"); }
             if g_nd != 1 { die("only a one-dimensional array can start from a string"); }
             g_str = 1;
             if g_count < 0 { g_count = tok_str_len + 1; }
-            if tok_str_len + 1 > g_count { die("the string does not fit in the array"); }
+            if tok_str_len + 1 > g_count { die_help("the string does not fit in the array", "make the char array bigger: the text and its end mark (0) must fit"); }
             }
         } else {
-            if g_count < 0 { die("an array size (a number) was expected"); }
+            if g_count < 0 { die_help("an array size (a number) was expected", "write the number of elements between [ ]: int a[10]"); }
             expect(";");
         }
         ty_tid = g_tid;
@@ -3044,7 +3044,7 @@ void parse_global(char^ name) {
                     }
                 }
                 gl_i += 1;
-                if gl_i > g_count { die("more values than the array can hold"); }
+                if gl_i > g_count { die_help("more values than the array can hold", "make the array bigger or give fewer values"); }
                 if tok_is(",") { next(); } else { break; }
             }
             if !tok_is("}") { die("} expected at the end of the list of values"); }
@@ -3145,7 +3145,7 @@ void parse_struct() {
     expect("{");
     int off = 0;
     while !tok_is("}") {
-        if tok_kind == T_EOF { die("} expected"); }
+        if tok_kind == T_EOF { die_help("} expected", "a '{' was opened and is not closed; check the braces above this place"); }
         int is_static = 0;
         op_pending = 0;
         if tok_is("operator") {
@@ -3157,7 +3157,7 @@ void parse_struct() {
             next();
         }
         parse_type();
-        if tok_kind != T_IDENT { die("a field or method name was expected"); }
+        if tok_kind != T_IDENT { die_help("a field or method name was expected", "write the name after the dot"); }
         char m_name[256];
         str_copy(@m_name, @tok_text, 256);
         int f_code = ty_elem;
@@ -3258,7 +3258,7 @@ void parse_top_item() {
         return;
     }
     if fn_naked == 1 || fn_noreturn == 1 || fn_interrupt == 1 || fn_align != 0 { die("naked, noreturn, interrupt and align(N) are for functions"); }
-    if ty_void == 1 && ty_ptr == 0 { die("a variable cannot be void"); }
+    if ty_void == 1 && ty_ptr == 0 { die_help("a variable cannot be void", "void is only for functions that give no value; use int, double, ... for a variable"); }
     parse_global(@d_fname);
 }
 

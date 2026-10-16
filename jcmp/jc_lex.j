@@ -1211,7 +1211,7 @@ void next() {
         }
         if !str_eq(@dw, "define") { die("unknown directive after #"); }
         while lc(0) == 32 || lc(0) == 9 { adv(); }
-        if !is_letter(lc(0)) { die("#define needs a name"); }
+        if !is_letter(lc(0)) { die_help("#define needs a name", "write #define NAME value"); }
         if def_count >= 2048 { die("too many #define names"); }
         int di = def_count;
         int dk = 0;
@@ -1255,8 +1255,8 @@ void next() {
         tok_kind = T_STR;
         int rn = 0;
         while lc(0) != '"' {
-            if cur_pos >= cur_len { die("unterminated string"); }
-            if rn >= 1000 { die("string literal too long"); }
+            if cur_pos >= cur_len { die_help("unterminated string", "add the closing \" before the end of the line (a text cannot continue on the next line)"); }
+            if rn >= 1000 { die_help("string literal too long", "split the text in two with +, or put it in a file and read it"); }
             tok_str[rn] = lc(0);
             rn += 1;
             adv();
@@ -1309,7 +1309,7 @@ void next() {
         if c == '0' && (lc(1) == 'x' || lc(1) == 'X') {
             adv();
             adv();
-            if hex_value(lc(0)) < 0 { die("bad hex number"); }
+            if hex_value(lc(0)) < 0 { die_help("bad hex number", "a hex number is 0x followed by digits 0-9 and a-f"); }
             while hex_value(lc(0)) >= 0 || (lc(0) == '_' && hex_value(lc(1)) >= 0) {
                 if lc(0) == '_' {
                     adv();                                   // 0x0900_0000 : a _ between digits is ignored
@@ -1321,7 +1321,7 @@ void next() {
         } else if c == '0' && (lc(1) == 'b' || lc(1) == 'B') {
             adv();
             adv();
-            if lc(0) != '0' && lc(0) != '1' { die("bad binary number"); }
+            if lc(0) != '0' && lc(0) != '1' { die_help("bad binary number", "a binary number is 0b followed by 0 and 1"); }
             while lc(0) == '0' || lc(0) == '1' || (lc(0) == '_' && (lc(1) == '0' || lc(1) == '1')) {
                 if lc(0) == '_' {
                     adv();
@@ -1383,11 +1383,11 @@ void next() {
         tok_kind = T_STR;
         int sn = 0;
         while lc(0) != '"' {
-            if cur_pos >= cur_len { die("unterminated string"); }
+            if cur_pos >= cur_len { die_help("unterminated string", "add the closing \" before the end of the line (a text cannot continue on the next line)"); }
             int sch = lc(0);
             adv();
             if sch == 92 { sch = read_escape(); }
-            if sn >= 1000 { die("string literal too long"); }
+            if sn >= 1000 { die_help("string literal too long", "split the text in two with +, or put it in a file and read it"); }
             tok_str[sn] = sch;
             sn += 1;
         }
@@ -1404,7 +1404,7 @@ void next() {
         int cch = lc(0);
         adv();
         if cch == 92 { cch = read_escape(); }
-        if lc(0) != 39 { die("unterminated character literal"); }
+        if lc(0) != 39 { die_help("unterminated character literal", "a character is written between single quotes: 'a'"); }
         adv();
         tok_num = cch;
         return;

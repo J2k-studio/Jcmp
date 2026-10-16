@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.159
+* **AST A6:** `switch` over data enums (`Option::Some(v): ...`) and structs with `free(self)` by value (moved into a copy, the source emptied) are made from the tree.
+* Error messages: `help:` lines for ~60 common errors.
+* Gate: 472 tests pass, 300 fuzz programs, `diffcheck` the same 2 differences. 1496 of 1814 corpus functions come from the tree.
+* Tests: `t422_ast_dataenum`, `t423_ast_freestruct`.
+
 ## 0.9.158
 * **AST A6: `try` / `catch` / `throw` from the tree** (the 120-byte snapshot of `x19` .. `x25` and `d8` .. `d15`, `j2k_try_enter`, the reload in the catch; `break` / `continue` / `return` inside a `try` leave the tries first). The name in `catch (e)` is a `char^` in the tree now (it was typed like a String), so `cout << e` prints a text.
 * **Dynamic arrays of pointers and of enum members** (`Node^[] list = arr(2);`, `list.push(p)` moves an owner into the array, `list[i]^.v`), **arrays that are returned and passed on** (`int[] f()`, `return a;`, `int[] b = f();`), **`a == null` / `a != null`**, `a = null`.

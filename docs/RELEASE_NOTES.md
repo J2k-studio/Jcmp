@@ -1,6 +1,8 @@
-# J2K / Jcmp 0.9.158
+# J2K / Jcmp 0.9.159
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
+
+**0.9.159:** internal: data-enum `switch` and structs with `free(self)` by value are made from the syntax tree; more `help:` lines in error messages.
 
 **0.9.158:** internal: `try` / `catch` / `throw`, arrays of pointers, returned arrays and arrays of Strings are made from the syntax tree.
 **0.9.157:** internal: `main` is made from the syntax tree too; loops are written test, body, jump back.

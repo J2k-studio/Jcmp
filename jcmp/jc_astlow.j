@@ -96,9 +96,9 @@ bool as1_sfree(int s) {
     return false;
 }
 
-// a struct that a local variable can be: not freeing itself, no init(); a String or a dynamic array inside it starts as zeros
+// a struct that a local variable can be: no init(); a String, a dynamic array or a free(self) inside it starts as zeros
 bool as1_sdecl(int s) {
-    if s < 0 || s >= scount || as1_sfree(s) { return false; }
+    if s < 0 || s >= scount { return false; }
     char hn[64];
     str_copy(@hn, @sname + s * 64, 64);
     str_copy(@hn + str_len(@hn), "__init", 8);
@@ -174,7 +174,7 @@ bool as1_dbl(int t) {
 // the type id of a parameter or a result (fptid / fret): 0 a whole number, 1 bool, 91 double
 // a struct that can be passed and returned by value: plain bytes, not too big
 bool as1_sbyval(int s) {
-    return as1_splain(s) && ssize[s] <= 128;
+    return as1_sdecl(s) && ssize[s] <= 128;
 }
 
 bool as1_tid(int t) {
@@ -813,7 +813,7 @@ bool as1_decl(int n) {
         }
         if as1_sty(dt) {
             if init == 0 { return as1_sdecl(dt % 65536 - 16); }
-            if !as1_splain(dt % 65536 - 16) || ssize[dt % 65536 - 16] > 128 && init != 0 { return false; }
+            if !as1_sbyval(dt % 65536 - 16) { return false; }
             // no value, a list, or a struct of the same type (a variable, a field, an element or a call)
             if init != 0 && ast_kind[init] == AK_LIST { return as1_slist(init, dt % 65536 - 16); }
             return init == 0 || (ast_ty[init] == dt && as1_sx(init));
@@ -862,6 +862,7 @@ bool as1_assign(int n) {
         int t = ast_c[n];
         if as1_sty(ast_ty[t]) {
             // a struct is copied: the target has an address, the value is a struct of the same type
+            if as1_sfree(ast_ty[t] % 65536 - 16) { return false; }
             return ast_b[n] == 0 && as1_lv(t) && as1_sbyval(ast_ty[t] % 65536 - 16) && ast_ty[ast_a[n]] == ast_ty[t] && as1_sx(ast_a[n]);
         }
         if !as1_target(t) || !as1_expr(ast_a[n]) || ast_b[n] < 0 { return false; }
@@ -927,6 +928,26 @@ bool as1_stmt(int n) {
         return as1_ptr(ast_ty[tv]) && ast_ty[tv] % 65536 == 2 && as1_expr(tv);
     }
     if k == AK_TRYCATCH { return as1_stmt(ast_a[n]) && as1_stmt(ast_b[n]); }
+    if k == AK_SWITCH && ast_val[n] == 1 {
+        // a data enum (a struct with a tag in its first word): the cases are members; the names they bind are copies of the values
+        int ds = ast_a[n];
+        if !as1_sty(ast_ty[ds]) || !as1_lv(ds) || opt_debug == 1 { return false; }
+        int dcs = ast_b[n];
+        if dcs == 0 { return false; }
+        while dcs != 0 {
+            int bn = ast_c[dcs];
+            while bn != 0 {
+                int bt = ast_ty[bn];
+                bool bok = as1_scalar(bt) || as1_pt(bt) || bt / 65536 == 4 || as1_dyn(bt);
+                if bt / 65536 == 3 && as1_scode(bt % 65536) && as1_splain(bt % 65536 - 16) { bok = true; }
+                if !bok { return false; }
+                bn = ast_nx[bn];
+            }
+            if !as1_stmt(ast_b[dcs]) { return false; }
+            dcs = ast_nx[dcs];
+        }
+        return true;
+    }
     if k == AK_SWITCH {
         // a whole number, a char or an enum; the patterns are constants (a data enum or a name that is bound: the text path)
         int sv = ast_a[n];
@@ -979,7 +1000,8 @@ int at_fields(int k) {
     if k == AK_NEG || k == AK_NOT || k == AK_CALL || k == AK_BLOCK || k == AK_DECL || k == AK_EXPR || k == AK_RET || k == AK_INCDEC || k == AK_CAST { return 1; }
     if k == AK_ASSIGN { return 5; }
     if k == AK_IF || k == AK_FOR { return 7; }
-    if k == AK_METHOD || k == AK_SWITCH || k == AK_CASE { return 3; }
+    if k == AK_METHOD || k == AK_SWITCH { return 3; }
+    if k == AK_CASE { return 7; }
     if k == AK_COUT || k == AK_LIST || k == AK_BUILTIN || k == AK_THROW { return 1; }
     if k == AK_TRYCATCH { return 3; }
     return 0;
@@ -1209,6 +1231,7 @@ int gl_ismain;                   // 1 while main is made: it ends with the exit 
 int gl_retoff;                   // the slot that holds the address of the result of a function that gives a struct, else -1
 int gl_ab;                       // the base register and the offset that gl_addr / gl_lv give
 int gl_ao;
+int gl_mvslot[AT_MAX];           // an argument that is a value that frees itself: the slot of its copy
 int gl_nstemps;                  // the new Strings made so far (the slots)
 int gl_hastmp[AT_MAX];           // for an if / while: its condition makes new Strings (they are freed before the jump)
 int gl_depth;                    // the cells in use below the frame pointer
@@ -1600,6 +1623,13 @@ void gl_call(int n) {
     while a != 0 {
         if fptid[fi * 8 + argn - hn] >= 100 {
             gl_saddr(a);
+            if fptid[fi * 8 + argn - hn] < 100 + scount && struct_has_free(fptid[fi * 8 + argn - hn] - 100) {
+                // moved into a copy; the source is emptied; the callee gets the address of the copy
+                gl_ensure();
+                gl_copy(30, gl_mvslot[a], 1, 0, ssize[fptid[fi * 8 + argn - hn] - 100]);
+                go_zero();
+                ir_add(IR_ADD, 1, 30, gl_mvslot[a], 1, 0);
+            }
         } else if fptid[fi * 8 + argn - hn] == 99 && fpstr[fi * 8 + argn - hn] == 1 {
             // a String parameter borrows: the String, or a temporary String made from a text
             gl_sval(a);
@@ -1644,7 +1674,10 @@ void gl_call(int n) {
         r += 1;
     }
     ir_set_args(e, argn, @gl_args);
-    if hid { ir_add(IR_ADD, 1, 30, at_c[n], 1, 0); }
+    if hid {
+        ir_add(IR_ADD, 1, 30, at_c[n], 1, 0);
+        if struct_has_free(fret[fi] - 100) { go_decl(at_c[n]); }          // the result is an owner of the kind 6 (own_add after the call)
+    }
     else if fret[fi] == 91 { ir_add(IR_BITS2F, 32, 1, 0, 0, 0); }
 }
 
@@ -2662,6 +2695,22 @@ void go_drain_val(int val) {
     }
 }
 
+// a value that frees itself moved out of a local variable: the local is emptied (zeros), as emit_zero_local did
+void go_zero() {
+    while go_peek() == 5 {
+        int off = ow_a[go_pos];
+        int size = ow_b[go_pos];
+        go_pos += 1;
+        gl_ensure();
+        ir_add(IR_CONST, 2, 0, 0, 0, 0);
+        int zk = 0;
+        while zk < size {
+            gl_store(30, off + zk, 2);
+            zk += 8;
+        }
+    }
+}
+
 // the variable at off became null (it was freed or its memory moved): `mov x1, 0; str x1, [x29, #off]`
 bool go_null(int off, int why) {
     if go_peek() != 4 || ow_a[go_pos] != off || ow_b[go_pos] != why { return false; }
@@ -3118,7 +3167,85 @@ int gl_pat(int p) {
 }
 
 // switch: the tests in order, then the bodies; the default runs when nothing matched wherever it is written
+// switch on a data enum: the address of the struct waits in the slot; the tag is its first word; a member that binds names copies the
+// values into the locals of the case first
+void gl_switch_data(int n) {
+    int slot = gl_bsl[n];
+    gl_saddr(at_a[n]);
+    gl_ensure();
+    gl_store(30, slot, 1);
+    int lend = gl_label();
+    int sdef = 0 - 1;
+    int cs = at_b[n];
+    int nc = 0;
+    while cs != 0 {
+        nc += 1;
+        cs = at_nx[cs];
+    }
+    if nc > 256 { gl_failx(0); return; }
+    int lbl[256];
+    cs = at_b[n];
+    int ci = 0;
+    while cs != 0 {
+        lbl[ci] = gl_label();
+        if at_a[cs] == 0 {
+            sdef = lbl[ci];
+        } else {
+            int pt = at_a[cs];
+            while pt != 0 {
+                gl_load(1, 30, slot);
+                int te = ir_add(IR_LOAD, 1, 1, 0, 0, 0);
+                ir_w[te] = 8;
+                ir_add(IR_CONST, 2, 0, 0, 0, at_val[pt]);
+                int lnext = gl_label();
+                gl_br(IR_EQ, 1, 2, 0, lbl[ci], lnext);
+                gl_place(lnext);
+                pt = at_nx[pt];
+            }
+        }
+        ci += 1;
+        cs = at_nx[cs];
+    }
+    if sdef >= 0 { gl_jmp(sdef); } else { gl_jmp(lend); }
+    cs = at_b[n];
+    ci = 0;
+    while cs != 0 {
+        gl_place(lbl[ci]);
+        int bn = at_c[cs];
+        while bn != 0 {
+            int fi = at_b[bn];
+            int bty = at_ty[bn];
+            int loc = gl_off[at_val[bn]];
+            gl_load(1, 30, slot);
+            if bty / 65536 == 3 {
+                gl_copy(30, loc, 1, fldoff[fi], ssize[bty % 65536 - 16]);
+            } else if bty / 65536 == 1 && fldcode[fi] >= 16 && fldptr[fi] == 0 {
+                // a struct that frees itself is only looked at: the name is its address
+                ir_add(IR_ADD, 1, 1, fldoff[fi], 1, 0);
+                gl_store(30, loc, 1);
+            } else {
+                int w = 8;
+                if bty / 65536 == 0 { w = as1_flw(bty % 65536); }
+                int le = ir_add(IR_LOAD, 2, 1, 0, 0, fldoff[fi]);
+                ir_w[le] = w;
+                gl_store(30, loc, 2);
+            }
+            bn = at_nx[bn];
+        }
+        gl_stmt(at_b[cs]);
+        if at_kind[at_b[cs]] != AK_BLOCK { go_flush(false); }       // a body without braces is a statement of its own (parse_statement)
+        gl_jmp(lend);
+        ci += 1;
+        cs = at_nx[cs];
+    }
+    gl_place(lend);
+}
+
 void gl_switch(int n) {
+    if at_val[n] == 1 {
+        gl_switch_data(n);
+        return;
+    }
     int slot = gl_bsl[n];
     gl_expr(at_a[n]);
     gl_ensure();
@@ -3159,6 +3286,7 @@ void gl_switch(int n) {
     while cs != 0 {
         gl_place(lbl[ci]);
         gl_stmt(at_b[cs]);
+        if at_kind[at_b[cs]] != AK_BLOCK { go_flush(false); }
         gl_jmp(lend);
         ci += 1;
         cs = at_nx[cs];
@@ -3264,6 +3392,8 @@ void gl_stmt(int n) {
                 gl_saddr(at_a[n]);
                 gl_ensure();
                 gl_copy(30, gl_off[at_val[n]], 1, 0, ssize[at_ty[n] % 65536 - 16]);
+                go_zero();                                  // a value that frees itself moved in: its source is emptied
+                go_flush(false);
             } else if struct_needs_zero(at_ty[n] % 65536 - 16) {
                 // a String or a dynamic array inside starts null: the struct starts as zeros
                 gl_ensure();
@@ -3434,6 +3564,7 @@ void gl_stmt(int n) {
             gl_ensure();
             gl_load(3, 30, gl_retoff);
             gl_copy(3, 0, 1, 0, ssize[at_ty[at_a[n]] % 65536 - 16]);
+            go_zero();
         } else if at_a[n] != 0 && at_ty[at_a[n]] / 65536 == 5 {
             // a dynamic array result: its header (an owner moves out: the parser nulls it)
             int rd = at_a[n];
@@ -3619,8 +3750,23 @@ void gl_tmps(int n) {
             gl_tmps(a);
             // a text for a String parameter: a temporary String is made
             if fi >= 0 && at_kind[a] == AK_STR && pidx < 8 && fpstr[fi * 8 + pidx] == 1 { gl_stemp(a); }
+            // a value that frees itself goes in a copy (`..moved`) and its source is emptied
+            if fi >= 0 && pidx < 8 && fptid[fi * 8 + pidx] >= 100 && fptid[fi * 8 + pidx] < 100 + scount && struct_has_free(fptid[fi * 8 + pidx] - 100) {
+                int msz = ssize[fptid[fi * 8 + pidx] - 100];
+                gl_mvslot[a] = gl_nslot;
+                gl_hint_add2(gl_nslot, msz, 0);
+                gl_nslot += (msz + 7) / 8 * 8;
+            }
             pidx += 1;
             a = at_nx[a];
+        }
+        // the result that frees itself is an owner of the kind 6 until the end of the statement (its record comes after the call)
+        if fi >= 0 && fvoid[fi] == 0 && fret[fi] >= 100 && at_c[n] != 0 && struct_has_free(fret[fi] - 100) && cond_depth == 0 {
+            int oe6 = go_find_add(at_c[n]);
+            if oe6 >= 0 {
+                if ow_d[oe6] != gl_nslot { gl_failx(0); }
+                gl_nslot += 32;
+            }
         }
         // a String that comes back is a temporary owner
         if fi >= 0 && fretstr[fi] == 1 && k == AK_CALL { gl_stemp(n); }
@@ -3714,6 +3860,24 @@ void gl_slots(int n) {
         gl_nslot += 8;
         int cs = at_b[n];
         while cs != 0 {
+            // the names that a member binds: a local each (a copy of a struct takes its size)
+            int bn = at_c[cs];
+            while bn != 0 {
+                gl_off[at_val[bn]] = gl_nslot;
+                int bty = at_ty[bn];
+                if bty / 65536 == 3 {
+                    int bsz = ssize[bty % 65536 - 16];
+                    gl_hint_add2(gl_nslot, bsz, 0);
+                    gl_nslot += (bsz + 7) / 8 * 8;
+                } else if bty / 65536 == 4 || bty / 65536 == 5 {
+                    gl_hint_add2(gl_nslot, 8, 0);
+                    gl_nslot += 8;
+                } else {
+                    gl_hint_add(gl_nslot);
+                    gl_nslot += 8;
+                }
+                bn = at_nx[bn];
+            }
             gl_slots(at_b[cs]);
             cs = at_nx[cs];
         }

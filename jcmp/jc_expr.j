@@ -284,7 +284,7 @@ int fp_in_d;                 // 1: the two operands of the next float operation 
 // returns 90 when the operation is done in f32, else 91; the operands are ready
 int fp_prepare(int lt, int rt) {
     if (!is_float(lt) || !is_float(rt)) && pass_no >= 2 { die("cannot mix a float and a non-float (use a cast, e.g. (double)n)"); }
-    if (lt == 90 && rt == 91) || (lt == 91 && rt == 90) { die("cannot mix float and double (use a cast)"); }
+    if (lt == 90 && rt == 91) || (lt == 91 && rt == 90) { die_help("cannot mix float and double", "use a cast"); }
     if lt == 90 || rt == 90 {
         if lt == 92 { lit_to_f32(0); }
         if rt == 92 { lit_to_f32(1); }
@@ -448,7 +448,7 @@ int bin_type(int a, int b) {
 // a << n  /  a >> n : the type of the left side
 int shift_type(int a, int b) {
     if pass_no < 2 { return 0; }
-    if !is_numeric(a) || !is_numeric(b) { die("arithmetic needs numbers (bool and enum values cannot be used)"); }
+    if !is_numeric(a) || !is_numeric(b) { die_help("arithmetic needs numbers (bool and enum values cannot be used)", "compare them, or cast with (int) when you really want the number"); }
     if is_unsigned(a) { return a; }
     if is_litnum(a) && is_litnum(b) { return 96; }
     return 0;
@@ -516,13 +516,13 @@ void no_num_for_ptr() {
 // the operand in x0 must be a bool (or the literal 0/1)
 void need_bool() {
     if pass_no < 2 { return; }
-    if ex_ty != 1 && ex_ty != 2 { die("a bool is required here (write a comparison, e.g. x != 0)"); }
+    if ex_ty != 1 && ex_ty != 2 { die_help("a bool is required here", "write a comparison, e.g. x != 0"); }
 }
 
 // the operand must be an ordinary number (not bool, not enum)
 void need_num(int t) {
     if pass_no < 2 { return; }
-    if !is_numeric(t) { die("arithmetic needs numbers (bool and enum values cannot be used)"); }
+    if !is_numeric(t) { die_help("arithmetic needs numbers (bool and enum values cannot be used)", "compare them, or cast with (int) when you really want the number"); }
 }
 
 // ------------------------------------------------------------ symbol tables
@@ -719,7 +719,7 @@ int lunloop[8192];           // the loop depth where it was declared
 
 // declare a local: bytes = 8 for a scalar, the (rounded) size for an array
 void add_local(char^ name, int kind, int elem, int bytes, int ptr) {
-    if lcount >= 8192 { die("too many local variables"); }
+    if lcount >= 8192 { die_help("too many local variables", "split the function in two, or keep some values in an array or a struct"); }
     check_local_name(name);
     str_copy(@lname + lcount * 64, name, 64);
     lkind[lcount] = kind;
@@ -778,7 +778,7 @@ void hint_add(int off, int size, int flag) {
 }
 
 void add_global(char^ name, int kind, int elem, int bytes, int ptr) {
-    if gcount >= 16384 { die("too many global variables"); }
+    if gcount >= 16384 { die_help("too many global variables", "keep related values in a struct or an array"); }
     str_copy(@gname + gcount * 64, name, 64);
     gkind[gcount] = kind;
     gelem[gcount] = elem;
@@ -1183,7 +1183,7 @@ void parse_index_chain() {
         ins_n("mov x1, ", st1);
         emit_line("mul x0, x0, x1");
         push_x0();
-        if !tok_is("[") { die("this array needs more indexes"); }
+        if !tok_is("[") { die_help("this array needs more indexes", "write one index for each dimension: a[i][j]"); }
         next();
         lit = 0;
         sq = tok_seq;
@@ -1201,7 +1201,7 @@ void parse_index_chain() {
         emit_line("add x0, x0, x1");
         if nd == 3 {
             push_x0();
-            if !tok_is("[") { die("this array needs more indexes"); }
+            if !tok_is("[") { die_help("this array needs more indexes", "write one index for each dimension: a[i][j]"); }
             next();
             lit = 0;
             sq = tok_seq;
@@ -1467,7 +1467,7 @@ int parse_args() {
             n += 1;
         }
         argno += 1;
-        if n > 16 { die("too many arguments (16 at most)"); }
+        if n > 16 { die_help("too many arguments (16 at most)", "pass a struct or a pointer to a struct instead of many values"); }
         if tok_is(",") {
             next();
         } else {
@@ -2086,7 +2086,7 @@ void gen_call() {
         last_call_struct_off = tmp_off;
         if struct_has_free(res_ty - 100) && cur_fidx >= 0 {
             // the result frees itself: the temporary is an owner until the end of the statement unless it is moved on
-            if cond_depth > 0 { die("a value that frees itself cannot be made on the right of && or || (put it in a variable first)"); }
+            if cond_depth > 0 { die_help("a value that frees itself cannot be made on the right of && or ||", "put it in a variable first"); }
             own_add(tmp_off, 6, res_ty - 100);
         }
     }
@@ -2277,7 +2277,7 @@ void lvalue_loop() {
             }
             if s_isarr == 0 {
                 if s_ptr == 0 { die_help("this value cannot be indexed with [ ]: it is not an array, a String or a pointer", "only arrays, Strings, dynamic arrays and pointers have elements"); }
-                if s_ptr == 10 { die("a void^ cannot be indexed (cast it to a typed pointer first)"); }
+                if s_ptr == 10 { die_help("a void^ cannot be indexed", "cast it to a typed pointer first"); }
                 v_nd = 1;
                 load_through(8);             // x0 = the pointer's value
                 s_code = s_ptr;
@@ -2379,7 +2379,7 @@ void lvalue_loop() {
         } else if tok_is("^") {
             check_moved_use();
             if lv_ptr == 0 || lv_kind == 1 { die_help("this value is not a pointer, so ^ cannot follow it", "only a pointer (int^ p) can be followed by ^ to reach the value it points to"); }
-            if lv_ptr == 10 { die("a void^ cannot be dereferenced (cast it to a typed pointer first)"); }
+            if lv_ptr == 10 { die_help("a void^ cannot be dereferenced", "cast it to a typed pointer first"); }
             next();
             lv_fresh = 0;
             load_through(8);
@@ -2418,9 +2418,9 @@ void lvalue_loop() {
                 lv_code = lv_ptr;
                 lv_ptr = 0;
             }
-            if lv_code < 16 || lv_kind == 1 { die("this value has no fields"); }
+            if lv_code < 16 || lv_kind == 1 { die_help("this value has no fields", "only a struct (or a pointer to a struct) has fields; check the name before the dot"); }
             next();
-            if tok_kind != T_IDENT { die("a field or method name was expected"); }
+            if tok_kind != T_IDENT { die_help("a field or method name was expected", "write the name after the dot"); }
             int st = lv_code - 16;
             char m_name[256];
             str_copy(@m_name, @tok_text, 256);
@@ -2556,7 +2556,7 @@ void gen_scope() {
     int sd = find_struct(@id_name);
     if en < 0 && sd < 0 { die_name("unknown name", @id_name); }
     next();
-    if tok_kind != T_IDENT { die("a name was expected after ::"); }
+    if tok_kind != T_IDENT { die_help("a name was expected after ::", "write the name of a function or a member: Math::sqrt, Color::Red"); }
     if en >= 0 {
         if !find_member(en, @tok_text) { die_name("not a member of the enum", @tok_text); }
         ins_n("mov x0, ", found_val);
@@ -3009,7 +3009,7 @@ void gen_identifier() {
             if sx_ty == 95 { emit_line("mov x1, 1"); }
             rt_call("__Str__from_int");
         } else {
-            die("str(x) works on numbers, characters, bools and Strings");
+            die_help("str(x) works on numbers, characters, bools and Strings", "write str(n) for a number, str(c) for a char, str(s) for a String");
         }
         str_temp();
         return;
@@ -3182,6 +3182,7 @@ int struct_source(int sidx) {
 
 // the local variable at frame offset off (a struct of size bytes) becomes empty: zeros
 void emit_zero_local(int off, int size) {
+    ow_add(5, off, size, 0, 0);          // the tree makes the same zeros (a value that frees itself moved out of the local)
     int zk = 0;
     emit_line("mov x1, 0");
     while zk < size {
@@ -3208,7 +3209,7 @@ bool is_strarr_dyn(int info) {
 
 // x0 = a new String: remember it as a temporary owner
 void str_temp() {
-    if cond_depth > 0 { die("a new String cannot be made on the right of && or || (put it in a variable first)"); }
+    if cond_depth > 0 { die_help("a new String cannot be made on the right of && or ||", "put it in a variable first"); }
     if cur_fidx < 0 { die("a String can only be made inside a function"); }
     ty_tid = 0;
     add_local(".t", 0, 8, 8, 0);
@@ -3559,7 +3560,7 @@ bool str_member(char^ dm) {
         lv_done = 1;
         return true;
     }
-    if str_eq(dm, "resize") { die("a String has no resize (use push, append or slice)"); }
+    if str_eq(dm, "resize") { die_help("a String has no resize", "use push, append or slice"); }
     return false;
 }
 
@@ -3845,7 +3846,7 @@ void dyn_member() {
     int etid = dyn_tid(info);
     if is_str_dyn(info) { etid = 0; }     // the elements of a String are plain chars
     next();                              // "."
-    if tok_kind != T_IDENT { die("a member name was expected"); }
+    if tok_kind != T_IDENT { die_help("a member name was expected", "write the name of a field or a method after the dot"); }
     char dm[64];
     str_copy(@dm, @tok_text, 64);
     next();
@@ -4112,7 +4113,7 @@ void gen_sizeof() {
     int size = 0;
     if at_type() {
         parse_type();
-        if ty_void == 1 && ty_ptr == 0 { die("sizeof(void) has no meaning"); }
+        if ty_void == 1 && ty_ptr == 0 { die_help("sizeof(void) has no meaning", "give a type with a size: sizeof(int), sizeof(Point)"); }
         size = 8;
         if ty_ptr == 0 { size = size_of(ty_elem); }
     } else {
@@ -4243,15 +4244,15 @@ void parse_unary_core() {
         next();
         if at_type() && !scope_follows() {
             parse_type();
-            if ty_void == 1 && ty_ptr == 0 { die("a value cannot be cast to void"); }
+            if ty_void == 1 && ty_ptr == 0 { die_help("a value cannot be cast to void", "remove the cast: a call result that is not needed can be left alone"); }
             expect(")");
             int cast_ty = ty_tid;
             int cast_ptr = ty_ptr;
             int cast_w = ty_width;
             parse_unary();
             if cast_ptr == 0 && pass_no >= 2 {
-                if cast_ty == 1 { die("a value cannot be cast to bool (write a comparison)"); }
-                if ex_ty == 1 { die("a bool cannot be cast (write a comparison instead)"); }
+                if cast_ty == 1 { die_help("a value cannot be cast to bool", "write a comparison"); }
+                if ex_ty == 1 { die_help("a bool cannot be cast", "write a comparison instead"); }
             }
             if cast_ptr == 0 && (is_float(cast_ty) || is_float(ex_ty)) {
                 gen_float_cast(cast_ty, ex_ty, cast_w);
@@ -4307,7 +4308,7 @@ void parse_unary_core() {
             return;
         }
         need_num(ex_ty);
-        if is_unsigned(ex_ty) && pass_no >= 2 { die("unary minus does not apply to an unsigned number (use 0 - x with a cast)"); }
+        if is_unsigned(ex_ty) && pass_no >= 2 { die_help("unary minus does not apply to an unsigned number", "use 0 - x with a cast"); }
         ex_ty = 0;
         emit_line("mov x1, 0");
         emit_line("sub x0, x1, x0");
@@ -4576,7 +4577,7 @@ void emit_simd_op(char^ op, int lt, int kind) {
         if kind == 2 { die("i64x2 has no * (NEON has no 64-bit multiply); use f64x2 or i32x4"); }
         if is_f { str_copy(@ins, "fmul", 8); } else { str_copy(@ins, "mul", 8); }
     } else if str_eq(op, "/") {
-        if !is_f { die("whole-number lanes have no / (use f64x2 or f32x4)"); }
+        if !is_f { die_help("whole-number lanes have no /", "use f64x2 or f32x4"); }
         str_copy(@ins, "fdiv", 8);
     } else { die("a simd value works with + - * / only"); }
     int rt = ex_ty;
@@ -5047,7 +5048,7 @@ void parse_mul() {
         } else if ex_ty >= 100 && ex_ty < 1000 && pass_no >= 2 {
             die("a number on the left of / and a struct on the right: write the struct first (v / 2.0)");
         } else if is_float(mlt) || is_float(ex_ty) {
-            if str_eq(@op, "%") { die("% does not work on floats"); }
+            if str_eq(@op, "%") { die_help("% does not work on floats", "cast to int first, or use Math::fmod"); }
             int mrt = ex_ty;
             take_operands_s(st);
             mlt = fp_binop(@op, mlt, mrt);
@@ -5257,7 +5258,7 @@ void parse_relational() {
             if str_eq(@rel, "<=") { fp_compare("le", rel_lt, rel_rt); }
             if str_eq(@rel, ">=") { fp_compare("ge", rel_lt, rel_rt); }
         } else if is_unsigned(rel_lt) || is_unsigned(rel_rt) {
-            if !num_compat(rel_lt, rel_rt) && pass_no >= 2 { die("cannot compare signed and unsigned numbers (use a cast)"); }
+            if !num_compat(rel_lt, rel_rt) && pass_no >= 2 { die_help("cannot compare signed and unsigned numbers", "use a cast"); }
             if str_eq(@rel, "<") { compare("lo"); }
             if str_eq(@rel, ">") { compare("hi"); }
             if str_eq(@rel, "<=") { compare("ls"); }
@@ -5285,7 +5286,7 @@ void check_comparable(int a, int b) {
     if a < 0 && a == b { ok = 1; }
     if (a == 1 || a == 2) && (b == 1 || b == 2) { ok = 1; }
     if a >= 3 && a == b { ok = 1; }
-    if ok == 0 { die("cannot compare values of different types (use a cast)"); }
+    if ok == 0 { die_help("cannot compare values of different types", "use a cast"); }
 }
 
 void parse_equality() {
