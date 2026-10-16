@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.164
+* **`module.function(...)` for every library:** the lower-case name of a module (the struct with a capital letter) and a dot reach its static functions: `fs.read_text(p)`, `json.parse(t)`, `math.sqrt(x)`, `path.join(a, b)`. `Struct::function` and `using` keep working. A variable, a global, a function or an enum of the same name wins. (docs/syntax-design.md 75)
+* **New module `tcp`** (struct `Tcp` in `<net>`): `tcp.listen(8080)`, `tcp.accept(l)`, `tcp.connect(ip, port)`, `tcp.recv(c)`, `tcp.send(c, text)`, `tcp.close(c)`. An error is thrown as a text (`try { } catch (e) { }`); `tcp.try_listen` ... return a `Result` for `?`. The old `Net::` functions stay.
+* AST: the same dot form is read by the syntax tree; a text literal as `char^`, `syscall`, `__hash`, `__panic`, array parameters, unsized char arrays and the constructors of Result / Option are made from the tree (1733 of 1959 corpus functions).
+* Gate: 489 tests pass (default and `-noast`), 300 fuzz programs, `diffcheck` the same 2 differences. Tests: `t434_tcp_module`.
+
 ## 0.9.163
 * **Fix (Android / Termux): `Net::accept` made the system call `accept` (202), which the filter of Android kills with "Bad system call"; it uses `accept4` (242) now.** A program that listened and accepted (a web server) died at the first connection. `send` / `recv` / `accept` also try again when a signal interrupts them.
 * **`using net;`** (also `using fs;` ...): the lower-case name of a module makes its functions plain names (`send(c, "hi")` instead of `Net::send`). A call used as a statement can be followed by `.method()` (`pair(@p).unwrap();`).

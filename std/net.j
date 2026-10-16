@@ -129,3 +129,49 @@ struct Net {
         syscall(57, fd);
     }
 }
+
+// Tcp: the short way (module name `tcp`, written  tcp.listen(8080)  or  Tcp::listen(8080)).
+// Designed by the assistant at the owner's request (2026-10-16), adjustable. An error is thrown as a text (catch it with try/catch;
+// an uncaught one stops the program with the text). The functions that return a Result instead are try_listen, try_accept, ...
+//   int l = tcp.listen(8080);   int c = tcp.accept(l);   String req = tcp.recv(c);   tcp.send(c, "hello");   tcp.close(c);
+//   int s = tcp.connect("127.0.0.1", 8080);
+char tcp_error_text[256];
+struct Tcp {
+    // throw the message of the error (copied to a buffer that stays alive while the stack is unwound)
+    static void fail(char^ msg) {
+        int n = 0;
+        while msg[n] != 0 && n < 255 {
+            tcp_error_text[n] = msg[n];
+            n += 1;
+        }
+        tcp_error_text[n] = 0;
+        throw (char^)@tcp_error_text;
+    }
+    static int take(Result<int, Error> r) {
+        switch r {
+            Result::Ok(v): return v;
+            Result::Err(e): Tcp::fail(e.message.c());
+        }
+        return 0;
+    }
+    static int listen(int port) { return Tcp::take(Net::tcp_listen(port)); }
+    static int accept(int l) { return Tcp::take(Net::accept(l)); }
+    static int connect(String ip, int port) { return Tcp::take(Net::tcp_connect(ip, port)); }
+    static int send(int c, String data) { return Tcp::take(Net::send(c, data)); }
+    static String recv_max(int c, int max) {
+        Result<String, Error> r = Net::recv(c, max);
+        switch r {
+            Result::Ok(v): return v;
+            Result::Err(e): Tcp::fail(e.message.c());
+        }
+        return "";
+    }
+    static String recv(int c) { return Tcp::recv_max(c, 4096); }
+    static int port_of(int l) { return Net::port_of(l); }
+    static void close(int c) { Net::close(c); }
+    static Result<int, Error> try_listen(int port) { return Net::tcp_listen(port); }
+    static Result<int, Error> try_accept(int l) { return Net::accept(l); }
+    static Result<int, Error> try_connect(String ip, int port) { return Net::tcp_connect(ip, port); }
+    static Result<int, Error> try_send(int c, String data) { return Net::send(c, data); }
+    static Result<String, Error> try_recv(int c) { return Net::recv(c, 4096); }
+}

@@ -1,6 +1,8 @@
-# J2K / Jcmp 0.9.163
+# J2K / Jcmp 0.9.164
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
+
+**0.9.164:** `module.function(...)` for every library (`fs.read_text`, `math.sqrt`), new module `tcp` (`tcp.listen(8080)`).
 
 **0.9.163:** fix for Android: a program that accepts a network connection no longer dies with "Bad system call"; `using net;`; errors say why (unreadable file, file system and network errors).
 

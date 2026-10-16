@@ -2,6 +2,8 @@
 char std_in_buf[4096];
 int std_in_pos;
 int std_in_len;
+char std_in_err[160];              // the text of the last input error (thrown; it must stay alive while the stack is unwound)
+int std_in_en;
 
 struct __In {
     // the next byte without taking it, or -1 at the end of the input
@@ -17,6 +19,39 @@ struct __In {
     static bool space(int c) {
         return c == 32 || c == 9 || c == 10 || c == 13;
     }
+    static void err_put(char^ s) {
+        int i = 0;
+        while s[i] != 0 && std_in_en < 150 {
+            std_in_err[std_in_en] = s[i];
+            std_in_en += 1;
+            i += 1;
+        }
+        std_in_err[std_in_en] = 0;
+    }
+    // throw "invalid input: <what> was expected, but found 'x'": c is the character that was found; the rest of the line is dropped
+    // so that a program that catches the error and asks again does not read the same wrong word twice
+    static void bad(char^ what, int c) {
+        std_in_en = 0;
+        __In::err_put("invalid input: ");
+        __In::err_put(what);
+        __In::err_put(" was expected, but found ");
+        if c < 0 || c == 10 || c == 13 {
+            __In::err_put("the end of the line");
+        } else {
+            char one[4];
+            one[0] = 39;
+            one[1] = (char)c;
+            one[2] = 39;
+            one[3] = 0;
+            __In::err_put((char^)@one);
+        }
+        int d = __In::peek();
+        while d >= 0 && d != 10 {
+            std_in_pos += 1;
+            d = __In::peek();
+        }
+        throw (char^)@std_in_err;
+    }
     // skip white space: the first character of the next word, or -1
     static int start() {
         int c = __In::peek();
@@ -29,7 +64,7 @@ struct __In {
     // a word into a String
     static void str(void^ h) {
         int c = __In::start();
-        if c < 0 { throw "end of input"; }
+        if c < 0 { throw "end of input: a word was expected, but the input has ended"; }
         __Str::clear(h);
         while c >= 0 && !__In::space(c) {
             __Str::push(h, c);
@@ -40,30 +75,30 @@ struct __In {
     // a whole number (an error unless lo <= value <= hi; no limits when lo > hi; uns = 1: no minus sign)
     static int num(int lo, int hi, int uns) {
         int c = __In::start();
-        if c < 0 { throw "end of input"; }
+        if c < 0 { throw "end of input: a whole number was expected, but the input has ended"; }
         int neg = 0;
         if c == '-' || c == '+' {
             if c == '-' { neg = 1; }
             std_in_pos += 1;
             c = __In::peek();
         }
-        if c < '0' || c > '9' { throw "invalid input"; }
-        if neg == 1 && uns == 1 { throw "invalid input"; }
+        if c < '0' || c > '9' { __In::bad("a whole number", c); }
+        if neg == 1 && uns == 1 { __In::bad("a number without a minus sign", '-'); }
         int v = 0;
         while c >= '0' && c <= '9' {
             v = v * 10 + (c - '0');
             std_in_pos += 1;
             c = __In::peek();
         }
-        if c >= 0 && !__In::space(c) { throw "invalid input"; }
+        if c >= 0 && !__In::space(c) { __In::bad("the end of the number", c); }
         if neg == 1 { v = 0 - v; }
-        if lo <= hi && (v < lo || v > hi) { throw "number out of range"; }
+        if lo <= hi && (v < lo || v > hi) { throw "number out of range for this variable (the type cannot hold it)"; }
         return v;
     }
     // a decimal number: 12  -3.5  .5  2e-3
     static double fnum() {
         int c = __In::start();
-        if c < 0 { throw "end of input"; }
+        if c < 0 { throw "end of input: a number was expected, but the input has ended"; }
         int neg = 0;
         if c == '-' || c == '+' {
             if c == '-' { neg = 1; }
@@ -92,7 +127,7 @@ struct __In {
                 c = __In::peek();
             }
         }
-        if seen == 0 { throw "invalid input"; }
+        if seen == 0 { __In::bad("a number", c); }
         if c == 'e' || c == 'E' {
             std_in_pos += 1;
             c = __In::peek();
@@ -102,7 +137,7 @@ struct __In {
                 std_in_pos += 1;
                 c = __In::peek();
             }
-            if c < '0' || c > '9' { throw "invalid input"; }
+            if c < '0' || c > '9' { __In::bad("the digits of the exponent", c); }
             int ev = 0;
             while c >= '0' && c <= '9' {
                 if ev < 10000 { ev = ev * 10 + (c - '0'); }
@@ -111,7 +146,7 @@ struct __In {
             }
             if eneg == 1 { exp -= ev; } else { exp += ev; }
         }
-        if c >= 0 && !__In::space(c) { throw "invalid input"; }
+        if c >= 0 && !__In::space(c) { __In::bad("the end of the number", c); }
         double v = (double)mant;
         while exp > 0 {
             v = v * 10.0;

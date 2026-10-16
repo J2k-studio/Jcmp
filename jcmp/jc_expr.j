@@ -2914,6 +2914,38 @@ bool sg_statement() {
 }
 
 // an identifier in an expression: a variable, an element, a deref or a call
+// `tcp.listen(8080)`, `fs.read_text(p)`: the lower-case name of a module (the struct with a capital letter) and a dot, then a static
+// function of it. A variable, a global or a function of the same name wins. On success `name` is the name of the struct.
+bool module_dot(char^ name) {
+    if !tok_is(".") || name[0] < 'a' || name[0] > 'z' { return false; }
+    if lookup_var(name) || find_func(name) >= 0 || find_device(name) >= 0 || find_enum(name) >= 0 { return false; }
+    char cap[64];
+    str_copy(@cap, name, 64);
+    cap[0] = cap[0] - 32;
+    if find_struct(@cap) < 0 { return false; }
+    // the word after the dot must be a static function of the struct (so that  name.field  keeps its other meanings)
+    int k = 0;
+    while lc(k) == ' ' || lc(k) == 9 { k += 1; }
+    char full[200];
+    str_copy(@full, @cap, 64);
+    int n = str_len(@full);
+    full[n] = '_';
+    full[n + 1] = '_';
+    n += 2;
+    int j = 0;
+    while is_alnum(lc(k + j)) || lc(k + j) == '_' {
+        if n + j < 190 { full[n + j] = lc(k + j); }
+        j += 1;
+    }
+    full[n + j] = 0;
+    if j == 0 { return false; }
+    int fi = find_func(@full);
+    if fi < 0 { return pass_no < 2; }
+    if fself[fi] == 1 { return false; }
+    str_copy(name, @cap, 64);
+    return true;
+}
+
 void gen_identifier() {
     str_copy(@id_name, @tok_text, 256);
     int idl = str_len(@id_name);
@@ -3051,7 +3083,7 @@ void gen_identifier() {
         call_postfix();
         return;
     }
-    if tok_is("::") {
+    if tok_is("::") || module_dot(@id_name) {
         gen_scope();
         return;
     }

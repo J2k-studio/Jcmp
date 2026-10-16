@@ -1972,3 +1972,80 @@ Rules: a function of the program with the same name wins over the module's; `usi
 function only, outside for the file (as `using stdlib;`). Also: a call used as a statement can be followed by `.method()`
 (`pair(@p).unwrap();`). Test: `t433_using_module`. Open: whether two modules with the same function name (`close` of `net`
 and of `fs`) should be an error or the first one wins (not checked yet; the order of the structs decides today).
+
+## 74. How a program uses the network: what is written today, and options that are easier to remember (owner asked 2026-10-16: "make calling functions easy; summarise how net is written; let us take the syntax apart so that people remember it and write it easily"). A proposal, nothing decided
+
+### 74.1 What is written today (0.9.163)
+A handle is a plain `int`. Every function can fail and returns `Result<..., Error>`; the caller writes `?` (pass the error on) or `.unwrap()` (stop with a panic).
+
+```
+#import <net>
+using net;                                   // since 0.9.163: no "Net::" in front
+
+Result<int, Error> serve() {
+    int l = tcp_listen(8080)?;               // 0 = let the system pick the port; port_of(l) tells which
+    while true {
+        int c = accept(l)?;
+        String req = recv(c, 4096)?;         // the second number is the most bytes to take
+        send(c, "HTTP/1.1 200 OK\r\n\r\nhello")?;
+        close(c);                            // the program must remember this
+    }
+    return Result<int, Error>::Ok(0);
+}
+client:   int s = tcp_connect("127.0.0.1", 8080)?;   send(s, "hello")?;   String r = recv(s, 100)?;   close(s);
+inside the program:  int p[2];  pair(@p)?;           // p[0] and p[1] are joined to each other
+```
+Functions: `tcp_listen(port)`, `port_of(fd)`, `accept(fd)`, `tcp_connect(ip_text, port)`, `pair(@two_ints)`, `send(fd, text)`, `recv(fd, max)`, `close(fd)`; IPv4 numbers only; no name lookup, no UDP, no timeout.
+
+### 74.2 What is hard to remember or easy to get wrong
+1. `recv(c, 4096)` - the second number means nothing to a beginner; nearly every call uses the same value.
+2. `close(c)` is forgotten on one of the exits (an `?` leaves the function) -> the descriptor leaks. The language already has `free(self)` that runs on every exit.
+3. A handle is an `int`: `send(l, ...)` on the listening socket compiles and fails at run time; a file number and a socket are the same type.
+4. `int p[2]; pair(@p)?;` - an array and `@` for two values.
+5. `tcp_listen` / `tcp_connect` repeat the name of the module; `accept(l)` and `close(c)` are short but `close` is also a file word (`fs`).
+6. `?` and `.unwrap()` after every call is noisy for a small script.
+
+### 74.3 Options (each is a style of the library; none needs new syntax in the compiler)
+**A. Keep the functions, make them shorter** - `listen(8080)`, `connect("127.0.0.1", 8080)`, `recv(c)` with a default size (a second function `recv_max(c, n)`, because overloading is not allowed, 9a), `pair()` returning both handles in a struct `Pair`.
+```
+int l = listen(8080)?;   int c = accept(l)?;   String req = recv(c)?;   send(c, "hi")?;   close(c);
+```
+**B. Handles are structs with methods and close themselves** (`free(self)` runs on every exit, so there is no `close` to forget):
+```
+Listener l = Listener::on(8080)?;            // Listener, Conn: two types, so send(listener) cannot be written
+while true {
+    Conn c = l.accept()?;
+    String req = c.read()?;                  // up to 4096 by default; c.read_max(n) for another size
+    c.write("HTTP/1.1 200 OK\r\n\r\nhello")?;
+}                                            // c is closed here, on every exit
+Conn s = Conn::to("127.0.0.1", 8080)?;       // client
+```
+(A struct with `free(self)` cannot be copied, 39.x: pass `Conn^` to a function. This is the rule that already exists for `File`-like owners.)
+**C. B plus one call that does the loop** - `Net::serve(8080, handle)` where `handle` is a function `void handle(Conn^ c)`; the library accepts, calls it, closes. A server of ten lines. Needs function pointers (exist) and, for a closure with state, lambdas (not yet in the tree path, but they work).
+```
+void handle(Conn^ c) { c.read()?; c.write("hello")?; }     // ? inside a void function: see question 5
+int main() { Net::serve(8080, handle)?; }
+```
+**D. Text addresses** (`"127.0.0.1:8080"`) in one string: `Conn::to("127.0.0.1:8080")`, `Listener::on(":8080")` (as Go does). One argument less to remember; the library splits the text.
+
+### 74.4 Score (rule of three: borrowed from other languages / easy for a person / easy for the machine; 1-3 each)
+| | borrowed | person | machine | note |
+|---|---|---|---|---|
+| A short functions | 3 (C, Python `socket`) | 2 | 3 | the descriptor leak stays |
+| B handle structs | 3 (Rust `TcpStream`, Go `net.Conn`, Python `with`) | 3 | 3 | closes itself; types stop a wrong call; uses what the language has |
+| C `serve` | 3 (Go `http.ListenAndServe`, Node) | 3 | 2 | best for a first program; hides the loop |
+| D address text | 3 (Go, Rust `ToSocketAddrs`) | 3 | 3 | works with A, B, C |
+Recommendation (the owner decides): **B + D**, with **C** as a later shortcut. Old names (`tcp_listen`, `accept`, ...) stay working until 1.0.0.0 (as `name__len` did, 73).
+
+### 74.5 Questions for the owner (also in `docs/open-questions.md`)
+1. A, B, B+D, or B+C+D? 2. Names: `Listener` / `Conn`, or `Server` / `Client`, or `Socket` for both (then `send(listener)` stays possible)? 3. Methods `read` / `write`, or `recv` / `send`? 4. Does `read()` with no size take up to 4096 and return what arrived (like today), or all until the other side closes? 5. May `?` be used in a `void` function (the error is then printed and the function returns)? Today `?` needs a Result in the return type.
+
+## 75. One way to call every library: `module.function(...)` (owner, 2026-10-16: "the other libraries should have the dot too and be made alike, easy to use, agreed, and restructure in a big way"). Designed by the assistant at the owner's request, adjustable
+
+Implemented in 0.9.164 (text path and syntax tree):
+1. **The module name is the struct name in lower case.** `fs.read_text(p)` = `Fs::read_text(p)`, `json.parse(t)`, `math.sqrt(x)`, `time.now()`, `path.join(a, b)`, `env.get(name)`, `tcp.listen(8080)`. The old `Struct::function` keeps working.
+2. A local variable, a global, a function or an enum of the same name wins (`int path = 5;` hides the module `path` in that scope). Only a **static** function of the struct is reached this way; `name.field` and `object.method()` keep their meaning.
+3. `using net;` (73) still makes the names bare (`listen(8080)`); the dot form is the one to teach because it reads the same in every file.
+4. **Naming rules for a module** (to be applied one module at a time, old names stay until 1.0.0.0): the module name is a noun (`tcp`, `fs`, `json`); a function is a verb without the module name in it (`tcp.listen`, not `tcp.tcp_listen`); the same verb means the same thing everywhere (`read`, `write`, `open`, `close`, `parse`, `text`, `get`, `set`, `find`, `len`); a size or option that has a usual value is not asked (`tcp.recv(c)`; `tcp.recv_max(c, n)` for another, because overloading is not allowed, 9a).
+5. **Errors:** a function of the short form **throws** a text on failure (`try { ... } catch (e) { ... }`, or the program stops with the text); `try_name(...)` is the same function returning `Result<T, Error>` for `?` and `switch`. First module made this way: `tcp` (`std/net.j`, struct `Tcp`; test `t434_tcp_module`). Not decided by the owner yet: whether the throwing form is the right default for every module (open question 10).
+6. Order of conversion: tcp (done), fs, json, path, env/proc, time/random, csv/toml, regex, hash, math, str. Each step adds the short names and keeps the old ones; a module is finished when its header example uses only the new form.

@@ -2527,7 +2527,8 @@ void parse_statement_inner() {
         parse_reg_assign();              // Reg::x18 = value;
         return;
     }
-    if tok_is("::") {                    // Struct::function(...);
+    if tok_is("::") || module_dot(@s_name) {   // Struct::function(...);  or  module.function(...);
+        str_copy(@id_name, @s_name, 256);
         gen_scope();
         if last_call_owning == 1 { warn("the memory returned here is not kept, so it can never be freed", "leak"); }
         expect(";");

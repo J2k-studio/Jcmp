@@ -791,6 +791,39 @@ int ast_classify(char^ qual, char^ name) {
     return 0;
 }
 
+// `module.function(...)`: the current token is the lower-case name of a module (the struct with a capital letter), a dot follows
+// and then a static function of the struct (see module_dot in jc_expr.j). On success the first letter of the token becomes a capital.
+bool ast_module_dot() {
+    if tok_kind != T_IDENT || tok_text[0] < 'a' || tok_text[0] > 'z' { return false; }
+    if ast_find_local(@tok_text) >= 0 || find_global(@tok_text) >= 0 || find_func(@tok_text) >= 0 || find_device(@tok_text) >= 0 || find_enum(@tok_text) >= 0 { return false; }
+    char cap[64];
+    str_copy(@cap, @tok_text, 64);
+    cap[0] = cap[0] - 32;
+    if find_struct(@cap) < 0 { return false; }
+    int k = 0;
+    while lc(k) == ' ' || lc(k) == 9 { k += 1; }
+    if lc(k) != '.' || lc(k + 1) == '.' { return false; }
+    k += 1;
+    while lc(k) == ' ' || lc(k) == 9 { k += 1; }
+    char full[200];
+    str_copy(@full, @cap, 64);
+    int n = str_len(@full);
+    full[n] = '_';
+    full[n + 1] = '_';
+    n += 2;
+    int j = 0;
+    while is_alnum(lc(k + j)) || lc(k + j) == '_' {
+        if n + j < 190 { full[n + j] = lc(k + j); }
+        j += 1;
+    }
+    full[n + j] = 0;
+    if j == 0 { return false; }
+    int fi = find_func(@full);
+    if fi < 0 || fself[fi] == 1 { return false; }
+    tok_text[0] = tok_text[0] - 32;
+    return true;
+}
+
 int ast_static_call(bool as_value) {
     char full[128];
     char full_q[64];
@@ -1161,7 +1194,7 @@ int ast_primary() {
             ast_fail("a built-in name that is not called");
             return 0;
         }
-        if ast_colons_follow() && ast_find_local(@tok_text) < 0 {
+        if (ast_colons_follow() && ast_find_local(@tok_text) < 0) || ast_module_dot() {
             return ast_static_call(true);
         }
         // a call?
@@ -2049,7 +2082,7 @@ int ast_stmt() {
             next();
             return ast_node(AK_EXPR, bx, 0, 0, 0);
         }
-        if ast_colons_follow() && ast_find_local(@tok_text) < 0 {
+        if (ast_colons_follow() && ast_find_local(@tok_text) < 0) || ast_module_dot() {
             int sc = ast_static_call(false);
             if ast_ok == 0 { return 0; }
             if tok_is("=") {
