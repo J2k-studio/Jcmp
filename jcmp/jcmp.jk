@@ -2,7 +2,7 @@
 // Build:  bin/jcmp jcmp/jcmp.jk -o jcmp1        (see bootstrap.sh)
 // Use:    jcmp1 input.jk -o program
 // the version of the compiler (also in the file VERSION; release.sh checks that they agree)
-#define JCMP_VERSION "0.9.166"
+#define JCMP_VERSION "0.9.167"
 
 #import "jc_base"
 #import "jc_asm"
@@ -348,12 +348,15 @@ void main() {
     // (its code is thrown away); pass 3 makes the code, leaving out unused functions.
     tm_stage("start");
     pass_no = 1;
+    recover_on = 1;                      // a mistake in a statement or an item is written and the reading goes on: all of them are shown
     reset_state(in_path);
     parse_program();
     if err_count > 0 { err_summary(); syscall(93, 1); }      // errors the parser survived (a missing ';')
     pass_no = 2;
     reset_state(in_path);
     parse_program();
+    recover_on = 0;
+    if err_count > 0 { err_summary(); syscall(93, 1); }
     tm_stage("parse passes 1+2");
     if find_func("main") < 0 && bare_mode == 0 { die_no_main(in_path); }
     compute_reach();

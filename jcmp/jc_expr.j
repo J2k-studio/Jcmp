@@ -495,9 +495,7 @@ int bin_type(int a, int b) {
         type_name_err(bad);
         end_msg();
         write_err("  help: bool and enum values are not numbers; compare them or cast with (int)\n");
-        err_count += 1;
-        err_summary();
-        syscall(93, 1);
+        die_end();
     }
     if !num_compat(a, b) { die_help("cannot mix signed and unsigned numbers", "use a cast, e.g. (u32)x"); }
     if is_unsigned(a) && is_unsigned(b) {
@@ -539,9 +537,7 @@ void check_assign(int want) {
         write_err("a decimal number cannot be stored in a whole number (int)");
         end_msg();
         write_err("  help: write (int)value to drop the decimals, or declare the variable as double\n");
-        err_count += 1;
-        err_summary();
-        syscall(93, 1);
+        die_end();
     }
     if ok == 0 {
         begin_msg("error");
@@ -552,7 +548,7 @@ void check_assign(int want) {
         if ex_ty == 2 { write_err("a number"); } else { type_name_err(ex_ty); }
         if want == 1 { write_err(" (use a comparison for a bool, or a cast)"); } else { write_err(" (use a cast to convert)"); }
         end_msg();
-        syscall(93, 1);
+        die_end();
     }
 }
 
@@ -565,9 +561,7 @@ void no_text_for_int(int want) {
         write_err("a text was given, but the parameter is a number");
         end_msg();
         write_err("  help: declare the parameter as char^ or String, or give a number\n");
-        err_count += 1;
-        err_summary();
-        syscall(93, 1);
+        die_end();
     }
     die_help("a text cannot be stored in an int", "declare the variable as char^ or String");
 }
@@ -775,7 +769,7 @@ void check_local_name(char^ name) {
         }
         end_msg();
         write_err("  help: use another name, or assign to the variable that exists\n");
-        syscall(93, 1);
+        die_end();
     }
 }
 
@@ -1443,9 +1437,7 @@ void die_no_member(int st, int kind, char^ name) {
     write_err("' are: ");
     write_member_names(st, kind);
     write_err("\n");
-    err_count += 1;
-    err_summary();
-    syscall(93, 1);
+    die_end();
 }
 
 void check_arg_count(int fi, int skip, int given) {
@@ -3050,9 +3042,7 @@ bool module_dot(char^ name) {
             write_err("  help: ");
             write_err(@hp);
             write_err("\n");
-            err_count += 1;
-            err_summary();
-            syscall(93, 1);
+            die_end();
         }
         return false;
     }
@@ -3403,9 +3393,7 @@ void str_adopt() {
             type_name_err(ex_ty);
             end_msg();
             write_err("  help: a String comes from a text or another String; str(value) makes text from a number\n");
-            err_count += 1;
-            err_summary();
-            syscall(93, 1);
+            die_end();
         }
     }
     rv_valid = 0;

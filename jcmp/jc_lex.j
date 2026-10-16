@@ -210,13 +210,23 @@ void err_summary() {
     write_err("\n");
 }
 
+// the end of every error message: with the recovery on (passes 1 and 2) the error is counted and thrown to the loop that reads
+// statements and items, which skips to the next one and goes on (so that all the mistakes of a file are shown, at most 20);
+// otherwise the summary is written and the compiler stops
+int recover_on;
+void die_end() {
+    err_count += 1;
+    if recover_on == 1 && err_count < 20 { throw "error already written"; }
+    if err_count >= 20 { write_err("too many errors, the compiler stops here\n"); }
+    err_summary();
+    syscall(93, 1);
+}
+
 void die(char^ msg) {
     begin_msg("error");
     write_err(msg);
     end_msg();
-    err_count += 1;
-    err_summary();
-    syscall(93, 1);
+    die_end();
 }
 
 // an error after which the parser can go on (the token that is missing is taken as written): shown once, in pass 1
@@ -229,6 +239,26 @@ void soft_error(char^ msg) {
     err_count += 1;
 }
 
+// an error that is written in every pass where it is met (pass 1 and 2), counted, and the reading goes on as if it were not there
+void soft_error_here(char^ msg) {
+    if pass_no != 1 { return; }
+    begin_msg("error");
+    write_err(msg);
+    end_msg();
+    err_count += 1;
+}
+
+void soft_error_help(char^ msg, char^ help) {
+    if pass_no != 1 { return; }
+    begin_msg("error");
+    write_err(msg);
+    end_msg();
+    write_err("  help: ");
+    write_err(help);
+    write_err("\n");
+    err_count += 1;
+}
+
 // an error with a second line  help: ...  under the source line
 void die_help(char^ msg, char^ help) {
     begin_msg("error");
@@ -237,9 +267,7 @@ void die_help(char^ msg, char^ help) {
     write_err("  help: ");
     write_err(help);
     write_err("\n");
-    err_count += 1;
-    err_summary();
-    syscall(93, 1);
+    die_end();
 }
 
 // what the parser sees now, for a message:  the end of the file / a text / 'token'
@@ -268,9 +296,7 @@ void die_found(char^ what, char^ help) {
     write_err("  help: ");
     write_err(help);
     write_err("\n");
-    err_count += 1;
-    err_summary();
-    syscall(93, 1);
+    die_end();
 }
 
 // the closest known name to `name` (at most 1 edit away, 2 for names of 5+ letters): in sug_buf, 1 if there is one
@@ -361,7 +387,7 @@ void die_name(char^ msg, char^ name) {
     if msg[0] == 'l' && msg[1] == 'i' && msg[2] == 'b' {
         write_err("  help: looked in the -I folders, J2K_PATH, ~/.j2k/lib and the lib folder next to the compiler; built in: stdlib, core, number, text, files, system, time, data, crypto, math, gfx, cpu, simd\n");
     }
-    syscall(93, 1);
+    die_end();
 }
 
 // the program has no main function (a message about the whole file, so it has no line)
@@ -552,9 +578,7 @@ void die_file(char^ path) {
     } else if e == 21 {
         write_err("  help: give the program file, for example main.jk\n");
     }
-    err_count += 1;
-    err_summary();
-    syscall(93, 1);
+    die_end();
 }
 
 // make `path` the current file (a new level); the old one is saved
@@ -1491,6 +1515,13 @@ void next() {
         adv();
         tok_str[sn] = 0;
         tok_str_len = sn;
+        if sn >= 2 && tok_str[sn - 2] == '/' && tok_str[sn - 1] == 'n' {
+            // "/n" or "text/n": a slash and the letter n (not a new line) unless the text is a path with more slashes
+            int sl = 0;
+            int sli = 0;
+            while sli < sn { if tok_str[sli] == '/' { sl += 1; } sli += 1; }
+            if sl == 1 { warn("this text ends with /n (a slash and the letter n): a new line is written \\n, with a backslash", "slash-n"); }
+        }
         return;
     }
     if c == 39 {
@@ -1613,9 +1644,7 @@ void expect(char^ s) {
             write_err("'");
         }
         end_msg();
-        err_count += 1;
-        err_summary();
-        syscall(93, 1);
+        die_end();
     }
     next();
 }

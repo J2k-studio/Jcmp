@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.167
+* **All the mistakes of a file are shown, not only the first one.** After an error the compiler skips to the end of the statement (or the item) and goes on reading; at most 20 errors, then `too many errors`. `N errors generated.` closes the list. (`die_end` throws to `recover_statement` / `parse_program` in passes 1 and 2.)
+* **Clearer messages for common slips:** a statement outside a function (`while`, `if`, `cout`, `x = 5;` at the top of the file) says `a statement cannot be written here, outside a function` with the fix; `int main {` says the ( ) are missing and still reads the body; `while x = 2 {` says that = stores and == compares; the error about a file that cannot be read no longer starts with `:0:0:`.
+* **New warning `-Wslash-n`:** a text that ends with `/n` (slash, letter n) is almost always a mistake for `\n`.
+* Gate: 493 tests pass (default and `-noast`), 300 fuzz programs, `diffcheck` the same 2 differences. Tests: `t437_fail_many_errors`, `t438_warn_slash_n`.
+
 ## 0.9.166
 * **Library names have three layers (docs/syntax-design.md 77):** `Net::tcp.listen(8080)` is the full name; `using Net;` opens the modules of `Net` so that `tcp.listen(8080)` works; `using Net::tcp.listen;` opens only that function. The syntax tree reads all three forms too.
 * **A module that is not open is an error that says how to open it:** `unknown name 'tcp' (the module is not open)` + `help: write Net::tcp.listen(...), or add using Net; (or using Net::tcp.listen;)`. This replaces the automatic `module.function` of 0.9.164 (which was never documented; `tcp.listen` now needs `using Net;`).

@@ -31,6 +31,7 @@ int gfi_neg[4096];
 int gfi_f32[4096];
 int gfi_count;
 int cur_in_func;             // 1 while compiling a function body
+int fn_noparen;              // 1: the next function has no ( ) (see parse_top_item)
 int using_line;
 int gsi_off[4096];            // global structs whose init() runs at startup
 int gsi_s[4096];
@@ -612,6 +613,61 @@ void arith_op(char^ opname) {
 
 // ------------------------------------------------------------- statements
 
+// skip the rest of a statement or item that had an error: to after the next ';' or after the '}' that closes a block opened in it;
+// a '}' that closes the block we are in is left alone
+void recover_skip() {
+    int depth = 0;
+    while tok_kind != T_EOF {
+        if tok_is("{") {
+            depth += 1;
+        } else if tok_is("}") {
+            if depth == 0 { return; }
+            depth -= 1;
+            if depth == 0 {
+                next();
+                return;
+            }
+        } else if tok_is(";") && depth == 0 {
+            next();
+            return;
+        }
+        next();
+    }
+}
+
+// one statement; a mistake in it is written and the reading goes on with the next statement (die_end throws while recover_on is 1)
+void recover_statement() {
+    if recover_on != 1 {
+        parse_statement();
+        return;
+    }
+    int at = cur_pos;
+    int sv_blk = cur_blk;
+    int sv_base = scope_base;
+    int sv_ok = own_ok;
+    int sv_cond = cond_depth;
+    int sv_loop = loop_depth;
+    int sv_try = try_depth;
+    int sv_stash = stash_depth;
+    bool bad = false;
+    try {
+        parse_statement();
+    } catch (re) {
+        bad = true;
+    }
+    if bad {
+        cur_blk = sv_blk;
+        scope_base = sv_base;
+        own_ok = sv_ok;
+        cond_depth = sv_cond;
+        loop_depth = sv_loop;
+        try_depth = sv_try;
+        stash_depth = sv_stash;
+        recover_skip();
+        if cur_pos == at && tok_kind != T_EOF && !tok_is("}") { next(); }       // always go forward
+    }
+}
+
 void parse_block() {
     int scope_mark = lcount;             // names declared inside end with the block
     int saved_base = scope_base;
@@ -641,7 +697,7 @@ void parse_block() {
             write_err("  help: a '}' is missing; check the braces that follow that line\n");
             syscall(93, 1);
         }
-        parse_statement();
+        recover_statement();
     }
     expect("}");
     warn_unused(scope_mark);
@@ -658,6 +714,13 @@ void parse_block() {
 void parse_condition(int lfalse) {
     int t0 = own_count;
     parse_expr();
+    if tok_is("=") && recover_on == 1 {
+        // `while x = 2 {` : a single = stores a value; the error is written and the reading goes on at the block
+        soft_error_help("a condition compares values, but = stores one", "write == to compare:  while x == 2 {");
+        while !tok_is("{") && !tok_is(";") && tok_kind != T_EOF { next(); }
+        emit_line("mov x0, 1");
+        ex_ty = 1;
+    }
     need_bool();
     str_flush(t0, 1);                    // the Strings made by the condition are freed before the jump
     emit_line("cmp x0, 0");
@@ -2476,9 +2539,7 @@ void parse_statement_inner() {
                     type_name_err(ex_ty);
                     end_msg();
                     write_err("  help: return a text or a String, or change the return type of the function\n");
-                    err_count += 1;
-                    err_summary();
-                    syscall(93, 1);
+                    die_end();
                 }
             }
             check_assign(cur_ret_tid);
@@ -2779,7 +2840,9 @@ void parse_function() {
         emit_int(int_off + 144);
         emit_line("]");
     }
-    expect("(");
+    bool noparen = fn_noparen == 1;          // `int main {` : the ( ) are missing (an error was written), read it as a function without parameters
+    fn_noparen = 0;
+    if !noparen { expect("("); }
     int nparams = 0;
     if f_rettid >= 100 {
         // a struct result is written through a hidden first parameter
@@ -2800,7 +2863,7 @@ void parse_function() {
         next();
         if tok_is(",") { next(); }
     }
-    if !tok_is(")") {
+    if !noparen && !tok_is(")") {
         while true {
             parse_type();
             if ty_void == 1 && ty_ptr == 0 { die("a parameter cannot be void"); }
@@ -2892,7 +2955,7 @@ void parse_function() {
             }
         }
     }
-    expect(")");
+    if !noparen { expect(")"); }
     if f_interrupt == 1 && f_declared > 0 { die("an interrupt function takes no parameters"); }
     fnpar[f_idx] = f_declared;
     scope_base = 0;
@@ -3312,12 +3375,35 @@ void parse_top_item() {
         parse_function();
         return;
     }
+    if tok_is("{") && !(ty_void == 0 && ty_ptr == 0 && false) {
+        // `int main {` : a function whose ( ) are missing
+        soft_error_here("a function needs ( ) after its name (write  int main() {  ), the body is read as if they were there");
+        fn_noparen = 1;
+        parse_function();
+        return;
+    }
     if fn_naked == 1 || fn_noreturn == 1 || fn_interrupt == 1 || fn_align != 0 { die("naked, noreturn, interrupt and align(N) are for functions"); }
     if ty_void == 1 && ty_ptr == 0 { die_help("a variable cannot be void", "void is only for functions that give no value; use int, double, ... for a variable"); }
     parse_global(@d_fname);
 }
 
 // one top-level item (generic declarations and the instances an item needs are handled first)
+// at the top level of a file: does the token start a statement (while, if, cout ..., or `name = ...;` / `name(...);`) instead of an item?
+bool top_statement_follows() {
+    if tok_kind != T_IDENT { return false; }
+    if tok_is("while") || tok_is("if") || tok_is("for") || tok_is("loop") || tok_is("switch") || tok_is("return") || tok_is("break") || tok_is("continue") { return true; }
+    if tok_is("cout") || tok_is("cin") || tok_is("coutf") || tok_is("cinf") || tok_is("defer") || tok_is("try") || tok_is("throw") { return true; }
+    if find_struct(@tok_text) >= 0 || find_enum(@tok_text) >= 0 || at_type() { return false; }
+    // a name that is not a type, then = or ( : an assignment or a call
+    int k = 0;
+    while lc(k) == ' ' || lc(k) == 9 { k += 1; }
+    int c = lc(k);
+    if c == '=' && lc(k + 1) != '=' { return true; }
+    if c == '(' { return find_func(@tok_text) >= 0 || lookup_var(@tok_text); }
+    if (c == '+' || c == '-') && lc(k + 1) == c { return true; }
+    return false;
+}
+
 void parse_one_item() {
     gen_item();
     if tok_kind == T_EOF { return; }
@@ -3352,6 +3438,9 @@ void parse_one_item() {
         blk_virtual = 1;
         parse_function();
     } else {
+        if top_statement_follows() {
+            die_help("a statement cannot be written here, outside a function", "lines like this run inside a function: write  int main() {  before them and  }  after them");
+        }
         parse_top_item();
     }
     gen_lambdas();                       // the lambdas written in this item become functions now
@@ -3359,7 +3448,28 @@ void parse_one_item() {
 }
 
 void parse_program() {
-    while tok_kind != T_EOF { parse_one_item(); }
+    while tok_kind != T_EOF {
+        if recover_on != 1 {
+            parse_one_item();
+        } else {
+            int at = cur_pos;
+            bool bad = false;
+            try {
+                parse_one_item();
+            } catch (re) {
+                bad = true;
+            }
+            if bad {
+                cur_in_func = 0;
+                loop_depth = 0;
+                try_depth = 0;
+                cond_depth = 0;
+                recover_skip();
+                if cur_pos == at && tok_kind != T_EOF { next(); }
+                if tok_is("}") { next(); }       // a '}' with no block to close
+            }
+        }
+    }
 }
 
 // the entry point: sets x28 (the global area), keeps the initial sp (argc /
