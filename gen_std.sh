@@ -57,6 +57,6 @@ text += gen("push_stats", ["stats"], "push_stats(): `using math::stats` -- Stats
 text += gen("push_matrix", ["matrix"], "push_matrix(): `import <matrix>` -- Mat3, Mat4.")
 text += gen("push_canvas", ["canvas"], "push_canvas(): `using gfx::canvas` -- Canvas.")
 text += gen("push_screen", ["screen"], "push_screen(): `using gfx::screen` -- Screen.")
-text += gen("push_prelude", ["prelude"], "push_prelude(): read in front of every program (Mem and the dynamic array routines).")
+text += gen("push_prelude", ["rt_heap", "rt_hw", "rt_mem", "rt_arr", "rt_str", "rt_in", "rt_mt"], "push_prelude(): the runtime, read in front of every program: heap + panic, hardware (Cpu Atomic Cache Bit), Mem, dynamic arrays, String, keyboard input, threads.")
 open("jcmp/jc_std.j", "w").write("\n".join(text))
 PY

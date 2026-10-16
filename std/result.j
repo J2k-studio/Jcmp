@@ -15,6 +15,47 @@ struct Error {
         e.message = message;
         return e;
     }
+    // the reason of a system error number in words (a negative number from a system call is fine)
+    static String reason(int e) {
+        if e < 0 { e = 0 - e; }
+        if e == 1 { return "not allowed"; }
+        if e == 2 { return "there is no file or folder with this name"; }
+        if e == 4 { return "interrupted"; }
+        if e == 9 { return "the file number is not open"; }
+        if e == 12 { return "out of memory"; }
+        if e == 13 { return "permission denied"; }
+        if e == 17 { return "it exists already"; }
+        if e == 20 { return "a part of the path is a file, not a folder"; }
+        if e == 21 { return "this is a folder, not a file"; }
+        if e == 22 { return "invalid argument"; }
+        if e == 24 { return "too many files are open"; }
+        if e == 28 { return "no space left on the device"; }
+        if e == 32 { return "the other side has closed the connection"; }
+        if e == 36 { return "the name is too long"; }
+        if e == 39 { return "the folder is not empty"; }
+        if e == 97 { return "this kind of address is not supported"; }
+        if e == 98 { return "the address is already in use"; }
+        if e == 99 { return "this address cannot be used here"; }
+        if e == 104 { return "the connection was reset"; }
+        if e == 110 { return "timed out"; }
+        if e == 111 { return "connection refused (nothing listens there)"; }
+        if e == 113 { return "no route to the host"; }
+        return "the system refused";
+    }
+    // the kind of a system error number
+    static ErrorKind kind_of(int e) {
+        if e < 0 { e = 0 - e; }
+        if e == 2 || e == 20 || e == 110 || e == 111 || e == 113 { return ErrorKind::NotFound; }
+        if e == 13 || e == 1 { return ErrorKind::Denied; }
+        if e == 22 || e == 21 || e == 36 || e == 97 { return ErrorKind::Invalid; }
+        return ErrorKind::Io;
+    }
+    // the error for a system error number: "what: reason (error N)"
+    static Error from_errno(int e, String what) {
+        if e < 0 { e = 0 - e; }
+        String m = what + ": " + Error::reason(e) + " (error " + str(e) + ")";
+        return Error::make(Error::kind_of(e), m);
+    }
     void free(self) {
         self.message.free();
     }

@@ -1954,3 +1954,21 @@ What works today: `!(a & b)` for NAND and `!(a | b)` for NOR (`!` gives 0 / 1), 
 | C functions in the library | `Logic::nand(a, b)` | no new words, the inliner makes it one instruction | longer than A |
 | D a table | `gate(g, a, b)` = bit `a*2+b` of a constant per gate | one expression for any gate; branch free | hard to read |
 Assistant's view: A for now (it is already short); if the owner wants words, B with the bitwise meaning (`nand` = `~(a & b)`, a `bool` operand gives a `bool`). Question: A, B or C?
+
+## 73. `using <module>;` makes the functions of a module plain names (owner asked 2026-10-16: "if there is a module net it must be `Net::` ... that is heavy; let `using net;` let me write the functions normally")
+
+Owner's request, implemented the same day. `using Net;` already worked for any struct; the new part is that the **lower-case
+name of a module** is accepted too: `using net;` means `using Net;`, `using fs;` means `using Fs;` (the struct with the same
+name and a capital first letter). After it a call of a static function of that struct is written without the prefix:
+
+```
+#import <net>
+using net;
+int l = tcp_listen(8080).unwrap();
+send(c, "hi").unwrap();
+```
+
+Rules: a function of the program with the same name wins over the module's; `using` inside a function holds for that
+function only, outside for the file (as `using stdlib;`). Also: a call used as a statement can be followed by `.method()`
+(`pair(@p).unwrap();`). Test: `t433_using_module`. Open: whether two modules with the same function name (`close` of `net`
+and of `fs`) should be an error or the first one wins (not checked yet; the order of the structs decides today).

@@ -1,6 +1,8 @@
-# J2K / Jcmp 0.9.162
+# J2K / Jcmp 0.9.163
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
+
+**0.9.163:** fix for Android: a program that accepts a network connection no longer dies with "Bad system call"; `using net;`; errors say why (unreadable file, file system and network errors).
 
 **0.9.162:** internal: `__hash`, `__panic`, unsized char arrays and the constructors of Result / Option are made from the syntax tree; the member names in a "has no method" help line are printed.
 

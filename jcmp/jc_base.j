@@ -226,12 +226,14 @@ int bare_mode;               // 1: the file starts with #!library: nothing is ad
 
 // read a whole file into dst (at most cap-1 bytes) and end it with 0;
 // returns the length, or -1 if it cannot be opened/read
+int file_errno;              // why the last read_file failed: the number of the system error (2 no such file, 13 no right, 21 a folder ...)
 int read_file(char^ path, char^ dst, int cap) {
+    file_errno = 0;
     int fd = syscall(56, -100, path, 0, 0);
-    if fd < 0 { return -1; }
+    if fd < 0 { file_errno = 0 - fd; return -1; }
     int n = syscall(63, fd, dst, cap - 1);
     syscall(57, fd);
-    if n < 0 { return -1; }
+    if n < 0 { file_errno = 0 - n; return -1; }
     dst[n] = 0;
     return n;
 }

@@ -71,6 +71,47 @@ void push_std_units(int mask) {
         put("        e.message = message;");
         put("        return e;");
         put("    }");
+        put("    // the reason of a system error number in words (a negative number from a system call is fine)");
+        put("    static String reason(int e) {");
+        put("        if e < 0 { e = 0 - e; }");
+        put("        if e == 1 { return \"not allowed\"; }");
+        put("        if e == 2 { return \"there is no file or folder with this name\"; }");
+        put("        if e == 4 { return \"interrupted\"; }");
+        put("        if e == 9 { return \"the file number is not open\"; }");
+        put("        if e == 12 { return \"out of memory\"; }");
+        put("        if e == 13 { return \"permission denied\"; }");
+        put("        if e == 17 { return \"it exists already\"; }");
+        put("        if e == 20 { return \"a part of the path is a file, not a folder\"; }");
+        put("        if e == 21 { return \"this is a folder, not a file\"; }");
+        put("        if e == 22 { return \"invalid argument\"; }");
+        put("        if e == 24 { return \"too many files are open\"; }");
+        put("        if e == 28 { return \"no space left on the device\"; }");
+        put("        if e == 32 { return \"the other side has closed the connection\"; }");
+        put("        if e == 36 { return \"the name is too long\"; }");
+        put("        if e == 39 { return \"the folder is not empty\"; }");
+        put("        if e == 97 { return \"this kind of address is not supported\"; }");
+        put("        if e == 98 { return \"the address is already in use\"; }");
+        put("        if e == 99 { return \"this address cannot be used here\"; }");
+        put("        if e == 104 { return \"the connection was reset\"; }");
+        put("        if e == 110 { return \"timed out\"; }");
+        put("        if e == 111 { return \"connection refused (nothing listens there)\"; }");
+        put("        if e == 113 { return \"no route to the host\"; }");
+        put("        return \"the system refused\";");
+        put("    }");
+        put("    // the kind of a system error number");
+        put("    static ErrorKind kind_of(int e) {");
+        put("        if e < 0 { e = 0 - e; }");
+        put("        if e == 2 || e == 20 || e == 110 || e == 111 || e == 113 { return ErrorKind::NotFound; }");
+        put("        if e == 13 || e == 1 { return ErrorKind::Denied; }");
+        put("        if e == 22 || e == 21 || e == 36 || e == 97 { return ErrorKind::Invalid; }");
+        put("        return ErrorKind::Io;");
+        put("    }");
+        put("    // the error for a system error number: \"what: reason (error N)\"");
+        put("    static Error from_errno(int e, String what) {");
+        put("        if e < 0 { e = 0 - e; }");
+        put("        String m = what + \": \" + Error::reason(e) + \" (error \" + str(e) + \")\";");
+        put("        return Error::make(Error::kind_of(e), m);");
+        put("    }");
         put("    void free(self) {");
         put("        self.message.free();");
         put("    }");
@@ -1018,18 +1059,7 @@ void push_std_units(int mask) {
         put("// an Error for the system error number e (a negative number from a system call is fine) and what was being done");
         put("struct Fs {");
         put("    static Error error(int e, String what, String path) {");
-        put("        if e < 0 { e = 0 - e; }");
-        put("        ErrorKind k = ErrorKind::Io;");
-        put("        if e == 2 || e == 20 { k = ErrorKind::NotFound; }");
-        put("        if e == 13 || e == 1 { k = ErrorKind::Denied; }");
-        put("        if e == 22 || e == 21 || e == 36 { k = ErrorKind::Invalid; }");
-        put("        String m = what + path;");
-        put("        m += \" (error \";");
-        put("        m += (char)('0' + e / 100 % 10);");
-        put("        m += (char)('0' + e / 10 % 10);");
-        put("        m += (char)('0' + e % 10);");
-        put("        m += \")\";");
-        put("        return Error::make(k, m);");
+        put("        return Error::from_errno(e, what + path);");
         put("    }");
         put("    // the whole file as a String");
         put("    static Result<String, Error> read_text(String path) {");
@@ -2885,13 +2915,7 @@ void push_std_units(int mask) {
         put("//   client:  int s = Net::tcp_connect(\"127.0.0.1\", 8080)?;   Net::send(s, \"hello\")?;   Net::close(s);");
         put("struct Net {");
         put("    static Error fail(String what, int e) {");
-        put("        int code = e;");
-        put("        if code < 0 { code = 0 - code; }");
-        put("        ErrorKind k = ErrorKind::Io;");
-        put("        if code == 111 || code == 113 || code == 110 { k = ErrorKind::NotFound; }");
-        put("        if code == 13 || code == 1 { k = ErrorKind::Denied; }");
-        put("        if code == 22 || code == 97 { k = ErrorKind::Invalid; }");
-        put("        return Error::make(k, what + \" (error \" + str(code) + \")\");");
+        put("        return Error::from_errno(e, what);");
         put("    }");
         put("    // the four numbers of \"a.b.c.d\" in a[0..3]; false when it is not an address");
         put("    static bool parse_ip(String s, int^ a) {");
@@ -2957,7 +2981,9 @@ void push_std_units(int mask) {
         put("        return ((sa[2] & 255) << 8) | (sa[3] & 255);");
         put("    }");
         put("    static Result<int, Error> accept(int fd) {");
-        put("        int c = syscall(202, fd, 0, 0);");
+        put("        // accept4 (242), not accept (202): the filter of Android kills a program that makes the plain accept call (\"Bad system call\")");
+        put("        int c = syscall(242, fd, 0, 0, 0);");
+        put("        while c == 0 - 4 { c = syscall(242, fd, 0, 0, 0); }          // interrupted by a signal: again");
         put("        if c < 0 { return Result<int, Error>::Err(Net::fail(\"accept failed\", c)); }");
         put("        return Result<int, Error>::Ok(c);");
         put("    }");
@@ -2990,6 +3016,7 @@ void push_std_units(int mask) {
         put("        while done < data.len {");
         put("            char^ p = data.c();");
         put("            int n = syscall(64, fd, @p[done], data.len - done);");
+        put("            while n == 0 - 4 { n = syscall(64, fd, @p[done], data.len - done); }");
         put("            if n < 0 { return Result<int, Error>::Err(Net::fail(\"send failed\", n)); }");
         put("            if n == 0 { break; }");
         put("            done += n;");
@@ -3000,6 +3027,7 @@ void push_std_units(int mask) {
         put("    static Result<String, Error> recv(int fd, int max) {");
         put("        char^ b = (char^)Mem::alloc(max + 1);");
         put("        int n = syscall(63, fd, b, max);");
+        put("        while n == 0 - 4 { n = syscall(63, fd, b, max); }");
         put("        if n < 0 {");
         put("            Mem::free((void^)b);");
         put("            return Result<String, Error>::Err(Net::fail(\"receive failed\", n));");
@@ -4344,7 +4372,7 @@ void push_screen() {
     cur_line_start = 0;
 }
 
-// push_prelude(): read in front of every program (Mem and the dynamic array routines).
+// push_prelude(): the runtime, read in front of every program: heap + panic, hardware (Cpu Atomic Cache Bit), Mem, dynamic arrays, String, keyboard input, threads.
 void push_prelude() {
     if lx_depth >= 15 { die("imports nested too deeply"); }
     stk_pos[lx_depth] = cur_pos;
@@ -4418,6 +4446,7 @@ void push_prelude() {
     put("    syscall(94, 134);");
     put("}");
     put("");
+    put("");
     put("// Cpu: instructions of the CPU that have no other way in (the compiler puts the instruction where the call is)");
     put("struct Cpu {");
     put("    static void wait() { __cpu_wait(); }                  // wfi: sleep until an interrupt");
@@ -4468,6 +4497,7 @@ void push_prelude() {
     put("    // the 8 bytes in the other order");
     put("    static int bswap(int x) { return __bswap(x); }");
     put("}");
+    put("");
     put("");
     put("struct Mem {");
     put("    // the order of the memory accesses (dmb): barrier = all, barrier_read = loads before, barrier_write = stores before, barrier_full = dsb");
@@ -5057,6 +5087,7 @@ void push_prelude() {
     put("    }");
     put("}");
     put("");
+    put("");
     put("// Dynamic arrays (T[] x = arr(n)): a header [length, capacity, data, element size]");
     put("// points to the elements. The header stays where it is, so every copy of the");
     put("// variable sees the same array; only the data block moves when it grows.");
@@ -5259,6 +5290,7 @@ void push_prelude() {
     put("        Mem::free(hv);");
     put("    }");
     put("}");
+    put("");
     put("");
     put("// String: a dynamic array of char (header [length, capacity, data, 1]) whose data always ends");
     put("// in a 0 byte after the length, so that the data is also a C-style text (cout, c()).");
@@ -6057,6 +6089,7 @@ void push_prelude() {
     put("    }");
     put("}");
     put("");
+    put("");
     put("// Reading the keyboard (cin >> x, cinf >> x): a buffer over file descriptor 0.");
     put("char std_in_buf[4096];");
     put("int std_in_pos;");
@@ -6249,6 +6282,7 @@ void push_prelude() {
     put("        return n;");
     put("    }");
     put("}");
+    put("");
     put("");
     put("// #multithread for i in a..b { ... }: the iterations are shared among several threads.");
     put("struct __Mt {");

@@ -139,11 +139,15 @@ void begin_msg(char^ kind) {
     msg_kind = 1;
     if str_eq(kind, "warning") { msg_kind = 2; }
     set_color("[1m");
-    write_err(@err_file);
-    write_err(":");
-    write_err_int(err_line);
-    write_err(":");
-    write_err_int(err_col);
+    if err_file[0] != 0 {
+        write_err(@err_file);
+        write_err(":");
+        write_err_int(err_line);
+        write_err(":");
+        write_err_int(err_col);
+    } else {
+        write_err("jcmp");                  // no source file yet (the file named on the command line cannot be read)
+    }
     write_err(": ");
     kind_color();
     write_err(kind);
@@ -460,6 +464,99 @@ int ro_next;                 // 1: the next global variable is read-only
 int ro_file;                 // bit d: the file at depth d has #pragma read as its first line
 int lvl_seq0[16];            // tok_seq when the file at this depth was entered
 
+// the files of the folder of `path` that are named almost like it: the closest in sug_buf (with the folder in front)
+void sug_files(char^ path) {
+    char dir[256];
+    char base[128];
+    int n = str_len(path);
+    int slash = 0 - 1;
+    int i = 0;
+    while i < n { if path[i] == '/' { slash = i; } i += 1; }
+    if slash < 0 {
+        dir[0] = '.';
+        dir[1] = 0;
+        str_copy(@base, path, 128);
+    } else {
+        str_copy(@dir, path, 256);
+        dir[slash] = 0;
+        if slash == 0 { dir[0] = '/'; dir[1] = 0; }
+        str_copy(@base, path + slash + 1, 128);
+    }
+    int fd = syscall(56, -100, @dir, 0, 0);
+    if fd < 0 { return; }
+    char ents[4096];
+    int guard = 0;
+    while guard < 64 {
+    guard += 1;
+    int got = syscall(61, fd, @ents, 4096);
+    if got <= 0 { break; }
+    int off = 0;
+    while off < got {
+        int reclen = (ents[off + 16] & 255) | ((ents[off + 17] & 255) << 8);
+        char^ nm = @ents[off + 19];
+        if nm[0] != '.' {
+            // the name with or without the ending .jk
+            sug_try(@base, nm);
+            int ln = str_len(nm);
+            if ln > 3 && nm[ln - 3] == '.' && nm[ln - 2] == 'j' && nm[ln - 1] == 'k' {
+                char stem[128];
+                str_copy(@stem, nm, 128);
+                stem[ln - 3] = 0;
+                sug_try(@base, @stem);
+            }
+        }
+        if reclen <= 0 { break; }
+        off += reclen;
+    }
+    }
+    syscall(57, fd);
+    if sug_buf[0] != 0 && slash >= 0 {
+        // the folder goes in front of the name
+        char whole[256];
+        str_copy(@whole, path, 256);
+        whole[slash + 1] = 0;
+        int wl = str_len(@whole);
+        str_copy(@whole + wl, @sug_buf, 256 - wl);
+        str_copy(@sug_buf, @whole, 64);
+    }
+}
+
+// error: the file `path` cannot be read; says why, and offers a file of almost the same name
+void die_file(char^ path) {
+    begin_msg("error");
+    write_err("cannot read file '");
+    write_err(path);
+    write_err("': ");
+    int e = file_errno;
+    if e == 2 { write_err("there is no file with this name"); }
+    else if e == 13 { write_err("permission denied (no right to read it)"); }
+    else if e == 21 { write_err("this is a folder, not a file"); }
+    else if e == 20 { write_err("a part of the path is a file, not a folder"); }
+    else if e == 36 { write_err("the name is too long"); }
+    else if e == 40 { write_err("too many symbolic links"); }
+    else { write_err("the system could not read it (error "); write_err_int(e); write_err(")"); }
+    end_msg();
+    sug_best = 99;
+    sug_buf[0] = 0;
+    if e == 2 || e == 20 { sug_files(path); }
+    if sug_buf[0] != 0 {
+        write_err("  help: did you mean '");
+        write_err(@sug_buf);
+        write_err("'?\n");
+    } else if e == 2 {
+        char cwd[256];
+        int cl = syscall(17, @cwd, 256);
+        write_err("  help: check the spelling; looked in the folder ");
+        if cl > 0 { write_err("'"); write_err(@cwd); write_err("'"); } else { write_err("(this one)"); }
+        write_err("\n");
+    } else if e == 21 {
+        write_err("  help: give the program file, for example main.jk\n");
+    }
+    err_count += 1;
+    err_summary();
+    syscall(93, 1);
+}
+
 // make `path` the current file (a new level); the old one is saved
 void push_file(char^ path) {
     if lx_depth >= 15 { die("imports nested too deeply"); }
@@ -473,7 +570,7 @@ void push_file(char^ path) {
     cur_base = lx_depth * 524288;
     str_copy(@lvl_name + lx_depth * 128, path, 128);
     int n = read_file(path, @src_bufs + cur_base, 524288);
-    if n < 0 { die_name("cannot read file", path); }
+    if n < 0 { die_file(path); }
     cur_len = n;
     cur_pos = 0;
     cur_line = 1;
@@ -564,7 +661,7 @@ void lex_init(char^ path) {
     lvl_seq0[0] = 0;
     str_copy(@lvl_name, path, 128);
     int n = read_file(path, @src_bufs, 524288);
-    if n < 0 { die_name("cannot read file", path); }
+    if n < 0 { die_file(path); }
     cur_len = n;
     cur_pos = 0;
     cur_line = 1;

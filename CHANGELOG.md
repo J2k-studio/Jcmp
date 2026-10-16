@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.163
+* **Fix (Android / Termux): `Net::accept` made the system call `accept` (202), which the filter of Android kills with "Bad system call"; it uses `accept4` (242) now.** A program that listened and accepted (a web server) died at the first connection. `send` / `recv` / `accept` also try again when a signal interrupts them.
+* **`using net;`** (also `using fs;` ...): the lower-case name of a module makes its functions plain names (`send(c, "hi")` instead of `Net::send`). A call used as a statement can be followed by `.method()` (`pair(@p).unwrap();`).
+* **Error messages say why:** an unreadable source file says if there is no file with that name, no permission, or a folder, offers a file of almost the same name and names the folder searched; no more `:0:0:` in front. The errors of `Fs` and `Net` carry the reason in words (`cannot open x: there is no file or folder with this name (error 2)`) from one table (`Error::from_errno`).
+* The runtime `std/prelude.j` is split into `rt_heap`, `rt_hw`, `rt_mem`, `rt_arr`, `rt_str`, `rt_in`, `rt_mt` (the generated code is the same); plan in `docs/design/14-modules.md`.
+* Gate: 488 tests pass. Tests: `t432` (unreadable file), `t433_using_module`.
+
 ## 0.9.162
 * **AST A6:** `__hash(x)`, `char s[] = "text"`, `0` as a null pointer, `__panic("text")`, and the assignment of a value that frees itself (the old content is freed, the new one moved in: the constructors `Result::Ok` / `Err` and `Option::Some`) are made from the tree.
 * Fix: a struct that owns memory, taken out of a data enum in `unwrap`, stays on the text path (found by `diffcheck`; test `t430_unwrap_struct`). A function whose result is a struct, a String or an array only takes a `return` of a value of that kind.

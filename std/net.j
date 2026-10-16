@@ -3,13 +3,7 @@
 //   client:  int s = Net::tcp_connect("127.0.0.1", 8080)?;   Net::send(s, "hello")?;   Net::close(s);
 struct Net {
     static Error fail(String what, int e) {
-        int code = e;
-        if code < 0 { code = 0 - code; }
-        ErrorKind k = ErrorKind::Io;
-        if code == 111 || code == 113 || code == 110 { k = ErrorKind::NotFound; }
-        if code == 13 || code == 1 { k = ErrorKind::Denied; }
-        if code == 22 || code == 97 { k = ErrorKind::Invalid; }
-        return Error::make(k, what + " (error " + str(code) + ")");
+        return Error::from_errno(e, what);
     }
     // the four numbers of "a.b.c.d" in a[0..3]; false when it is not an address
     static bool parse_ip(String s, int^ a) {
@@ -75,7 +69,9 @@ struct Net {
         return ((sa[2] & 255) << 8) | (sa[3] & 255);
     }
     static Result<int, Error> accept(int fd) {
-        int c = syscall(202, fd, 0, 0);
+        // accept4 (242), not accept (202): the filter of Android kills a program that makes the plain accept call ("Bad system call")
+        int c = syscall(242, fd, 0, 0, 0);
+        while c == 0 - 4 { c = syscall(242, fd, 0, 0, 0); }          // interrupted by a signal: again
         if c < 0 { return Result<int, Error>::Err(Net::fail("accept failed", c)); }
         return Result<int, Error>::Ok(c);
     }
@@ -108,6 +104,7 @@ struct Net {
         while done < data.len {
             char^ p = data.c();
             int n = syscall(64, fd, @p[done], data.len - done);
+            while n == 0 - 4 { n = syscall(64, fd, @p[done], data.len - done); }
             if n < 0 { return Result<int, Error>::Err(Net::fail("send failed", n)); }
             if n == 0 { break; }
             done += n;
@@ -118,6 +115,7 @@ struct Net {
     static Result<String, Error> recv(int fd, int max) {
         char^ b = (char^)Mem::alloc(max + 1);
         int n = syscall(63, fd, b, max);
+        while n == 0 - 4 { n = syscall(63, fd, b, max); }
         if n < 0 {
             Mem::free((void^)b);
             return Result<String, Error>::Err(Net::fail("receive failed", n));

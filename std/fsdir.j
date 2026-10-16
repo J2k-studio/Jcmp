@@ -2,18 +2,7 @@
 // an Error for the system error number e (a negative number from a system call is fine) and what was being done
 struct Fs {
     static Error error(int e, String what, String path) {
-        if e < 0 { e = 0 - e; }
-        ErrorKind k = ErrorKind::Io;
-        if e == 2 || e == 20 { k = ErrorKind::NotFound; }
-        if e == 13 || e == 1 { k = ErrorKind::Denied; }
-        if e == 22 || e == 21 || e == 36 { k = ErrorKind::Invalid; }
-        String m = what + path;
-        m += " (error ";
-        m += (char)('0' + e / 100 % 10);
-        m += (char)('0' + e / 10 % 10);
-        m += (char)('0' + e % 10);
-        m += ")";
-        return Error::make(k, m);
+        return Error::from_errno(e, what + path);
     }
     // the whole file as a String
     static Result<String, Error> read_text(String path) {

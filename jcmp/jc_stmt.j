@@ -1368,6 +1368,13 @@ void parse_using() {
         }
     } else if tok_kind == T_IDENT {
         us_s = find_struct(@tok_text);
+        if us_s < 0 && tok_text[0] >= 'a' && tok_text[0] <= 'z' {
+            // using net;  the name of a module: the struct with the same name and a capital letter (Net)
+            char capn[64];
+            str_copy(@capn, @tok_text, 64);
+            capn[0] = capn[0] - 32;
+            us_s = find_struct(@capn);
+        }
         if us_s < 0 && pass_no >= 2 { die_name("unknown struct", @tok_text); }
         next();
     }
@@ -2503,6 +2510,7 @@ void parse_statement_inner() {
     if tok_is("(") && !(lookup_var(@s_name) && v_tid < 0 && v_kind != 2) {   // a call used as a statement
         resolve_callee();
         gen_call();
+        if tok_is(".") { call_postfix(); }               // pair(@p).unwrap(); : go on with the result of the call
         if last_call_owning == 1 { warn("the memory returned here is not kept, so it can never be freed", "leak"); }
         expect(";");
         return;
