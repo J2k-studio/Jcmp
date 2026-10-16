@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.162
+* **AST A6:** `__hash(x)`, `char s[] = "text"`, `0` as a null pointer, `__panic("text")`, and the assignment of a value that frees itself (the old content is freed, the new one moved in: the constructors `Result::Ok` / `Err` and `Option::Some`) are made from the tree.
+* Fix: a struct that owns memory, taken out of a data enum in `unwrap`, stays on the text path (found by `diffcheck`; test `t430_unwrap_struct`). A function whose result is a struct, a String or an array only takes a `return` of a value of that kind.
+* Fix: the help line "the methods of 'X' are: ..." printed empty names.
+* Gate: 486 tests pass (default and `-noast`), 300 fuzz programs, `diffcheck` the same 2 differences. 1702 of 1927 corpus functions come from the tree.
+* Tests: `t429_ast_hash`, `t430_unwrap_struct`, `t431_ast_result_new`.
+
 ## 0.9.161
 * **AST A6:** array parameters (`int a[]`, `P ps[]`, `char t[]`), the arguments that are arrays or texts (address + number of elements), `a.len` on them, and `char w[16] = "text"` with `cout << w` are made from the tree.
 * **New warning `-Woldlen`:** `name__len` is the old way to read the length of an array parameter; use `name.len`. The old name still works.

@@ -1,6 +1,8 @@
-# J2K / Jcmp 0.9.161
+# J2K / Jcmp 0.9.162
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
+
+**0.9.162:** internal: `__hash`, `__panic`, unsized char arrays and the constructors of Result / Option are made from the syntax tree; the member names in a "has no method" help line are printed.
 
 **0.9.161:** internal: array parameters, `char w[N] = "text"` are made from the syntax tree. New warning `-Woldlen` for `name__len` (use `name.len`).
 

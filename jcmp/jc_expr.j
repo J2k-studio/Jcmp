@@ -1351,7 +1351,7 @@ void write_member_names(int st, int kind) {
             }
             if same && nm[pl] == '_' && nm[pl + 1] == '_' && nm[pl + 2] != '_' && fbuiltin[k] == 0 {
                 if shown > 0 { write_err(", "); }
-                write_err(@nm + pl + 2);
+                write_err(@nm[pl + 2]);
                 shown += 1;
             }
             k += 1;

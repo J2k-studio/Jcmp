@@ -288,6 +288,7 @@ bool as1_special(char^ nm) {
     if as1_intrin(nm) != 0 { return false; }
     if as1_prefix(nm, "Bit__") || as1_prefix(nm, "Cpu__") || as1_prefix(nm, "Cache__") || as1_prefix(nm, "Atomic__") { return true; }
     if as1_prefix(nm, "Mem__bar") { return true; }
+    if str_eq(nm, "__panic") { return false; }          // a function of the prelude: a call
     return nm[0] == '_' && nm[1] == '_';
 }
 
@@ -618,7 +619,7 @@ bool as1_expr(int n) {
     int ty = ast_ty[n];
     if k == AK_STR { return ast_b[n] < 1000 && opt_debug == 0; }      // a text where a `char^` is wanted: the address of its bytes
     if !as1_val(ty) { return false; }
-    if k == AK_NUM { return as1_scalar(ty); }
+    if k == AK_NUM { return as1_scalar(ty) || (as1_pt(ty) && ast_val[n] == 0); }
     if k == AK_FNUM { return true; }
     if k == AK_ENUMV { return as1_enumv(n); }
     if k == AK_BUILTIN {
@@ -628,6 +629,12 @@ bool as1_expr(int n) {
         if bo == 5 {
             // alloc(bytes): a call of Mem__alloc (the -d build tells where the block was made: the text path)
             return opt_debug == 0 && a1 != 0 && ast_nx[a1] == 0 && as1_scalar(ast_ty[a1]) && !as1_dbl(ast_ty[a1]) && as1_expr(a1) && find_func("Mem__alloc") >= 0;
+        }
+        if bo == 9 {
+            // __hash(x): a String or a whole number / pointer
+            if a1 == 0 || ast_nx[a1] != 0 || opt_debug == 1 { return false; }
+            if ast_ty[a1] / 65536 == 4 { return as1_sval(a1); }
+            return as1_expr(a1) && !as1_dbl(ast_ty[a1]);
         }
         if bo == 8 {
             // syscall(number, up to 6 arguments): whole numbers and pointers (a text is its address)
@@ -821,6 +828,7 @@ bool as1_decl(int n) {
         if as1_arr(dt) {
             // a fixed array of one dimension with a number as its size, no initial values or a list that fits
             if init == 0 { return ast_b[n] > 0 && ast_b[n] < 65536; }
+            if ast_kind[init] == AK_STR && ast_b[n] < 0 { return dt % 65536 == 2 && ast_b[init] < 1000 && opt_debug == 0; }
             if ast_kind[init] == AK_STR { return dt % 65536 == 2 && ast_b[n] > 0 && ast_b[n] < 65536 && ast_b[init] < ast_b[n] && ast_b[init] < 1000 && opt_debug == 0; }
             if ast_kind[init] != AK_LIST { return false; }
             int cnt = as1_count(init);
@@ -892,7 +900,11 @@ bool as1_assign(int n) {
         int t = ast_c[n];
         if as1_sty(ast_ty[t]) {
             // a struct is copied: the target has an address, the value is a struct of the same type
-            if as1_sfree(ast_ty[t] % 65536 - 16) { return false; }
+            if struct_has_free(ast_ty[t] % 65536 - 16) {
+                // the old content is freed, the new one is moved in: from a local variable (emptied afterwards) or a call
+                int vk = ast_kind[ast_a[n]];
+                if vk != AK_VAR && vk != AK_CALL { return false; }
+            }
             return ast_b[n] == 0 && as1_lv(t) && as1_sbyval(ast_ty[t] % 65536 - 16) && ast_ty[ast_a[n]] == ast_ty[t] && as1_sx(ast_a[n]);
         }
         if !as1_target(t) || !as1_expr(ast_a[n]) || ast_b[n] < 0 { return false; }
@@ -937,7 +949,7 @@ bool as1_stmt(int n) {
         if ast_kind[ex] == AK_METHOD && as1_dyn(ast_ty[ast_a[ex]]) && !as1_sdyn(ast_ty[ast_a[ex]]) { return as1_dynmethod(ex) != 0; }
         if ast_kind[ex] == AK_METHOD && ast_ty[ast_a[ex]] / 65536 == 4 { return as1_strmethod(ex) != 0; }
         if ast_kind[ex] == AK_METHOD && as1_sdyn(ast_ty[ast_a[ex]]) { return as1_samethod(ex) != 0; }
-        if ast_kind[ex] == AK_BUILTIN && ast_fop_of(ast_val[ex]) == 8 { return as1_expr(ex); }
+        if ast_kind[ex] == AK_BUILTIN && ast_fop_of(ast_val[ex]) >= 8 { return as1_expr(ex); }
         return (ast_kind[ex] == AK_CALL && as1_call(ex)) || (ast_kind[ex] == AK_METHOD && as1_method(ex));
     }
     if k == AK_IF { return as1_expr(ast_a[n]) && as1_stmt(ast_b[n]) && as1_stmt(ast_c[n]); }
@@ -946,6 +958,7 @@ bool as1_stmt(int n) {
     if k == AK_RET {
         if ast_a[n] == 0 { return true; }
         if as1_sty(ast_ty[ast_a[n]]) { return as1_fret >= 0 && ast_ty[ast_a[n]] == 3 * 65536 + 16 + as1_fret && as1_sx(ast_a[n]); }
+        if as1_fret >= 0 || as1_fretstr == 1 || as1_fretdyn == 1 { if !(ast_ty[ast_a[n]] / 65536 == 4 || ast_ty[ast_a[n]] / 65536 == 5) { return false; } }      // the result is a struct, a String or an array: the value must be one too
         if ast_ty[ast_a[n]] / 65536 == 4 { return as1_fretstr == 1 && as1_sval(ast_a[n]); }
         if ast_ty[ast_a[n]] / 65536 == 5 { return as1_fretdyn == 1 && as1_dynval(ast_a[n]); }
         return as1_expr(ast_a[n]);
@@ -970,7 +983,7 @@ bool as1_stmt(int n) {
             while bn != 0 {
                 int bt = ast_ty[bn];
                 bool bok = as1_scalar(bt) || as1_pt(bt) || bt / 65536 == 4 || as1_dyn(bt);
-                if bt / 65536 == 3 && as1_scode(bt % 65536) && as1_splain(bt % 65536 - 16) { bok = true; }
+                if bt / 65536 == 3 && as1_scode(bt % 65536) && as1_splain(bt % 65536 - 16) && !struct_has_free(bt % 65536 - 16) { bok = true; }      // a value that frees itself is moved out of the enum: the text path
                 if !bok { return false; }
                 bn = ast_nx[bn];
             }
@@ -1216,6 +1229,7 @@ void at_store(int f_idx) {
         }
         if k == AK_BUILTIN { at_val[base + i] = ast_fop_of(ast_val[i]); }
         if k == AK_DECL && ast_b[i] < 0 && ast_a[i] != 0 && ast_kind[ast_a[i]] == AK_LIST { at_b[base + i] = as1_count(ast_a[i]); }
+        if k == AK_DECL && ast_b[i] < 0 && ast_a[i] != 0 && ast_kind[ast_a[i]] == AK_STR { at_b[base + i] = ast_b[ast_a[i]] + 1; }
         if k == AK_STR {
             int sl = ast_b[i];
             if at_spn + sl + 1 > 262144 { at_n = base; at_reject(f_idx, "literals"); return; }
@@ -1508,7 +1522,7 @@ bool gl_has_call(int n) {
     if n == 0 { return false; }
     int k = at_kind[n];
     if k == AK_CALL || k == AK_METHOD { return true; }
-    if k == AK_BUILTIN && at_val[n] == 8 { return true; }
+    if k == AK_BUILTIN && (at_val[n] == 8 || at_val[n] == 9) { return true; }
     if k == AK_BIN { return gl_has_call(at_a[n]) || gl_has_call(at_b[n]); }
     if k == AK_NEG || k == AK_NOT || k == AK_CAST || k == AK_DEREF || k == AK_ADDR || k == AK_FIELD || k == AK_BUILTIN { return gl_has_call(at_a[n]); }
     if k == AK_INDEX { return gl_has_call(at_a[n]) || gl_has_call(at_b[n]); }
@@ -1756,6 +1770,32 @@ void gl_saddr(int n) {
 
 // target = value for structs: the address of the target waits (v9 .. or a cell) while the value is made
 void gl_assign_struct(int target, int value) {
+    int fsi = at_ty[target] % 65536 - 16;
+    if struct_has_free(fsi) {
+        // value first, then free(target), copy, and the source is emptied
+        gl_lv(target);
+        gl_ensure();
+        if gl_ab != 1 || gl_ao != 0 { ir_add(IR_ADD, 1, gl_ab, gl_ao, 1, 0); }
+        int c1 = gl_cell(gl_depth);
+        gl_store(30, c1, 1);
+        gl_depth += 1;
+        gl_saddr(value);
+        gl_ensure();
+        int c2 = gl_cell(gl_depth);
+        gl_store(30, c2, 1);
+        gl_depth += 1;
+        gl_load(1, 30, c1);
+        char sfn[128];
+        str_copy(@sfn, @sname + fsi * 64, 64);
+        str_copy(@sfn + str_len(@sfn), "__free", 8);
+        gl_rt1(@sfn, 1);
+        gl_load(3, 30, c1);
+        gl_load(4, 30, c2);
+        gl_depth -= 2;
+        gl_copy(3, 0, 4, 0, ssize[fsi]);
+        go_zero();
+        return;
+    }
     gl_lv(target);
     bool fixed = gl_ab == 30 || gl_ab == 29;
     int fb = gl_ab;
@@ -2402,6 +2442,16 @@ void gl_expr(int n) {
         gl_rt1("Mem__alloc", 1);
         return;
     }
+    if k == AK_BUILTIN && at_val[n] == 9 {
+        if at_ty[at_a[n]] / 65536 == 4 {
+            gl_sval(at_a[n]);
+            gl_rt1("__Str__hash", 1);
+        } else {
+            gl_expr(at_a[n]);
+            gl_rt1("__Str__hashint", 1);
+        }
+        return;
+    }
     if k == AK_BUILTIN && at_val[n] == 8 {
         // syscall: the arguments wait in cells, then x8 = the number, x0 .. = the arguments
         int sbase = gl_depth;
@@ -2799,7 +2849,7 @@ void go_drain_val(int val) {
 
 // a value that frees itself moved out of a local variable: the local is emptied (zeros), as emit_zero_local did
 void go_zero() {
-    while go_peek() == 5 {
+    if go_peek() == 5 {
         int off = ow_a[go_pos];
         int size = ow_b[go_pos];
         go_pos += 1;

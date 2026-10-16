@@ -951,6 +951,7 @@ int ast_fop_of(int at) {
     if str_eq(nm, "alloc") { return 5; }            // alloc(n): the address of a block (typed as a whole number, a cast gives the pointer)
     if str_eq(nm, "free") { return 6; }
     if str_eq(nm, "arr") { return 7; }              // arr(n): a new dynamic array (only as the value of a declaration)
+    if str_eq(nm, "__hash") { return 9; }             // __hash(x): a number for a key of a Map / Set (a whole number is hashed, a String too)
     if str_eq(nm, "syscall") { return 8; }          // syscall(number, args ...): the result of the system call, a whole number
     return 0;
 }
@@ -1154,7 +1155,7 @@ int ast_primary() {
                 ast_cur_ty = ast_mkty(0, 0);
                 if ast_is_fop(bp) { ast_cur_ty = ast_mkty(0, 7); }
                 if ast_is_alloc(bp) { ast_cur_ty = ast_mkty(0, 8); }
-                if ast_fop_of(bp) == 8 { ast_cur_ty = ast_mkty(0, 8); }
+                if ast_fop_of(bp) >= 8 { ast_cur_ty = ast_mkty(0, 8); }
                 return ast_postfix(ast_node(AK_BUILTIN, bargs, 0, 0, bp), 0, 8);
             }
             ast_fail("a built-in name that is not called");
