@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.160
+* **AST A6:** `syscall(n, ...)` and a text literal where a `char^` is wanted (`char^ p = "abc"`, `f("text")`) are made from the tree.
+* Fix: a `main` that contains a system call was cut at the first `svc` by the lifter and the register pass; its end is `mov x8, 94` + `svc 0` now.
+* Gate: 476 tests pass (default and `-noast`), 300 fuzz programs, `diffcheck` the same 2 differences. 1508 of 1823 corpus functions come from the tree.
+* Tests: `t424_ast_textptr`, `t425_ast_syscall`.
+
 ## 0.9.159
 * **AST A6:** `switch` over data enums (`Option::Some(v): ...`) and structs with `free(self)` by value (moved into a copy, the source emptied) are made from the tree.
 * Error messages: `help:` lines for ~60 common errors.

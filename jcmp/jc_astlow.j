@@ -599,6 +599,7 @@ bool as1_expr(int n) {
     if n == 0 { return false; }
     int k = ast_kind[n];
     int ty = ast_ty[n];
+    if k == AK_STR { return ast_b[n] < 1000 && opt_debug == 0; }      // a text where a `char^` is wanted: the address of its bytes
     if !as1_val(ty) { return false; }
     if k == AK_NUM { return as1_scalar(ty); }
     if k == AK_FNUM { return true; }
@@ -610,6 +611,17 @@ bool as1_expr(int n) {
         if bo == 5 {
             // alloc(bytes): a call of Mem__alloc (the -d build tells where the block was made: the text path)
             return opt_debug == 0 && a1 != 0 && ast_nx[a1] == 0 && as1_scalar(ast_ty[a1]) && !as1_dbl(ast_ty[a1]) && as1_expr(a1) && find_func("Mem__alloc") >= 0;
+        }
+        if bo == 8 {
+            // syscall(number, up to 6 arguments): whole numbers and pointers (a text is its address)
+            int sc = 0;
+            int sa = a1;
+            while sa != 0 {
+                if !as1_expr(sa) || as1_dbl(ast_ty[sa]) { return false; }
+                sc += 1;
+                sa = ast_nx[sa];
+            }
+            return opt_debug == 0 && sc >= 1 && sc <= 7;
         }
         return bo >= 1 && bo <= 4 && a1 != 0 && ast_nx[a1] == 0 && as1_dbl(ast_ty[a1]) && as1_expr(a1);
     }
@@ -835,7 +847,7 @@ bool as1_decl(int n) {
         if as1_pt(dt) {
             if ast_a[n] == 0 { return true; }
             int pv = ast_a[n];
-            return as1_expr(pv) && (as1_pt(ast_ty[pv]) || (ast_kind[pv] == AK_NUM && ast_val[pv] == 0) || as1_callptr(pv));
+            return as1_expr(pv) && (as1_pt(ast_ty[pv]) || ast_kind[pv] == AK_STR || (ast_kind[pv] == AK_NUM && ast_val[pv] == 0) || as1_callptr(pv));
         }
         if !as1_scalar(dt) { return false; }
         if ast_a[n] == 0 { return true; }
@@ -871,7 +883,7 @@ bool as1_assign(int n) {
         if as1_pt(ast_ty[t]) {
             // a pointer gets a pointer of the same kind or 0
             int pv2 = ast_a[n];
-            return opc == 0 && as1_expr(pv2) && (as1_pt(ast_ty[pv2]) || (ast_kind[pv2] == AK_NUM && ast_val[pv2] == 0) || as1_callptr(pv2));
+            return opc == 0 && as1_expr(pv2) && (as1_pt(ast_ty[pv2]) || ast_kind[pv2] == AK_STR || (ast_kind[pv2] == AK_NUM && ast_val[pv2] == 0) || as1_callptr(pv2));
         }
         if as1_pt(ast_ty[ast_a[n]]) { return false; }
         if td { return (opc == 0 || as1_arith(opc)) && as1_dbl(ast_ty[ast_a[n]]) == (td || true); }
@@ -907,6 +919,7 @@ bool as1_stmt(int n) {
         if ast_kind[ex] == AK_METHOD && as1_dyn(ast_ty[ast_a[ex]]) && !as1_sdyn(ast_ty[ast_a[ex]]) { return as1_dynmethod(ex) != 0; }
         if ast_kind[ex] == AK_METHOD && ast_ty[ast_a[ex]] / 65536 == 4 { return as1_strmethod(ex) != 0; }
         if ast_kind[ex] == AK_METHOD && as1_sdyn(ast_ty[ast_a[ex]]) { return as1_samethod(ex) != 0; }
+        if ast_kind[ex] == AK_BUILTIN && ast_fop_of(ast_val[ex]) == 8 { return as1_expr(ex); }
         return (ast_kind[ex] == AK_CALL && as1_call(ex)) || (ast_kind[ex] == AK_METHOD && as1_method(ex));
     }
     if k == AK_IF { return as1_expr(ast_a[n]) && as1_stmt(ast_b[n]) && as1_stmt(ast_c[n]); }
@@ -1473,6 +1486,7 @@ bool gl_has_call(int n) {
     if n == 0 { return false; }
     int k = at_kind[n];
     if k == AK_CALL || k == AK_METHOD { return true; }
+    if k == AK_BUILTIN && at_val[n] == 8 { return true; }
     if k == AK_BIN { return gl_has_call(at_a[n]) || gl_has_call(at_b[n]); }
     if k == AK_NEG || k == AK_NOT || k == AK_CAST || k == AK_DEREF || k == AK_ADDR || k == AK_FIELD || k == AK_BUILTIN { return gl_has_call(at_a[n]); }
     if k == AK_INDEX { return gl_has_call(at_a[n]) || gl_has_call(at_b[n]); }
@@ -2244,6 +2258,7 @@ void gl_assign_mem(int target, int value, int ao, int step) {
 void gl_expr(int n) {
     int k = at_kind[n];
     gl_ensure();
+    if k == AK_STR { gl_sval(n); return; }
     if k == AK_NUM {
         ir_add(IR_CONST, 1, 0, 0, 0, at_val[n]);
         return;
@@ -2338,6 +2353,41 @@ void gl_expr(int n) {
     if k == AK_BUILTIN && at_val[n] == 5 {
         gl_expr(at_a[n]);
         gl_rt1("Mem__alloc", 1);
+        return;
+    }
+    if k == AK_BUILTIN && at_val[n] == 8 {
+        // syscall: the arguments wait in cells, then x8 = the number, x0 .. = the arguments
+        int sbase = gl_depth;
+        int sn = 0;
+        int sa = at_a[n];
+        while sa != 0 {
+            gl_expr(sa);
+            gl_ensure();
+            gl_store(30, gl_cell(gl_depth), 1);
+            gl_depth += 1;
+            sn += 1;
+            sa = at_nx[sa];
+        }
+        gl_depth = sbase;
+        int sk = 0;
+        while sk < sn {
+            gl_load(sk + 1, 30, gl_cell(sbase + sk));
+            sk += 1;
+        }
+        gl_ensure();
+        ir_add(IR_COPY, 9, 1, 0, 0, 0);
+        sk = 1;
+        while sk < sn {
+            ir_add(IR_COPY, sk, sk + 1, 0, 0, 0);
+            sk += 1;
+        }
+        int se = ir_add(IR_SYSCALL, 1, 9, 0, 0, 0);
+        int r = 0;
+        while r < sn - 1 {
+            gl_args[r] = r + 1;
+            r += 1;
+        }
+        ir_set_args(se, sn - 1, @gl_args);
         return;
     }
     if k == AK_BUILTIN {

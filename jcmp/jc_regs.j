@@ -1084,6 +1084,7 @@ void regs_run() {
             int p = i;
             bool done = false;
             bool seen_epi = false;
+            bool seen_exit = false;
             bool too_big = false;
             while p < out_len && !done {
                 int pe = rg_end(p);
@@ -1094,7 +1095,8 @@ void regs_run() {
                     rg_n += 1;
                     if rg_has(p, "ldr x29, [sp, #0]") { seen_epi = true; }
                     if seen_epi && rg_has(p, "ret\n") { done = true; }
-                    if is_main == 1 && rg_has(p, "svc 0\n") { done = true; }
+                    if is_main == 1 && rg_has(p, "mov x8, 94\n") { seen_exit = true; }
+                    if is_main == 1 && seen_exit && rg_has(p, "svc 0\n") { done = true; }
                 }
                 p = pe + 1;
             }

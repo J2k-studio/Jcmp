@@ -1830,6 +1830,7 @@ void ir_collect() {
             int p = i;
             bool done = false;
             bool seen_epi = false;
+            bool seen_exit = false;
             bool is_main = rg_has(i, "main:\n");
             int cnt = 0;
             while p < out_len && !done {
@@ -1838,7 +1839,8 @@ void ir_collect() {
                 cnt += 1;
                 if rg_has(p, "ldr x29, [sp, #0]") { seen_epi = true; }
                 if seen_epi && rg_has(p, "ret\n") { done = true; }
-                if is_main && rg_has(p, "svc 0\n") { done = true; }
+                if is_main && rg_has(p, "mov x8, 94\n") { seen_exit = true; }
+                if is_main && seen_exit && rg_has(p, "svc 0\n") { done = true; }
                 p = pe + 1;
             }
             if done && !is_main && cnt < 160 {
@@ -1891,6 +1893,7 @@ void ir_run() {
             int p = i;
             bool done = false;
             bool seen_epi = false;
+            bool seen_exit = false;
             bool is_main = rg_has(i, "main:\n");
             int cnt = 0;
             while p < out_len && !done {
@@ -1899,7 +1902,8 @@ void ir_run() {
                 cnt += 1;
                 if rg_has(p, "ldr x29, [sp, #0]") { seen_epi = true; }
                 if seen_epi && rg_has(p, "ret\n") { done = true; }
-                if is_main && rg_has(p, "svc 0\n") { done = true; }
+                if is_main && rg_has(p, "mov x8, 94\n") { seen_exit = true; }
+                if is_main && seen_exit && rg_has(p, "svc 0\n") { done = true; }
                 p = pe + 1;
             }
             // the name

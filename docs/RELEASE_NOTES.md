@@ -1,6 +1,8 @@
-# J2K / Jcmp 0.9.159
+# J2K / Jcmp 0.9.160
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
+
+**0.9.160:** internal: `syscall` and text literals as `char^` are made from the syntax tree; `main` with a system call is optimised whole.
 
 **0.9.159:** internal: data-enum `switch` and structs with `free(self)` by value are made from the syntax tree; more `help:` lines in error messages.
 
