@@ -2071,3 +2071,16 @@ Work list: docs/design/14-modules.md section 6.
 
 ## 78. `nl`: a new line without a backslash (owner, 2026-10-17: "have both `nl` and `\n`")
 Asked because `\` is awkward to type on a phone keyboard. Owner's answer: **both** `\n` (as before) and a word `nl`. `nl` is the character 10 and is used like any value: `cout << x << nl;`, `cout << "a" << nl << "b";`. A variable or function named `nl` hides it. `endl` is not added. Test: `t439_nl`. Also noted: `cout << x;` with one item adds the new line by itself (rule from earlier), `(char)10` always worked.
+
+## 79. Helpers of a module are marked with `__` (owner, 2026-10-17: "use A")
+Open question 9 answered: a function that is not part of the API of a module starts with `__` (as `__Arr`, `__Str`, `__Files` already do): `Net::__parse_ip`. It is a convention that every reader sees at once; the compiler does not forbid the call (a keyword `private` can come later, after 1.0.0.0). The helpers of the library are renamed one module at a time; the old public names stay until 1.0.0.0.
+The owner also gave an example of how names should read for the network: `Net::open.port(8080)` ("open a port"). Open question 10 (objects for sockets) is continued with names like this: the module word is an action or a thing in plain words, the function says what is given. Proposals are made without scores and without "another language does it" (owner, 2026-10-17: take the ways apart and find the neutral one).
+
+### 79.1 Network objects: owner's answers (2026-10-17)
+1. `Net::open.port(8080)` is a direction, not a decision.
+2. A connection may close itself only when ownership **moves** and only with **a command and the owner's consent**: nothing closes silently.
+3. The names are formal, not chatty: the type that waits is `Listener`, the type of a connected line is `Connection`; the verbs are the formal ones (`accept`, `receive`, `send`, `close`).
+Open (needs the owner): which command asks for the closing. Ways, side by side, without a score: (a) `defer c.close();` - exists today, the owner writes it where the connection is made, nothing new in the language; (b) a struct with `free(self)` closes at the end of the block (already the rule for structs that free themselves, approved earlier) - nothing to write, which the new answer may not allow for this type; (c) a word at the declaration (`own Connection c = ...;`) - new syntax, the closing is visible on the line that makes the connection.
+
+### 79.2 The owner's answer on closing (2026-10-17): "just `int c = l.close();` or `free(...)`, that is all"
+No automatic closing, no `defer` needed: the owner closes by hand, as memory is freed by hand. `Listener::close()` and `Connection::close()` give 0, or the number of the system error. Implemented in 0.9.175 (`std/net.j`, test `t453_net_objects`): `Listener::on(port)`, `l.port()`, `l.accept()`, `Connection::to(ip, port)`, `c.receive()`, `c.receive_max(n)`, `c.send(text)`, `c.close()`. The two creating names (`on`, `to`) are the assistant's, adjustable; the owner's direction `Net::open.port(8080)` stays open for a later renaming.

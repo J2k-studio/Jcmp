@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.175
+* **Network objects:** `Listener::on(port)` (`port()`, `accept()`, `close()`) and `Connection::to(ip, port)` (`receive()`, `receive_max(n)`, `send(text)`, `close()`). Nothing closes by itself: the owner calls `close()` (0, or the number of the system error). The old `tcp.xxx` functions stay. (docs/syntax-design.md 79.1, 79.2)
+* **`jcmp -showlib NAME`** writes the source of a library that is inside the compiler (`net`, `text`, `math`, ...). The libraries are part of the program `jcmp`, which is why an unpacked release has no library folder (docs/roadmap-1.0.md).
+* AST: methods of structs that give a String, `a.len` of tables, `split`, tables of 2-3 dimensions, bool arrays; 1960 of 2112 corpus functions (92.8%).
+* New documents: `docs/roadmap-1.0.md` (what 1.0.0.0 is and its checklist), `docs/design/15-arm32.md` (the phone runs 32-bit ARM programs; the plan).
+* Gate: 518 tests pass (default and `-noast`), 300 fuzz programs, `diffcheck` the same 2 differences. Tests: `t453_net_objects`, `-showlib`.
+
 ## 0.9.174
 * **AST A6:** tables of two and three dimensions (local and global: `grid[i][j]`, `cube[i][j][k]`), `a.len` of fixed arrays (the first dimension for a table), `text.split(sep)`, functions that return a `char` or a `char^`, and the methods of structs that give a String list are made from the tree. 1942 of 2099 corpus functions (92.5%).
 * Fix (inside the tree lowering): a call of a runtime routine with three or more arguments could pass a stale register as the third one (`gl_rt2`).

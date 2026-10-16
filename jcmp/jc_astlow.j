@@ -459,6 +459,7 @@ bool as1_sval(int n) {
         return as1_scalar(ast_ty[sa]) && as1_expr(sa) && ast_ty[sa] % 65536 != 13 && ast_ty[sa] % 65536 != 3;
     }
     if k == AK_CALL { return ast_val[n] >= 0 && fretstr[ast_val[n]] == 1 && as1_call(n); }
+    if k == AK_METHOD && as1_sty(ast_ty[ast_a[n]]) { return as1_mfn(n) >= 0 && fretstr[as1_mfn(n)] == 1 && as1_method(n); }      // a method of a struct that gives a String
     if k == AK_BIN {
         if ast_val[n] != AO_ADD { return false; }
         int a = ast_a[n];
@@ -3294,7 +3295,7 @@ void gl_sval(int n) {
         gl_pload(n);
         return;
     }
-    if k == AK_CALL {
+    if k == AK_CALL || (k == AK_METHOD && at_val[n] >= 0 && at_val[n] < 1000) {
         gl_call(n);
         gl_skeep(n);
         return;
@@ -3629,7 +3630,7 @@ void gl_sadopt(int n) {
     gl_ensure();
     if k == AK_STR {
         gl_rt2("__Str__from", 1);
-    } else if k == AK_BIN || k == AK_CALL || (k == AK_METHOD && at_val[n] >= 2005) || (k == AK_BUILTIN && at_val[n] == 13) {
+    } else if k == AK_BIN || k == AK_CALL || (k == AK_METHOD && at_val[n] >= 2005) || (k == AK_METHOD && at_val[n] >= 0 && at_val[n] < 1000) || (k == AK_BUILTIN && at_val[n] == 13) {
         // a new String: taken over, the temporary is null
         if !go_null(at_c[n], 5) { gl_failx(15); }
     } else {
@@ -4322,6 +4323,11 @@ void gl_hint_add(int off) {
     gl_hint_add2(off, 8, 1);
 }
 
+// the hint of a hidden slot that holds a struct: the parser calls one of 8 bytes a plain 8-byte value (a variable of the struct is not)
+void gl_hint_struct(int off, int size) {
+    if size == 8 { gl_hint_add(off); } else { gl_hint_add2(off, size, 0); }
+}
+
 void gl_hint_add2(int off, int size, int flag) {
     if gl_hint_n > 8000 { gl_failx(24); return; }
     gl_hint[gl_hint_n] = 0;
@@ -4413,7 +4419,7 @@ void gl_tmps(int n) {
         if fi >= 0 && fvoid[fi] == 0 && fret[fi] >= 100 {
             int sz = ssize[fret[fi] - 100];
             at_c[n] = gl_nslot;
-            gl_hint_add2(gl_nslot, sz, 0);
+            gl_hint_struct(gl_nslot, sz);              // the hidden slot of a struct result: the parser makes it with the type id 0
             gl_nslot += (sz + 7) / 8 * 8;
         }
         int a = at_a[n];
@@ -4430,7 +4436,7 @@ void gl_tmps(int n) {
             if fi >= 0 && pidx < 8 && fptid[fi * 8 + pidx] >= 100 && fptid[fi * 8 + pidx] < 100 + scount && struct_has_free(fptid[fi * 8 + pidx] - 100) {
                 int msz = ssize[fptid[fi * 8 + pidx] - 100];
                 gl_mvslot[a] = gl_nslot;
-                gl_hint_add2(gl_nslot, msz, 0);
+                gl_hint_struct(gl_nslot, msz);
                 gl_nslot += (msz + 7) / 8 * 8;
             }
             pidx += 1;
@@ -4445,7 +4451,7 @@ void gl_tmps(int n) {
             }
         }
         // a String that comes back is a temporary owner
-        if fi >= 0 && fretstr[fi] == 1 && k == AK_CALL { gl_stemp(n); }
+        if fi >= 0 && fretstr[fi] == 1 && (k == AK_CALL || k == AK_METHOD) { gl_stemp(n); }
         return;
     }
     if k == AK_BIN || k == AK_INDEX { gl_tmps(at_a[n]); gl_tmps(at_b[n]); return; }

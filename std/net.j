@@ -168,3 +168,36 @@ struct Tcp {
     static Result<int, Error> try_send(int c, String data) { return Net::send(c, data); }
     static Result<String, Error> try_recv(int c) { return Net::recv(c, 4096); }
 }
+
+// Listener and Connection: the formal names of the two sides of a TCP line (docs/syntax-design.md 79.1). Nothing closes by itself:
+// the owner calls close() (it gives 0, or the number of the system error) or frees the line another way. A failure is thrown as a text.
+//   Listener l = Listener::on(8080);   Connection c = l.accept();   String request = c.receive();   c.send("hello");   c.close();   l.close();
+//   Connection s = Connection::to("127.0.0.1", 8080);
+// Designed by the assistant (the names Listener::on and Connection::to), adjustable.
+struct Connection {
+    int fd;
+    static Connection to(String ip, int port) {
+        Connection c;
+        c.fd = Tcp::connect(ip, port);
+        return c;
+    }
+    String receive(self) { return Tcp::recv(self.fd); }
+    String receive_max(self, int max) { return Tcp::recv_max(self.fd, max); }
+    int send(self, String data) { return Tcp::send(self.fd, data); }
+    int close(self) { return syscall(57, self.fd); }
+}
+struct Listener {
+    int fd;
+    static Listener on(int port) {
+        Listener l;
+        l.fd = Tcp::listen(port);
+        return l;
+    }
+    int port(self) { return Net::port_of(self.fd); }
+    Connection accept(self) {
+        Connection c;
+        c.fd = Tcp::accept(self.fd);
+        return c;
+    }
+    int close(self) { return syscall(57, self.fd); }
+}

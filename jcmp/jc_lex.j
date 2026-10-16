@@ -960,6 +960,26 @@ int std_category(char^ name) {
 }
 
 // the library `name` (with / for the dots) is loaded: the built-in ones (stdlib, cpu), else a file found by find_library
+// jcmp -showlib NAME: the source of a library that is inside the compiler, written to the standard output (1: shown, 0: no such library)
+bool show_library(char^ name) {
+    int mask = std_category(name);
+    if str_eq(name, "stdlib") || str_eq(name, "std") || str_eq(name, "math") || str_eq(name, "gfx") { mask = 511; }
+    if mask != 0 {
+        push_std_units(mask);
+    } else if str_eq(name, "simd") { push_simd(); }
+    else if str_eq(name, "cpu") { push_cpu(); }
+    else if str_eq(name, "vector") { push_vector(); }
+    else if str_eq(name, "matrix") { push_matrix(); }
+    else if str_eq(name, "quat") { push_quat(); }
+    else if str_eq(name, "complex") { push_complex(); }
+    else if str_eq(name, "stats") { push_stats(); }
+    else if str_eq(name, "canvas") { push_canvas(); }
+    else if str_eq(name, "screen") { push_screen(); }
+    else { return false; }
+    syscall(64, 1, @src_bufs + cur_base, cur_len);
+    return true;
+}
+
 void import_library(char^ name, char^ rel) {
     if str_eq(name, "stdlib") || str_eq(name, "std") {
         if str_eq(name, "std") && import_warned == 0 {

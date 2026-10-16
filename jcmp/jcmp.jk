@@ -2,7 +2,7 @@
 // Build:  bin/jcmp jcmp/jcmp.jk -o jcmp1        (see bootstrap.sh)
 // Use:    jcmp1 input.jk -o program
 // the version of the compiler (also in the file VERSION; release.sh checks that they agree)
-#define JCMP_VERSION "0.9.174"
+#define JCMP_VERSION "0.9.175"
 
 #import "jc_base"
 #import "jc_asm"
@@ -86,6 +86,7 @@ void help() {
     write_out("  -st              strict: warnings are errors\n");
     write_out("  -I dir           also look for imported files in dir\n");
     write_out("  -emit-asm file   also write the assembler text\n");
+    write_out("  -showlib name    write the source of a library that is inside the compiler (net, text, math ...) and stop\n");
     write_out("  -nofma           do not fuse a * b + c into one instruction (the last bit of the result may differ with it)\n");
     write_out("  -color           coloured messages (the default when stderr is a terminal)\n");
     write_out("  -nocolor         plain messages\n");
@@ -153,6 +154,11 @@ void main() {
                 lg_arg += 1;
             }
             lg_run(0, lg_speed);
+            syscall(93, 0);
+        } else if str_eq(a, "-showlib") {
+            ai += 1;
+            if ai >= argc() { write_err("jcmp: -showlib needs the name of a library (stdlib, core, number, text, files, system, time, data, crypto, net, math, gfx, cpu, simd, vector, matrix, quat, complex, stats, canvas, screen)\n"); syscall(93, 1); }
+            if !show_library(arg(ai)) { write_err("jcmp: there is no library inside the compiler with this name; the libraries inside are: stdlib, core, number, text, files, system, time, data, crypto, net, math, gfx, cpu, simd, vector, matrix, quat, complex, stats, canvas, screen\n"); syscall(93, 1); }
             syscall(93, 0);
         } else if str_eq(a, "-d") {
             opt_debug = 1;

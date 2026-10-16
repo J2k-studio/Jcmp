@@ -1,6 +1,8 @@
-# J2K / Jcmp 0.9.174
+# J2K / Jcmp 0.9.175
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
+
+**0.9.175:** `Listener` / `Connection` for TCP, `jcmp -showlib NAME`, more of the compiler on the syntax tree.
 
 **0.9.174:** internal: tables of 2-3 dimensions, `a.len` of fixed arrays, `split`, char-returning functions are made from the syntax tree.
 

@@ -80,6 +80,7 @@ int main() {
 | `Term` | `term` | `cols` `rows` `key_pressed` |
 | `Time` | `time`, `random` | `now_ms` `mono_ns` `sleep_ms` · `seed` `next` `range` `unit` |
 | `Net` | `tcp` | `listen` `accept` `connect` `recv` `recv_max` `send` `close` `port_of` (+ `try_`) |
+| (types) | `Listener`, `Connection` | `Listener::on(port)` `port` `accept` `close` · `Connection::to(ip, port)` `receive` `receive_max` `send` `close` (nothing closes by itself) |
 | `Csv` | `csv` | `split` `quote` `join` |
 | `Toml` | `toml` | `get` `get_or` `get_int` `get_bool` `get_double` |
 | `Regex` | `regex` | `find` `text` `matches` |
