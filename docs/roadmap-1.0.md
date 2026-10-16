@@ -30,6 +30,11 @@
 * Any other name is searched in this order: the `-I` folders, the folders of `J2K_PATH`, `~/.j2k/lib`, the `lib` folder next
   to the compiler. `jget` (v0, planned) puts a downloaded library in `~/.j2k/lib`.
 
+* **Update 0.9.176 (owner, 2026-10-17):** the library is also outside the compiler, in the folder **`Library/`** (full name, owner's choice), always
+  paired with the compiler of the same version (`Library/VERSION`). `#import <net>` = the official library (the compiler's `Library/`, `JCMP_LIB`,
+  or the copy inside); `#import "path.jk"` = a file of the user. `jcmp -update` replaces compiler and library together. The copy inside
+  the compiler stays as a fallback until the external way has been proven in releases.
+
 ## 4. ARM32 (planned steps; the compiler has an IR, so the work is a second code generator)
 1. Write down what is different: 32-bit registers (r0-r12, sp, lr, pc), the calling rules (AAPCS: r0-r3, 64-bit values in a
    pair), system calls through `svc 0` with the number in r7, an ELF32 header, a 4-byte pointer, and what `int` means.

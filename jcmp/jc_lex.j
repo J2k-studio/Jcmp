@@ -385,7 +385,7 @@ void die_name(char^ msg, char^ name) {
         write_err("  help: this is part of the standard library: write #import <stdlib> at the top of the file\n");
     }
     if msg[0] == 'l' && msg[1] == 'i' && msg[2] == 'b' {
-        write_err("  help: looked in the -I folders, J2K_PATH, ~/.j2k/lib and the lib folder next to the compiler; built in: stdlib, core, number, text, files, system, time, data, crypto, math, gfx, cpu, simd\n");
+        write_err("  help: looked in the -I folders, J2K_PATH, ~/.j2k/Library and the Library folder next to the compiler; built in: stdlib, core, number, text, files, system, time, data, crypto, math, gfx, cpu, simd\n");
     }
     die_end();
 }
@@ -698,6 +698,177 @@ void lex_init(char^ path) {
 
 // ---------------------------------------------------------------- import std
 // append one line of text to the current level's buffer
+// ---------------------------------------------------------------- the standard library: inside the compiler, or in files
+// The compiler and its library are one pair (docs/roadmap-1.0.md): the files of the library are the text that is inside the compiler,
+// and a folder `Library` with the file VERSION is used when it is found (JCMP_LIB, Library next to the compiler, ../Library/jcmp next to it).
+// The version in lib/VERSION must be the version of the compiler; if not, the compiler stops and says what to do.
+int lib_external;                // 1: read the library from files in lib_dir, 0: from the text inside the compiler
+char lib_dir[256];
+
+bool lib_has_version(char^ dir) {
+    char vp[300];
+    str_copy(@vp, dir, 250);
+    append_text(@vp, "/VERSION");
+    char vb[64];
+    return read_file(@vp, @vb, 60) > 0;
+}
+
+// the folder of the library (lib_dir), or false
+bool lib_find_dir() {
+    char^ envd = env_get("JCMP_LIB");
+    if envd != null && envd[0] != 0 {
+        str_copy(@lib_dir, envd, 250);
+        return true;
+    }
+    char exe[256];
+    int en = syscall(78, -100, "/proc/self/exe", @exe, 200);
+    if en <= 0 { return false; }
+    exe[en] = 0;
+    int cut = en;
+    while cut > 0 && exe[cut - 1] != '/' { cut -= 1; }
+    if cut <= 0 { return false; }
+    exe[cut - 1] = 0;
+    str_copy(@lib_dir, @exe, 200);
+    append_text(@lib_dir, "/Library");
+    if lib_has_version(@lib_dir) { return true; }
+    str_copy(@lib_dir, @exe, 200);
+    append_text(@lib_dir, "/../Library/jcmp");
+    if lib_has_version(@lib_dir) { return true; }
+    lib_dir[0] = 0;
+    return false;
+}
+
+// at the start of the compiler: choose the source of the library and check that it is the library of this compiler
+void lib_init(char^ ver) {
+    lib_external = 0;
+    if !lib_find_dir() { return; }
+    char vp[300];
+    str_copy(@vp, @lib_dir, 250);
+    append_text(@vp, "/VERSION");
+    char vb[64];
+    int vn = read_file(@vp, @vb, 60);
+    if vn <= 0 {
+        begin_msg("error");
+        write_err("the folder of the library has no VERSION file: ");
+        write_err(@lib_dir);
+        end_msg();
+        write_err("  help: the folder named in JCMP_LIB (or Library next to the compiler) must be the lib folder of a release of jcmp\n");
+        err_count += 1;
+        err_summary();
+        syscall(93, 1);
+    }
+    while vn > 0 && (vb[vn - 1] == 10 || vb[vn - 1] == 13 || vb[vn - 1] == ' ') { vn -= 1; }
+    vb[vn] = 0;
+    if !str_eq(@vb, ver) {
+        begin_msg("error");
+        write_err("the library in '");
+        write_err(@lib_dir);
+        write_err("' is for jcmp ");
+        write_err(@vb);
+        write_err(", but this compiler is jcmp ");
+        write_err(ver);
+        end_msg();
+        write_err("  help: a compiler and its library must be the same version; install them again together (jcmp -update, or the install script)\n");
+        err_count += 1;
+        err_summary();
+        syscall(93, 1);
+    }
+    lib_external = 1;
+}
+
+// jcmp -update [VERSION]: run the install script, which replaces the compiler and the library together (a pair).
+// The script comes from JCMP_INSTALL_URL (a mirror, or a file: address for tests) or from the public repository.
+void self_update(char^ version) {
+    char exe[256];
+    int en = syscall(78, -100, "/proc/self/exe", @exe, 250);
+    if en <= 0 { write_err("jcmp: -update cannot find where the compiler is\n"); syscall(93, 1); }
+    exe[en] = 0;
+    int cut = en;
+    while cut > 0 && exe[cut - 1] != '/' { cut -= 1; }
+    if cut <= 1 { write_err("jcmp: -update cannot find the folder of the compiler\n"); syscall(93, 1); }
+    exe[cut - 1] = 0;
+    char^ url = env_get("JCMP_INSTALL_URL");
+    if url == null || url[0] == 0 { url = "https://raw.githubusercontent.com/J2k-studio/Jcmp/main/install.sh"; }
+    char script[1200];
+    script[0] = 0;
+    append_text(@script, "U='");
+    append_text(@script, url);
+    append_text(@script, "'; (curl -fsSL \"$U\" || wget -qO- \"$U\") | sh -s -- --dir '");
+    append_text(@script, @exe);
+    append_text(@script, "'");
+    if lib_find_dir() {
+        append_text(@script, " --libdir '");
+        append_text(@script, @lib_dir);
+        append_text(@script, "'");
+    } else {
+        append_text(@script, " --with-lib");
+    }
+    if version != null {
+        append_text(@script, " --version '");
+        append_text(@script, version);
+        append_text(@script, "'");
+    }
+    int k = 0;
+    while script[k] != 0 {
+        if script[k] == 10 { write_err("jcmp: -update: a name has a line break in it\n"); syscall(93, 1); }
+        k += 1;
+    }
+    write_err("jcmp: updating the compiler and its library together ...\n");
+    char^ prefix = env_get("PREFIX");
+    char shp[200];
+    shp[0] = 0;
+    int ne = 0;
+    while arg(argc() + 1 + ne) != null { ne += 1; }
+    int envp[200];
+    if ne > 190 { ne = 190; }
+    int ei = 0;
+    while ei < ne { envp[ei] = (int)arg(argc() + 1 + ei); ei += 1; }
+    envp[ne] = 0;
+    int av[6];
+    av[0] = (int)"sh";
+    av[1] = (int)"-c";
+    av[2] = (int)@script;
+    av[3] = 0;
+    int pid = syscall(220, 17, 0, 0, 0, 0);
+    if pid == 0 {
+        if prefix != null && str_len(prefix) < 150 {
+            str_copy(@shp, prefix, 150);
+            append_text(@shp, "/bin/sh");
+            syscall(221, @shp, @av, @envp);
+        }
+        syscall(221, "/bin/sh", @av, @envp);
+        syscall(221, "/system/bin/sh", @av, @envp);
+        syscall(221, "/usr/bin/sh", @av, @envp);
+        syscall(93, 127);
+    }
+    int status = 0;
+    syscall(260, pid, @status, 0, 0);
+    if status != 0 { write_err("jcmp: -update failed; nothing was changed unless the lines above say so\n"); syscall(93, 1); }
+    syscall(93, 0);
+}
+
+// the text of the library file name.j is added to the library "file" that is being made (see the push_ functions)
+void ext_put(char^ name) {
+    char fp[300];
+    str_copy(@fp, @lib_dir, 250);
+    append_text(@fp, "/");
+    append_text(@fp, name);
+    append_text(@fp, ".j");
+    int room = 524288 - cur_len - 4;
+    int n = read_file(@fp, @src_bufs + cur_base + cur_len, room);
+    if n < 0 {
+        begin_msg("error");
+        write_err("a file of the library cannot be read: ");
+        write_err(@fp);
+        end_msg();
+        write_err("  help: the library folder is damaged or incomplete; install the compiler and its library again (jcmp -update)\n");
+        err_count += 1;
+        err_summary();
+        syscall(93, 1);
+    }
+    cur_len += n;
+}
+
 void put(char^ text) {
     int i = 0;
     while text[i] != 0 {
@@ -805,7 +976,7 @@ bool find_library(char^ rel, char^ out) {
     if home != null {
         char hd[256];
         str_copy(@hd, home, 200);
-        append_text(@hd, "/.j2k/lib");
+        append_text(@hd, "/.j2k/Library");
         if try_lib_dir(@hd, rel, out) { return true; }
     }
     char exe[256];
@@ -818,7 +989,7 @@ bool find_library(char^ rel, char^ out) {
             exe[cut - 1] = 0;
             char ld[256];
             str_copy(@ld, @exe, 200);
-            append_text(@ld, "/lib");
+            append_text(@ld, "/Library");
             if try_lib_dir(@ld, rel, out) { return true; }
         }
     }

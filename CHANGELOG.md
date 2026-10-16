@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.9.176
+* **The library as files, paired with the compiler.** The repository and every release now have a folder **`Library/`** (one file per unit: `core.j number.j text.j files.j system.j time.j data.j crypto.j net.j ...` and `VERSION`), made by `gen_std.sh` from `std/`. The compiler uses it when it finds it (`JCMP_LIB=DIR`, `Library` next to the compiler, `../Library/jcmp` next to it); otherwise the copy inside the compiler is used, so a single `jcmp` file still works alone. The version in `Library/VERSION` must be the version of the compiler, or the compiler stops and says what to do. The assembler text of a program is the same with both.
+* **`jcmp -update [version]`** replaces the compiler and its library together (as a pair) with the latest release (or the given version) through the install script; the old program is replaced by a rename, so it works while `jcmp` itself is running.
+* `install.sh --with-lib` / `--libdir DIR`; releases contain `jcmp-library.tar.gz` and the folder `Library/` in the big archive.
+* Other libraries are also searched in `~/.j2k/Library` and the `Library` folder next to the compiler (was `lib`).
+* New document `docs/design/16-separate-compilation.md` (research and the middle way; nothing locked).
+* Gate: 519 tests pass; the whole suite also passes with the library read from files.
+
 ## 0.9.175
 * **Network objects:** `Listener::on(port)` (`port()`, `accept()`, `close()`) and `Connection::to(ip, port)` (`receive()`, `receive_max(n)`, `send(text)`, `close()`). Nothing closes by itself: the owner calls `close()` (0, or the number of the system error). The old `tcp.xxx` functions stay. (docs/syntax-design.md 79.1, 79.2)
 * **`jcmp -showlib NAME`** writes the source of a library that is inside the compiler (`net`, `text`, `math`, ...). The libraries are part of the program `jcmp`, which is why an unpacked release has no library folder (docs/roadmap-1.0.md).

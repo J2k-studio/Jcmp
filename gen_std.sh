@@ -16,17 +16,34 @@ units = [
     ["hash"],                                   # 7 crypto
     ["net"],                                    # 8 net
 ]
+unit_names = ["core", "number", "text", "files", "system", "time", "data", "crypto", "net"]
 files = [f for u in units for f in u]
-def gen(name, files, doc):
+import os
+os.makedirs("Library", exist_ok=True)
+def libtext(fs):
+    # exactly the lines that put() writes: every line of every file, and a line for the empty piece after the last newline
+    out = []
+    for f in fs:
+        for line in open("std/%s.j" % f).read().split("\n"):
+            out.append(line + "\n")
+    return "".join(out)
+def writelib(name, fs):
+    open("Library/%s.j" % name, "w").write(libtext(fs))
+def gen(name, files, doc, libname):
+    writelib(libname, files)
     out = ['void %s() {' % name,
            '    if lx_depth >= 15 { die("imports nested too deeply"); }',
            '    stk_pos[lx_depth] = cur_pos;', '    stk_line[lx_depth] = cur_line;',
            '    stk_ls[lx_depth] = cur_line_start;',
            '    str_copy(@lvl_name + (lx_depth + 1) * 128, @lvl_name + lx_depth * 128, 128);',
            '    lx_depth += 1;', '    lvl_lib[lx_depth] = 1;', '    cur_base = lx_depth * 524288;', '    cur_len = 0;']
+    out.append('    if lib_external == 1 {')
+    out.append('        ext_put("%s");' % libname)
+    out.append('    } else {')
     for f in files:
         for line in open("std/%s.j" % f).read().split("\n"):
             out.append('    put("%s");' % line.replace("\\", "\\\\").replace('"', '\\"'))
+    out.append('    }')
     out += ['    src_bufs[cur_base + cur_len] = 0;', '    cur_pos = 0;', '    cur_line = 1;',
             '    cur_line_start = 0;', '}', '']
     return ["// " + doc] + out
@@ -39,24 +56,30 @@ def gen_units(name, units, doc):
            '    str_copy(@lvl_name + (lx_depth + 1) * 128, @lvl_name + lx_depth * 128, 128);',
            '    lx_depth += 1;', '    lvl_lib[lx_depth] = 1;', '    cur_base = lx_depth * 524288;', '    cur_len = 0;']
     for n, u in enumerate(units):
+        writelib(unit_names[n], u)
         out.append('    if (mask & %d) != 0 {' % (1 << n))
+        out.append('        if lib_external == 1 {')
+        out.append('            ext_put("%s");' % unit_names[n])
+        out.append('        } else {')
         for f in u:
             for line in open("std/%s.j" % f).read().split("\n"):
-                out.append('        put("%s");' % line.replace("\\", "\\\\").replace('"', '\\"'))
+                out.append('            put("%s");' % line.replace("\\", "\\\\").replace('"', '\\"'))
+        out.append('        }')
         out.append('    }')
     out += ['    src_bufs[cur_base + cur_len] = 0;', '    cur_pos = 0;', '    cur_line = 1;',
             '    cur_line_start = 0;', '}', '']
     return out
 text += gen_units("push_std_units", units, "push_std_units(mask): the units of the standard library in the mask become a new \"file\" that is read next (core, number, text, files, system, time, data, crypto).")
-text += gen("push_cpu", ["cpu"], "push_cpu(): `import cpu` -- threads and locks.")
-text += gen("push_simd", ["simd"], "push_simd(): `import <simd>` -- f64x2, i64x2, f32x4, i32x4.")
-text += gen("push_vector", ["vector"], "push_vector(): `import <vector>` -- Vec2, Vec3, Vec4.")
-text += gen("push_quat", ["quat"], "push_quat(): `using math::quat` -- quat.")
-text += gen("push_complex", ["complex"], "push_complex(): `using math::complex` -- cplx.")
-text += gen("push_stats", ["stats"], "push_stats(): `using math::stats` -- Stats.")
-text += gen("push_matrix", ["matrix"], "push_matrix(): `import <matrix>` -- Mat3, Mat4.")
-text += gen("push_canvas", ["canvas"], "push_canvas(): `using gfx::canvas` -- Canvas.")
-text += gen("push_screen", ["screen"], "push_screen(): `using gfx::screen` -- Screen.")
-text += gen("push_prelude", ["rt_heap", "rt_hw", "rt_mem", "rt_arr", "rt_str", "rt_in", "rt_fp", "rt_mt"], "push_prelude(): the runtime, read in front of every program: heap + panic, hardware (Cpu Atomic Cache Bit), Mem, dynamic arrays, String, keyboard input, threads.")
+text += gen("push_cpu", ["cpu"], "push_cpu(): `import cpu` -- threads and locks.", "cpu")
+text += gen("push_simd", ["simd"], "push_simd(): `import <simd>` -- f64x2, i64x2, f32x4, i32x4.", "simd")
+text += gen("push_vector", ["vector"], "push_vector(): `import <vector>` -- Vec2, Vec3, Vec4.", "vector")
+text += gen("push_quat", ["quat"], "push_quat(): `using math::quat` -- quat.", "quat")
+text += gen("push_complex", ["complex"], "push_complex(): `using math::complex` -- cplx.", "complex")
+text += gen("push_stats", ["stats"], "push_stats(): `using math::stats` -- Stats.", "stats")
+text += gen("push_matrix", ["matrix"], "push_matrix(): `import <matrix>` -- Mat3, Mat4.", "matrix")
+text += gen("push_canvas", ["canvas"], "push_canvas(): `using gfx::canvas` -- Canvas.", "canvas")
+text += gen("push_screen", ["screen"], "push_screen(): `using gfx::screen` -- Screen.", "screen")
+text += gen("push_prelude", ["rt_heap", "rt_hw", "rt_mem", "rt_arr", "rt_str", "rt_in", "rt_fp", "rt_mt"], "push_prelude(): the runtime, read in front of every program: heap + panic, hardware (Cpu Atomic Cache Bit), Mem, dynamic arrays, String, keyboard input, threads.", "runtime")
 open("jcmp/jc_std.j", "w").write("\n".join(text))
+open("Library/VERSION", "w").write(open("VERSION").read().strip() + "\n")
 PY

@@ -9,6 +9,8 @@
 #                      Example: ... | sh -s -- --dir ../bin
 #   --version X.Y.Z    a specific release (default: the latest)
 #   --with-assembler   also install j2k_asm, the stand-alone assembler
+#   --libdir DIR       the folder for the library files (implies --with-lib; default ../Library/jcmp next to the program)
+#   --with-lib         also install the library as files (../Library/jcmp next to the program); the compiler has it inside anyway
 # Environment: JCMP_VERSION (same as --version), JCMP_BASE=URL to download from another place (a mirror,
 # or file:///folder for a local copy).
 set -eu
@@ -16,12 +18,16 @@ REPO="J2k-studio/Jcmp"
 BINDIR=""
 VERSION="${JCMP_VERSION:-}"
 WITH_ASM=0
+WITH_LIB=0
+LIBDIR=""
 usage() { sed -n '2,13p' "$0" 2>/dev/null | sed 's/^# \{0,1\}//' || true; }
 while [ $# -gt 0 ]; do
     case "$1" in
         --dir) [ $# -ge 2 ] || { echo "install: --dir needs a folder"; exit 1; }; BINDIR="$2"; shift 2 ;;
         --version) [ $# -ge 2 ] || { echo "install: --version needs a number"; exit 1; }; VERSION="$2"; shift 2 ;;
         --with-assembler) WITH_ASM=1; shift ;;
+        --with-lib) WITH_LIB=1; shift ;;
+        --libdir) [ $# -ge 2 ] || { echo "install: --libdir needs a folder"; exit 1; }; LIBDIR="$2"; WITH_LIB=1; shift 2 ;;
         -h|--help) usage; exit 0 ;;
         *) echo "install: unknown option '$1' (try --help)"; exit 1 ;;
     esac
@@ -66,11 +72,23 @@ install_one() {   # install_one NAME OLD-NAME : releases before 0.2.2 called the
     WANT="$(grep " $GOT\$" "$TMP/SHA256SUMS" | cut -d' ' -f1)"
     HAVE="$(sha256sum "$TMP/$GOT" | cut -d' ' -f1)"
     [ -n "$WANT" ] && [ "$WANT" = "$HAVE" ] || { echo "install: the checksum of $GOT does not match, nothing installed"; exit 1; }
-    cp "$TMP/$GOT" "$BINDIR/$1"
-    chmod +x "$BINDIR/$1"
+    cp "$TMP/$GOT" "$BINDIR/.$1.new"
+    chmod +x "$BINDIR/.$1.new"
+    mv -f "$BINDIR/.$1.new" "$BINDIR/$1"    # a rename also works while the old program is running (jcmp -update)
 }
 install_one jcmp jcmp-linux-arm64
 [ "$WITH_ASM" = 1 ] && install_one j2k_asm j2k_asm-linux-arm64
+if [ "$WITH_LIB" = 1 ]; then
+    fetch "$BASE/jcmp-library.tar.gz" "$TMP/jcmp-library.tar.gz"
+    WANT="$(grep " jcmp-library.tar.gz\$" "$TMP/SHA256SUMS" | cut -d' ' -f1)"
+    HAVE="$(sha256sum "$TMP/jcmp-library.tar.gz" | cut -d' ' -f1)"
+    [ -n "$WANT" ] && [ "$WANT" = "$HAVE" ] || { echo "install: the checksum of jcmp-library.tar.gz does not match, the library was not installed"; exit 1; }
+    [ -n "$LIBDIR" ] || LIBDIR="$BINDIR/../Library/jcmp"
+    mkdir -p "$LIBDIR"
+    tar -xzf "$TMP/jcmp-library.tar.gz" -C "$TMP"
+    cp "$TMP"/Library/* "$LIBDIR/"
+    echo "installed: $(cd "$LIBDIR" && pwd)  (the library of jcmp $(cat "$LIBDIR/VERSION"))"
+fi
 echo "installed: $BINDIR/jcmp  ($("$BINDIR/jcmp" --version))"
 [ "$WITH_ASM" = 1 ] && echo "installed: $BINDIR/j2k_asm"
 case ":$PATH:" in *":$BINDIR:"*) ;; *) echo "add the folder to your PATH:  export PATH=\"$BINDIR:\$PATH\"" ;; esac

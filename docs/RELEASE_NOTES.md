@@ -1,6 +1,8 @@
-# J2K / Jcmp 0.9.175
+# J2K / Jcmp 0.9.176
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
+
+**0.9.176:** the library as files in `Library/` paired with the compiler (version checked), `jcmp -update`, `install.sh --with-lib`.
 
 **0.9.175:** `Listener` / `Connection` for TCP, `jcmp -showlib NAME`, more of the compiler on the syntax tree.
 

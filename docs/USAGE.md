@@ -69,6 +69,15 @@ for e in hello fib shapes heap; do bin/jcmp examples/$e.jk -o /tmp/$e && /tmp/$e
 (or only one module: `using stdlib::mem`, `str`, `sys`, `math`, `fs`). `cout` and `cin` need `#import <stdlib>` and `using stdlib`. Its source is `std/*.j`.
 See [LANGUAGE.md](LANGUAGE.md).
 
+### Where the library lives, and `jcmp -update`
+The library is inside the `jcmp` file, so one file is enough. The same library is also given as files in the folder `Library/`
+(`jcmp -showlib net` writes one). If the compiler finds a `Library` folder (the folder named in `JCMP_LIB`, `Library` next to `jcmp`, or
+`../Library/jcmp` next to it) it reads the library from there. The compiler and its library are a **pair**: `Library/VERSION` must be the
+version of the compiler, or the compiler stops and tells you to install them again. `#import <net>` is a library of the language;
+`#import "dir/file.jk"` is your own file.
+`jcmp -update` replaces the compiler and its library together with the latest release (`jcmp -update 0.9.176` for a given one);
+`install.sh --with-lib` installs the library files next to the compiler.
+
 ## Should the documentation be a website?
 
 Markdown files are shown nicely by GitHub, and `README.md` is the front page. A website
