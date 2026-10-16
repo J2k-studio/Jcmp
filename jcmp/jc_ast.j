@@ -791,36 +791,38 @@ int ast_classify(char^ qual, char^ name) {
     return 0;
 }
 
-// `module.function(...)`: the current token is the lower-case name of a module (the struct with a capital letter), a dot follows
-// and then a static function of the struct (see module_dot in jc_expr.j). On success the first letter of the token becomes a capital.
+// `module.function(...)`: the current token is the name of a module that `using` has opened, a dot follows and then a static function
+// of the struct that holds it (see module_dot in jc_expr.j). On success the token becomes the name of the struct. A module that is not
+// open is not read here: the body stays on the text path, which gives the message.
 bool ast_module_dot() {
     if tok_kind != T_IDENT || tok_text[0] < 'a' || tok_text[0] > 'z' { return false; }
     if ast_find_local(@tok_text) >= 0 || find_global(@tok_text) >= 0 || find_func(@tok_text) >= 0 || find_device(@tok_text) >= 0 || find_enum(@tok_text) >= 0 { return false; }
-    char cap[64];
-    str_copy(@cap, @tok_text, 64);
-    cap[0] = cap[0] - 32;
-    if find_struct(@cap) < 0 { return false; }
+    int row = mod_find("", @tok_text);
+    if row < 0 { return false; }
+    char^ stn = mod_row(row, 2);
+    int st = find_struct(stn);
     int k = 0;
     while lc(k) == ' ' || lc(k) == 9 { k += 1; }
     if lc(k) != '.' || lc(k + 1) == '.' { return false; }
     k += 1;
     while lc(k) == ' ' || lc(k) == 9 { k += 1; }
+    char fnm[64];
+    int j = 0;
+    while (is_alnum(lc(k + j)) || lc(k + j) == '_') && j < 62 {
+        fnm[j] = lc(k + j);
+        j += 1;
+    }
+    fnm[j] = 0;
+    if j == 0 { return false; }
     char full[200];
-    str_copy(@full, @cap, 64);
+    str_copy(@full, stn, 64);
     int n = str_len(@full);
     full[n] = '_';
     full[n + 1] = '_';
-    n += 2;
-    int j = 0;
-    while is_alnum(lc(k + j)) || lc(k + j) == '_' {
-        if n + j < 190 { full[n + j] = lc(k + j); }
-        j += 1;
-    }
-    full[n + j] = 0;
-    if j == 0 { return false; }
+    str_copy(@full + n + 2, @fnm, 120);
     int fi = find_func(@full);
-    if fi < 0 || fself[fi] == 1 { return false; }
-    tok_text[0] = tok_text[0] - 32;
+    if fi < 0 || fself[fi] == 1 || !mod_open(st, @fnm) { return false; }
+    str_copy(@tok_text, stn, 64);
     return true;
 }
 
@@ -836,6 +838,19 @@ int ast_static_call(bool as_value) {
     if tok_kind != T_IDENT {
         ast_fail("a name was expected after ::");
         return 0;
+    }
+    if is_enum < 0 && lc(0) == '.' && lc(1) != '.' {
+        // Fs::fs.read(p) : the namespace, the module, the function
+        int mrow = mod_find(@full, @tok_text);
+        if mrow >= 0 {
+            str_copy(@full, mod_row(mrow, 2), 64);
+            next();                              // the module
+            next();                              // the dot
+            if tok_kind != T_IDENT {
+                ast_fail("a function name was expected after the dot");
+                return 0;
+            }
+        }
     }
     if is_reg {
         int rpool = ast_pool_add(@tok_text);

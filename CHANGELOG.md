@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.166
+* **Library names have three layers (docs/syntax-design.md 77):** `Net::tcp.listen(8080)` is the full name; `using Net;` opens the modules of `Net` so that `tcp.listen(8080)` works; `using Net::tcp.listen;` opens only that function. The syntax tree reads all three forms too.
+* **A module that is not open is an error that says how to open it:** `unknown name 'tcp' (the module is not open)` + `help: write Net::tcp.listen(...), or add using Net; (or using Net::tcp.listen;)`. This replaces the automatic `module.function` of 0.9.164 (which was never documented; `tcp.listen` now needs `using Net;`).
+* Modules known so far: `fs`, `dir` (Fs), `path`, `json`, `tcp` (Net), `env`, `proc`, `term`, `time`, `random` (Time), `csv`, `toml`, `regex`, `fmt`, `math`, `str`, `log`, `date`, `num`, `arena`; the short function names are added module by module in the next releases (the old names keep working).
+* Gate: 491 tests pass (default and `-noast`), 300 fuzz programs, `diffcheck` the same 2 differences; 1746 of 1972 corpus functions come from the tree. Tests: `t435_names_layers`, `t436` (closed module), `t434_tcp_module` uses `using Net;`.
+
 ## 0.9.165
 * **Keyboard input errors say what is wrong:** `cin >> x` with a wrong word throws `invalid input: a whole number was expected, but found 'n'` (was `invalid input`); a number followed by letters says where the number should have ended; the end of the input says what was expected.  The wrong word stays in the input, as before (a program that catches the error skips it with `cin >> word;`).
 * (The source of 0.9.164 on `main` already held this change by mistake while its binary did not; 0.9.165 makes them agree. A release now waits until nothing in the repository is edited.)

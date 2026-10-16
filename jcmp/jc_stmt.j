@@ -1366,6 +1366,46 @@ void parse_using() {
                 um += 1;
             }
         }
+    } else if tok_kind == T_IDENT && mod_is_namespace(@tok_text) && find_struct(@tok_text) >= 0 {
+        // using Fs;  (the modules of Fs are open, and the names of its own functions are bare)   using Fs::fs;   using Fs::fs.read;
+        char ns[64];
+        str_copy(@ns, @tok_text, 64);
+        next();
+        if tok_is("::") {
+            next();
+            if tok_kind != T_IDENT { die_help("a module name was expected after ::", "write for example  using Fs::fs;  or  using Fs::fs.read;"); }
+            int mrow = mod_find(@ns, @tok_text);
+            if mrow < 0 { die_name("this namespace has no such module", @tok_text); }
+            int mst = find_struct(mod_row(mrow, 2));
+            next();
+            if tok_is(".") {
+                next();
+                if tok_kind != T_IDENT { die_help("a function name was expected after the dot", "write for example  using Fs::fs.read;"); }
+                if uf_n >= 63 { die("too many single functions in use"); }
+                uf_st[uf_n] = mst;
+                uf_loc[uf_n] = cur_in_func;
+                str_copy(@uf_name + uf_n * 64, @tok_text, 64);
+                uf_n += 1;
+                next();
+            } else if cur_in_func == 1 {
+                um_l[mst] = 1;
+            } else {
+                um_g[mst] = 1;
+            }
+        } else {
+            // the namespace alone: every module of it, and (as before) the struct of the same name
+            int mi = 0;
+            while mi < mod_count() {
+                if str_eq(mod_row(mi, 0), @ns) {
+                    int ms = find_struct(mod_row(mi, 2));
+                    if ms >= 0 {
+                        if cur_in_func == 1 { um_l[ms] = 1; } else { um_g[ms] = 1; }
+                    }
+                }
+                mi += 1;
+            }
+            us_s = find_struct(@ns);
+        }
     } else if tok_kind == T_IDENT {
         us_s = find_struct(@tok_text);
         if us_s < 0 && tok_text[0] >= 'a' && tok_text[0] <= 'z' {
@@ -2645,6 +2685,12 @@ void parse_function() {
     ue_i = 0;
     while ue_i < 256 {
         us_l[ue_i] = 0;
+        um_l[ue_i] = 0;
+        ue_i += 1;
+    }
+    ue_i = 0;
+    while ue_i < uf_n {                      // the functions opened inside the previous function close with it
+        if uf_loc[ue_i] == 1 { uf_st[ue_i] = 0 - 1; }
         ue_i += 1;
     }
     dv_clear_local();

@@ -1,6 +1,8 @@
-# J2K / Jcmp 0.9.165
+# J2K / Jcmp 0.9.166
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
+
+**0.9.166:** library names with three layers (`Net::tcp.listen`, `using Net;`, `using Net::tcp.listen;`); a module that is not open is an error that says how to open it.
 
 **0.9.165:** input errors of `cin` say what was expected and what was found.
 

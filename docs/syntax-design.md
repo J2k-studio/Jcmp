@@ -2049,3 +2049,22 @@ Implemented in 0.9.164 (text path and syntax tree):
 4. **Naming rules for a module** (to be applied one module at a time, old names stay until 1.0.0.0): the module name is a noun (`tcp`, `fs`, `json`); a function is a verb without the module name in it (`tcp.listen`, not `tcp.tcp_listen`); the same verb means the same thing everywhere (`read`, `write`, `open`, `close`, `parse`, `text`, `get`, `set`, `find`, `len`); a size or option that has a usual value is not asked (`tcp.recv(c)`; `tcp.recv_max(c, n)` for another, because overloading is not allowed, 9a).
 5. **Errors:** a function of the short form **throws** a text on failure (`try { ... } catch (e) { ... }`, or the program stops with the text); `try_name(...)` is the same function returning `Result<T, Error>` for `?` and `switch`. First module made this way: `tcp` (`std/net.j`, struct `Tcp`; test `t434_tcp_module`). Not decided by the owner yet: whether the throwing form is the right default for every module (open question 10).
 6. Order of conversion: tcp (done), fs, json, path, env/proc, time/random, csv/toml, regex, hash, math, str. Each step adds the short names and keeps the old ones; a module is finished when its header example uses only the new form.
+
+## 76. Keyboard input: a wrong word is an error (owner, 2026-10-16)
+Asked: should there be a safe reader (`input.int("number: ")` that asks again)? **Owner's answer: no, keep it as it is.** `cin >> x` with `x` a number throws a text when the word is not a number (the message says what was expected and what was found); a program that must accept anything reads a `char` or a `String` and checks it itself. The wrong word stays in the input; a program that catches the error skips it with `cin >> word;` (test `t173_cin`). No `input` module is made.
+
+## 77. Names of the library: `Namespace::module.function`, and `using` removes the layers (owner, 2026-10-16). Answers recorded; the rest designed by the assistant at the owner's request, adjustable. Supersedes the automatic form of 75 (`fs.read(...)` without `using`) and changes 73
+
+The full name has three layers: `Fs::fs.read(p)`, `Net::tcp.listen(8080)`, `Path::path.join(a, b)`.
+| written | meaning |
+|---|---|
+| `Fs::fs.read(p)` | the full name; always valid |
+| `using Fs;` then `fs.read(p)`, `fs.write(...)` | `using` takes the namespace layer away for every module of `Fs` |
+| `using Fs::fs.read;` then `fs.read(p)` | only that function is made available (`fs.write` stays unknown) |
+Rules:
+1. (owner) **Without `using` the short form is an error:** `fs.read(p)` says `unknown name 'fs'` with `help: write Fs::fs.read(...) or add using Fs;` (it names the layer that is missing). This replaces the automatic form of 0.9.164.
+2. (owner asked "abbreviate or not?", assistant's choice) **No abbreviation:** one rule for every module, no exceptions (`Path::path.join(...)`, not `Path::join`); `using` is what makes it short. A namespace can then hold several modules (`Net` = `tcp`, later `udp`).
+3. (owner) After `using Fs::fs.read;` the call is still written `fs.read(p)`; there is no bare `read(p)`. The bare form of 73 (`using net;` -> `send(c, "hi")`) is **kept for the old names only** until the owner says otherwise (question: drop it at 1.0.0.0?).
+4. The old names (`Fs::read_text`, `Net::tcp_listen`) keep working until 1.0.0.0.
+5. The syntax tree reads all of these forms (not only the text path), with tests for each.
+Work list: docs/design/14-modules.md section 6.

@@ -108,6 +108,71 @@ int emenum[8192];
 int emcount;
 int us_g[256];                // "using Struct" at file level
 int us_l[256];                // ... inside the current function
+// ---------------------------------------------------------------- modules of the library: Namespace::module.function
+// The names of the library have three layers (docs/syntax-design.md 77): `Fs::fs.read(p)`. `using Fs;` takes the namespace away
+// (`fs.read(p)`), `using Fs::fs.read;` makes only that function available. A row: the namespace, the module, the struct that holds it.
+int mod_count() { return 20; }
+char^ mod_row(int i, int col) {
+    char^ ns = "";
+    char^ md = "";
+    char^ st = "";
+    if i == 0 { ns = "Fs"; md = "fs"; st = "Fs"; }
+    else if i == 1 { ns = "Fs"; md = "dir"; st = "Dir"; }
+    else if i == 2 { ns = "Path"; md = "path"; st = "Path"; }
+    else if i == 3 { ns = "Json"; md = "json"; st = "Json"; }
+    else if i == 4 { ns = "Net"; md = "tcp"; st = "Tcp"; }
+    else if i == 5 { ns = "Env"; md = "env"; st = "Env"; }
+    else if i == 6 { ns = "Proc"; md = "proc"; st = "Proc"; }
+    else if i == 7 { ns = "Term"; md = "term"; st = "Term"; }
+    else if i == 8 { ns = "Time"; md = "time"; st = "Time"; }
+    else if i == 9 { ns = "Time"; md = "random"; st = "Random"; }
+    else if i == 10 { ns = "Csv"; md = "csv"; st = "Csv"; }
+    else if i == 11 { ns = "Toml"; md = "toml"; st = "Toml"; }
+    else if i == 12 { ns = "Regex"; md = "regex"; st = "Regex"; }
+    else if i == 13 { ns = "Fmt"; md = "fmt"; st = "Fmt"; }
+    else if i == 14 { ns = "Math"; md = "math"; st = "Math"; }
+    else if i == 15 { ns = "Str"; md = "str"; st = "Str"; }
+    else if i == 16 { ns = "Log"; md = "log"; st = "Log"; }
+    else if i == 17 { ns = "Date"; md = "date"; st = "Date"; }
+    else if i == 18 { ns = "Num"; md = "num"; st = "Num"; }
+    else if i == 19 { ns = "Arena"; md = "arena"; st = "Arena"; }
+    if col == 0 { return ns; }
+    if col == 1 { return md; }
+    return st;
+}
+// the row of the module `md` in the namespace `ns` (ns "" : any namespace), or -1; the struct must exist in this program
+int mod_find(char^ ns, char^ md) {
+    int i = 0;
+    while i < mod_count() {
+        if str_eq(mod_row(i, 1), md) && (ns[0] == 0 || str_eq(mod_row(i, 0), ns)) && find_struct(mod_row(i, 2)) >= 0 { return i; }
+        i += 1;
+    }
+    return 0 - 1;
+}
+bool mod_is_namespace(char^ ns) {
+    int i = 0;
+    while i < mod_count() {
+        if str_eq(mod_row(i, 0), ns) { return true; }
+        i += 1;
+    }
+    return false;
+}
+int um_g[256];               // the module (by struct) is open: "using Fs;" at file level (1: all its functions)
+int um_l[256];               // ... inside the current function
+int uf_n;                    // "using Fs::fs.read;" : a function of a module that is open alone
+int uf_st[64];
+int uf_loc[64];
+char uf_name[4096];          // 64 x 64
+// is the function `fn` of the module held by the struct `st` open (by `using`)?
+bool mod_open(int st, char^ fn) {
+    if um_g[st] == 1 || um_l[st] == 1 { return true; }
+    int i = 0;
+    while i < uf_n {
+        if uf_st[i] == st && str_eq(@uf_name + i * 64, fn) { return true; }
+        i += 1;
+    }
+    return false;
+}
 int ue_g[64];                // "using enum" at file level
 int ue_l[64];                // ... inside the current function
 
@@ -2557,6 +2622,17 @@ void gen_scope() {
     if en < 0 && sd < 0 { die_name("unknown name", @id_name); }
     next();
     if tok_kind != T_IDENT { die_help("a name was expected after ::", "write the name of a function or a member: Math::sqrt, Color::Red"); }
+    if en < 0 && lc(0) == '.' && lc(1) != '.' {
+        // Fs::fs.read(p) : the namespace, the module, the function
+        int mrow = mod_find(@id_name, @tok_text);
+        if mrow >= 0 {
+            str_copy(@id_name, mod_row(mrow, 2), 64);
+            next();                              // the module; the dot is the token now
+            next();                              // the dot; the function is the token now
+            sd = find_struct(@id_name);
+            if tok_kind != T_IDENT { die_help("a function name was expected after the dot", "write for example Fs::fs.read(path)"); }
+        }
+    }
     if en >= 0 {
         if !find_member(en, @tok_text) { die_name("not a member of the enum", @tok_text); }
         ins_n("mov x0, ", found_val);
@@ -2914,35 +2990,73 @@ bool sg_statement() {
 }
 
 // an identifier in an expression: a variable, an element, a deref or a call
-// `tcp.listen(8080)`, `fs.read_text(p)`: the lower-case name of a module (the struct with a capital letter) and a dot, then a static
-// function of it. A variable, a global or a function of the same name wins. On success `name` is the name of the struct.
+// `fs.read(p)`, `tcp.listen(8080)`: the name of a module that `using` has opened, a dot, and one of its static functions.
+// A variable, a global, a function or an enum of the same name wins. On success `name` is the name of the struct.
+// A module that exists but is not open is an error that says how to open it.
 bool module_dot(char^ name) {
     if !tok_is(".") || name[0] < 'a' || name[0] > 'z' { return false; }
     if lookup_var(name) || find_func(name) >= 0 || find_device(name) >= 0 || find_enum(name) >= 0 { return false; }
-    char cap[64];
-    str_copy(@cap, name, 64);
-    cap[0] = cap[0] - 32;
-    if find_struct(@cap) < 0 { return false; }
-    // the word after the dot must be a static function of the struct (so that  name.field  keeps its other meanings)
+    int row = mod_find("", name);
+    if row < 0 { return false; }
+    char^ stn = mod_row(row, 2);
+    int st = find_struct(stn);
+    // the word after the dot
     int k = 0;
     while lc(k) == ' ' || lc(k) == 9 { k += 1; }
+    char fnm[64];
+    int j = 0;
+    while (is_alnum(lc(k + j)) || lc(k + j) == '_') && j < 62 {
+        fnm[j] = lc(k + j);
+        j += 1;
+    }
+    fnm[j] = 0;
+    if j == 0 { return false; }
     char full[200];
-    str_copy(@full, @cap, 64);
+    str_copy(@full, stn, 64);
     int n = str_len(@full);
     full[n] = '_';
     full[n + 1] = '_';
-    n += 2;
-    int j = 0;
-    while is_alnum(lc(k + j)) || lc(k + j) == '_' {
-        if n + j < 190 { full[n + j] = lc(k + j); }
-        j += 1;
-    }
-    full[n + j] = 0;
-    if j == 0 { return false; }
+    str_copy(@full + n + 2, @fnm, 120);
     int fi = find_func(@full);
     if fi < 0 { return pass_no < 2; }
     if fself[fi] == 1 { return false; }
-    str_copy(name, @cap, 64);
+    if !mod_open(st, @fnm) {
+        if pass_no < 2 {
+            str_copy(name, stn, 64);             // pass 1 only learns: read it as the call it will be
+            return true;
+        }
+        {
+            char hp[200];
+            str_copy(@hp, "write ", 200);
+            append_text(@hp, mod_row(row, 0));
+            append_text(@hp, "::");
+            append_text(@hp, name);
+            append_text(@hp, ".");
+            append_text(@hp, @fnm);
+            append_text(@hp, "(...), or add  using ");
+            append_text(@hp, mod_row(row, 0));
+            append_text(@hp, ";  (or  using ");
+            append_text(@hp, mod_row(row, 0));
+            append_text(@hp, "::");
+            append_text(@hp, name);
+            append_text(@hp, ".");
+            append_text(@hp, @fnm);
+            append_text(@hp, ";)");
+            begin_msg("error");
+            write_err("unknown name '");
+            write_err(name);
+            write_err("' (the module is not open)");
+            end_msg();
+            write_err("  help: ");
+            write_err(@hp);
+            write_err("\n");
+            err_count += 1;
+            err_summary();
+            syscall(93, 1);
+        }
+        return false;
+    }
+    str_copy(name, stn, 64);
     return true;
 }
 
