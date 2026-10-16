@@ -1,6 +1,8 @@
-# J2K / Jcmp 0.9.170
+# J2K / Jcmp 0.9.171
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
+
+**0.9.171:** internal: structs with `init()` and the operators of structs are made from the syntax tree.
 
 **0.9.170:** short names for `csv`, `toml`, `regex`, `hash`, `num`, `hex`, `base64`; the table of short names in `docs/STDLIB.md`.
 

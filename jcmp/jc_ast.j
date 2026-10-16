@@ -188,6 +188,29 @@ int ast_node(int kind, int a, int b, int c, int val) {
     return ast_n;
 }
 
+// a copy of the tree of a place (a variable, a field, an element, a dereference), for a target that is also read
+int ast_clone(int n) {
+    int k = ast_kind[n];
+    ast_cur_ty = ast_ty[n];
+    if k == AK_VAR || k == AK_GVAR || k == AK_NUM { return ast_node(k, 0, ast_b[n], ast_c[n], ast_val[n]); }
+    if k == AK_FIELD || k == AK_DEREF {
+        int a2 = ast_clone(ast_a[n]);
+        if ast_ok == 0 { return 0; }
+        ast_cur_ty = ast_ty[n];
+        return ast_node(k, a2, ast_b[n], ast_c[n], ast_val[n]);
+    }
+    if k == AK_INDEX {
+        int ia = ast_clone(ast_a[n]);
+        if ast_ok == 0 { return 0; }
+        int ib = ast_clone(ast_b[n]);
+        if ast_ok == 0 { return 0; }
+        ast_cur_ty = ast_ty[n];
+        return ast_node(k, ia, ib, ast_c[n], ast_val[n]);
+    }
+    ast_fail("a target that cannot be copied in the tree");
+    return 0;
+}
+
 int ast_find_local(char^ name) {
     int i = ast_nl - 1;
     while i >= 0 {
@@ -1081,6 +1104,20 @@ int ast_primary() {
         next();
         int a = ast_primary();
         if ast_ok == 0 { return 0; }
+        if ast_ty[a] / 65536 == 3 {
+            // -a on a struct: its method neg
+            int nst = ast_ty[a] % 65536 - 16;
+            char nfn[128];
+            str_copy(@nfn, @sname + nst * 64, 64);
+            str_copy(@nfn + str_len(@nfn), "__neg", 8);
+            int nfi = find_func(@nfn);
+            if nfi < 0 || fop[nfi] == 0 || simd_kind(100 + nst) != 0 {
+                ast_fail("a minus on a struct that is not a method of the program");
+                return 0;
+            }
+            ast_cur_ty = ast_fn_ty(nfi);
+            return ast_node(AK_METHOD, a, 0, 0, ast_pool_add("neg"));
+        }
         ast_cur_ty = ast_arith_ty(ast_ty[a], ast_ty[a]);
         return ast_node(AK_NEG, a, 0, 0, 0);
     }
@@ -1313,6 +1350,38 @@ int ast_expr(int level) {
         next();
         int rhs = ast_expr(lv + 1);
         if ast_ok == 0 { return 0; }
+        if ast_ty[rhs] / 65536 == 3 && ast_ty[lhs] / 65536 == 0 && code == AO_MUL {
+            // number * struct: the same as struct * number (the method mul of the struct)
+            int sw = lhs;
+            lhs = rhs;
+            rhs = sw;
+        }
+        if ast_ty[lhs] / 65536 == 3 && (code == AO_ADD || code == AO_SUB || code == AO_MUL || code == AO_DIV || code == AO_EQ || code == AO_NE) {
+            // an operator of a struct: a call of its method  add  sub  mul  div  eq  (a != b is the negation of eq)
+            int ost = ast_ty[lhs] % 65536 - 16;
+            char^ opn = "add";
+            if code == AO_SUB { opn = "sub"; }
+            if code == AO_MUL { opn = "mul"; }
+            if code == AO_DIV { opn = "div"; }
+            if code == AO_EQ || code == AO_NE { opn = "eq"; }
+            char ofn[128];
+            str_copy(@ofn, @sname + ost * 64, 64);
+            str_copy(@ofn + str_len(@ofn), "__", 4);
+            str_copy(@ofn + str_len(@ofn), opn, 16);
+            int ofi = find_func(@ofn);
+            if ofi < 0 || fop[ofi] == 0 || simd_kind(100 + ost) != 0 {
+                ast_fail("an operator of a struct that is not a method of the program");
+                return 0;
+            }
+            ast_cur_ty = ast_fn_ty(ofi);
+            int om = ast_node(AK_METHOD, lhs, rhs, 0, ast_pool_add(opn));
+            if code == AO_NE {
+                ast_cur_ty = ast_mkty(0, 3);
+                om = ast_node(AK_NOT, om, 0, 0, 0);
+            }
+            lhs = om;
+            continue;
+        }
         if code >= AO_LT {
             ast_cur_ty = ast_mkty(0, 3);
         } else if code == AO_ADD && (ast_ty[lhs] / 65536 == 4 || ast_ty[rhs] / 65536 == 4) {
@@ -2208,6 +2277,30 @@ int ast_stmt() {
             return 0;
         }
         next();
+        if opc != 0 && ast_ty[target] / 65536 == 3 {
+            // a += b on a struct is a = a.add(b) (sub, mul, div the same): the method call gets a copy of the target
+            char^ opn2 = "add";
+            if opc == AO_SUB { opn2 = "sub"; }
+            else if opc == AO_MUL { opn2 = "mul"; }
+            else if opc == AO_DIV { opn2 = "div"; }
+            else if opc != AO_ADD { ast_fail("this operator does not work on a struct"); return 0; }
+            int sst = ast_ty[target] % 65536 - 16;
+            char sfn[128];
+            str_copy(@sfn, @sname + sst * 64, 64);
+            str_copy(@sfn + str_len(@sfn), "__", 4);
+            str_copy(@sfn + str_len(@sfn), opn2, 16);
+            int sfi = find_func(@sfn);
+            if sfi < 0 || fop[sfi] == 0 || simd_kind(100 + sst) != 0 {
+                ast_fail("an operator of a struct that is not a method of the program");
+                return 0;
+            }
+            int tcopy = ast_clone(target);
+            if ast_ok == 0 { return 0; }
+            ast_cur_ty = ast_fn_ty(sfi);
+            int mcall = ast_node(AK_METHOD, tcopy, v2, 0, ast_pool_add(opn2));
+            ast_cur_ty = ast_ty[target];
+            return ast_node(AK_ASSIGN, mcall, 0, target, 0);
+        }
         ast_cur_ty = ast_ty[target];
         return ast_node(AK_ASSIGN, v2, opc, target, 0);
     }

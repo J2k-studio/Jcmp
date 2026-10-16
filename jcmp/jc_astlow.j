@@ -98,11 +98,16 @@ bool as1_sfree(int s) {
 
 // a struct that a local variable can be: no init(); a String, a dynamic array or a free(self) inside it starts as zeros
 bool as1_sdecl(int s) {
+    return s >= 0 && s < scount;
+}
+
+// does the struct have an init() (it runs where a variable of the struct is made without a value)?
+bool as1_hasinit(int s) {
     if s < 0 || s >= scount { return false; }
     char hn[64];
     str_copy(@hn, @sname + s * 64, 64);
     str_copy(@hn + str_len(@hn), "__init", 8);
-    return find_func(@hn) < 0;
+    return find_func(@hn) >= 0;
 }
 
 bool as1_scode(int b) {
@@ -586,11 +591,11 @@ int as1_dynmethod(int n) {
 bool as1_method(int n) {
     if opt_debug == 1 { return false; }
     int fi = as1_mfn(n);
-    if fi < 0 || fnpar[fi] < 1 || fretdyn[fi] != 0 || fop[fi] != 0 { return false; }
+    if fi < 0 || fnpar[fi] < 1 || fretdyn[fi] != 0 { return false; }
     if fnpar[fi] + as1_hidden(fi) > 8 { return false; }
     if fvoid[fi] == 0 && !as1_rtid(fret[fi]) { return false; }
     if fcharret[fi] != 0 || farr[fi] != 0 || as1_special(@fname + fi * 64) { return false; }
-    if fptid[fi * 8] != 0 || !as1_lv(ast_a[n]) { return false; }
+    if fptid[fi * 8] != 0 || !as1_sx(ast_a[n]) { return false; }      // the object: a variable, or a struct that a call made
     return as1_args(fi, ast_b[n], 1);
 }
 
@@ -663,7 +668,7 @@ bool as1_expr(int n) {
         int fi = ast_val[n];
         if opt_debug == 1 || fi < 0 || fldkind[fi] != 0 || flddyn[fi] != 0 || !as1_sty(ast_ty[ast_a[n]]) { return false; }
         if as1_pt(ty) { if fldptr[fi] == 0 { return false; } } else if fldptr[fi] != 0 { return false; }
-        return as1_lv(ast_a[n]);
+        return as1_lv(ast_a[n]) || ((ast_kind[ast_a[n]] == AK_CALL || ast_kind[ast_a[n]] == AK_METHOD) && as1_sx(ast_a[n]));
     }
     if k == AK_GVAR {
         int gi = ast_val[n];
@@ -783,7 +788,7 @@ bool as1_item(int e, int code) {
 
 // a list of values for the struct s: the fields in order, a list for a field that is a struct or an array
 bool as1_slist(int lst, int s) {
-    if lst == 0 || ast_kind[lst] != AK_LIST || !as1_splain(s) { return false; }
+    if lst == 0 || ast_kind[lst] != AK_LIST || struct_needs_zero(s) { return false; }
     int it = ast_a[lst];
     int k = 0;
     while k < snf[s] {
@@ -858,7 +863,8 @@ bool as1_decl(int n) {
         }
         if as1_sarr(dt) {
             int ss = dt % 65536 - 16;
-            if !as1_splain(ss) { return false; }
+            if struct_needs_zero(ss) { return false; }
+            if as1_hasinit(ss) && (init != 0 || ast_b[n] > 64) { return false; }
             if init == 0 { return ast_b[n] > 0 && ast_b[n] * ssize[ss] < 65536; }
             if ast_kind[init] != AK_LIST { return false; }
             int cnt2 = as1_count(init);
@@ -1659,10 +1665,9 @@ void gl_call(int n) {
         argn = 1;
     }
     if at_kind[n] == AK_METHOD {
-        // the first argument is the address of the object
-        gl_lv(a);
+        // the first argument is the address of the object (a variable, or the slot of the struct that a call made)
+        gl_saddr(a);
         gl_ensure();
-        if gl_ab != 1 || gl_ao != 0 { ir_add(IR_ADD, 1, gl_ab, gl_ao, 1, 0); }
         gl_store(30, gl_cell(gl_depth), 1);
         gl_depth += 1;
         argn += 1;
@@ -1769,6 +1774,16 @@ void gl_saddr(int n) {
 }
 
 // target = value for structs: the address of the target waits (v9 .. or a cell) while the value is made
+// run S__init on the struct at the frame offset off
+void gl_init_call(int sidx, int off) {
+    char inm[64];
+    str_copy(@inm, @sname + sidx * 64, 64);
+    str_copy(@inm + str_len(@inm), "__init", 8);
+    gl_ensure();
+    ir_add(IR_ADD, 1, 30, off, 1, 0);
+    gl_rt1(@inm, 1);
+}
+
 void gl_assign_struct(int target, int value) {
     int fsi = at_ty[target] % 65536 - 16;
     if struct_has_free(fsi) {
@@ -2115,7 +2130,14 @@ void gl_addr(int n) {
         return;
     }
     if k == AK_FIELD {
-        gl_lv(at_a[n]);
+        int fb = at_kind[at_a[n]];
+        if fb == AK_CALL || fb == AK_METHOD {
+            gl_saddr(at_a[n]);                  // a field of a struct that a call made: its slot
+            gl_ab = 1;
+            gl_ao = 0;
+        } else {
+            gl_lv(at_a[n]);
+        }
         gl_ao += fldoff[at_val[n]];
         return;
     }
@@ -3527,6 +3549,16 @@ void gl_stmt(int n) {
     }
     if k == AK_DECL {
         if as1_arr(at_ty[n]) || as1_sarr(at_ty[n]) {
+            if at_a[n] == 0 && as1_sarr(at_ty[n]) && as1_hasinit(at_ty[n] % 65536 - 16) {
+                // an array of structs that have init(): it runs on each element
+                int isz = ssize[at_ty[n] % 65536 - 16];
+                int ik = 0;
+                while ik < at_b[n] {
+                    gl_init_call(at_ty[n] % 65536 - 16, gl_off[at_val[n]] + ik * isz);
+                    ik += 1;
+                }
+                return;
+            }
             if at_a[n] != 0 && at_kind[at_a[n]] == AK_STR {
                 // char w[16] = "text": the bytes in words of 8, the rest zeros (as the text path does)
                 int sl = at_b[at_a[n]];
@@ -3579,6 +3611,7 @@ void gl_stmt(int n) {
                     zk += 8;
                 }
             }
+            if at_a[n] == 0 && as1_hasinit(at_ty[n] % 65536 - 16) { gl_init_call(at_ty[n] % 65536 - 16, gl_off[at_val[n]]); }
             go_decl(gl_off[at_val[n]]);
             return;
         }
@@ -3983,6 +4016,10 @@ void gl_slots(int n) {
             int sasz = at_b[n] * ssize[at_ty[n] % 65536 - 16];
             gl_hint_add2(gl_nslot, sasz, 0);
             gl_nslot += (sasz + 7) / 8 * 8;
+            if at_a[n] == 0 && as1_hasinit(at_ty[n] % 65536 - 16) {
+                gl_hint_add(gl_nslot);              // the counter of the loop that runs init() on each element (..i)
+                gl_nslot += 8;
+            }
         } else {
             gl_hint_add(gl_nslot);
             gl_nslot += 8;

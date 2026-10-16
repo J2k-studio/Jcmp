@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.171
+* **AST A6:** structs that have `init()` (a variable, and every element of an array of them, gets it from the tree), **operators of structs** (`a + b`, `a - b`, `a * 2.0`, `2.0 * a`, `a == b`, `a != b`, `-a`, `a += b`: method calls `add` `sub` `mul` `div` `eq` `neg`), a method whose object is the result of another call (`(a + b).dot(c)`), and a field of such a result are made from the tree. 1837 of 2058 corpus functions (89%).
+* Gate: 499 tests pass (default and `-noast`), 300 fuzz programs, `diffcheck` the same 2 differences.
+
 ## 0.9.170
 * **Short names for seven more modules:** `csv` (`split` `quote` `join`), `toml` (`get` `get_or` `get_int` `get_bool` `get_double`), `regex` (`find` `text` `matches`), `hash` (`sha256` `sha256_file`), `num` (`parse_int` `parse_double`), `hex` and `base64` (`encode` `decode`); throwing, `try_` for a `Result`. All fifteen modules with a short form are listed in `docs/STDLIB.md` ("Short names").
 * The short names of a unit live in one struct (`__Files`, `__System`, `__TimeM`, `__Data`, `__Text`): a program may have 256 structs at most, and a struct per module would have taken room from the programs. The compiler adds the prefix (`fs_read`) itself.
