@@ -296,7 +296,13 @@ bool as1_args(int fi, int a2, int pk) {
     while a2 != 0 {
         if pk >= fnpar[fi] { return false; }
         int pt = fptid[fi * 8 + pk];
-        if pt == 99 && fpstr[fi * 8 + pk] == 1 {
+        if (farr[fi] >> pk) % 2 == 1 {
+            // T name[]: a text (its bytes and length + 1) or an array variable (its address and its number of elements)
+            int ak = ast_kind[a2];
+            if ak == AK_STR { if ast_b[a2] >= 1000 || opt_debug == 1 { return false; } }
+            else if ak == AK_VAR || ak == AK_GVAR { if !(as1_arr(ast_ty[a2]) || as1_sarr(ast_ty[a2])) { return false; } }
+            else { return false; }
+        } else if pt == 99 && fpstr[fi * 8 + pk] == 1 {
             // a String parameter (borrowed): a String variable, a text (a temporary String is made) or a new String
             if ast_ty[a2] / 65536 != 4 || !as1_sval(a2) { return false; }
         } else if pt == 99 {
@@ -316,6 +322,17 @@ bool as1_args(int fi, int a2, int pk) {
     return pk == fnpar[fi];
 }
 
+// the registers that the parameters take: an array parameter (T name[]) takes two (the address and the length)
+int as1_nregs(int fi) {
+    int n = fnpar[fi];
+    int k = 0;
+    while k < fnpar[fi] {
+        if (farr[fi] >> k) % 2 == 1 { n += 1; }
+        k += 1;
+    }
+    return n;
+}
+
 // the number of registers of the call besides the parameters: the address of the result when a struct is the result
 int as1_hidden(int fi) {
     if fvoid[fi] == 0 && fret[fi] >= 100 { return 1; }
@@ -328,9 +345,9 @@ bool as1_call(int n) {
     int fi = ast_val[n];
     if fi < 0 || fi >= fcount { return false; }
     if fretdyn[fi] != 0 && fretstr[fi] != 1 && !as1_dyn(ast_fn_ty(fi)) { return false; }
-    if fnpar[fi] + as1_hidden(fi) > 8 { return false; }
+    if as1_nregs(fi) + as1_hidden(fi) > 8 { return false; }
     if fvoid[fi] == 0 && !as1_rtid(fret[fi]) && fretstr[fi] != 1 && fretdyn[fi] == 0 { return false; }
-    if fcharret[fi] != 0 || farr[fi] != 0 || as1_special(@fname + fi * 64) { return false; }
+    if fcharret[fi] != 0 || as1_special(@fname + fi * 64) { return false; }
     int ik = as1_intrin(@fname + fi * 64);
     if ik != 0 {
         // whole numbers in and out (the text path takes any number of arguments from the call: only the right count is lowered)
@@ -804,6 +821,7 @@ bool as1_decl(int n) {
         if as1_arr(dt) {
             // a fixed array of one dimension with a number as its size, no initial values or a list that fits
             if init == 0 { return ast_b[n] > 0 && ast_b[n] < 65536; }
+            if ast_kind[init] == AK_STR { return dt % 65536 == 2 && ast_b[n] > 0 && ast_b[n] < 65536 && ast_b[init] < ast_b[n] && ast_b[init] < 1000 && opt_debug == 0; }
             if ast_kind[init] != AK_LIST { return false; }
             int cnt = as1_count(init);
             if cnt == 0 || cnt >= 65536 || (ast_b[n] > 0 && cnt > ast_b[n]) || ast_b[n] == 0 { return false; }
@@ -995,6 +1013,8 @@ bool as1_stmt(int n) {
             } else if as1_ptr(ast_ty[it]) && ast_ty[it] % 65536 == 2 && ast_kind[it] != AK_STR {
                 // a char^: the characters up to the 0 (a catch variable, the result of c())
                 if !as1_expr(it) { return false; }
+            } else if ast_kind[it] == AK_VAR && as1_arr(ast_ty[it]) && ast_ty[it] % 65536 == 2 {
+                // a local array of chars: printed up to the 0
             } else if ast_kind[it] != AK_STR {
                 // a number, a bool, a char or a double (a pointer, a String, an array: the text path)
                 if !as1_scalar(ast_ty[it]) || !as1_expr(it) { return false; }
@@ -1137,13 +1157,14 @@ bool as1_dynparams() {
 void at_store(int f_idx) {
     if ast_lower_on == 0 || at_nfn >= AT_FUNCS || at_n + ast_n + 2 >= AT_MAX { return; }
     // the function: parameters of whole numbers, bool or double, a result of those or nothing
-    if fnpar[f_idx] + as1_hidden(f_idx) > 8 || (fretdyn[f_idx] != 0 && fretstr[f_idx] != 1 && !as1_dyn(ast_fn_ty(f_idx))) || fcharret[f_idx] != 0 || farr[f_idx] != 0 {
+    if as1_nregs(f_idx) + as1_hidden(f_idx) > 8 || (fretdyn[f_idx] != 0 && fretstr[f_idx] != 1 && !as1_dyn(ast_fn_ty(f_idx))) || fcharret[f_idx] != 0 {
         at_rej_n = fnpar[f_idx] * 1000 + fretdyn[f_idx] * 100 + fcharret[f_idx] * 10 + farr[f_idx];
         at_reject(f_idx, "signature");
         return;
     }
     int pk = 0;
     while pk < fnpar[f_idx] {
+        if (farr[f_idx] >> pk) % 2 == 1 { pk += 1; continue; }
         if fptid[f_idx * 8 + pk] == 99 && as1_dynparams() { pk += 1; continue; }
         if !as1_ptid(fptid[f_idx * 8 + pk]) { at_rej_n = fptid[f_idx * 8 + pk]; at_reject(f_idx, "parameter"); return; }
         pk += 1;
@@ -1244,6 +1265,7 @@ int gl_ismain;                   // 1 while main is made: it ends with the exit 
 int gl_retoff;                   // the slot that holds the address of the result of a function that gives a struct, else -1
 int gl_ab;                       // the base register and the offset that gl_addr / gl_lv give
 int gl_ao;
+int gl_acnt[1024];               // the number of elements of the array variable (a local), for the arguments of T name[]
 int gl_mvslot[AT_MAX];           // an argument that is a value that frees itself: the slot of its copy
 int gl_nstemps;                  // the new Strings made so far (the slots)
 int gl_hastmp[AT_MAX];           // for an if / while: its condition makes new Strings (they are freed before the jump)
@@ -1634,17 +1656,42 @@ void gl_call(int n) {
     }
     int hn = 0;
     if hid { hn = 1; }
+    int xarr = 0;                         // the registers that the array arguments took in addition
     while a != 0 {
-        if fptid[fi * 8 + argn - hn] >= 100 {
+        if (farr[fi] >> (argn - hn - xarr)) % 2 == 1 {
+            // T name[]: the address, then the number of elements (a text: its length + 1)
+            int alen = 0;
+            if at_kind[a] == AK_STR {
+                gl_sval(a);
+                alen = at_b[a] + 1;
+            } else {
+                if at_kind[a] == AK_VAR { alen = gl_acnt[at_val[a]]; } else { alen = gcnt[at_val[a]]; }
+                if alen <= 0 { gl_failx(30); return; }
+                gl_lv(a);
+                gl_ensure();
+                if gl_ab != 1 || gl_ao != 0 { ir_add(IR_ADD, 1, gl_ab, gl_ao, 1, 0); }
+            }
+            gl_ensure();
+            gl_store(30, gl_cell(gl_depth), 1);
+            gl_depth += 1;
+            ir_add(IR_CONST, 1, 0, 0, 0, alen);
+            gl_store(30, gl_cell(gl_depth), 1);
+            gl_depth += 1;
+            argn += 2;
+            xarr += 1;
+            a = at_nx[a];
+            continue;
+        }
+        if fptid[fi * 8 + argn - hn - xarr] >= 100 {
             gl_saddr(a);
-            if fptid[fi * 8 + argn - hn] < 100 + scount && struct_has_free(fptid[fi * 8 + argn - hn] - 100) {
+            if fptid[fi * 8 + argn - hn - xarr] < 100 + scount && struct_has_free(fptid[fi * 8 + argn - hn - xarr] - 100) {
                 // moved into a copy; the source is emptied; the callee gets the address of the copy
                 gl_ensure();
-                gl_copy(30, gl_mvslot[a], 1, 0, ssize[fptid[fi * 8 + argn - hn] - 100]);
+                gl_copy(30, gl_mvslot[a], 1, 0, ssize[fptid[fi * 8 + argn - hn - xarr] - 100]);
                 go_zero();
                 ir_add(IR_ADD, 1, 30, gl_mvslot[a], 1, 0);
             }
-        } else if fptid[fi * 8 + argn - hn] == 99 && fpstr[fi * 8 + argn - hn] == 1 {
+        } else if fptid[fi * 8 + argn - hn - xarr] == 99 && fpstr[fi * 8 + argn - hn - xarr] == 1 {
             // a String parameter borrows: the String, or a temporary String made from a text
             gl_sval(a);
             if at_kind[a] == AK_STR {
@@ -2556,6 +2603,11 @@ void gl_cout(int n) {
             gl_cout_str(it);
         } else if at_ty[it] / 65536 == 4 {
             gl_cout_string(it);
+        } else if at_kind[it] == AK_VAR && as1_arr(at_ty[it]) && at_ty[it] % 65536 == 2 {
+            gl_ensure();
+            ir_add(IR_ADD, 1, 30, gl_off[at_val[it]], 1, 0);
+            gl_rt1("j2k_print_str", 1);
+            gl_lastw = 9;
         } else if at_ty[it] / 65536 == 1 && at_ty[it] % 65536 == 2 {
             gl_expr(it);
             gl_rt1("j2k_print_str", 1);
@@ -3425,6 +3477,28 @@ void gl_stmt(int n) {
     }
     if k == AK_DECL {
         if as1_arr(at_ty[n]) || as1_sarr(at_ty[n]) {
+            if at_a[n] != 0 && at_kind[at_a[n]] == AK_STR {
+                // char w[16] = "text": the bytes in words of 8, the rest zeros (as the text path does)
+                int sl = at_b[at_a[n]];
+                int words = (at_b[n] + 7) / 8;
+                int wi = 0;
+                while wi < words {
+                    int wv = 0;
+                    int bi = 7;
+                    while bi >= 0 {
+                        int pos = wi * 8 + bi;
+                        int bv = 0;
+                        if pos < sl { bv = at_spool[at_val[at_a[n]] + pos] & 255; }
+                        wv = (wv << 8) | bv;
+                        bi -= 1;
+                    }
+                    gl_ensure();
+                    ir_add(IR_CONST, 1, 0, 0, 0, wv);
+                    gl_store(30, gl_off[at_val[n]] + wi * 8, 1);
+                    wi += 1;
+                }
+                return;
+            }
             if at_a[n] != 0 {
                 int ecode = at_ty[n] % 65536;
                 int ecnt = at_b[n];
@@ -3843,6 +3917,7 @@ void gl_slots(int n) {
         gl_tmps(at_a[n]);
         if at_val[n] >= 0 && at_val[n] < 1024 { gl_off[at_val[n]] = gl_nslot; }
         int own_at = gl_nslot;
+        if at_val[n] >= 0 && at_val[n] < 1024 { gl_acnt[at_val[n]] = at_b[n]; }
         if as1_dyn(at_ty[n]) || at_ty[n] / 65536 == 4 {
             gl_hint_add2(gl_nslot, 8, 0);
             gl_nslot += 8;

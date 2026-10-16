@@ -2916,6 +2916,10 @@ bool sg_statement() {
 // an identifier in an expression: a variable, an element, a deref or a call
 void gen_identifier() {
     str_copy(@id_name, @tok_text, 256);
+    int idl = str_len(@id_name);
+    if idl > 5 && id_name[idl - 1] == 'n' && id_name[idl - 2] == 'e' && id_name[idl - 3] == 'l' && id_name[idl - 4] == '_' && id_name[idl - 5] == '_' {
+        warn("'name__len' is the old way to read the length of an array parameter; use 'name.len'", "oldlen");
+    }
     next();
     if tok_is(".") && find_device(@id_name) >= 0 && !lookup_var(@id_name) {
         gen_device_read();                  // Uart.flags.bit(5)

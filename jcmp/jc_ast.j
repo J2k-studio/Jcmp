@@ -566,6 +566,31 @@ int ast_postfix(int base, int kind, int tb) {
                 ast_fail("a field name was expected");
                 return 0;
             }
+            if ast_pkind == 1 && ast_kind[cur] == AK_VAR && str_eq(@tok_text, "len") {
+                // `a.len` of a parameter `T a[]` (an array of structs too): the hidden local a__len
+                int qli = 0;
+                bool qgot = false;
+                while qli < ast_nl {
+                    if ast_lid[qli] == ast_val[cur] {
+                        char qln[96];
+                        str_copy(@qln, @ast_lname + qli * 64, 64);
+                        str_copy(@qln + str_len(@qln), "__len", 8);
+                        int qlen = ast_find_local(@qln);
+                        if qlen >= 0 {
+                            next();
+                            ast_pkind = 0;
+                            ast_pbase = 8;
+                            ast_ndims = 0;
+                            ast_cur_ty = ast_mkty(0, 8);
+                            cur = ast_node(AK_VAR, 0, 0, 0, ast_lid[qlen]);
+                            qli = ast_nl;
+                            qgot = true;
+                        }
+                    }
+                    qli += 1;
+                }
+                if qgot { continue; }
+            }
             if ast_pkind == 1 && ast_pbase >= 16 {
                 // a pointer to a struct used like the struct (the `self` of a method, a name in a case)
                 ast_cur_ty = ast_mkty(3, ast_pbase);
@@ -644,10 +669,29 @@ int ast_postfix(int base, int kind, int tb) {
                 cur = ast_node(AK_FIELD, cur, 0, 0, fi);
             } else {
                 // a member that is not a field of a user struct: len, cap ... of a String or a dynamic array, a member of a library type
+                int plen = 0 - 1;
+                if str_eq(@mn, "len") && ast_kind[cur] == AK_VAR {
+                    // `a.len` of a parameter `T a[]`: the hidden local a__len
+                    int pli = 0;
+                    while pli < ast_nl {
+                        if ast_lid[pli] == ast_val[cur] {
+                            char pln[96];
+                            str_copy(@pln, @ast_lname + pli * 64, 64);
+                            str_copy(@pln + str_len(@pln), "__len", 8);
+                            plen = ast_find_local(@pln);
+                        }
+                        pli += 1;
+                    }
+                }
                 ast_pkind = 0;
                 ast_pbase = 8;
                 ast_cur_ty = ast_mkty(0, 8);
-                cur = ast_node(AK_FIELD, cur, ast_pool_add(@mn) + 1, 0, 0 - 1);
+                if plen >= 0 {
+                    ast_ndims = 0;
+                    cur = ast_node(AK_VAR, 0, 0, 0, ast_lid[plen]);
+                } else {
+                    cur = ast_node(AK_FIELD, cur, ast_pool_add(@mn) + 1, 0, 0 - 1);
+                }
             }
         } else {
             break;

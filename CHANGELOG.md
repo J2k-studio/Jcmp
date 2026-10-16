@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.161
+* **AST A6:** array parameters (`int a[]`, `P ps[]`, `char t[]`), the arguments that are arrays or texts (address + number of elements), `a.len` on them, and `char w[16] = "text"` with `cout << w` are made from the tree.
+* **New warning `-Woldlen`:** `name__len` is the old way to read the length of an array parameter; use `name.len`. The old name still works.
+* Gate: 481 tests pass (default and `-noast`), 300 fuzz programs, `diffcheck` the same 2 differences. 1549 of 1846 corpus functions come from the tree.
+* Tests: `t426_ast_chararray`, `t427_ast_arrparam`, `t428_warn_oldlen`.
+
 ## 0.9.160
 * **AST A6:** `syscall(n, ...)` and a text literal where a `char^` is wanted (`char^ p = "abc"`, `f("text")`) are made from the tree.
 * Fix: a `main` that contains a system call was cut at the first `svc` by the lifter and the register pass; its end is `mov x8, 94` + `svc 0` now.
