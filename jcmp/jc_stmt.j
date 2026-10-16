@@ -1440,31 +1440,27 @@ void parse_using() {
             if tok_kind != T_IDENT { die_help("a module name was expected after ::", "write for example  using Fs::fs;  or  using Fs::fs.read;"); }
             int mrow = mod_find(@ns, @tok_text);
             if mrow < 0 { die_name("this namespace has no such module", @tok_text); }
-            int mst = find_struct(mod_row(mrow, 2));
             next();
             if tok_is(".") {
                 next();
                 if tok_kind != T_IDENT { die_help("a function name was expected after the dot", "write for example  using Fs::fs.read;"); }
                 if uf_n >= 63 { die("too many single functions in use"); }
-                uf_st[uf_n] = mst;
+                uf_st[uf_n] = mrow;
                 uf_loc[uf_n] = cur_in_func;
                 str_copy(@uf_name + uf_n * 64, @tok_text, 64);
                 uf_n += 1;
                 next();
             } else if cur_in_func == 1 {
-                um_l[mst] = 1;
+                um_l[mrow] = 1;
             } else {
-                um_g[mst] = 1;
+                um_g[mrow] = 1;
             }
         } else {
             // the namespace alone: every module of it, and (as before) the struct of the same name
             int mi = 0;
             while mi < mod_count() {
                 if str_eq(mod_row(mi, 0), @ns) {
-                    int ms = find_struct(mod_row(mi, 2));
-                    if ms >= 0 {
-                        if cur_in_func == 1 { um_l[ms] = 1; } else { um_g[ms] = 1; }
-                    }
+                    if cur_in_func == 1 { um_l[mi] = 1; } else { um_g[mi] = 1; }
                 }
                 mi += 1;
             }

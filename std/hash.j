@@ -203,3 +203,10 @@ struct Sha256 {
         return Result<String, Error>::Ok("");
     }
 }
+
+// hash: the short names (Hash::hash.sha256(text), with  using Hash;  hash.sha256(text)); a file that cannot be read is thrown
+struct Hash {
+    static String sha256(String s) { return Sha256::hex(s); }
+    static String sha256_file(String path) { return Sha256::file(path).take(); }
+    static Result<String, Error> try_sha256_file(String path) { return Sha256::file(path); }
+}

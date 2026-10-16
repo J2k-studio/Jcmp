@@ -464,9 +464,3 @@ struct Json {
 }
 
 // json: Json::json.parse(text), with  using Json;  json.parse(text). A text that is not JSON is thrown as an error; try_parse returns the Result.
-struct __Json {
-    static JsonDoc parse(String text) { return Json::parse(text).take(); }
-    static Result<JsonDoc, Error> try_parse(String text) { return Json::parse(text); }
-    static String quote(String s) { return Json::quote(s); }
-    static String num_text(double x) { return Json::num_text(x); }
-}

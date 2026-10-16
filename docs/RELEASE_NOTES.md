@@ -1,6 +1,8 @@
-# J2K / Jcmp 0.9.169
+# J2K / Jcmp 0.9.170
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
+
+**0.9.170:** short names for `csv`, `toml`, `regex`, `hash`, `num`, `hex`, `base64`; the table of short names in `docs/STDLIB.md`.
 
 **0.9.169:** big doubles are written as `1.9e+30`; float literals up to e308 and with long digits.
 

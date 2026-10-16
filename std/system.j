@@ -154,9 +154,11 @@ struct Term {
 }
 
 // env, proc, term: the short names (Env::env.get(name), with  using Env;  env.get(name))
-struct __Env {
-    static Option<String> get(String name) { return Env::get(name); }
-    static String get_or(String name, String fallback) {
+
+// the short names of the system unit (env, proc, term): <module>_<name>, the compiler adds the prefix
+struct __System {
+    static Option<String> env_get(String name) { return Env::get(name); }
+    static String env_get_or(String name, String fallback) {
         Option<String> v = Env::get(name);
         switch v {
             Option::Some(s): return s;
@@ -164,16 +166,12 @@ struct __Env {
         }
         return fallback;
     }
-    static String[] args() { return Env::args(); }
-}
-struct __Proc {
-    static int run(String cmd, String[] args) { return Proc::run(cmd, args).take(); }
-    static Result<int, Error> try_run(String cmd, String[] args) { return Proc::run(cmd, args); }
-    static String output(String cmd, String[] args) { return Proc::output(cmd, args).take(); }
-    static Result<String, Error> try_output(String cmd, String[] args) { return Proc::output(cmd, args); }
-}
-struct __Term {
-    static int cols() { return Term::cols(); }
-    static int rows() { return Term::rows(); }
-    static bool key_pressed() { return Term::key_pressed(); }
+    static String[] env_args() { return Env::args(); }
+    static int proc_run(String cmd, String[] args) { return Proc::run(cmd, args).take(); }
+    static Result<int, Error> proc_try_run(String cmd, String[] args) { return Proc::run(cmd, args); }
+    static String proc_output(String cmd, String[] args) { return Proc::output(cmd, args).take(); }
+    static Result<String, Error> proc_try_output(String cmd, String[] args) { return Proc::output(cmd, args); }
+    static int term_cols() { return Term::cols(); }
+    static int term_rows() { return Term::rows(); }
+    static bool term_key_pressed() { return Term::key_pressed(); }
 }

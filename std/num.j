@@ -16,3 +16,11 @@ struct Num {
         return Result<double, Error>::Ok(v);
     }
 }
+
+// num: the short names (Num::num.parse_int(text), with  using Num;  num.parse_int(text)); a text that is not a number is thrown
+struct __Num {
+    static int parse_int(String s) { return Num::parse_int(s).take(); }
+    static Result<int, Error> try_parse_int(String s) { return Num::parse_int(s); }
+    static double parse_double(String s) { return Num::parse_double(s).take(); }
+    static Result<double, Error> try_parse_double(String s) { return Num::parse_double(s); }
+}

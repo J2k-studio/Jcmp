@@ -185,3 +185,18 @@ struct Regex {
         return false;
     }
 }
+
+// regex: the short names (Regex::regex.matches(p, t), with  using Regex;  regex.matches(p, t))
+
+// the short names of the text unit (hex, base64, regex): <module>_<name>, the compiler adds the prefix
+struct __Text {
+    static String hex_encode(String s) { return Hex::encode(s); }
+    static String hex_decode(String h) { return Hex::decode(h).take(); }
+    static Result<String, Error> hex_try_decode(String h) { return Hex::decode(h); }
+    static String base64_encode(String s) { return Base64::encode(s); }
+    static String base64_decode(String b) { return Base64::decode(b).take(); }
+    static Result<String, Error> base64_try_decode(String b) { return Base64::decode(b); }
+    static int regex_find(String p, String t) { return Regex::find(p, t); }
+    static String regex_text(String p, String t) { return Regex::find_text(p, t); }
+    static bool regex_matches(String p, String t) { return Regex::matches(p, t); }
+}

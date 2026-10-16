@@ -43,3 +43,48 @@ Date d;  d.set_unix(1709211909);  cout << d.text() << " " << d.weekday() << "\n"
 String cfg = "[server]\nport = 8080\n";
 cout << Toml::get_int(cfg, "server.port").unwrap() << "\n";                 // 8080
 ```
+
+## Short names: `module.function`
+
+Every function can be written with the name of its module. The full name has three layers, `using` takes layers away:
+
+```jk
+#import <stdlib>
+using stdlib;
+using Fs;                                  // opens the modules of Fs: fs and dir
+
+int main() {
+    fs.write("notes.txt", "alpha\nbeta\n");     // the full name is Fs::fs.write(...)
+    String[] lines = fs.lines("notes.txt");
+    cout << lines.len << nl;                     // 2
+    try {
+        String t = fs.read("missing.txt");
+    } catch (e) {
+        cout << e << nl;                         // cannot open missing.txt: there is no file or folder with this name (error 2)
+    }
+    Result<String, Error> r = fs.try_read("missing.txt");   // the same, as a value
+    return 0;
+}
+```
+`using Fs::fs.read;` opens one function only. A module that is not open is an error that says how to open it. A failure is
+**thrown** as a text (`try { } catch (e) { }`); `try_name` returns the `Result`. The long names (`Fs::read_text`) keep working.
+
+| namespace | modules | functions |
+|---|---|---|
+| `Fs` | `fs` | `read` `lines` `write` `append` `exists` `size` `remove` `rename` (+ `try_`) |
+| | `dir` | `make` `make_all` `remove` `list` `current` `exists` (+ `try_`) |
+| `Path` | `path` | `join` `name` `parent` `ext` `stem` |
+| `Json` | `json` | `parse` `quote` `num_text` (+ `try_parse`) |
+| `Env` | `env` | `get` `get_or` `args` |
+| `Proc` | `proc` | `run` `output` (+ `try_`) |
+| `Term` | `term` | `cols` `rows` `key_pressed` |
+| `Time` | `time`, `random` | `now_ms` `mono_ns` `sleep_ms` · `seed` `next` `range` `unit` |
+| `Net` | `tcp` | `listen` `accept` `connect` `recv` `recv_max` `send` `close` `port_of` (+ `try_`) |
+| `Csv` | `csv` | `split` `quote` `join` |
+| `Toml` | `toml` | `get` `get_or` `get_int` `get_bool` `get_double` |
+| `Regex` | `regex` | `find` `text` `matches` |
+| `Hash` | `hash` | `sha256` `sha256_file` (+ `try_`) |
+| `Num` | `num` | `parse_int` `parse_double` (+ `try_`) |
+| `Hex`, `Base64` | `hex`, `base64` | `encode` `decode` (+ `try_decode`) |
+
+A new line can be written `nl` (no backslash): `cout << x << nl;`.

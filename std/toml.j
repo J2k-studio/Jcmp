@@ -113,3 +113,28 @@ struct Toml {
         return Option<double>::Some(n * sign);
     }
 }
+
+// toml: the short names (Toml::toml.get(text, key), with  using Toml;  toml.get(text, key)); get returns an Option, get_or a value
+
+// the short names of the data unit (csv, json, toml): <module>_<name>, the compiler adds the prefix
+struct __Data {
+    static String[] csv_split(String line) { return Csv::split_line(line); }
+    static String csv_quote(String f) { return Csv::quote_field(f); }
+    static String csv_join(String[] fields) { return Csv::join_line(fields); }
+    static JsonDoc json_parse(String text) { return Json::parse(text).take(); }
+    static Result<JsonDoc, Error> json_try_parse(String text) { return Json::parse(text); }
+    static String json_quote(String s) { return Json::quote(s); }
+    static String json_num_text(double x) { return Json::num_text(x); }
+    static Option<String> toml_get(String text, String key) { return Toml::get(text, key); }
+    static String toml_get_or(String text, String key, String fallback) {
+        Option<String> v = Toml::get(text, key);
+        switch v {
+            Option::Some(s): return s;
+            Option::None: return fallback;
+        }
+        return fallback;
+    }
+    static Option<int> toml_get_int(String text, String key) { return Toml::get_int(text, key); }
+    static Option<bool> toml_get_bool(String text, String key) { return Toml::get_bool(text, key); }
+    static Option<double> toml_get_double(String text, String key) { return Toml::get_double(text, key); }
+}

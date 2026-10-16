@@ -50,14 +50,14 @@ struct Random {
 }
 
 // time, random: the short names (Time::time.now_ms(), with  using Time;  time.now_ms()  and  random.range(1, 6))
-struct __Time {
-    static int now_ms() { return Time::now_ms(); }
-    static int mono_ns() { return Time::mono_ns(); }
-    static void sleep_ms(int ms) { Time::sleep_ms(ms); }
-}
-struct __Random {
-    static void seed(int s) { Random::seed(s); }
-    static int next() { return Random::next(); }
-    static int range(int lo, int hi) { return Random::range(lo, hi); }
-    static double unit() { return Random::unit(); }
+
+// the short names of the time unit (time, random): <module>_<name>, the compiler adds the prefix
+struct __TimeM {
+    static int time_now_ms() { return Time::now_ms(); }
+    static int time_mono_ns() { return Time::mono_ns(); }
+    static void time_sleep_ms(int ms) { Time::sleep_ms(ms); }
+    static void random_seed(int s) { Random::seed(s); }
+    static int random_next() { return Random::next(); }
+    static int random_range(int lo, int hi) { return Random::range(lo, hi); }
+    static double random_unit() { return Random::unit(); }
 }

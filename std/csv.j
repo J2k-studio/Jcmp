@@ -57,3 +57,5 @@ struct Csv {
         return r;
     }
 }
+
+// csv: the short names (Csv::csv.split(line), with  using Csv;  csv.split(line))

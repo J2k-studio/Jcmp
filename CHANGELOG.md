@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.170
+* **Short names for seven more modules:** `csv` (`split` `quote` `join`), `toml` (`get` `get_or` `get_int` `get_bool` `get_double`), `regex` (`find` `text` `matches`), `hash` (`sha256` `sha256_file`), `num` (`parse_int` `parse_double`), `hex` and `base64` (`encode` `decode`); throwing, `try_` for a `Result`. All fifteen modules with a short form are listed in `docs/STDLIB.md` ("Short names").
+* The short names of a unit live in one struct (`__Files`, `__System`, `__TimeM`, `__Data`, `__Text`): a program may have 256 structs at most, and a struct per module would have taken room from the programs. The compiler adds the prefix (`fs_read`) itself.
+* Gate: 498 tests pass (default and `-noast`), 300 fuzz programs, `diffcheck` the same 2 differences; 1817 of 2054 corpus functions from the tree. Test: `t443_modules_rest`.
+
 ## 0.9.169
 * **Big doubles:** a `double` of 2^64 or more is written as `1.901476e+30` (it was the word `big`); `inf` and `nan` as before. A float literal may have an exponent up to e308 (`1.0e300`, was e22) and a long whole part (`12345678901234567890.0`) or fraction (`3.14159265358979323846`): digits beyond 18 are not kept (a double has about 16).
 * Gate: 497 tests pass (default and `-noast`), 300 fuzz programs, `diffcheck` the same 2 differences. Test: `t442_big_doubles`.

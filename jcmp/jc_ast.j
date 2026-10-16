@@ -800,7 +800,6 @@ bool ast_module_dot() {
     int row = mod_find("", @tok_text);
     if row < 0 { return false; }
     char^ stn = mod_row(row, 2);
-    int st = find_struct(stn);
     int k = 0;
     while lc(k) == ' ' || lc(k) == 9 { k += 1; }
     if lc(k) != '.' || lc(k + 1) == '.' { return false; }
@@ -819,10 +818,12 @@ bool ast_module_dot() {
     int n = str_len(@full);
     full[n] = '_';
     full[n + 1] = '_';
-    str_copy(@full + n + 2, @fnm, 120);
+    str_copy(@full + n + 2, mod_row(row, 3), 20);
+    str_copy(@full + str_len(@full), @fnm, 60);
     int fi = find_func(@full);
-    if fi < 0 || fself[fi] == 1 || !mod_open(st, @fnm) { return false; }
+    if fi < 0 || fself[fi] == 1 || !mod_open(row, @fnm) { return false; }
     str_copy(@tok_text, stn, 64);
+    str_copy(@mod_prefix, mod_row(row, 3), 60);
     return true;
 }
 
@@ -844,6 +845,7 @@ int ast_static_call(bool as_value) {
         int mrow = mod_find(@full, @tok_text);
         if mrow >= 0 {
             str_copy(@full, mod_row(mrow, 2), 64);
+            str_copy(@mod_prefix, mod_row(mrow, 3), 60);
             next();                              // the module
             next();                              // the dot
             if tok_kind != T_IDENT {
@@ -852,6 +854,7 @@ int ast_static_call(bool as_value) {
             }
         }
     }
+    mod_apply_prefix();                      // a module of a merged struct: the function is named <module>_<name>
     if is_reg {
         int rpool = ast_pool_add(@tok_text);
         next();

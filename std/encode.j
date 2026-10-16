@@ -91,3 +91,5 @@ struct Base64 {
         return Result<String, Error>::Ok(r);
     }
 }
+
+// hex, base64: the short names (Hex::hex.encode(s), with  using Hex;  hex.encode(s));  decode throws on a text that is not valid
