@@ -451,6 +451,13 @@ bool as1_sval(int n) {
     if k == AK_STR { return ast_b[n] < 1000; }
     if k == AK_VAR || k == AK_GVAR || k == AK_FIELD || k == AK_INDEX { return as1_dplace(n); }
     if k == AK_METHOD && as1_sdyn(ast_ty[ast_a[n]]) { return as1_samethod(n) == 2 || as1_samethod(n) == 10; }
+    if k == AK_BUILTIN && ast_fop_of(ast_val[n]) == 13 {
+        // str(x): a whole number (not an unsigned 64-bit one), a char, a double or a String
+        int sa = ast_a[n];
+        if sa == 0 || ast_nx[sa] != 0 { return false; }
+        if ast_ty[sa] / 65536 == 4 { return as1_sval(sa) && ast_kind[sa] != AK_STR; }
+        return as1_scalar(ast_ty[sa]) && as1_expr(sa) && ast_ty[sa] % 65536 != 13 && ast_ty[sa] % 65536 != 3;
+    }
     if k == AK_CALL { return ast_val[n] >= 0 && fretstr[ast_val[n]] == 1 && as1_call(n); }
     if k == AK_BIN {
         if ast_val[n] != AO_ADD { return false; }
@@ -635,6 +642,8 @@ bool as1_expr(int n) {
             // alloc(bytes): a call of Mem__alloc (the -d build tells where the block was made: the text path)
             return opt_debug == 0 && a1 != 0 && ast_nx[a1] == 0 && as1_scalar(ast_ty[a1]) && !as1_dbl(ast_ty[a1]) && as1_expr(a1) && find_func("Mem__alloc") >= 0;
         }
+        if bo == 11 { return a1 == 0 && opt_debug == 0; }
+        if bo == 12 { return a1 != 0 && ast_nx[a1] == 0 && as1_scalar(ast_ty[a1]) && !as1_dbl(ast_ty[a1]) && as1_expr(a1) && opt_debug == 0; }
         if bo == 9 {
             // __hash(x): a String or a whole number / pointer
             if a1 == 0 || ast_nx[a1] != 0 || opt_debug == 1 { return false; }
@@ -981,7 +990,7 @@ bool as1_stmt(int n) {
     if k == AK_SWITCH && ast_val[n] == 1 {
         // a data enum (a struct with a tag in its first word): the cases are members; the names they bind are copies of the values
         int ds = ast_a[n];
-        if !as1_sty(ast_ty[ds]) || !as1_lv(ds) || opt_debug == 1 { return false; }
+        if !as1_sty(ast_ty[ds]) || !(as1_lv(ds) || ((ast_kind[ds] == AK_CALL || ast_kind[ds] == AK_METHOD) && as1_sx(ds))) || opt_debug == 1 { return false; }
         int dcs = ast_b[n];
         if dcs == 0 { return false; }
         while dcs != 0 {
@@ -2464,6 +2473,21 @@ void gl_expr(int n) {
         gl_rt1("Mem__alloc", 1);
         return;
     }
+    if k == AK_BUILTIN && at_val[n] == 11 {
+        gl_ensure();
+        gl_load(1, 29, 0);                      // the saved stack pointer: argc is the first word
+        gl_load(1, 1, 0);
+        return;
+    }
+    if k == AK_BUILTIN && at_val[n] == 12 {
+        gl_expr(at_a[n]);
+        gl_ensure();
+        ir_add(IR_SHL, 1, 1, 3, 1, 0);          // i * 8
+        gl_load(2, 29, 0);
+        ir_add(IR_ADD, 1, 2, 1, 0, 0);
+        gl_load(1, 1, 8);                       // argv[i] is at [sp + 8 + 8 * i]
+        return;
+    }
     if k == AK_BUILTIN && at_val[n] == 9 {
         if at_ty[at_a[n]] / 65536 == 4 {
             gl_sval(at_a[n]);
@@ -3004,6 +3028,28 @@ void gl_sval(int n) {
         gl_samethod(n);
         return;
     }
+    if k == AK_BUILTIN && at_val[n] == 13 {
+        int sa = at_a[n];
+        if at_ty[sa] / 65536 == 4 {
+            gl_sval(sa);
+            gl_rt2("__Str__clone", 1);
+        } else if gl_isd(sa) {
+            gl_expr_d(sa);
+            gl_ensure();
+            ir_add(IR_F2BITS, 1, 32, 0, 0, 0);
+            gl_rt2("__Str__from_double", 1);
+        } else if at_ty[sa] % 65536 == 2 {
+            gl_expr(sa);
+            gl_rt2("__Str__from_char", 1);
+        } else {
+            gl_expr(sa);
+            gl_ensure();
+            ir_add(IR_CONST, 2, 0, 0, 0, 0);
+            gl_rt2("__Str__from_int", 2);
+        }
+        gl_skeep(n);
+        return;
+    }
     if k == AK_BIN {
         int a = at_a[n];
         int b = at_b[n];
@@ -3257,7 +3303,7 @@ void gl_sadopt(int n) {
     gl_ensure();
     if k == AK_STR {
         gl_rt2("__Str__from", 1);
-    } else if k == AK_BIN || k == AK_CALL || (k == AK_METHOD && at_val[n] >= 2005) {
+    } else if k == AK_BIN || k == AK_CALL || (k == AK_METHOD && at_val[n] >= 2005) || (k == AK_BUILTIN && at_val[n] == 13) {
         // a new String: taken over, the temporary is null
         if !go_null(at_c[n], 5) { gl_failx(15); }
     } else {
@@ -3912,9 +3958,11 @@ void gl_stemp(int n) {
 void gl_tmps(int n) {
     if n == 0 { return; }
     int k = at_kind[n];
-    if at_ty[n] / 65536 == 4 && (k == AK_BIN || (k == AK_METHOD && at_val[n] < 3000)) {
+    if at_ty[n] / 65536 == 4 && (k == AK_BIN || (k == AK_METHOD && at_val[n] < 3000) || (k == AK_BUILTIN && at_val[n] == 13)) {
         // a new String: the operands first, then the temporary
-        if k == AK_BIN {
+        if k == AK_BUILTIN {
+            gl_tmps(at_a[n]);
+        } else if k == AK_BIN {
             gl_tmps(at_a[n]);
             gl_tmps(at_b[n]);
         } else {

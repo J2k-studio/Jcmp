@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.172
+* **AST A6:** `argc()` and `arg(i)`, `str(x)` (a whole number, a char, a double or a String: a new String), and `switch` on the result of a call (`switch Num::parse_int(text) { ... }`) are made from the tree. 1855 of 2063 corpus functions (90%).
+* Gate: 503 tests pass (default and `-noast`), 300 fuzz programs, `diffcheck` the same 2 differences. Tests: `t445_ast_args`, `t446_ast_str`.
+
 ## 0.9.171
 * **AST A6:** structs that have `init()` (a variable, and every element of an array of them, gets it from the tree), **operators of structs** (`a + b`, `a - b`, `a * 2.0`, `2.0 * a`, `a == b`, `a != b`, `-a`, `a += b`: method calls `add` `sub` `mul` `div` `eq` `neg`), a method whose object is the result of another call (`(a + b).dot(c)`), and a field of such a result are made from the tree. 1837 of 2058 corpus functions (89%).
 * Gate: 499 tests pass (default and `-noast`), 300 fuzz programs, `diffcheck` the same 2 differences.
