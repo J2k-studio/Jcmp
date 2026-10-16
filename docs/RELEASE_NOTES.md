@@ -1,6 +1,8 @@
-# J2K / Jcmp 0.9.172
+# J2K / Jcmp 0.9.173
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
+
+**0.9.173:** internal: `for x in ...`, `move`, the memory brackets, String methods on new Strings, array methods and arrays of bool are made from the syntax tree.
 
 **0.9.172:** internal: `argc()`, `arg(i)`, `str(x)` and `switch` on a call result are made from the syntax tree.
 

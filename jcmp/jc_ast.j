@@ -1025,6 +1025,7 @@ int ast_fop_of(int at) {
     if str_eq(nm, "alloc") { return 5; }            // alloc(n): the address of a block (typed as a whole number, a cast gives the pointer)
     if str_eq(nm, "free") { return 6; }
     if str_eq(nm, "arr") { return 7; }              // arr(n): a new dynamic array (only as the value of a declaration)
+    if str_eq(nm, "move") { return 14; }               // move(p): the value of the owner p, which becomes null
     if str_eq(nm, "str") { return 13; }                // str(x): a new String with the number, the character or the String x
     if str_eq(nm, "argc") { return 11; }              // argc(): the number of arguments of the command line
     if str_eq(nm, "arg") { return 12; }               // arg(i): the i-th argument, a text
@@ -1174,7 +1175,15 @@ int ast_primary() {
         }
         if ast_is_builtin(@tok_text) && ast_find_local(@tok_text) < 0 && find_global(@tok_text) < 0 && (find_func(@tok_text) < 0 || tok_is("alloc") || tok_is("arr") || tok_is("free") || tok_is("move")) {
             int bp = ast_pool_add(@tok_text);
+            bool is_arr_name = str_eq(@tok_text, "arr");
             next();
+            if tok_is("[") && is_arr_name && sg_read(1) {
+                // arr[n] is arr(n): the parser's own rewriting
+                sg_skip(1);
+                sg_make(4);
+                push_macro(@sg_out);
+                next();
+            }
             if tok_is("[") {
                 // alloc[n]  arr[n]  pool[T, n]: the brackets are read as they are
                 int depth2 = 0;
@@ -1238,12 +1247,31 @@ int ast_primary() {
                             return ast_postfix(ast_node(AK_NUM, 0, 0, 0, szv), 0, 8);
                         }
                     }
-                    int depth = 1;
-                    while depth > 0 && tok_kind != T_EOF {
-                        if tok_is("(") { depth += 1; }
-                        if tok_is(")") { depth -= 1; }
-                        next();
+                    // sizeof(x): the size of the type of an expression (the code of the operand is not made)
+                    int so = ast_expr(0);
+                    if ast_ok == 0 { return 0; }
+                    if !tok_is(")") {
+                        ast_fail("sizeof of something that is not understood");
+                        return 0;
                     }
+                    next();
+                    int sk = ast_ty[so] / 65536;
+                    int sb = ast_ty[so] % 65536;
+                    int ssz = 0;
+                    if sk == 0 {
+                        ssz = 8;
+                        if sb == 1 || sb == 2 || sb == 3 || sb == 11 { ssz = 1; }
+                        if sb == 4 || sb == 6 || sb == 12 { ssz = 4; }
+                    } else if sk == 1 || sk == 4 || sk == 5 {
+                        ssz = 8;
+                    } else if sk == 3 {
+                        ssz = ssize[sb - 16];
+                    } else {
+                        ast_fail("sizeof of an array or of a type that is not in the subset");
+                        return 0;
+                    }
+                    ast_cur_ty = ast_mkty(0, 8);
+                    return ast_postfix(ast_node(AK_NUM, 0, 0, 0, ssz), 0, 8);
                 } else {
                     bargs = ast_args();
                     if ast_ok == 0 { return 0; }
@@ -1255,6 +1283,12 @@ int ast_primary() {
                 if ast_fop_of(bp) == 13 {
                     ast_cur_ty = ast_mkty(4, 8);
                     return ast_postfix(ast_node(AK_BUILTIN, bargs, 0, 0, bp), 4, 8);
+                }
+                if ast_fop_of(bp) == 14 && bargs != 0 {
+                    int mk = ast_ty[bargs] / 65536;
+                    int mb = ast_ty[bargs] % 65536;
+                    ast_cur_ty = ast_ty[bargs];
+                    return ast_postfix(ast_node(AK_BUILTIN, bargs, 0, 0, bp), mk, mb);
                 }
                 return ast_postfix(ast_node(AK_BUILTIN, bargs, 0, 0, bp), 0, 8);
             }
@@ -1946,6 +1980,7 @@ int ast_try() {
 
 int ast_stmt() {
     if tok_is("{") { return ast_block(); }
+    if tok_kind == T_IDENT && ast_find_local(@tok_text) < 0 { sg_statement(); }      // alloc[int^ p = n]; free[p]; grow[p = n]: the usual form, read the same way as the parser does
     if tok_is("@") {
         // @no_reorder { ... }
         next();
@@ -2029,6 +2064,19 @@ int ast_stmt() {
                 if li2 >= 0 {
                     ast_lkind[li2] = 0;
                     ast_lbase[li2] = 0;
+                    // the type of the element: a number, a pointer, a member of an enum, a char of a String, a String of a String[]
+                    int fkd = ast_ty[from] / 65536;
+                    int fbs = ast_ty[from] % 65536;
+                    if fkd == 5 {
+                        if fbs == 4008 { ast_lkind[li2] = 4; ast_lbase[li2] = 8; }
+                        else if fbs < 1000 { ast_lbase[li2] = fbs; }
+                        else if fbs >= 1000 && fbs < 1500 { ast_lkind[li2] = 1; ast_lbase[li2] = fbs - 1000; }
+                        else if fbs >= 6003 && fbs < 6090 { ast_lkind[li2] = 6; ast_lbase[li2] = fbs - 6000; }
+                    } else if fkd == 4 {
+                        ast_lbase[li2] = 2;
+                    } else if fkd == 2 && fbs < 16 {
+                        ast_lbase[li2] = fbs;
+                    }
                 }
                 ast_loop_depth += 1;
                 int body3 = ast_block();

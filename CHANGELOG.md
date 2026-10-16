@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.173
+* **AST A6:** `for x in things { }` (arrays of numbers, pointers and Strings, the chars of a String, fixed arrays, lists that a call made), `move(p)`, `alloc[...]` / `free[...]` / `grow[...]` / `arr[n]` (the tree now reads the parser's own rewriting), `sizeof(expression)`, pointers to `void`, casts of a pointer to a number, the call `alloc(n)` whose result is not used, String methods on a new String (`(a + b).trim()`), `c()` and `replace`, methods of arrays of numbers (`sort` `remove` `insert` `contains` `index_of`), methods of structs that give a list, arrays of `bool` (local, global, parameter), `cout` of a global array of chars. 1908 of 2088 corpus functions (91%).
+* `-ast2` names the smallest part of a statement that the tree lowering does not take (`culprit:`).
+* Gate: 511 tests pass (default and `-noast`), 300 fuzz programs, `diffcheck` the same 2 differences. Tests: `t447` .. `t450`.
+
 ## 0.9.172
 * **AST A6:** `argc()` and `arg(i)`, `str(x)` (a whole number, a char, a double or a String: a new String), and `switch` on the result of a call (`switch Num::parse_int(text) { ... }`) are made from the tree. 1855 of 2063 corpus functions (90%).
 * Gate: 503 tests pass (default and `-noast`), 300 fuzz programs, `diffcheck` the same 2 differences. Tests: `t445_ast_args`, `t446_ast_str`.
