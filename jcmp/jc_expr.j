@@ -440,10 +440,29 @@ int float_literal_bits(int mant, int exp10) {
             }
             pw = (double)p10;
         } else {
+            // 10^19 .. 10^22 are exact in a double; beyond that the power is built from 10^22 (the last bits of the result may differ)
             double pb[1];
             int^ pbi = (int^)@pb[0];
-            pbi[0] = pow10_bits(ae);
-            pw = pb[0];
+            int rest = ae;
+            pw = 1.0;
+            pbi[0] = pow10_bits(22);
+            double big22 = pb[0];
+            while rest > 22 {
+                pw = pw * big22;
+                rest -= 22;
+            }
+            if rest > 18 {
+                pbi[0] = pow10_bits(rest);
+                pw = pw * pb[0];
+            } else {
+                int p10b = 1;
+                int pkb = 0;
+                while pkb < rest {
+                    p10b = p10b * 10;
+                    pkb += 1;
+                }
+                pw = pw * (double)p10b;
+            }
         }
         if exp10 < 0 {
             fl[0] = fl[0] / pw;

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.169
+* **Big doubles:** a `double` of 2^64 or more is written as `1.901476e+30` (it was the word `big`); `inf` and `nan` as before. A float literal may have an exponent up to e308 (`1.0e300`, was e22) and a long whole part (`12345678901234567890.0`) or fraction (`3.14159265358979323846`): digits beyond 18 are not kept (a double has about 16).
+* Gate: 497 tests pass (default and `-noast`), 300 fuzz programs, `diffcheck` the same 2 differences. Test: `t442_big_doubles`.
+
 ## 0.9.168
 * **Short names for nine modules (docs/syntax-design.md 75, 77):** with `using Fs;` (or the full name `Fs::fs.read(p)`): `fs.read`, `fs.lines`, `fs.write`, `fs.append`, `fs.exists`, `fs.size`, `fs.remove`, `fs.rename`; `dir.make`, `dir.make_all`, `dir.remove`, `dir.list`, `dir.current`, `dir.exists`; `path.join`, `path.name`, `path.parent`, `path.ext`, `path.stem`; `json.parse`, `json.quote`; `env.get`, `env.get_or`, `env.args`; `proc.run`, `proc.output`; `term.cols`; `time.now_ms`, `time.sleep_ms`; `random.range` ... A failure is **thrown** as a text (`try { } catch (e) { }`); `try_name(...)` returns the `Result`. The long names (`Fs::read_text`, ...) keep working. New: `Result::take()` and `Error::raise(text)`.
 * **`nl`** is a new line without a backslash: `cout << x << nl;` (`"\n"` still works).

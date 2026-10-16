@@ -1452,12 +1452,17 @@ void next() {
                 adv();
             }
         } else {
+            int fm = 0;                                      // the first 18 digits, for a decimal number with a long whole part
+            int fextra = 0;                                  // the digits after those
+            int fnd = 0;
             while is_digit(lc(0)) || (lc(0) == '_' && is_digit(lc(1))) {
                 if lc(0) == '_' {
                     adv();                                   // 1_000_000
                     continue;
                 }
                 tok_num = tok_num * 10 + (lc(0) - '0');
+                if fm > 0 || lc(0) != '0' { fnd += 1; }
+                if fnd <= 18 { fm = fm * 10 + (lc(0) - '0'); } else { fextra += 1; }
                 adv();
             }
             // 1.5   2.5e10   1e-3   (a "." must be followed by a digit: 0..10 is a range)
@@ -1467,13 +1472,17 @@ void next() {
                 tok_float = 1;
                 tok_mant = tok_num;
                 tok_exp = 0;
-                if tok_mant > 9007199254740992 { die("float literal has too many digits"); }
+                if fextra > 0 {
+                    tok_mant = fm;                           // 12345678901234567890.0 : the first 18 digits and a power of ten
+                    tok_exp = fextra;
+                }
                 if has_frac {
                     adv();
                     while is_digit(lc(0)) {
-                        if tok_mant > 900719925474099 { die("float literal has too many digits"); }
-                        tok_mant = tok_mant * 10 + (lc(0) - '0');
-                        tok_exp -= 1;
+                        if tok_mant <= 99999999999999999 {          // more than 18 digits are not kept (a double has about 16)
+                            tok_mant = tok_mant * 10 + (lc(0) - '0');
+                            tok_exp -= 1;
+                        }
                         adv();
                     }
                 }
@@ -1493,8 +1502,7 @@ void next() {
                     }
                     tok_exp += exp_sign * exp_val;
                 }
-                if tok_mant > 9007199254740992 { die("float literal has too many digits"); }
-                if tok_exp > 22 || tok_exp < 0 - 22 { die("float literal exponent out of range (-22..22)"); }
+                if tok_exp > 308 || tok_exp < 0 - 308 { die("float literal exponent out of range (-308..308)"); }
             }
         }
         return;

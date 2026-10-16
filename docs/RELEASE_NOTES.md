@@ -1,6 +1,8 @@
-# J2K / Jcmp 0.9.168
+# J2K / Jcmp 0.9.169
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
+
+**0.9.169:** big doubles are written as `1.9e+30`; float literals up to e308 and with long digits.
 
 **0.9.168:** short names for `fs`, `dir`, `path`, `json`, `env`, `proc`, `term`, `time`, `random` (throw, `try_` for a Result); `nl`; a double-free fix for arrays returned out of a Result.
 

@@ -1125,6 +1125,7 @@ void parse_cout() {
         } else if is_float(ex_ty) {
             if ex_ty == 90 { f32_to_f64(0); }
             emit_line("bl j2k_print_f64");
+            note_call("__Fp__huge");               // a double of 2^64 or more is written by this routine of the runtime
             used_fprint = 1;
             used_uprint = 1;
             c_last = 8;
@@ -3904,12 +3905,7 @@ void emit_fprint_helper() {
     emit_line("bl j2k_print_char");
     emit_line("b j2k_pf_done");
     emit_line("j2k_pf_huge:");
-    emit_line("mov x0, 98");
-    emit_line("bl j2k_print_char");
-    emit_line("mov x0, 105");
-    emit_line("bl j2k_print_char");
-    emit_line("mov x0, 103");
-    emit_line("bl j2k_print_char");
+    emit_line("bl __Fp__huge");              // x0 still holds the bits of the value (the sign is written already)
     emit_line("j2k_pf_done:");
     emit_line("ldr x30, [sp, #0]");
     emit_line("add sp, sp, #48");
