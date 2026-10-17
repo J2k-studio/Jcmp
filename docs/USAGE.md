@@ -78,9 +78,10 @@ version of the compiler, or the compiler stops and tells you to install them aga
 `jcmp -update` replaces the compiler and its library together with the latest release (`jcmp -update 0.9.176` for a given one);
 `install.sh --with-lib` installs the library files next to the compiler.
 
-### `jget`: libraries from an index (version 0)
-`jget list` shows the libraries of the index, `jget install NAME` downloads one (with `curl`), checks its SHA-256 against the index and puts it in `~/.j2k/Library/NAME.j`, where
-`#import <NAME>` finds it; `jget remove NAME` deletes it, `jget installed` lists the folder. `JGET_INDEX` names another index (an address or a `file://` path), `JGET_LIB` another folder.
+### `jget`: data from the web, and libraries (version 0)
+`jget -h URL` fetches the data at an address (http, https, ftp, file) and writes it to the screen; `jget -h URL -o FILE` writes it to a file (a bare `jget URL` does the same). It uses `curl`, or `wget` when there is no `curl`.
+`jget -li list` shows the libraries of the index, `jget -li install NAME` downloads one, checks its SHA-256 against the index and puts it in `~/.j2k/Library/NAME.j`, where
+`#import <NAME>` finds it; `jget -li uninstall NAME` deletes it, `jget -li installed` lists the folder. The libraries that are inside the compiler (`cpu`, `net`, `math` ...) need no install. `JGET_INDEX` names another index (an address or a `file://` path), `JGET_LIB` another folder.
 The index is a text file with a line `NAME VERSION URL SHA256` for each library. The source of `jget` is `examples/jget.jk`. The project index is not published yet, so set `JGET_INDEX` to an index of your own for now.
 
 ### `-cache DIR` (experimental)

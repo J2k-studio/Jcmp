@@ -1,13 +1,15 @@
-// jget -- fetch a library for J2K (version 0)
-//   jget list                  the libraries in the index (a * marks the ones that are installed)
-//   jget install NAME          download NAME, check its SHA-256 against the index, put it in the library folder
-//   jget remove NAME           delete an installed library
-//   jget installed             the libraries in the library folder
+// jget -- fetch things from the web and libraries for J2K (version 0)
+//   jget -h URL [-o FILE]         fetch the data at URL (http, https, ftp, file): to the screen, or to FILE
+//   jget -li list                 the libraries in the index (a * marks the ones that are installed)
+//   jget -li install NAME         download the library NAME, check its SHA-256 against the index, put it in the library folder
+//   jget -li uninstall NAME       delete an installed library
+//   jget -li installed            the libraries in the library folder
+// (the words install, remove, uninstall, list and installed also work without -li)
 // The index is a text file; each line is:  NAME VERSION URL SHA256   (lines that start with # are comments).
-// Where: JGET_INDEX (an address or a file path; curl reads it) - default: the public index of the project.
+// Where: JGET_INDEX (an address or a file path) - default: the public index of the project.
 //        JGET_LIB   (the library folder) - default: ~/.j2k/Library, where `#import <name>` looks for libraries.
 // A library is one J2K source file NAME.j. Nothing from the library is run when it is installed.
-// This program calls curl (and nothing else) to download.
+// The download is done by curl, or by wget when there is no curl (jget has no web client of its own yet).
 #import <stdlib>
 using stdlib;
 
@@ -47,33 +49,51 @@ bool name_ok(String n) {
     return true;
 }
 
-// download `address` to the file `to`; false (with a message) when curl cannot
+// run a program and give its exit code (127: it was not found or could not start)
+int run_prog(String cmd, String[] args) {
+    switch Proc::run(cmd, args) {
+        Result::Ok(code): return code;
+        Result::Err(e): return 127;
+    }
+    return 127;
+}
+
+// download `address` to the file `to` (to the screen when `to` is empty); false (with a message) when it cannot
 bool download(String address, String to) {
     String[] a = arr(0);
     a.push("-fsSL");
-    a.push("-o");
-    a.push(to);
+    if to.len > 0 {
+        a.push("-o");
+        a.push(to);
+    }
     a.push(address);
-    switch Proc::run("curl", a) {
-        Result::Ok(code): {
-            if code != 0 {
-                err("jget: cannot download " + address + " (curl exit code " + str(code) + ")\n");
-                return false;
-            }
-            return true;
-        }
-        Result::Err(e): {
-            err("jget: cannot run curl: " + e.message + "\n");
+    int code = run_prog("curl", a);
+    if code == 127 {
+        String[] w = arr(0);
+        w.push("-q");
+        w.push("-O");
+        if to.len > 0 { w.push(to); } else { w.push("-"); }
+        w.push(address);
+        code = run_prog("wget", w);
+        if code == 127 {
+            err("jget: neither curl nor wget was found; install one of them (jget has no web client of its own yet)\n");
             return false;
         }
     }
-    return false;
+    if code != 0 {
+        err("jget: cannot fetch " + address + " (exit code " + str(code) + ")\n");
+        return false;
+    }
+    return true;
 }
 
 // the index text, fetched into a temporary file in the library folder
 String fetch_index(String dir) {
     String tmp = dir + "/.index.tmp";
-    if !download(index_address(), tmp) { return ""; }
+    if !download(index_address(), tmp) {
+        err("jget: the index of libraries could not be fetched. The index of the project is not published yet: set JGET_INDEX to the address (or the path) of an index.\n");
+        return "";
+    }
     switch Fs::read_text(tmp) {
         Result::Ok(t): { Fs::remove(tmp); return t; }
         Result::Err(e): { err("jget: cannot read the index: " + e.message + "\n"); return ""; }
@@ -102,7 +122,20 @@ String[] find_entry(String index, String name) {
     return none;
 }
 
+// the libraries that are inside the compiler: #import <name> needs no install
+bool builtin_name(String n) {
+    String[] b = "stdlib core number text files system time data crypto net math gfx cpu simd vector matrix quat complex stats canvas screen".split(" ");
+    for i in 0..b.len {
+        if b[i] == n { return true; }
+    }
+    return false;
+}
+
 int cmd_install(String name) {
+    if builtin_name(name) {
+        cout << name << " is part of the compiler: write  #import <" << name << ">  in your program; nothing to install" << nl;
+        return 0;
+    }
     if !name_ok(name) {
         err("jget: '" + name + "' is not a library name (letters, digits and _ only)\n");
         return 1;
@@ -193,21 +226,50 @@ int cmd_installed() {
 }
 
 int usage() {
-    err("usage: jget list | install NAME | remove NAME | installed\n");
+    err("usage: jget -h URL [-o FILE]            fetch the data at URL\n");
+    err("       jget -li list | installed        libraries (the index / the installed ones)\n");
+    err("       jget -li install NAME            install a library\n");
+    err("       jget -li uninstall NAME          remove a library\n");
     return 1;
+}
+
+// jget -h URL [-o FILE]
+int cmd_fetch(String[] av, int at) {
+    if av.len <= at { return usage(); }
+    String url = av[at];
+    String to = "";
+    if av.len > at + 1 {
+        if av[at + 1] == "-o" && av.len > at + 2 { to = av[at + 2]; } else { return usage(); }
+    }
+    if download(url, to) { return 0; }
+    return 1;
+}
+
+bool is_address(String s) {
+    return s.starts_with("http://") || s.starts_with("https://") || s.starts_with("ftp://") || s.starts_with("file://");
+}
+
+int cmd_library(String[] av, int at) {
+    if av.len <= at { return usage(); }
+    String cmd = av[at];
+    if cmd == "list" { return cmd_list(); }
+    if cmd == "installed" { return cmd_installed(); }
+    if cmd == "install" || cmd == "remove" || cmd == "uninstall" {
+        if av.len <= at + 1 { return usage(); }
+        String name = av[at + 1];
+        if cmd == "install" { return cmd_install(name); }
+        return cmd_remove(name);
+    }
+    return usage();
 }
 
 int main() {
     String[] av = Env::args();
     if av.len < 2 { return usage(); }
-    String cmd = av[1];
-    if cmd == "list" { return cmd_list(); }
-    if cmd == "installed" { return cmd_installed(); }
-    if cmd == "install" || cmd == "remove" {
-        if av.len < 3 { return usage(); }
-        String name = av[2];
-        if cmd == "install" { return cmd_install(name); }
-        return cmd_remove(name);
-    }
-    return usage();
+    String first = av[1];
+    if first == "-h" { return cmd_fetch(av, 2); }
+    if first == "--help" { usage(); return 0; }
+    if first == "-li" { return cmd_library(av, 2); }
+    if is_address(first) { return cmd_fetch(av, 1); }
+    return cmd_library(av, 1);
 }

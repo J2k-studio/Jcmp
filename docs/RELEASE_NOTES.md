@@ -1,6 +1,8 @@
-# J2K / Jcmp 0.9.179
+# J2K / Jcmp 0.9.180
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
+
+**0.9.180:** `jget -h URL` fetches data from the web (like curl / wget), `jget -li install NAME` for libraries; the libraries inside the compiler need no install.
 
 **0.9.179:** the compiler is about twice as fast (three slow places found with a profiler); the programs it makes are unchanged.
 

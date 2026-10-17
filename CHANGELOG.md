@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.180
+* **`jget` is a fetch tool too, not only for libraries** (owner, 2026-10-17): `jget -h URL [-o FILE]` fetches the data at an address (to the screen or to a file; a bare `jget URL` does the same) with `curl` or `wget`. Libraries: `jget -li install NAME`, `jget -li uninstall NAME`, `jget -li list`, `jget -li installed` (the old words without `-li` still work).
+* `jget -li install cpu` says that `cpu` (and the other libraries of the compiler) is inside the compiler and needs no install, instead of a 404; when the index cannot be fetched the message says that the project index is not published yet and how to set `JGET_INDEX`.
+* Development notes and stray files (`plan-test.md`, `t391_net.jk`, `docs/roadmap-1.0.md`, `docs/error-messages-plan.md`) are no longer in the public branch (`.publish-ignore`).
+
 ## 0.9.179
 * **The compiler is about 2 times faster** (the compiler compiling itself: 17.6 s to 9.2 s on the same machine in the same minute; the program that comes out is byte for byte the same). Found with a new sampling profiler (`tools/profile.py`, with the hidden option `-xmap FILE` that writes the address of every label):
   1. returning from an imported file or a generic instance scanned the whole text of the file below it to find its length (a quarter of the time): the length is now saved when the file is entered;

@@ -2096,3 +2096,9 @@ The file that separate compilation writes for a module (names, types, sizes of s
 * `jget list`, `jget install NAME`, `jget remove NAME`, `jget installed`. `install` downloads with `curl`, compares the SHA-256 with the index, and only then moves the file into the library folder
   (`JGET_LIB`, default `~/.j2k/Library`, where `#import <NAME>` looks). A wrong checksum installs nothing.
 * Not in version 0 (open): names with an owner (`owner/name`), versions (`NAME@1.2`), a lock file, signatures, packages of several files, `jget publish`, `jget update`.
+
+### 81.1 The words of `jget` (owner, 2026-10-17: "make jget useful like curl and wget, not only for jcmp")
+* `jget -h URL [-o FILE]` fetches the data at URL (the owner wrote `jget -h https://...`; `-h` is "http", so help is `jget --help`). `jget URL` is the same.
+* `jget -li install NAME`, `jget -li uninstall NAME`, `jget -li list`, `jget -li installed` for libraries (`-li` = library; the owner's wording). The v0 words `install remove list installed` still work.
+* The download is done by `curl`, else `wget`. A web client of its own needs a name lookup (DNS, over UDP) and TLS; that is a larger piece of work (after 1.0.0.0, or earlier if the owner wants).
+* `NAME` of a library that is inside the compiler (`cpu`, `net`, `math` ...): nothing to install, `jget` says so.
