@@ -1173,7 +1173,7 @@ int ast_primary() {
             ast_cur_ty = ast_mkty(1, 8);
             return ast_node(AK_NUM, 0, 0, 0, 0);
         }
-        if ast_is_builtin(@tok_text) && ast_find_local(@tok_text) < 0 && find_global(@tok_text) < 0 && (find_func(@tok_text) < 0 || tok_is("alloc") || tok_is("arr") || tok_is("free") || tok_is("move")) {
+        if ast_is_builtin(@tok_text) && ast_find_local(@tok_text) < 0 && find_global(@tok_text) < 0 && (ast_resolve_func(@tok_text) < 0 || !(str_eq(@tok_text, "assert") || str_eq(@tok_text, "exit") || str_eq(@tok_text, "panic") || str_eq(@tok_text, "len")) && find_func(@tok_text) < 0 || tok_is("alloc") || tok_is("arr") || tok_is("free") || tok_is("move")) {
             int bp = ast_pool_add(@tok_text);
             bool is_arr_name = str_eq(@tok_text, "arr");
             next();
@@ -2243,7 +2243,7 @@ int ast_stmt() {
         if find_enum(@tok_text) >= 0 && ast_find_local(@tok_text) < 0 && ast_decl_follows() {
             return ast_decl(0 - 10 - find_enum(@tok_text));
         }
-        if ast_is_builtin(@tok_text) && ast_find_local(@tok_text) < 0 && find_global(@tok_text) < 0 && (find_func(@tok_text) < 0 || tok_is("alloc") || tok_is("arr") || tok_is("free") || tok_is("move")) {
+        if ast_is_builtin(@tok_text) && ast_find_local(@tok_text) < 0 && find_global(@tok_text) < 0 && (ast_resolve_func(@tok_text) < 0 || !(str_eq(@tok_text, "assert") || str_eq(@tok_text, "exit") || str_eq(@tok_text, "panic") || str_eq(@tok_text, "len")) && find_func(@tok_text) < 0 || tok_is("alloc") || tok_is("arr") || tok_is("free") || tok_is("move")) {
             int bx = ast_expr(0);
             if ast_ok == 0 { return 0; }
             if !tok_is(";") {

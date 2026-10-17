@@ -1936,6 +1936,14 @@ void compute_reach() {
             j += 1;
         }
     }
+    if x_allreach == 1 {
+        // -xall: every function is wanted (to look at the whole library, not only what main reaches)
+        k = 0;
+        while k < fcount {
+            freach[k] = 1;
+            k += 1;
+        }
+    }
 }
 
 int cur_abi;                 // the abi of the call being compiled (Name::call)

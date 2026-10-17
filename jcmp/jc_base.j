@@ -255,3 +255,4 @@ int x_cutmin;                   // -xcachecut MIN MAX: the first hit that is cut
 int x_repeat;                   // -xrepeat
 int x_lex;                      // -xlex
 int allow_syscall;               // #allow syscall: no warning about syscall(number, ...)
+int x_allreach;                  // -xall

@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9.189
+* Internal: the syntax tree (the part of the compiler that makes the code) now builds more functions: methods called on a text (`"  x ".trim()`), `String[]` parameters, and `assert` / `exit` / `panic` / `len` when they are functions of the library (`using stdlib::sys`). The programs are the same; new tests `t465`, `t466`. A hidden option `-xall` measures the whole library on the tree.
+
 ## 0.9.188
 * **The cache is on by default** (owner: after three releases without a difference, make it the default; it has been public since 0.9.177). `~/.j2k/cache` is used for a program whose code is big enough to gain (a small program is faster without the files); `J2K_CACHE=dir` chooses the folder, `J2K_CACHE=` (empty) or `-nocache` turns it off; a folder that cannot be made is ignored and the build goes on. The key of a function now also holds a hash of the compiler file itself, so another build of the compiler (even of the same version) never reuses its entries; a used entry is touched, and when the folder is over `J2K_CACHE_MAX_MB` (default 512) the files not used for the longest time are deleted. The program is the same, byte for byte (the text from `-emit-asm` has other label numbers when entries are used).
 * **The interface file `.jh`**: `jcmp -jh FILE [-o OUT]` writes the interface of a file: the directives, the globals, the headers of the functions without the bodies, the structs and enums with the headers of their methods, the comments in front of them; the first line holds the compiler, the hash of the source and the hash of the interface (it stays the same when only a body changes). `jcmp -api NAME` does it for a library (`jcmp -api net`). See `docs/design/16-separate-compilation.md` for what it is for and what comes after.

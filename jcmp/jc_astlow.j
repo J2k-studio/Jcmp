@@ -536,7 +536,8 @@ int as1_samethod(int n) {
 // a member function of a String variable that is a statement or gives a number or a char: 1 push(c), 2 pop(), 3 clear(), 4 append(x); 0 else
 // a String value that a method may read: a variable (a place) or a new String (the temporary lives to the end of the statement)
 bool as1_srecv(int r) {
-    if ast_ty[r] / 65536 != 4 || ast_kind[r] == AK_STR { return false; }
+    if ast_ty[r] / 65536 != 4 { return false; }
+    if ast_kind[r] == AK_STR { return ast_b[r] < 1000 && opt_debug == 0; }      // a text: a temporary String is made from it
     return as1_svarn(r) || as1_sval(r);
 }
 
@@ -1330,7 +1331,7 @@ void at_reject(int f_idx, char^ why) {
 bool as1_dynparams() {
     int i = 0;
     while i < lcount && i < ast_nl {
-        if (ast_lkind[i] == 4 && opt_debug == 1) || (ast_lkind[i] == 5 && !as1_el(ast_lbase[i])) { return false; }
+        if (ast_lkind[i] == 4 && opt_debug == 1) || (ast_lkind[i] == 5 && !as1_el(ast_lbase[i]) && ast_lbase[i] != 4008) { return false; }
         i += 1;
     }
     return true;
@@ -3286,6 +3287,16 @@ void gl_skeep(int n) {
     go_decl(at_c[n]);
 }
 
+// v1 = the String that a method works on: a text is made into a temporary String first
+void gl_srv(int r) {
+    gl_sval(r);
+    if at_kind[r] == AK_STR {
+        gl_ensure();
+        gl_rt2("__Str__from", 1);
+        gl_skeep(r);
+    }
+}
+
 // v1 = the value of a String operand: the header of a String, the address of a text, the code of a char
 void gl_sval(int n) {
     int k = at_kind[n];
@@ -3363,7 +3374,7 @@ void gl_sval(int n) {
     int mo = at_val[n] - 2000;
     int r = at_a[n];
     int a1 = at_b[n];
-    gl_sval(r);
+    gl_srv(r);
     if mo == 19 {
         // replace(a, b): x0 = the String, x1 = a, x2 = its kind, x3 = b, x4 = its kind
         gl_ensure();
@@ -3555,7 +3566,7 @@ void gl_samethod(int n) {
 // text.split(sep): v1 = the new list of Strings (x0 = the String, x1 = the separator, x2 = its kind)
 void gl_split(int n) {
     int a = at_b[n];
-    gl_sval(at_a[n]);
+    gl_srv(at_a[n]);
     gl_ensure();
     int cs0 = gl_cell(gl_depth);
     gl_store(30, cs0, 1);
@@ -3574,12 +3585,12 @@ void gl_strmethod(int n) {
     int a = at_b[n];
     gl_ensure();
     if mo == 18 {
-        gl_sval(at_a[n]);
+        gl_srv(at_a[n]);
         gl_rt2("__Str__c", 1);
         return;
     }
     if mo == 2 || mo == 3 || mo >= 14 || mo == 14 {
-        gl_sval(at_a[n]);
+        gl_srv(at_a[n]);
         if mo == 17 {
             // free(): the memory goes and the place is null
             gl_rt2("__Arr__free", 1);
@@ -3596,7 +3607,7 @@ void gl_strmethod(int n) {
         }
         return;
     }
-    gl_sval(at_a[n]);
+    gl_srv(at_a[n]);
     int c0 = gl_cell(gl_depth);
     gl_store(30, c0, 1);
     gl_depth += 1;
@@ -4402,6 +4413,7 @@ void gl_tmps(int n) {
             gl_tmps(at_b[n]);
         } else {
             gl_tmps(at_a[n]);
+            if at_kind[at_a[n]] == AK_STR && at_ty[at_a[n]] / 65536 == 4 && at_val[n] >= 2000 { gl_stemp(at_a[n]); }
             int sa = at_b[n];
             while sa != 0 {
                 gl_tmps(sa);
@@ -4414,6 +4426,7 @@ void gl_tmps(int n) {
     if k == AK_METHOD && at_val[n] >= 1000 {
         // a member function of a dynamic array or a String: the receiver (a temporary String has its slot first), then the arguments
         gl_tmps(at_a[n]);
+        if at_kind[at_a[n]] == AK_STR && at_ty[at_a[n]] / 65536 == 4 && at_val[n] >= 2000 { gl_stemp(at_a[n]); }
         int ma = at_b[n];
         while ma != 0 {
             gl_tmps(ma);
