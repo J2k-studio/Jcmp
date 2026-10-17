@@ -1,6 +1,8 @@
-# J2K / Jcmp 0.9.183
+# J2K / Jcmp 0.9.184
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
+
+**0.9.184:** TLS also speaks AES-128-GCM (more servers are reached).
 
 **0.9.183:** https from the library: TLS 1.3 with the check of the certificate chain, written in J2K (X25519, ChaCha20-Poly1305, RSA, ECDSA, X.509, DNS); `Crypto`.
 

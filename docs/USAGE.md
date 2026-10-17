@@ -85,8 +85,8 @@ The part of its work that is done by the library of the compiler is `Net::http.d
 
 ### https
 `Net::http.get(url)` and `Net::http.download(url, file, show)` speak **https://** too: TLS 1.3 written in J2K (see the library, struct `Crypto`). The server is checked: the chain of certificates, the name, the dates and a trusted root. The trusted
-roots are read from the file named in `J2K_CA` (or `SSL_CERT_FILE`), else from the usual places (`$PREFIX/etc/tls/cert.pem`, `/etc/ssl/certs/ca-certificates.crt`, `/etc/ssl/cert.pem`, Android's `/system/etc/security/cacerts`). The cipher suite
-offered is ChaCha20-Poly1305 with X25519; servers that only know older protocols are not reached. This code is new and has not been audited.
+roots are read from the file named in `J2K_CA` (or `SSL_CERT_FILE`), else from the usual places (`$PREFIX/etc/tls/cert.pem`, `/etc/ssl/certs/ca-certificates.crt`, `/etc/ssl/cert.pem`, Android's `/system/etc/security/cacerts`). The cipher suites
+offered are ChaCha20-Poly1305 and AES-128-GCM with X25519; servers that only know TLS 1.2 or older are not reached. This code is new and has not been audited.
 
 ### `-cache DIR` (experimental)
 `jcmp prog.jk -cache build/cache` keeps the final code of every function in the folder `build/cache` and uses it the next time for the functions that did not change

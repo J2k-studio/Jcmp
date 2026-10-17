@@ -833,7 +833,7 @@ struct Crypto {
     // A connection is a block of memory (its address is the handle). The numbers (8 bytes each) are at the offsets 0..120, the keys after them.
     //   0 fd  8 write sequence  16 read sequence  24 write encrypted?  32 read encrypted?  40 bytes waiting in inbuf  48 plain bytes ready  56 where the plain bytes start
     //   64 inbuf (address)  72 plainbuf (address)  80 transcript (address)  88 transcript length  96 certificates (address)  104 certificates length  112 peer closed?
-    //   128 write key (32)  160 write iv (12)  176 read key (32)  208 read iv (12)  224 client handshake secret (32)  256 server handshake secret (32)  288 handshake secret (32)
+    //   392 cipher suite  400 CertificateVerify (address)  408 its size  416 transcript hash at CertificateVerify (32)  128 write key (32)  160 write iv (12)  176 read key (32)  208 read iv (12)  224 client handshake secret (32)  256 server handshake secret (32)  288 handshake secret (32)
     static int tls_geti(char^ c, int off) {
         int^ p = (int^)(c + off);
         return p[0];
@@ -931,7 +931,11 @@ struct Crypto {
         char nonce[12];
         int seq = Crypto::tls_geti(c, 8);
         Crypto::tls_nonce(c + 160, seq, (char^)@nonce);
-        Crypto::aead_seal(c + 128, (char^)@nonce, rec, 5, plain, inner, rec + 5, rec + 5 + inner);
+        if Crypto::tls_geti(c, 392) == 0x1301 {
+            Crypto::gcm_seal(c + 128, (char^)@nonce, rec, 5, plain, inner, rec + 5, rec + 5 + inner);
+        } else {
+            Crypto::aead_seal(c + 128, (char^)@nonce, rec, 5, plain, inner, rec + 5, rec + 5 + inner);
+        }
         Crypto::tls_seti(c, 8, seq + 1);
         bool ok2 = Crypto::tls_write_all(fd, rec, 5 + inner + 16);
         Mem::free((void^)plain);
@@ -959,7 +963,13 @@ struct Crypto {
         int seq = Crypto::tls_geti(c, 16);
         Crypto::tls_nonce(c + 208, seq, (char^)@nonce);
         int clen = len - 16;
-        if !Crypto::aead_open(c + 176, (char^)@nonce, (char^)@hdr, 5, inbuf, clen, inbuf + clen, plain) { return -1; }
+        bool opened = false;
+        if Crypto::tls_geti(c, 392) == 0x1301 {
+            opened = Crypto::gcm_open(c + 176, (char^)@nonce, (char^)@hdr, 5, inbuf, clen, inbuf + clen, plain);
+        } else {
+            opened = Crypto::aead_open(c + 176, (char^)@nonce, (char^)@hdr, 5, inbuf, clen, inbuf + clen, plain);
+        }
+        if !opened { return -1; }
         Crypto::tls_seti(c, 16, seq + 1);
         int end = clen;
         while end > 0 && plain[end - 1] == 0 { end -= 1; }
@@ -970,7 +980,9 @@ struct Crypto {
     static void tls_set_keys(char^ c, int write, char^ secret) {
         int koff = 176;
         if write == 1 { koff = 128; }
-        Crypto::tls_expand_label(secret, "key", "".c(), 0, c + koff, 32);
+        int klen = 32;
+        if Crypto::tls_geti(c, 392) == 0x1301 { klen = 16; }
+        Crypto::tls_expand_label(secret, "key", "".c(), 0, c + koff, klen);
         Crypto::tls_expand_label(secret, "iv", "".c(), 0, c + koff + 32, 12);
     }
     // starts TLS on a socket that is connected (fd): gives the handle of the connection. host is the name for the server (SNI) and for the check of the certificate.
@@ -1000,7 +1012,7 @@ struct Crypto {
         ch[p] = (char)32; p += 1;
         for i in 0..32 { ch[p + i] = sid[i]; }
         p += 32;
-        ch[p] = (char)0; ch[p + 1] = (char)2; ch[p + 2] = (char)0x13; ch[p + 3] = (char)3; p += 4;     // TLS_CHACHA20_POLY1305_SHA256
+        ch[p] = (char)0; ch[p + 1] = (char)4; ch[p + 2] = (char)0x13; ch[p + 3] = (char)3; ch[p + 4] = (char)0x13; ch[p + 5] = (char)1; p += 6;     // TLS_CHACHA20_POLY1305_SHA256, TLS_AES_128_GCM_SHA256
         ch[p] = (char)1; ch[p + 1] = (char)0; p += 2;                                                   // no compression
         int ext0 = p;
         p += 2;
@@ -1044,7 +1056,8 @@ struct Crypto {
         q += 1 + sidlen;
         int suite = Crypto::tls_get16(plain + q);
         q += 3;                                  // the suite and the compression
-        if suite != 0x1303 { return Crypto::tls_fail(c, "the server chose a cipher suite that is not written (" + str(suite) + ")"); }
+        if suite != 0x1303 && suite != 0x1301 { return Crypto::tls_fail(c, "the server chose a cipher suite that is not written (" + str(suite) + ")"); }
+        Crypto::tls_seti(c, 392, suite);
         int extlen = Crypto::tls_get16(plain + q);
         q += 2;
         int endx = q + extlen;
@@ -1277,6 +1290,167 @@ struct Crypto {
         alert[1] = (char)0;
         Crypto::tls_send_record(c, 21, (char^)@alert, 2);
         Crypto::tls_release(c);
+    }
+    // ---------------------------------------------------------------- AES-128 and GCM (FIPS 197, NIST SP 800-38D)
+    static void aes_sbox(char^ out) { Crypto::unhex("637c777bf26b6fc53001672bfed7ab76ca82c97dfa5947f0add4a2af9ca472c0b7fd9326363ff7cc34a5e5f171d8311504c723c31896059a071280e2eb27b27509832c1a1b6e5aa0523bd6b329e32f8453d100ed20fcb15b6acbbe394a4c58cfd0efaafb434d338545f9027f503c9fa851a3408f929d38f5bcb6da2110fff3d2cd0c13ec5f974417c4a77e3d645d197360814fdc222a908846eeb814de5e0bdbe0323a0a4906245cc2d3ac629195e479e7c8376d8dd54ea96c56f4ea657aae08ba78252e1ca6b4c6e8dd741f4bbd8b8a703eb5664803f60e613557b986c11d9ee1f8981169d98e949b1e87e9ce5528df8ca1890dbfe6426841992d0fb054bb16", out); }
+    static int aes_xtime(int a) {
+        a = a << 1;
+        if (a & 256) != 0 { a = a xor 0x11b; }
+        return a & 255;
+    }
+    // the 11 round keys of a 16 byte key into rk (176 bytes); sb: the S-box (256 bytes)
+    static void aes_expand(char^ key, char^ rk, char^ sb) {
+        for i in 0..16 { rk[i] = key[i]; }
+        int rcon = 1;
+        for i in 4..44 {
+            char t[4];
+            for j in 0..4 { t[j] = rk[(i - 1) * 4 + j]; }
+            if i % 4 == 0 {
+                char first = t[0];
+                t[0] = (char)(sb[t[1] & 255] xor rcon);
+                t[1] = sb[t[2] & 255];
+                t[2] = sb[t[3] & 255];
+                t[3] = sb[first & 255];
+                rcon = Crypto::aes_xtime(rcon);
+            }
+            for j in 0..4 { rk[i * 4 + j] = (char)(rk[(i - 4) * 4 + j] xor t[j]); }
+        }
+    }
+    // one block of 16 bytes encrypted (in and out may be the same)
+    static void aes_encrypt(char^ rk, char^ sb, char^ in, char^ out) {
+        char s[16];
+        for i in 0..16 { s[i] = (char)(in[i] xor rk[i]); }
+        for round in 1..11 {
+            char t[16];
+            // SubBytes and ShiftRows
+            for c in 0..4 {
+                for r in 0..4 { t[c * 4 + r] = sb[s[((c + r) % 4) * 4 + r] & 255]; }
+            }
+            if round < 10 {
+                for c in 0..4 {
+                    int a0 = t[c * 4] & 255;
+                    int a1 = t[c * 4 + 1] & 255;
+                    int a2 = t[c * 4 + 2] & 255;
+                    int a3 = t[c * 4 + 3] & 255;
+                    int all = a0 xor a1 xor a2 xor a3;
+                    s[c * 4] = (char)(a0 xor all xor Crypto::aes_xtime(a0 xor a1));
+                    s[c * 4 + 1] = (char)(a1 xor all xor Crypto::aes_xtime(a1 xor a2));
+                    s[c * 4 + 2] = (char)(a2 xor all xor Crypto::aes_xtime(a2 xor a3));
+                    s[c * 4 + 3] = (char)(a3 xor all xor Crypto::aes_xtime(a3 xor a0));
+                }
+            } else {
+                for i in 0..16 { s[i] = t[i]; }
+            }
+            for i in 0..16 { s[i] = (char)(s[i] xor rk[round * 16 + i]); }
+        }
+        for i in 0..16 { out[i] = s[i]; }
+    }
+    // multiplication in GF(2^128) of GCM: x = x * h (both as 16 bytes, big-endian bit order of the standard)
+    static void ghash_mul(char^ x, char^ h) {
+        int zh = 0;
+        int zl = 0;
+        int vh = 0;
+        int vl = 0;
+        for i in 0..8 { vh = (vh << 8) | (h[i] & 255); vl = (vl << 8) | (h[8 + i] & 255); }
+        for i in 0..128 {
+            int bit = ((x[i / 8] & 255) >> (7 - i % 8)) & 1;
+            if bit == 1 { zh = zh xor vh; zl = zl xor vl; }
+            int lsb = vl & 1;
+            vl = ((vl >> 1) & 0x7FFFFFFFFFFFFFFF) | (vh << 63);
+            vh = (vh >> 1) & 0x7FFFFFFFFFFFFFFF;
+            if lsb == 1 { vh = vh xor (0xE1 << 56); }
+        }
+        for i in 0..8 {
+            x[i] = (char)((zh >> (56 - i * 8)) & 255);
+            x[8 + i] = (char)((zl >> (56 - i * 8)) & 255);
+        }
+    }
+    // GHASH of the aad and the ciphertext, then the tag = E(J0) xor GHASH
+    static void gcm_tag(char^ rk, char^ sb, char^ h, char^ j0, char^ aad, int alen, char^ ct, int clen, char^ tag) {
+        char x[16];
+        for i in 0..16 { x[i] = (char)0; }
+        int pos = 0;
+        while pos < alen {
+            int take = alen - pos;
+            if take > 16 { take = 16; }
+            for i in 0..take { x[i] = (char)(x[i] xor aad[pos + i]); }
+            Crypto::ghash_mul((char^)@x, h);
+            pos += take;
+        }
+        pos = 0;
+        while pos < clen {
+            int take = clen - pos;
+            if take > 16 { take = 16; }
+            for i in 0..take { x[i] = (char)(x[i] xor ct[pos + i]); }
+            Crypto::ghash_mul((char^)@x, h);
+            pos += take;
+        }
+        char lens[16];
+        int abits = alen * 8;
+        int cbits = clen * 8;
+        for i in 0..8 { lens[i] = (char)((abits >> (56 - i * 8)) & 255); lens[8 + i] = (char)((cbits >> (56 - i * 8)) & 255); }
+        for i in 0..16 { x[i] = (char)(x[i] xor lens[i]); }
+        Crypto::ghash_mul((char^)@x, h);
+        char ej[16];
+        Crypto::aes_encrypt(rk, sb, j0, (char^)@ej);
+        for i in 0..16 { tag[i] = (char)(x[i] xor ej[i]); }
+    }
+    // counter mode starting at the counter block cb (the last 4 bytes are the counter); in -> out
+    static void gcm_ctr(char^ rk, char^ sb, char^ cb0, char^ in, int n, char^ out) {
+        char cb[16];
+        for i in 0..16 { cb[i] = cb0[i]; }
+        int pos = 0;
+        while pos < n {
+            int ctr = ((cb[12] & 255) << 24) | ((cb[13] & 255) << 16) | ((cb[14] & 255) << 8) | (cb[15] & 255);
+            ctr = (ctr + 1) & 0xFFFFFFFF;
+            cb[12] = (char)((ctr >> 24) & 255);
+            cb[13] = (char)((ctr >> 16) & 255);
+            cb[14] = (char)((ctr >> 8) & 255);
+            cb[15] = (char)(ctr & 255);
+            char ks[16];
+            Crypto::aes_encrypt(rk, sb, (char^)@cb, (char^)@ks);
+            int take = n - pos;
+            if take > 16 { take = 16; }
+            for i in 0..take { out[pos + i] = (char)(in[pos + i] xor ks[i]); }
+            pos += take;
+        }
+    }
+    // AES-128-GCM with a 12 byte iv: encrypts n bytes of in into out, writes the 16 bytes tag
+    static void gcm_seal(char^ key, char^ iv, char^ aad, int alen, char^ in, int n, char^ out, char^ tag) {
+        char sb[256];
+        char rk[176];
+        Crypto::aes_sbox((char^)@sb);
+        Crypto::aes_expand(key, (char^)@rk, (char^)@sb);
+        char h[16];
+        char zero[16];
+        for i in 0..16 { zero[i] = (char)0; }
+        Crypto::aes_encrypt((char^)@rk, (char^)@sb, (char^)@zero, (char^)@h);
+        char j0[16];
+        for i in 0..12 { j0[i] = iv[i]; }
+        j0[12] = (char)0; j0[13] = (char)0; j0[14] = (char)0; j0[15] = (char)1;
+        Crypto::gcm_ctr((char^)@rk, (char^)@sb, (char^)@j0, in, n, out);
+        Crypto::gcm_tag((char^)@rk, (char^)@sb, (char^)@h, (char^)@j0, aad, alen, out, n, tag);
+    }
+    // checks the tag and decrypts; false (out not written) when the tag is wrong
+    static bool gcm_open(char^ key, char^ iv, char^ aad, int alen, char^ ct, int n, char^ tag, char^ out) {
+        char sb[256];
+        char rk[176];
+        Crypto::aes_sbox((char^)@sb);
+        Crypto::aes_expand(key, (char^)@rk, (char^)@sb);
+        char h[16];
+        char zero[16];
+        for i in 0..16 { zero[i] = (char)0; }
+        Crypto::aes_encrypt((char^)@rk, (char^)@sb, (char^)@zero, (char^)@h);
+        char j0[16];
+        for i in 0..12 { j0[i] = iv[i]; }
+        j0[12] = (char)0; j0[13] = (char)0; j0[14] = (char)0; j0[15] = (char)1;
+        char want[16];
+        Crypto::gcm_tag((char^)@rk, (char^)@sb, (char^)@h, (char^)@j0, aad, alen, ct, n, (char^)@want);
+        int diff = 0;
+        for i in 0..16 { diff = diff | (want[i] xor tag[i]); }
+        if diff != 0 { return false; }
+        Crypto::gcm_ctr((char^)@rk, (char^)@sb, (char^)@j0, ct, n, out);
+        return true;
     }
     // ---------------------------------------------------------------- big numbers (Montgomery arithmetic) for RSA and the curves
     // A number is an array of n limbs of 28 bits, the least significant first. The modulus must be odd.
