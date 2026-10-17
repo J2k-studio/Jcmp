@@ -869,7 +869,26 @@ void main() {
 }
 ```
 
-The raw `syscall(...)`, `argc()`, `arg(i)` exist for the standard library; programs should use `Sys`.
+### `Sys`: the system, by names
+
+A program talks to the operating system through `Sys`, which has a named function for each call: `Sys::open_read(path)`, `open_write`, `open_append`, `close`, `read`, `write`, `lseek`, `stat`,
+`rename`, `unlink`, `mkdir`, `rmdir`, `getdents`, `pipe`, `fork`, `execve`, `wait`, `kill`, `clock_gettime`, `sleep_ms`, `random`, `mmap`, `munmap`, sockets (`socket_tcp`, `bind`, `listen`, `connect`, `accept`) and more.
+They return what the kernel returns (a number, or a negative error: `Error::reason(n)` says it in words) and refuse arguments that would make the kernel touch a wrong place (a null buffer, a negative size, a signal to a whole group of processes)
+without calling it. The numbers of the system calls are in `Sys` only, so a port to another machine changes one file.
+
+```jk
+#import <stdlib>
+
+void main() {
+    int fd = Sys::open_write("/tmp/sys_example.txt");
+    Sys::write(fd, "hello\n".c(), 6);
+    Sys::close(fd);
+    cout << Error::reason(Sys::open_read("/tmp/there_is_no_such_file")) << "\n";
+}
+```
+
+The raw `syscall(number, ...)` still works (it is what `Sys` is made of), but a program that uses it gets a warning (an error with `-st`): `Sys::call(number, ...)` is the way for a call that `Sys` does not have yet, and
+`#allow syscall` at the top of a low level program says that the numbers are meant. `argc()` and `arg(i)` are for the standard library; programs use `Sys::argc()` and `Sys::arg(i)` or `Env::args()`.
 
 ## Messages
 

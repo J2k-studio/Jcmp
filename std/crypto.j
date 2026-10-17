@@ -651,12 +651,12 @@ struct Crypto {
         Crypto::tls_expand_label(secret, label, (char^)@h, 32, out, 32);
     }
     static void tls_random(char^ p, int n) {
-        int got = syscall(278, p, n, 0);
+        int got = Sys::random(p, n);
         if got != n {
-            int fd = syscall(56, -100, "/dev/urandom", 0, 0);
+            int fd = Sys::open_read("/dev/urandom");
             if fd >= 0 {
-                syscall(63, fd, p, n);
-                syscall(57, fd);
+                Sys::read(fd, p, n);
+                Sys::close(fd);
             }
         }
     }
@@ -664,8 +664,8 @@ struct Crypto {
     static bool tls_read_exact(int fd, char^ p, int n) {
         int got = 0;
         while got < n {
-            int r = syscall(63, fd, p + got, n - got);
-            while r == 0 - 4 { r = syscall(63, fd, p + got, n - got); }
+            int r = Sys::read(fd, p + got, n - got);
+            while r == 0 - 4 { r = Sys::read(fd, p + got, n - got); }
             if r <= 0 { return false; }
             got += r;
         }
@@ -674,8 +674,8 @@ struct Crypto {
     static bool tls_write_all(int fd, char^ p, int n) {
         int off = 0;
         while off < n {
-            int r = syscall(64, fd, p + off, n - off);
-            while r == 0 - 4 { r = syscall(64, fd, p + off, n - off); }
+            int r = Sys::write(fd, p + off, n - off);
+            while r == 0 - 4 { r = Sys::write(fd, p + off, n - off); }
             if r <= 0 { return false; }
             off += r;
         }
@@ -1029,7 +1029,7 @@ struct Crypto {
     }
     // close the socket and free the memory of the connection
     static void tls_release(char^ c) {
-        syscall(57, Crypto::tls_geti(c, 0));
+        Sys::close(Crypto::tls_geti(c, 0));
         Mem::free((void^)Crypto::tls_geti(c, 64));
         Mem::free((void^)Crypto::tls_geti(c, 72));
         Mem::free((void^)Crypto::tls_geti(c, 80));
@@ -2009,7 +2009,7 @@ struct Crypto {
     }
     static int unix_now() {
         int ts[2];
-        syscall(113, 0, @ts);
+        Sys::clock_gettime(0, @ts);
         return ts[0];
     }
     static char lower_c(char c) {
@@ -2159,16 +2159,16 @@ struct Crypto {
     }
     // a whole file as text, "" when it cannot be read
     static String read_text(String path) {
-        int fd = syscall(56, -100, path.c(), 0, 0);
+        int fd = Sys::open_read(path.c());
         if fd < 0 { return ""; }
         char buf[8192];
         String r = "";
         while true {
-            int n = syscall(63, fd, @buf, 8192);
+            int n = Sys::read(fd, @buf, 8192);
             if n <= 0 { break; }
             for i in 0..n { r.push(buf[i]); }
         }
-        syscall(57, fd);
+        Sys::close(fd);
         return r;
     }
     static int find_from(String s, String x, int from) {
@@ -2219,12 +2219,12 @@ struct Crypto {
     }
     // the names of the files of a folder, one per line ("" when it is not a folder)
     static String list_dir(String path) {
-        int fd = syscall(56, -100, path.c(), 0x10000, 0);
+        int fd = Sys::open_dir(path.c());
         if fd < 0 { return ""; }
         char buf[4096];
         String r = "";
         while true {
-            int n = syscall(61, fd, @buf, 4096);
+            int n = Sys::getdents(fd, @buf, 4096);
             if n <= 0 { break; }
             int pos = 0;
             while pos < n {
@@ -2236,7 +2236,7 @@ struct Crypto {
                 pos += reclen;
             }
         }
-        syscall(57, fd);
+        Sys::close(fd);
         return r;
     }
     // the texts (PEM) in which the trusted certificates are: the files of J2K_CA (a file or a folder) or, when it is not set, the usual places

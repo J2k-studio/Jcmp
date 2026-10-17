@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.186
+* **`Sys`: the system by names** (owner's idea): about 60 functions (`Sys::open_read`, `read`, `write`, `lseek`, `stat`, `rename`, `unlink`, `mkdir`, `pipe`, `fork`, `wait`, `kill`, `clock_gettime`, `sleep_ms`, `random`, `mmap`, sockets ...) with checks of the arguments that would make the kernel touch a wrong place (null buffer, negative size, signal to a group, address that is not a page). The whole standard library now uses `Sys::` and no number of a system call; the runtime (`rt_*.j`) is the layer under it. `Sys::call(number, ...)` for a call that is not there yet.
+* **Warning `-Wsyscall`**: `syscall(number, ...)` in a program says to use `Sys` (an error with `-st`); `#allow syscall` (a new directive) turns it off; the library never warns. The compiler's sources have the directive.
+* The flag `O_DIRECTORY` of the library was the number of another machine (0x10000); it is 16384 on ARM64 now, in one place.
+* Tests: `t464_sys` (files, folders, pipe, fork, clock, random, and the refusals), the warning test.
+
 ## 0.9.185
 * **The cache is easy to use:** `J2K_CACHE=dir` (in your shell profile) makes every build use the cache folder; `-nocache` turns it off for one build; `jcmp -clean dir` deletes the files of a cache. The compiler compiling itself: 5.0 s clean, 1.7 s with a full cache (the same program, byte for byte).
 * **The syntax tree makes pointer arithmetic** (`@array + n`, `p + n`, `n + p`, `p - n`, `p - q`; the number is in bytes): about a tenth of the functions of the compiler that were left on the text path now come from the tree (A6).

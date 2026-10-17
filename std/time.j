@@ -3,20 +3,20 @@ struct Time {
     // milliseconds since 1970 (the clock of the computer)
     static int now_ms() {
         int ts[2];
-        syscall(113, 0, @ts);
+        Sys::clock_gettime(0, @ts);
         return ts[0] * 1000 + ts[1] / 1000000;
     }
     // a clock that only goes forward, in nanoseconds: for measuring how long something takes
     static int mono_ns() {
         int ts[2];
-        syscall(113, 1, @ts);
+        Sys::clock_gettime(1, @ts);
         return ts[0] * 1000000000 + ts[1];
     }
     static void sleep_ms(int ms) {
         int ts[2];
         ts[0] = ms / 1000;
         ts[1] = ms % 1000 * 1000000;
-        syscall(101, @ts, 0);
+        Sys::nanosleep(@ts);
     }
 }
 

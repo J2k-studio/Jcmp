@@ -2102,3 +2102,12 @@ The file that separate compilation writes for a module (names, types, sizes of s
 * `jget -li install NAME`, `jget -li uninstall NAME`, `jget -li list`, `jget -li installed` for libraries (`-li` = library; the owner's wording). The v0 words `install remove list installed` still work.
 * The download is done by `curl`, else `wget`. A web client of its own needs a name lookup (DNS, over UDP) and TLS; that is a larger piece of work (after 1.0.0.0, or earlier if the owner wants).
 * `NAME` of a library that is inside the compiler (`cpu`, `net`, `math` ...): nothing to install, `jget` says so.
+
+## 82. `Sys`: the system by names, `syscall(number, ...)` warns (owner's idea, 2026-10-17; the names and the checks are the assistant's, adjustable)
+The owner asked for a layer `Sys` between programs and the kernel (as libc is for C) so that nobody writes system call numbers, the numbers of one machine stay in one place (a port changes
+that place), and the dangerous calls are guarded. Done in 0.9.186:
+* `std/sys.j`: a function for each call used by the library and more (files, folders, pipes, processes, the clock, random bytes, memory, IPv4 sockets, terminal), `Sys::call(n, ...)` for the rest. Results are the kernel's (>= 0 or -errno).
+* Guards: a null buffer with a size gives -14, a negative size or a bad signal gives -22, `close(-1)` gives -9, `munmap`/`mprotect` of an address that is not a page give -22, `kill(pid <= 0, ...)` (a whole group, or everything) is refused.
+  The flags of `open` are the numbers of the machine; `open_read / open_write / open_append / open_dir` need none.
+* The whole standard library (std/*.j except the runtime `rt_*.j`, which is the layer under `Sys`) and the tests of the network were moved from `syscall(...)` to `Sys::`.
+* The compiler warns about `syscall(number, ...)` in a program (not in the library): `[-Wsyscall]`, an error with `-st`. `#allow syscall` (a new directive, next to `#reserve`) turns it off for the program; the compiler's own source has it.

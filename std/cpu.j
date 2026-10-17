@@ -20,14 +20,14 @@ struct Mutex {
         if c == 0 { return; }
         if c != 2 { c = __xchg(w, 2); }
         while c != 0 {
-            syscall(98, w, 128, 2, 0, 0, 0);           // futex wait: sleep while the word is 2
+            Sys::futex(w, 128, 2);           // futex wait: sleep while the word is 2
             c = __xchg(w, 2);
         }
     }
     void unlock(self) {
         int^ w = @self.state;
         int old = __xchg(w, 0);
-        if old == 2 { syscall(98, w, 129, 1, 0, 0, 0); }     // futex wake: one waiter
+        if old == 2 { Sys::futex(w, 129, 1); }     // futex wake: one waiter
     }
     // true if the lock was free and is now yours
     bool try_lock(self) {
@@ -42,8 +42,9 @@ struct Thread {
     // start function(arg) in a new thread
     static Thread create(void(void^)^ f, void^ arg) {
         int size = 1048576;
-        int base = syscall(222, 0, size, 3, 34, -1, 0);       // mmap: the stack (zeroed)
-        if base < 0 { throw "cannot create the thread: no memory for its stack"; }
+        void^ stack = Sys::mmap(size);                         // the stack (zeroed)
+        if stack == null { throw "cannot create the thread: no memory for its stack"; }
+        int base = (int)stack;
         int^ cb = (int^)Mem::alloc(32);
         if (int)cb == 0 { throw "cannot create the thread: out of memory"; }
         cb[1] = base;
@@ -53,7 +54,7 @@ struct Thread {
         std_mt = 1;                                            // from now on the heap is locked
         int tid = __thread_start(f, arg, block, (int)cb, block);
         if tid < 0 {
-            syscall(215, base, size);
+            Sys::munmap((void^)base, size);
             Mem::free(cb);
             throw "cannot create the thread";
         }
@@ -67,9 +68,9 @@ struct Thread {
         if (int)cb == 0 { throw "join: this is not a running or finished thread"; }
         if cb[3] != 0 { throw "cannot join a detached thread"; }
         while cb[0] != 0 {
-            syscall(98, cb, 0, cb[0], 0, 0, 0);                // futex wait (not the private kind: the kernel wakes the shared one at thread exit)
+            Sys::futex(cb, 0, cb[0]);                // futex wait (not the private kind: the kernel wakes the shared one at thread exit)
         }
-        syscall(215, cb[1], cb[2]);                            // give the stack back
+        Sys::munmap((void^)cb[1], cb[2]);                            // give the stack back
         Mem::free(cb);
         self.cb = null;
     }
@@ -90,12 +91,12 @@ struct Thread {
         int ts[2];
         ts[0] = ms / 1000;
         ts[1] = ms % 1000 * 1000000;
-        syscall(101, @ts, 0);
+        Sys::nanosleep(@ts);
     }
     static void yield() {
-        syscall(124);
+        Sys::yield();
     }
     static int id() {
-        return syscall(178);
+        return Sys::gettid();
     }
 }

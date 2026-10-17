@@ -524,7 +524,7 @@ void cc_stat(char^ dir) {
 
 // jcmp -clean DIR: delete the files of the cache in DIR (*.fn, *.tmp, keys.txt); says how many
 void cc_clean(char^ dir) {
-    int fd = syscall(56, -100, dir, 0x10000, 0);
+    int fd = syscall(56, -100, dir, 16384, 0);
     if fd < 0 {
         write_err("jcmp: -clean: there is no cache folder ");
         write_err(dir);

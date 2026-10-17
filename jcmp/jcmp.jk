@@ -2,7 +2,8 @@
 // Build:  bin/jcmp jcmp/jcmp.jk -o jcmp1        (see bootstrap.sh)
 // Use:    jcmp1 input.jk -o program
 // the version of the compiler (also in the file VERSION; release.sh checks that they agree)
-#define JCMP_VERSION "0.9.185"
+#allow syscall                         // the compiler is the layer under Sys: it calls the system by number on purpose
+#define JCMP_VERSION "0.9.186"
 
 #import "jc_base"
 #import "jc_asm"

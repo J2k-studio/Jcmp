@@ -46,13 +46,13 @@ struct Proc {
         int^ envp = (int^)Mem::alloc(8 * (ne + 1));
         for i in 0..ne { envp[i] = (int)arg(argc() + 1 + i); }
         envp[ne] = 0;
-        int pid = syscall(220, 17, 0, 0, 0, 0);
+        int pid = Sys::fork();
         if pid == 0 {
-            if wfd >= 0 { syscall(24, wfd, 1, 0); }
+            if wfd >= 0 { Sys::dup2(wfd, 1); }
             bool slash = false;
             for i in 0..cmd.len { if cmd[i] == '/' { slash = true; } }
             if slash {
-                syscall(221, cmd.c(), argv, envp);
+                Sys::execve(cmd.c(), argv, envp);
             } else {
                 String path = "";
                 switch Env::get("PATH") {
@@ -63,12 +63,12 @@ struct Proc {
                 for i in 0..path.len + 1 {
                     if i == path.len || path[i] == ':' {
                         String full = path.slice(start, i) + "/" + cmd;
-                        syscall(221, full.c(), argv, envp);
+                        Sys::execve(full.c(), argv, envp);
                         start = i + 1;
                     }
                 }
             }
-            syscall(93, 127);
+            Sys::exit(127);
         }
         Mem::free(argv);
         Mem::free(envp);
@@ -77,7 +77,7 @@ struct Proc {
     // waits for the child; its exit code (128 + the signal if it was killed)
     static int finish(int pid) {
         int status = 0;
-        syscall(260, pid, @status, 0, 0);
+        Sys::wait(pid, @status);
         int sig = status & 127;
         if sig != 0 { return 128 + sig; }
         return (status >> 8) & 255;
@@ -91,25 +91,25 @@ struct Proc {
     // runs a program, waits for it and returns what it wrote to its output
     static Result<String, Error> output(String cmd, String[] args) {
         int fds[1];
-        int rc = syscall(59, @fds, 0);
+        int rc = Sys::pipe(@fds);
         if rc < 0 { return Result<String, Error>::Err(Error::make(ErrorKind::Io, "cannot make a pipe")); }
         int rfd = fds[0] & 4294967295;
         int wfd = fds[0] >> 32;
         int pid = Proc::launch(cmd, args, wfd);
-        syscall(57, wfd);
+        Sys::close(wfd);
         if pid < 0 {
-            syscall(57, rfd);
+            Sys::close(rfd);
             return Result<String, Error>::Err(Error::make(ErrorKind::Other, "cannot start " + cmd));
         }
         String text = "";
         char buf[4096];
-        int n = syscall(63, rfd, @buf, 4095);
+        int n = Sys::read(rfd, @buf, 4095);
         while n > 0 {
             buf[n] = 0;
             text.append((char^)@buf);
-            n = syscall(63, rfd, @buf, 4095);
+            n = Sys::read(rfd, @buf, 4095);
         }
-        syscall(57, rfd);
+        Sys::close(rfd);
         Proc::finish(pid);
         return Result<String, Error>::Ok(text);
     }
@@ -121,7 +121,7 @@ struct Term {
     // the number of columns (80 if it cannot be asked)
     static int cols() {
         char ws[8];
-        int rc = syscall(29, 1, 0x5413, @ws);
+        int rc = Sys::window_size(1, @ws);
         if rc < 0 { return 80; }
         int c = (ws[2] & 255) | ((ws[3] & 255) << 8);
         if c < 10 { return 80; }
@@ -130,7 +130,7 @@ struct Term {
     // the number of rows (24 if it cannot be asked)
     static int rows() {
         char ws[8];
-        int rc = syscall(29, 1, 0x5413, @ws);
+        int rc = Sys::window_size(1, @ws);
         if rc < 0 { return 24; }
         int r = (ws[0] & 255) | ((ws[1] & 255) << 8);
         if r < 5 { return 24; }
@@ -144,11 +144,11 @@ struct Term {
         for i in 0..8 { pfd[i] = 0; }
         for i in 0..16 { ts[i] = 0; }
         pfd[4] = 1;                                   // POLLIN on file 0
-        int rc = syscall(73, @pfd, 1, @ts, 0, 8);
+        int rc = Sys::ppoll(@pfd, 1, @ts);
         if rc <= 0 { return false; }
         if (pfd[6] & 1) == 0 { return false; }
         char buf[256];
-        int n = syscall(63, 0, @buf, 256);
+        int n = Sys::read(0, @buf, 256);
         return n > 0;                                 // 0 is the end of the input: no key
     }
 }

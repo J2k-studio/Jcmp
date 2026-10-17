@@ -2050,6 +2050,7 @@ void gen_call() {
     pop_args(n);
     if str_eq(@callee, "syscall") {
         if n < 1 || n > 7 { die("syscall takes 1 to 7 arguments"); }
+        if allow_syscall == 0 { warn("syscall(number, ...) calls the system by a number that belongs to one machine; use Sys::open, Sys::read ... (Sys::call(number, ...) when Sys has no function for it), or write #allow syscall at the top of the program", "syscall"); }
         emit_line("mov x8, x0");
         int i = 1;
         while i < n {

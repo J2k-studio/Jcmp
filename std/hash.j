@@ -165,7 +165,7 @@ struct Sha256 {
     }
     // the digest of the bytes of a file
     static Result<String, Error> file(String path) {
-        int fd = syscall(56, -100, path.c(), 0, 0);
+        int fd = Sys::open_read(path.c());
         if fd < 0 { return Result<String, Error>::Err(Fs::error(fd, "cannot open ", path)); }
         int st[136];                 // h (8), k (64), w (64)
         Sha256::init((int^)@st);
@@ -178,9 +178,9 @@ struct Sha256 {
             // fill the buffer (a read may give less than asked)
             have = 0;
             while have < 4096 {
-                int n = syscall(63, fd, (char^)@buf + have, 4096 - have);
+                int n = Sys::read(fd, (char^)@buf + have, 4096 - have);
                 if n < 0 {
-                    syscall(57, fd);
+                    Sys::close(fd);
                     return Result<String, Error>::Err(Fs::error(n, "cannot read ", path));
                 }
                 if n == 0 {
@@ -196,7 +196,7 @@ struct Sha256 {
                 pos += 64;
             }
             if !more {
-                syscall(57, fd);
+                Sys::close(fd);
                 return Result<String, Error>::Ok(Sha256::finish((int^)@st, (char^)@buf + pos, have - pos, total));
             }
         }

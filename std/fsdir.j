@@ -6,17 +6,17 @@ struct Fs {
     }
     // the whole file as a String
     static Result<String, Error> read_text(String path) {
-        int fd = syscall(56, -100, path.c(), 0, 0);
+        int fd = Sys::open_read(path.c());
         if fd < 0 { return Result<String, Error>::Err(Fs::error(fd, "cannot open ", path)); }
         String text = "";
         char buf[4096];
-        int n = syscall(63, fd, @buf, 4095);
+        int n = Sys::read(fd, @buf, 4095);
         while n > 0 {
             buf[n] = 0;
             text.append((char^)@buf);
-            n = syscall(63, fd, @buf, 4095);
+            n = Sys::read(fd, @buf, 4095);
         }
-        syscall(57, fd);
+        Sys::close(fd);
         if n < 0 { return Result<String, Error>::Err(Fs::error(n, "cannot read ", path)); }
         return Result<String, Error>::Ok(text);
     }
@@ -46,40 +46,40 @@ struct Fs {
         return Fs::put(path, text, 1089);
     }
     static Result<int, Error> put(String path, String text, int flags) {
-        int fd = syscall(56, -100, path.c(), flags, 420);
+        int fd = Sys::open(path.c(), flags, 420);
         if fd < 0 { return Result<int, Error>::Err(Fs::error(fd, "cannot write ", path)); }
         int done = 0;
         char^ p = text.c();
         while done < text.len {
-            int n = syscall(64, fd, p + done, text.len - done);
+            int n = Sys::write(fd, p + done, text.len - done);
             if n <= 0 {
-                syscall(57, fd);
+                Sys::close(fd);
                 return Result<int, Error>::Err(Fs::error(n, "cannot write ", path));
             }
             done += n;
         }
-        syscall(57, fd);
+        Sys::close(fd);
         return Result<int, Error>::Ok(done);
     }
     static bool exists(String path) {
-        return syscall(48, -100, path.c(), 0, 0) == 0;
+        return Sys::access(path.c()) == 0;
     }
     // the size of a file in bytes
     static Result<int, Error> size(String path) {
-        int fd = syscall(56, -100, path.c(), 0, 0);
+        int fd = Sys::open_read(path.c());
         if fd < 0 { return Result<int, Error>::Err(Fs::error(fd, "cannot open ", path)); }
-        int n = syscall(62, fd, 0, 2);
-        syscall(57, fd);
+        int n = Sys::lseek(fd, 0, 2);
+        Sys::close(fd);
         if n < 0 { return Result<int, Error>::Err(Fs::error(n, "cannot size ", path)); }
         return Result<int, Error>::Ok(n);
     }
     static Result<int, Error> remove(String path) {
-        int r = syscall(35, -100, path.c(), 0);
+        int r = Sys::unlink(path.c());
         if r < 0 { return Result<int, Error>::Err(Fs::error(r, "cannot remove ", path)); }
         return Result<int, Error>::Ok(0);
     }
     static Result<int, Error> rename(String from, String to) {
-        int r = syscall(38, -100, from.c(), -100, to.c());
+        int r = Sys::rename(from.c(), to.c());
         if r < 0 { return Result<int, Error>::Err(Fs::error(r, "cannot rename ", from)); }
         return Result<int, Error>::Ok(0);
     }
@@ -88,11 +88,11 @@ struct Fs {
 struct Dir {
     static bool exists(String path) {
         int st[18];
-        if syscall(79, -100, path.c(), @st, 0) != 0 { return false; }       // newfstatat
+        if Sys::stat(path.c(), @st) != 0 { return false; }       // newfstatat
         return (st[2] & 4294967295 & 61440) == 16384;                          // st_mode is a folder
     }
     static Result<int, Error> make(String path) {
-        int r = syscall(34, -100, path.c(), 493);
+        int r = Sys::mkdir(path.c(), 493);
         if r < 0 { return Result<int, Error>::Err(Fs::error(r, "cannot make the folder ", path)); }
         return Result<int, Error>::Ok(0);
     }
@@ -102,31 +102,31 @@ struct Dir {
         for ch in path {
             if ch == '/' && part.len > 0 {
                 if !Dir::exists(part) {
-                    int r1 = syscall(34, -100, part.c(), 493);
+                    int r1 = Sys::mkdir(part.c(), 493);
                     if r1 < 0 { return Result<int, Error>::Err(Fs::error(r1, "cannot make the folder ", part)); }
                 }
             }
             part.push(ch);
         }
         if part.len > 0 && !Dir::exists(part) {
-            int r2 = syscall(34, -100, part.c(), 493);
+            int r2 = Sys::mkdir(part.c(), 493);
             if r2 < 0 { return Result<int, Error>::Err(Fs::error(r2, "cannot make the folder ", part)); }
         }
         return Result<int, Error>::Ok(0);
     }
     // remove an empty folder
     static Result<int, Error> remove(String path) {
-        int r = syscall(35, -100, path.c(), 512);                // AT_REMOVEDIR
+        int r = Sys::rmdir(path.c());                // AT_REMOVEDIR
         if r < 0 { return Result<int, Error>::Err(Fs::error(r, "cannot remove the folder ", path)); }
         return Result<int, Error>::Ok(0);
     }
     // the names in a folder (not . and ..), in order
     static Result<String[], Error> list(String path) {
-        int fd = syscall(56, -100, path.c(), 16384, 0);
+        int fd = Sys::open_dir(path.c());
         if fd < 0 { return Result<String[], Error>::Err(Fs::error(fd, "cannot read the folder ", path)); }
         String[] names = arr(8);
         char buf[4096];
-        int n = syscall(61, fd, @buf, 4096);                     // getdents64
+        int n = Sys::getdents(fd, @buf, 4096);                     // getdents64
         while n > 0 {
             int at = 0;
             while at < n {
@@ -140,15 +140,15 @@ struct Dir {
                 if !(name == ".") && !(name == "..") { names.push(name); }
                 at += reclen;
             }
-            n = syscall(61, fd, @buf, 4096);
+            n = Sys::getdents(fd, @buf, 4096);
         }
-        syscall(57, fd);
+        Sys::close(fd);
         names.sort();
         return Result<String[], Error>::Ok(names);
     }
     static Result<String, Error> current() {
         char buf[1024];
-        int n = syscall(17, @buf, 1024);
+        int n = Sys::getcwd(@buf, 1024);
         if n < 0 { return Result<String, Error>::Err(Fs::error(n, "cannot get the folder", "")); }
         String s = "";
         s.append((char^)@buf);

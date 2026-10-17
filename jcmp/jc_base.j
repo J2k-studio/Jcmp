@@ -254,3 +254,4 @@ int x_cutmax = 1000000;          // -xcachecut N: only the first N functions tha
 int x_cutmin;                   // -xcachecut MIN MAX: the first hit that is cut
 int x_repeat;                   // -xrepeat
 int x_lex;                      // -xlex
+int allow_syscall;               // #allow syscall: no warning about syscall(number, ...)

@@ -1,6 +1,8 @@
-# J2K / Jcmp 0.9.185
+# J2K / Jcmp 0.9.186
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
+
+**0.9.186:** `Sys`: the system by names with checks; the library has no system call numbers; `syscall(...)` in a program warns, `#allow syscall`.
 
 **0.9.185:** the cache is easy (`J2K_CACHE`, `-nocache`, `-clean`); pointer arithmetic from the syntax tree.
 

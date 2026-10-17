@@ -1516,6 +1516,23 @@ void next() {
             next();
             return;
         }
+        if str_eq(@dw, "allow") {
+            // #allow syscall : this program calls the system by number on purpose (no warning about syscall(...))
+            while lc(0) == 32 || lc(0) == 9 { adv(); }
+            char aw[32];
+            int ak = 0;
+            while is_letter(lc(0)) && ak < 30 {
+                aw[ak] = lc(0);
+                ak += 1;
+                adv();
+            }
+            aw[ak] = 0;
+            if str_eq(@aw, "syscall") { allow_syscall = 1; }
+            else { die("after #allow can follow: syscall"); }
+            while lc(0) != 10 && lc(0) != 0 { adv(); }
+            next();
+            return;
+        }
         if str_eq(@dw, "reserve") {
             // #reserve x19, x20 : the compiler never uses these registers; the program does (Reg::x19, register { })
             while true {

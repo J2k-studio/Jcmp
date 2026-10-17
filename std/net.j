@@ -47,20 +47,20 @@ struct Net {
     }
     // a socket that listens on the port (0: the system picks one; Net::port_of tells which) on every address of this computer
     static Result<int, Error> tcp_listen(int port) {
-        int fd = syscall(198, 2, 1, 0);
+        int fd = Sys::socket_tcp();
         if fd < 0 { return Result<int, Error>::Err(Net::fail("cannot make a socket", fd)); }
         int one = 1;
-        syscall(208, fd, 1, 2, @one, 4);
+        Sys::setsockopt(fd, 1, 2, @one, 4);
         char sa[16];
         Net::make_addr(@sa, 0, 0, 0, 0, port);
-        int r = syscall(200, fd, @sa, 16);
+        int r = Sys::bind(fd, @sa, 16);
         if r < 0 {
-            syscall(57, fd);
+            Sys::close(fd);
             return Result<int, Error>::Err(Net::fail("cannot use the port", r));
         }
-        r = syscall(201, fd, 16);
+        r = Sys::listen(fd, 16);
         if r < 0 {
-            syscall(57, fd);
+            Sys::close(fd);
             return Result<int, Error>::Err(Net::fail("cannot listen", r));
         }
         return Result<int, Error>::Ok(fd);
@@ -69,27 +69,27 @@ struct Net {
     static int port_of(int fd) {
         char sa[16];
         int len = 16;
-        int r = syscall(204, fd, @sa, @len);
+        int r = Sys::getsockname(fd, @sa, @len);
         if r < 0 { return r; }
         return ((sa[2] & 255) << 8) | (sa[3] & 255);
     }
     static Result<int, Error> accept(int fd) {
         // accept4 (242), not accept (202): the filter of Android kills a program that makes the plain accept call ("Bad system call")
-        int c = syscall(242, fd, 0, 0, 0);
-        while c == 0 - 4 { c = syscall(242, fd, 0, 0, 0); }          // interrupted by a signal: again
+        int c = Sys::accept(fd);
+        while c == 0 - 4 { c = Sys::accept(fd); }          // interrupted by a signal: again
         if c < 0 { return Result<int, Error>::Err(Net::fail("accept failed", c)); }
         return Result<int, Error>::Ok(c);
     }
     static Result<int, Error> tcp_connect(String ip, int port) {
         int a[4];
         if !Net::parse_ip(ip, @a) { return Result<int, Error>::Err(Error::make(ErrorKind::Invalid, "not an address like 127.0.0.1: " + ip)); }
-        int fd = syscall(198, 2, 1, 0);
+        int fd = Sys::socket_tcp();
         if fd < 0 { return Result<int, Error>::Err(Net::fail("cannot make a socket", fd)); }
         char sa[16];
         Net::make_addr(@sa, a[0], a[1], a[2], a[3], port);
-        int r = syscall(203, fd, @sa, 16);
+        int r = Sys::connect(fd, @sa, 16);
         if r < 0 {
-            syscall(57, fd);
+            Sys::close(fd);
             return Result<int, Error>::Err(Net::fail("cannot connect to " + ip, r));
         }
         return Result<int, Error>::Ok(fd);
@@ -97,7 +97,7 @@ struct Net {
     // two sockets that are joined to each other (a connection inside the program)
     static Result<int, Error> pair(int^ out) {
         i32 fds[2];                        // the system writes two 32-bit numbers
-        int r = syscall(199, 1, 1, 0, @fds);
+        int r = Sys::socketpair(@fds);
         if r < 0 { return Result<int, Error>::Err(Net::fail("cannot make a socket pair", r)); }
         out[0] = fds[0];
         out[1] = fds[1];
@@ -108,8 +108,8 @@ struct Net {
         int done = 0;
         while done < data.len {
             char^ p = data.c();
-            int n = syscall(64, fd, @p[done], data.len - done);
-            while n == 0 - 4 { n = syscall(64, fd, @p[done], data.len - done); }
+            int n = Sys::write(fd, @p[done], data.len - done);
+            while n == 0 - 4 { n = Sys::write(fd, @p[done], data.len - done); }
             if n < 0 { return Result<int, Error>::Err(Net::fail("send failed", n)); }
             if n == 0 { break; }
             done += n;
@@ -119,8 +119,8 @@ struct Net {
     // what arrived (at most max bytes; "" when the other side closed)
     static Result<String, Error> recv(int fd, int max) {
         char^ b = (char^)Mem::alloc(max + 1);
-        int n = syscall(63, fd, b, max);
-        while n == 0 - 4 { n = syscall(63, fd, b, max); }
+        int n = Sys::read(fd, b, max);
+        while n == 0 - 4 { n = Sys::read(fd, b, max); }
         if n < 0 {
             Mem::free((void^)b);
             return Result<String, Error>::Err(Net::fail("receive failed", n));
@@ -131,7 +131,7 @@ struct Net {
         return Result<String, Error>::Ok(r);
     }
     static void close(int fd) {
-        syscall(57, fd);
+        Sys::close(fd);
     }
     // ---- names and pages: Net::dns.lookup("example.com"), Net::http.get("http://...") (designed by the assistant for jget, 2026-10-17, adjustable)
     // dns: A records over UDP port 53, no cache. A name that is already an address stays; localhost, the hosts files, then the name server.
@@ -174,16 +174,16 @@ struct Net {
     }
     // a whole small file as a text, or "" when it cannot be read (the net unit does not need the files unit)
     static String dns_read(String path) {
-        int fd = syscall(56, -100, path.c(), 0, 0);
+        int fd = Sys::open_read(path.c());
         if fd < 0 { return ""; }
         char buf[4096];
         String r = "";
         while true {
-            int n = syscall(63, fd, @buf, 4096);
+            int n = Sys::read(fd, @buf, 4096);
             if n <= 0 { break; }
             for i in 0..n { r.push(buf[i]); }
         }
-        syscall(57, fd);
+        Sys::close(fd);
         return r;
     }
     // the name server to ask: J2K_DNS, then the resolv.conf files, else 1.1.1.1
@@ -273,36 +273,33 @@ struct Net {
         int sv[4];
         if !Net::parse_ip(server, @sv) { return Result<String, Error>::Err(Error::make(ErrorKind::Invalid, "the name server is not an address: " + server)); }
         int ts[2];
-        syscall(113, 1, @ts);
+        Sys::clock_gettime(1, @ts);
         int id = (ts[1] / 1000) & 65535;
         String q = Net::dns_build_query(name, id);
-        int fd = syscall(198, 2, 2, 0);          // a datagram socket
+        int fd = Sys::socket_udp();          // a datagram socket
         if fd < 0 { return Result<String, Error>::Err(Net::fail("cannot make a socket", fd)); }
         char sa[16];
         Net::make_addr(@sa, sv[0], sv[1], sv[2], sv[3], 53);
-        int cr = syscall(203, fd, @sa, 16);
+        int cr = Sys::connect(fd, @sa, 16);
         if cr < 0 {
-            syscall(57, fd);
+            Sys::close(fd);
             return Result<String, Error>::Err(Net::fail("cannot reach the name server " + server, cr));
         }
-        int tv[2];
-        tv[0] = 3;
-        tv[1] = 0;
-        syscall(208, fd, 1, 20, @tv, 16);        // receive time out
+        Sys::set_receive_timeout(fd, 3);        // wait at most 3 seconds for an answer
         char buf[1500];
         for attempt in 0..3 {
-            syscall(64, fd, q.c(), q.len);
-            int n = syscall(63, fd, @buf, 1500);
+            Sys::write(fd, q.c(), q.len);
+            int n = Sys::read(fd, @buf, 1500);
             if n > 12 && (buf[0] & 255) == ((id >> 8) & 255) && (buf[1] & 255) == (id & 255) {
                 String r = "";
                 for i in 0..n { r.push(buf[i]); }
-                syscall(57, fd);
+                Sys::close(fd);
                 String ip = Net::dns_parse_answer(r);
                 if ip.len == 0 { return Result<String, Error>::Err(Error::make(ErrorKind::NotFound, "no address for " + name)); }
                 return Result<String, Error>::Ok(ip);
             }
         }
-        syscall(57, fd);
+        Sys::close(fd);
         return Result<String, Error>::Err(Error::make(ErrorKind::Io, "the name server " + server + " did not answer"));
     }
     static Result<String, Error> dns_try_lookup(String name) {
@@ -555,7 +552,7 @@ struct Net {
         // the width of the bar from the width of the terminal
         char ws[8];
         int width = 20;
-        if syscall(29, 2, 0x5413, @ws) == 0 {
+        if Sys::window_size(2, @ws) == 0 {
             int cols = (ws[2] & 255) | ((ws[3] & 255) << 8);
             if cols > 0 { width = cols - 56; }
             if width < 8 { width = 8; }
@@ -608,18 +605,18 @@ struct Net {
         line.push((char)27);                     // ESC [ K : erase the rest of the line
         line.push('[');
         line.push('K');
-        syscall(64, 2, line.c(), line.len);
+        Sys::write(2, line.c(), line.len);
     }
     static int http_now_ms() {
         int ts[2];
-        syscall(113, 1, @ts);
+        Sys::clock_gettime(1, @ts);
         return ts[0] * 1000 + ts[1] / 1000000;
     }
     static void http_write_all(int fd, String s) {
         int off = 0;
         char^ p = s.c();
         while off < s.len {
-            int n = syscall(64, fd, @p[off], s.len - off);
+            int n = Sys::write(fd, @p[off], s.len - off);
             if n <= 0 { return; }
             off += n;
         }
@@ -695,10 +692,10 @@ struct Net {
         bool chunked = lh.contains("\r\ntransfer-encoding: chunked");
         if chunked { total = -1; }
         String tmp = path + ".part";
-        int wf = syscall(56, -100, tmp.c(), 577, 420);
+        int wf = Sys::open_write(tmp.c());
         if wf < 0 { Net::http_chan_close(secure, fd); return Result<int, Error>::Err(Net::fail("cannot write " + tmp, wf)); }
         char termios[64];
-        bool tty = show == 1 && syscall(29, 2, 21505, @termios) == 0;
+        bool tty = show == 1 && Sys::isatty(2) == 0;
         int t0 = Net::http_now_ms();
         int last = t0;
         int done = 0;
@@ -766,18 +763,18 @@ struct Net {
             }
         }
         Net::http_chan_close(secure, fd);
-        syscall(57, wf);
+        Sys::close(wf);
         if tty {
             Net::http_show_progress(done, total, Net::http_now_ms() - t0, 1);
-            syscall(64, 2, "\n", 1);
+            Sys::write(2, "\n", 1);
         }
         if failed {
-            syscall(35, -100, tmp.c(), 0);
+            Sys::unlink(tmp.c());
             return Result<int, Error>::Err(Error::make(ErrorKind::Io, "the download of " + url + " stopped before the end (" + str(done) + " bytes)"));
         }
-        int rr = syscall(38, -100, tmp.c(), -100, path.c());
+        int rr = Sys::rename(tmp.c(), path.c());
         if rr < 0 {
-            syscall(35, -100, tmp.c(), 0);
+            Sys::unlink(tmp.c());
             return Result<int, Error>::Err(Net::fail("cannot write " + path, rr));
         }
         return Result<int, Error>::Ok(done);
@@ -860,7 +857,7 @@ struct Connection {
     String receive(self) { return Tcp::recv(self.fd); }
     String receive_max(self, int max) { return Tcp::recv_max(self.fd, max); }
     int send(self, String data) { return Tcp::send(self.fd, data); }
-    int close(self) { return syscall(57, self.fd); }
+    int close(self) { return Sys::close(self.fd); }
 }
 struct Listener {
     int fd;
@@ -875,5 +872,5 @@ struct Listener {
         c.fd = Tcp::accept(self.fd);
         return c;
     }
-    int close(self) { return syscall(57, self.fd); }
+    int close(self) { return Sys::close(self.fd); }
 }
