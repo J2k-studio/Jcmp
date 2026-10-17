@@ -2715,6 +2715,7 @@ void parse_function() {
         if ty_elem == 2 && ty_ptr == 0 && ty_dyn == 0 && ty_void == 0 { fcharret[fcount] = 1; }
         if ty_ptr == 2 && ty_dyn == 0 && ty_void == 0 { fcharret[fcount] = 2; }
         f_idx = fcount;
+        ft_add(fcount);
         fcount += 1;
     }
     int f_declared = 0;

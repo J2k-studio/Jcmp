@@ -34,7 +34,7 @@ def gen(name, files, doc, libname):
     out = ['void %s() {' % name,
            '    if lx_depth >= 15 { die("imports nested too deeply"); }',
            '    stk_pos[lx_depth] = cur_pos;', '    stk_line[lx_depth] = cur_line;',
-           '    stk_ls[lx_depth] = cur_line_start;',
+           '    stk_ls[lx_depth] = cur_line_start;', '    stk_len[lx_depth] = cur_len;',
            '    str_copy(@lvl_name + (lx_depth + 1) * 128, @lvl_name + lx_depth * 128, 128);',
            '    lx_depth += 1;', '    lvl_lib[lx_depth] = 1;', '    cur_base = lx_depth * 524288;', '    cur_len = 0;']
     out.append('    if lib_external == 1 {')
@@ -52,7 +52,7 @@ def gen_units(name, units, doc):
     out = ['// ' + doc, 'void %s(int mask) {' % name,
            '    if lx_depth >= 15 { die("imports nested too deeply"); }',
            '    stk_pos[lx_depth] = cur_pos;', '    stk_line[lx_depth] = cur_line;',
-           '    stk_ls[lx_depth] = cur_line_start;',
+           '    stk_ls[lx_depth] = cur_line_start;', '    stk_len[lx_depth] = cur_len;',
            '    str_copy(@lvl_name + (lx_depth + 1) * 128, @lvl_name + lx_depth * 128, 128);',
            '    lx_depth += 1;', '    lvl_lib[lx_depth] = 1;', '    cur_base = lx_depth * 524288;', '    cur_len = 0;']
     for n, u in enumerate(units):

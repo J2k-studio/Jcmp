@@ -698,13 +698,47 @@ void sug_names(char^ name) {
     }
 }
 
+// the names of the functions and of the globals are looked up in a hash table (the compiler asks for a name very often; a scan of all names took a third of the time)
+int ft_tab[65536];                // function index + 1, open addressing by the hash of the name
+int gt_tab[65536];
+
+int name_hash(char^ s) {
+    int h = 5381;
+    int k = 0;
+    while s[k] != 0 && k < 63 {
+        h = (h * 33 + s[k]) & 1073741823;
+        k += 1;
+    }
+    return h & 65535;
+}
+
 int find_func(char^ name) {
-    int i = 0;
-    while i < fcount {
+    int h = name_hash(name);
+    while ft_tab[h] != 0 {
+        int i = ft_tab[h] - 1;
         if str_eq(@fname + i * 64, name) { return i; }
-        i += 1;
+        h = (h + 1) & 65535;
     }
     return -1;
+}
+
+// the function i was just added: the first function with a name keeps the name (as the scan did)
+void ft_add(int i) {
+    int h = name_hash(@fname + i * 64);
+    while ft_tab[h] != 0 {
+        if str_eq(@fname + (ft_tab[h] - 1) * 64, @fname + i * 64) { return; }
+        h = (h + 1) & 65535;
+    }
+    ft_tab[h] = i + 1;
+}
+
+void gt_add(int i) {
+    int h = name_hash(@gname + i * 64);
+    while gt_tab[h] != 0 {
+        if str_eq(@gname + (gt_tab[h] - 1) * 64, @gname + i * 64) { return; }
+        h = (h + 1) & 65535;
+    }
+    gt_tab[h] = i + 1;
 }
 
 
@@ -740,10 +774,11 @@ int find_local(char^ name) {
 }
 
 int find_global(char^ name) {
-    int i = 0;
-    while i < gcount {
+    int h = name_hash(name);
+    while gt_tab[h] != 0 {
+        int i = gt_tab[h] - 1;
         if str_eq(@gname + i * 64, name) { return i; }
-        i += 1;
+        h = (h + 1) & 65535;
     }
     return -1;
 }
@@ -899,6 +934,7 @@ void add_global(char^ name, int kind, int elem, int bytes, int ptr) {
         goff[gcount] = gl_bytes;
         gl_bytes += (bytes + 7) / 8 * 8;
     }
+    gt_add(gcount);
     gcount += 1;
 }
 

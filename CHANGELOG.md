@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.179
+* **The compiler is about 2 times faster** (the compiler compiling itself: 17.6 s to 9.2 s on the same machine in the same minute; the program that comes out is byte for byte the same). Found with a new sampling profiler (`tools/profile.py`, with the hidden option `-xmap FILE` that writes the address of every label):
+  1. returning from an imported file or a generic instance scanned the whole text of the file below it to find its length (a quarter of the time): the length is now saved when the file is entered;
+  2. `find_func` / `find_global` compared the name with every function and global (a quarter of the time): hash tables now;
+  3. the register-web pass cleared 65 536 table entries for every function and every call (a tenth): only the entries that can be used.
+* Hidden: `-xmap FILE`, `-xlex`.
+
 ## 0.9.178
 * **`jget` version 0** (`examples/jget.jk`, built into the release as `jget`): `jget list | install NAME | remove NAME | installed`. A library is one source file; the index is a text file `NAME VERSION URL SHA256`; the download uses `curl`, the SHA-256 is checked before anything is installed (a wrong checksum installs nothing); names with `/` or `..` are refused. The library goes to `~/.j2k/Library` (`JGET_LIB`), where `#import <NAME>` looks. `install.sh` installs `jget` next to `jcmp`. The public index repository does not exist yet (open question): use `JGET_INDEX`.
 * The message "library not found" says that `jget install NAME` fetches a library.

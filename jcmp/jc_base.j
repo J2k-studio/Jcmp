@@ -253,3 +253,4 @@ int x_cachelist;                // -xcachelist
 int x_cutmax = 1000000;          // -xcachecut N: only the first N functions that come from the cache are cut (to find what the back end remembers)
 int x_cutmin;                   // -xcachecut MIN MAX: the first hit that is cut
 int x_repeat;                   // -xrepeat
+int x_lex;                      // -xlex

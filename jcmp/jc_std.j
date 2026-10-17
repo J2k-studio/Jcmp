@@ -6,6 +6,7 @@ void push_std_units(int mask) {
     stk_pos[lx_depth] = cur_pos;
     stk_line[lx_depth] = cur_line;
     stk_ls[lx_depth] = cur_line_start;
+    stk_len[lx_depth] = cur_len;
     str_copy(@lvl_name + (lx_depth + 1) * 128, @lvl_name + lx_depth * 128, 128);
     lx_depth += 1;
     lvl_lib[lx_depth] = 1;
@@ -3321,6 +3322,7 @@ void push_cpu() {
     stk_pos[lx_depth] = cur_pos;
     stk_line[lx_depth] = cur_line;
     stk_ls[lx_depth] = cur_line_start;
+    stk_len[lx_depth] = cur_len;
     str_copy(@lvl_name + (lx_depth + 1) * 128, @lvl_name + lx_depth * 128, 128);
     lx_depth += 1;
     lvl_lib[lx_depth] = 1;
@@ -3444,6 +3446,7 @@ void push_simd() {
     stk_pos[lx_depth] = cur_pos;
     stk_line[lx_depth] = cur_line;
     stk_ls[lx_depth] = cur_line_start;
+    stk_len[lx_depth] = cur_len;
     str_copy(@lvl_name + (lx_depth + 1) * 128, @lvl_name + lx_depth * 128, 128);
     lx_depth += 1;
     lvl_lib[lx_depth] = 1;
@@ -3584,6 +3587,7 @@ void push_vector() {
     stk_pos[lx_depth] = cur_pos;
     stk_line[lx_depth] = cur_line;
     stk_ls[lx_depth] = cur_line_start;
+    stk_len[lx_depth] = cur_len;
     str_copy(@lvl_name + (lx_depth + 1) * 128, @lvl_name + lx_depth * 128, 128);
     lx_depth += 1;
     lvl_lib[lx_depth] = 1;
@@ -3727,6 +3731,7 @@ void push_quat() {
     stk_pos[lx_depth] = cur_pos;
     stk_line[lx_depth] = cur_line;
     stk_ls[lx_depth] = cur_line_start;
+    stk_len[lx_depth] = cur_len;
     str_copy(@lvl_name + (lx_depth + 1) * 128, @lvl_name + lx_depth * 128, 128);
     lx_depth += 1;
     lvl_lib[lx_depth] = 1;
@@ -3814,6 +3819,7 @@ void push_complex() {
     stk_pos[lx_depth] = cur_pos;
     stk_line[lx_depth] = cur_line;
     stk_ls[lx_depth] = cur_line_start;
+    stk_len[lx_depth] = cur_len;
     str_copy(@lvl_name + (lx_depth + 1) * 128, @lvl_name + lx_depth * 128, 128);
     lx_depth += 1;
     lvl_lib[lx_depth] = 1;
@@ -3875,6 +3881,7 @@ void push_stats() {
     stk_pos[lx_depth] = cur_pos;
     stk_line[lx_depth] = cur_line;
     stk_ls[lx_depth] = cur_line_start;
+    stk_len[lx_depth] = cur_len;
     str_copy(@lvl_name + (lx_depth + 1) * 128, @lvl_name + lx_depth * 128, 128);
     lx_depth += 1;
     lvl_lib[lx_depth] = 1;
@@ -3951,6 +3958,7 @@ void push_matrix() {
     stk_pos[lx_depth] = cur_pos;
     stk_line[lx_depth] = cur_line;
     stk_ls[lx_depth] = cur_line_start;
+    stk_len[lx_depth] = cur_len;
     str_copy(@lvl_name + (lx_depth + 1) * 128, @lvl_name + lx_depth * 128, 128);
     lx_depth += 1;
     lvl_lib[lx_depth] = 1;
@@ -4197,6 +4205,7 @@ void push_canvas() {
     stk_pos[lx_depth] = cur_pos;
     stk_line[lx_depth] = cur_line;
     stk_ls[lx_depth] = cur_line_start;
+    stk_len[lx_depth] = cur_len;
     str_copy(@lvl_name + (lx_depth + 1) * 128, @lvl_name + lx_depth * 128, 128);
     lx_depth += 1;
     lvl_lib[lx_depth] = 1;
@@ -4343,6 +4352,7 @@ void push_screen() {
     stk_pos[lx_depth] = cur_pos;
     stk_line[lx_depth] = cur_line;
     stk_ls[lx_depth] = cur_line_start;
+    stk_len[lx_depth] = cur_len;
     str_copy(@lvl_name + (lx_depth + 1) * 128, @lvl_name + lx_depth * 128, 128);
     lx_depth += 1;
     lvl_lib[lx_depth] = 1;
@@ -4680,6 +4690,7 @@ void push_prelude() {
     stk_pos[lx_depth] = cur_pos;
     stk_line[lx_depth] = cur_line;
     stk_ls[lx_depth] = cur_line_start;
+    stk_len[lx_depth] = cur_len;
     str_copy(@lvl_name + (lx_depth + 1) * 128, @lvl_name + lx_depth * 128, 128);
     lx_depth += 1;
     lvl_lib[lx_depth] = 1;

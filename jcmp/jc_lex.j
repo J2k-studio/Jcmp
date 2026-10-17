@@ -25,6 +25,7 @@ int lx_depth;                // 0 = the main file
 int stk_pos[16];             // saved positions of the files below the current one
 int stk_line[16];
 int stk_ls[16];
+int stk_len[16];            // the length of the file below (so that returning to it does not need a scan of its whole text)
 char lvl_name[2048];         // path of the file at each level (16 x 128)
 char inc_names[65536];        // paths already imported (64 x 128)
 int inc_count;
@@ -587,6 +588,7 @@ void push_file(char^ path) {
     stk_pos[lx_depth] = cur_pos;
     stk_line[lx_depth] = cur_line;
     stk_ls[lx_depth] = cur_line_start;
+    stk_len[lx_depth] = cur_len;
     lx_depth += 1;
     lvl_lib[lx_depth] = 0;
     lvl_seq0[lx_depth] = tok_seq;
@@ -608,6 +610,7 @@ void push_macro(char^ text) {
     stk_pos[lx_depth] = cur_pos;
     stk_line[lx_depth] = cur_line;
     stk_ls[lx_depth] = cur_line_start;
+    stk_len[lx_depth] = cur_len;
     str_copy(@lvl_name + (lx_depth + 1) * 128, @lvl_name + lx_depth * 128, 128);
     lx_depth += 1;
     lvl_lib[lx_depth] = lvl_lib[lx_depth - 1];
@@ -626,6 +629,7 @@ void push_text(char^ text, int n, char^ file, int line) {
     stk_pos[lx_depth] = cur_pos;
     stk_line[lx_depth] = cur_line;
     stk_ls[lx_depth] = cur_line_start;
+    stk_len[lx_depth] = cur_len;
     lx_depth += 1;
     lvl_lib[lx_depth] = 0;
     cur_base = lx_depth * 524288;
@@ -651,10 +655,7 @@ void pop_file() {
     cur_pos = stk_pos[lx_depth];
     cur_line = stk_line[lx_depth];
     cur_line_start = stk_ls[lx_depth];
-    // the length of the file we returned to: it ends at its last 0 byte
-    int n = 0;
-    while src_bufs[cur_base + n] != 0 { n += 1; }
-    cur_len = n;
+    cur_len = stk_len[lx_depth];
     set_err_file(lx_depth);
 }
 

@@ -570,8 +570,14 @@ int op_webs() {
         }
     }
     // the nodes
+    // only the nodes that can be used: the instructions (0 .. ir_n) and the live-in nodes of the blocks (from 65536); this was every node up to 65536 + 64 * blocks each time
     int nn = 65536 + ir_nb * 64;
     int x = 0;
+    while x < ir_n + 1 {
+        op_uf[x] = x;
+        x += 1;
+    }
+    x = 65536;
     while x < nn {
         op_uf[x] = x;
         x += 1;
