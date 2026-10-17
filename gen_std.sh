@@ -13,7 +13,7 @@ units = [
     ["system", "log"],                          # 4 system
     ["time", "date"],                           # 5 time
     ["collections", "json", "csv", "toml"],     # 6 data
-    ["hash"],                                   # 7 crypto
+    ["hash", "crypto"],                         # 7 crypto
     ["net"],                                    # 8 net
 ]
 unit_names = ["core", "number", "text", "files", "system", "time", "data", "crypto", "net"]

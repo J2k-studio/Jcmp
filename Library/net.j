@@ -363,10 +363,37 @@ struct Net {
         }
         return out;
     }
-    static Result<String, Error> http_read_all(int fd) {
+    // one connection, plain (secure 0: h is the socket) or TLS (secure 1: h is the handle of Crypto::tls_connect)
+    static Result<int, Error> http_open(String host, int port, int secure) {
+        String ip = "";
+        switch Net::dns_try_lookup(host) {
+            Result::Ok(a): { ip = a; }
+            Result::Err(e): { return Result<int, Error>::Err(Error::make(e.kind, e.message)); }
+        }
+        int fd = 0;
+        switch Net::tcp_connect(ip, port) {
+            Result::Ok(c): { fd = c; }
+            Result::Err(e): { return Result<int, Error>::Err(Error::make(e.kind, e.message)); }
+        }
+        if secure == 0 { return Result<int, Error>::Ok(fd); }
+        return Crypto::tls_connect(fd, host, 0);
+    }
+    static Result<int, Error> http_chan_send(int secure, int h, String data) {
+        if secure == 0 { return Net::send(h, data); }
+        if Crypto::tls_send(h, data) { return Result<int, Error>::Ok(data.len); }
+        return Result<int, Error>::Err(Error::make(ErrorKind::Io, "send failed"));
+    }
+    static Result<String, Error> http_chan_recv(int secure, int h, int max) {
+        if secure == 0 { return Net::recv(h, max); }
+        return Result<String, Error>::Ok(Crypto::tls_recv(h));
+    }
+    static void http_chan_close(int secure, int h) {
+        if secure == 0 { Net::close(h); } else { Crypto::tls_close(h); }
+    }
+    static Result<String, Error> http_read_all(int secure, int h) {
         String all = "";
         while true {
-            Result<String, Error> r = Net::recv(fd, 65536);
+            Result<String, Error> r = Net::http_chan_recv(secure, h, 65536);
             switch r {
                 Result::Ok(chunk): {
                     if chunk.len == 0 { return Result<String, Error>::Ok(all); }
@@ -379,13 +406,16 @@ struct Net {
     }
     static Result<String, Error> http_fetch(String url, int depth) {
         if depth > 5 { return Result<String, Error>::Err(Error::make(ErrorKind::Invalid, "too many redirects")); }
-        if url.starts_with("https://") {
-            return Result<String, Error>::Err(Error::make(ErrorKind::Invalid, "https needs TLS, which is not written yet: " + url));
+        int secure = 0;
+        int plen = 7;
+        int port = 80;
+        if url.starts_with("https://") { secure = 1; plen = 8; port = 443; }
+        else if !url.starts_with("http://") {
+            return Result<String, Error>::Err(Error::make(ErrorKind::Invalid, "not an http or https address: " + url));
         }
-        if !url.starts_with("http://") {
-            return Result<String, Error>::Err(Error::make(ErrorKind::Invalid, "not an http address: " + url));
-        }
-        String rest = url.slice(7, url.len);
+        String scheme = "http://";
+        if secure == 1 { scheme = "https://"; }
+        String rest = url.slice(plen, url.len);
         int slash = rest.find("/");
         String hostport = rest;
         String path = "/";
@@ -394,7 +424,6 @@ struct Net {
             path = rest.slice(slash, rest.len);
         }
         String host = hostport;
-        int port = 80;
         int colon = hostport.find(":");
         if colon >= 0 {
             host = hostport.slice(0, colon);
@@ -406,27 +435,22 @@ struct Net {
             }
         }
         if host.len == 0 { return Result<String, Error>::Err(Error::make(ErrorKind::Invalid, "no host in " + url)); }
-        String ip = "";
-        switch Net::dns_try_lookup(host) {
-            Result::Ok(a): { ip = a; }
-            Result::Err(e): { return Result<String, Error>::Err(Error::make(e.kind, e.message)); }
-        }
-        int fd = 0;
-        switch Net::tcp_connect(ip, port) {
-            Result::Ok(c): { fd = c; }
+        int h = 0;
+        switch Net::http_open(host, port, secure) {
+            Result::Ok(x): { h = x; }
             Result::Err(e): { return Result<String, Error>::Err(Error::make(e.kind, e.message)); }
         }
         String req = "GET " + path + " HTTP/1.1\r\nHost: " + hostport + "\r\nUser-Agent: jget\r\nAccept: */*\r\nConnection: close\r\n\r\n";
-        switch Net::send(fd, req) {
+        switch Net::http_chan_send(secure, h, req) {
             Result::Ok(n): { }
-            Result::Err(e): { Net::close(fd); return Result<String, Error>::Err(Error::make(e.kind, e.message)); }
+            Result::Err(e): { Net::http_chan_close(secure, h); return Result<String, Error>::Err(Error::make(e.kind, e.message)); }
         }
         String all = "";
-        switch Net::http_read_all(fd) {
+        switch Net::http_read_all(secure, h) {
             Result::Ok(t): { all = t; }
-            Result::Err(e): { Net::close(fd); return Result<String, Error>::Err(Error::make(e.kind, e.message)); }
+            Result::Err(e): { Net::http_chan_close(secure, h); return Result<String, Error>::Err(Error::make(e.kind, e.message)); }
         }
-        Net::close(fd);
+        Net::http_chan_close(secure, h);
         int he = all.find("\r\n\r\n");
         if he < 0 { return Result<String, Error>::Err(Error::make(ErrorKind::Parse, "the answer of " + host + " has no header")); }
         String head = all.slice(0, he);
@@ -447,7 +471,7 @@ struct Net {
             int le = Net::http_find_from(head, "\r\n", ls);
             if le < 0 { le = head.len; }
             String loc = head.slice(ls, le).trim();
-            if loc.starts_with("/") { loc = "http://" + hostport + loc; }
+            if loc.starts_with("/") { loc = scheme + hostport + loc; }
             return Net::http_fetch(loc, depth + 1);
         }
         if code >= 400 {
@@ -464,9 +488,12 @@ struct Net {
     // the parts of an http:// address: [host, host:port, path, port]; one text (the reason) when it cannot be used
     static String[] http_split(String url) {
         String[] r = arr(0);
-        if url.starts_with("https://") { r.push("https needs TLS, which is not written yet: " + url); return r; }
-        if !url.starts_with("http://") { r.push("not an http address: " + url); return r; }
-        String rest = url.slice(7, url.len);
+        int secure = 0;
+        int plen = 7;
+        int port = 80;
+        if url.starts_with("https://") { secure = 1; plen = 8; port = 443; }
+        else if !url.starts_with("http://") { r.push("not an http or https address: " + url); return r; }
+        String rest = url.slice(plen, url.len);
         int slash = rest.find("/");
         String hostport = rest;
         String path = "/";
@@ -475,7 +502,6 @@ struct Net {
             path = rest.slice(slash, rest.len);
         }
         String host = hostport;
-        int port = 80;
         int colon = hostport.find(":");
         if colon >= 0 {
             host = hostport.slice(0, colon);
@@ -491,6 +517,7 @@ struct Net {
         r.push(hostport);
         r.push(path);
         r.push(str(port));
+        r.push(str(secure));
         return r;
     }
     // 1.2 MB, 340.5 KB, 17 B
@@ -543,55 +570,53 @@ struct Net {
         String hostport = u[1];
         String rpath = u[2];
         int port = u[3].to_int();
-        String ip = "";
-        switch Net::dns_try_lookup(host) {
-            Result::Ok(a): { ip = a; }
-            Result::Err(e): { return Result<int, Error>::Err(Error::make(e.kind, e.message)); }
-        }
+        int secure = u[4].to_int();
+        String scheme = "http://";
+        if secure == 1 { scheme = "https://"; }
         int fd = 0;
-        switch Net::tcp_connect(ip, port) {
+        switch Net::http_open(host, port, secure) {
             Result::Ok(c): { fd = c; }
             Result::Err(e): { return Result<int, Error>::Err(Error::make(e.kind, e.message)); }
         }
         String req = "GET " + rpath + " HTTP/1.1\r\nHost: " + hostport + "\r\nUser-Agent: jget\r\nAccept: */*\r\nConnection: close\r\n\r\n";
-        switch Net::send(fd, req) {
+        switch Net::http_chan_send(secure, fd, req) {
             Result::Ok(n): { }
-            Result::Err(e): { Net::close(fd); return Result<int, Error>::Err(Error::make(e.kind, e.message)); }
+            Result::Err(e): { Net::http_chan_close(secure, fd); return Result<int, Error>::Err(Error::make(e.kind, e.message)); }
         }
         // the header
         String buf = "";
         int he = -1;
         while he < 0 {
-            switch Net::recv(fd, 65536) {
+            switch Net::http_chan_recv(secure, fd, 65536) {
                 Result::Ok(c): {
-                    if c.len == 0 { Net::close(fd); return Result<int, Error>::Err(Error::make(ErrorKind::Parse, "the answer of " + host + " has no header")); }
+                    if c.len == 0 { Net::http_chan_close(secure, fd); return Result<int, Error>::Err(Error::make(ErrorKind::Parse, "the answer of " + host + " has no header")); }
                     buf.append(c);
                     he = buf.find("\r\n\r\n");
                 }
-                Result::Err(e): { Net::close(fd); return Result<int, Error>::Err(Error::make(e.kind, e.message)); }
+                Result::Err(e): { Net::http_chan_close(secure, fd); return Result<int, Error>::Err(Error::make(e.kind, e.message)); }
             }
-            if he < 0 && buf.len > 65536 { Net::close(fd); return Result<int, Error>::Err(Error::make(ErrorKind::Parse, "the header of " + host + " is too long")); }
+            if he < 0 && buf.len > 65536 { Net::http_chan_close(secure, fd); return Result<int, Error>::Err(Error::make(ErrorKind::Parse, "the header of " + host + " is too long")); }
         }
         String head = buf.slice(0, he);
         String lh = Net::http_lower_ascii(head);
-        if head.len < 12 || !head.starts_with("HTTP/") { Net::close(fd); return Result<int, Error>::Err(Error::make(ErrorKind::Parse, "the answer of " + host + " is not HTTP")); }
+        if head.len < 12 || !head.starts_with("HTTP/") { Net::http_chan_close(secure, fd); return Result<int, Error>::Err(Error::make(ErrorKind::Parse, "the answer of " + host + " is not HTTP")); }
         int code = 0;
         for i in 9..12 {
-            if head[i] < '0' || head[i] > '9' { Net::close(fd); return Result<int, Error>::Err(Error::make(ErrorKind::Parse, "bad status line from " + host)); }
+            if head[i] < '0' || head[i] > '9' { Net::http_chan_close(secure, fd); return Result<int, Error>::Err(Error::make(ErrorKind::Parse, "bad status line from " + host)); }
             code = code * 10 + (head[i] - '0');
         }
         if code == 301 || code == 302 || code == 303 || code == 307 || code == 308 {
-            Net::close(fd);
+            Net::http_chan_close(secure, fd);
             int li = lh.find("\r\nlocation:");
             if li < 0 { return Result<int, Error>::Err(Error::make(ErrorKind::Parse, "a redirect without a place")); }
             int ls = li + 11;
             int le = Net::http_find_from(head, "\r\n", ls);
             if le < 0 { le = head.len; }
             String loc = head.slice(ls, le).trim();
-            if loc.starts_with("/") { loc = "http://" + hostport + loc; }
+            if loc.starts_with("/") { loc = scheme + hostport + loc; }
             return Net::http_download_to(loc, path, show, depth + 1);
         }
-        if code >= 400 { Net::close(fd); return Result<int, Error>::Err(Error::make(ErrorKind::NotFound, "HTTP " + str(code) + " from " + url)); }
+        if code >= 400 { Net::http_chan_close(secure, fd); return Result<int, Error>::Err(Error::make(ErrorKind::NotFound, "HTTP " + str(code) + " from " + url)); }
         int total = -1;
         int cl = lh.find("\r\ncontent-length:");
         if cl >= 0 {
@@ -607,7 +632,7 @@ struct Net {
         if chunked { total = -1; }
         String tmp = path + ".part";
         int wf = syscall(56, -100, tmp.c(), 577, 420);
-        if wf < 0 { Net::close(fd); return Result<int, Error>::Err(Net::fail("cannot write " + tmp, wf)); }
+        if wf < 0 { Net::http_chan_close(secure, fd); return Result<int, Error>::Err(Net::fail("cannot write " + tmp, wf)); }
         char termios[64];
         bool tty = show == 1 && syscall(29, 2, 21505, @termios) == 0;
         int t0 = Net::http_now_ms();
@@ -667,7 +692,7 @@ struct Net {
                 }
             }
             if !finished {
-                switch Net::recv(fd, 65536) {
+                switch Net::http_chan_recv(secure, fd, 65536) {
                     Result::Ok(c): {
                         if c.len == 0 { finished = true; if chunked || (total >= 0 && done < total) { failed = true; } }
                         data = c;
@@ -676,7 +701,7 @@ struct Net {
                 }
             }
         }
-        Net::close(fd);
+        Net::http_chan_close(secure, fd);
         syscall(57, wf);
         if tty {
             Net::http_show_progress(done, total, Net::http_now_ms() - t0);

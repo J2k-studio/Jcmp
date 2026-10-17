@@ -1,6 +1,8 @@
-# J2K / Jcmp 0.9.182
+# J2K / Jcmp 0.9.183
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
+
+**0.9.183:** https from the library: TLS 1.3 with the check of the certificate chain, written in J2K (X25519, ChaCha20-Poly1305, RSA, ECDSA, X.509, DNS); `Crypto`.
 
 **0.9.182:** `Net::http.download` (files to disk with a progress bar); `jget` moved to its own project, which downloads files, not only pages.
 

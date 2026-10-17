@@ -1142,7 +1142,7 @@ int std_category(char^ name) {
     if str_eq(name, "time") { return 33; }
     if str_eq(name, "data") { return 71; }
     if str_eq(name, "crypto") { return 141; }
-    if str_eq(name, "net") { return 261; }
+    if str_eq(name, "net") { return 397; }
     return 0;
 }
 
