@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.185
+* **The cache is easy to use:** `J2K_CACHE=dir` (in your shell profile) makes every build use the cache folder; `-nocache` turns it off for one build; `jcmp -clean dir` deletes the files of a cache. The compiler compiling itself: 5.0 s clean, 1.7 s with a full cache (the same program, byte for byte).
+* **The syntax tree makes pointer arithmetic** (`@array + n`, `p + n`, `n + p`, `p - n`, `p - q`; the number is in bytes): about a tenth of the functions of the compiler that were left on the text path now come from the tree (A6).
+* **A better progress line** (`Net::http.download`, `jget`): `[#########>         ]  50%  13.1 MB / 25.9 MB  844.9 KB/s  ETA 0:15`; the speed is that of the last second, not the average of everything; the bar fits the width of the terminal; when the size is not known a block goes to and fro with the size, the speed and the time; at the end `[##########] 100%  25.9 MB in 0:31  (840.1 KB/s)`.
+* Library index: [github.com/J2k-studio/Jcmp-libs](https://github.com/J2k-studio/Jcmp-libs) is organised (libs/, tools/add.sh, tools/check.sh with a check on GitHub, CONTRIBUTING) and has an example library; `jget -li install example` works end to end.
+
 ## 0.9.184
 * **TLS: AES-128-GCM added** (TLS_AES_128_GCM_SHA256 is offered after ChaCha20-Poly1305 and used when the server chooses it): servers that prefer or only have AES are reached. AES (FIPS 197) and GCM (SP 800-38D) are written in J2K and checked with the NIST test cases (`t463_aes_gcm`); `t462` runs against a server with only AES and one with only ChaCha20. Speed with a local server: 5 MB in 1.5 s with AES-GCM, 0.35 s with ChaCha20.
 

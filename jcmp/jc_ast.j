@@ -1427,6 +1427,10 @@ int ast_expr(int level) {
             ast_cur_ty = ast_mkty(0, 3);
         } else if code == AO_ADD && (ast_ty[lhs] / 65536 == 4 || ast_ty[rhs] / 65536 == 4) {
             ast_cur_ty = ast_mkty(4, 8);               // a String joined with something
+        } else if (code == AO_ADD || code == AO_SUB) && ast_ty[lhs] / 65536 == 1 && ast_ty[rhs] / 65536 == 0 && ast_ty[rhs] % 65536 != 6 && ast_ty[rhs] % 65536 != 7 {
+            ast_cur_ty = ast_ty[lhs];                  // a pointer moved by a number of bytes (the same type)
+        } else if code == AO_ADD && ast_ty[rhs] / 65536 == 1 && ast_ty[lhs] / 65536 == 0 && ast_ty[lhs] % 65536 != 6 && ast_ty[lhs] % 65536 != 7 {
+            ast_cur_ty = ast_ty[rhs];
         } else {
             ast_cur_ty = ast_arith_ty(ast_ty[lhs], ast_ty[rhs]);
         }

@@ -2,7 +2,7 @@
 // Build:  bin/jcmp jcmp/jcmp.jk -o jcmp1        (see bootstrap.sh)
 // Use:    jcmp1 input.jk -o program
 // the version of the compiler (also in the file VERSION; release.sh checks that they agree)
-#define JCMP_VERSION "0.9.184"
+#define JCMP_VERSION "0.9.185"
 
 #import "jc_base"
 #import "jc_asm"
@@ -89,6 +89,7 @@ void help() {
     write_out("  -st              strict: warnings are errors\n");
     write_out("  -I dir           also look for imported files in dir\n");
     write_out("  -emit-asm file   also write the assembler text\n");
+    write_out("  -cache dir       keep the code of the functions that did not change in dir (J2K_CACHE=dir for every build); -nocache: not; -clean dir: delete a cache\n");
     write_out("  -update [version] replace the compiler and its library (as a pair) by the latest release, or by the given version\n");
     write_out("  -showlib name    write the source of a library that is inside the compiler (net, text, math ...) and stop\n");
     write_out("  -nofma           do not fuse a * b + c into one instruction (the last bit of the result may differ with it)\n");
@@ -117,6 +118,7 @@ char^ x_pre;
 char^ x_map;
 char^ x_cachestat;
 char^ x_cachedir;
+int x_nocache;
 
 // "address name" for every label of the program that was just assembled (the code starts at 0x4000B0)
 char map_buf[4000000];
@@ -306,6 +308,13 @@ void main() {
         } else if str_eq(a, "-xastdump") {
             ast_report = 1;
             ast_dump = 1;                // hidden: print the tree of every body that is in the subset
+        } else if str_eq(a, "-clean") {
+            ai += 1;
+            if ai >= argc() { write_err("jcmp: -clean needs the folder of the cache\n"); syscall(93, 1); }
+            cc_clean(arg(ai));
+            syscall(93, 0);
+        } else if str_eq(a, "-nocache") {
+            x_nocache = 1;                   // do not use the cache even when J2K_CACHE is set
         } else if str_eq(a, "-cache") {
             ai += 1;
             if ai >= argc() { usage(); }
@@ -379,6 +388,11 @@ void main() {
     }
     if in_path == null { usage(); }
     lib_init(JCMP_VERSION);
+    if x_cachedir == null && x_nocache == 0 {
+        // the environment variable J2K_CACHE names a cache folder for every build
+        char^ ce = env_get("J2K_CACHE");
+        if ce != null && ce[0] != 0 { x_cachedir = ce; }
+    }
     char derived[512];
     char base[256];
     // the name of the program from the source: x.jk / x.j -> x

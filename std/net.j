@@ -1,6 +1,11 @@
 // Net: TCP sockets (IPv4, addresses written as numbers: "127.0.0.1"; there is no name lookup).
 //   server:  int l = Net::tcp_listen(8080)?;   int c = Net::accept(l)?;   String req = Net::recv(c, 4096)?;   Net::send(c, "hi")?;
 //   client:  int s = Net::tcp_connect("127.0.0.1", 8080)?;   Net::send(s, "hello")?;   Net::close(s);
+// the state of the progress line (the speed of the last moments)
+int net_pg_t;
+int net_pg_b;
+int net_pg_sp;
+
 struct Net {
     static Error fail(String what, int e) {
         return Error::from_errno(e, what);
@@ -526,24 +531,83 @@ struct Net {
         if n < 1048576 { return str(n / 1024) + "." + str((n % 1024) * 10 / 1024) + " KB"; }
         return str(n / 1048576) + "." + str((n % 1048576) * 10 / 1048576) + " MB";
     }
-    // the line of the progress bar on the error output:   45%  [=========>               ]  1.2 MB / 2.7 MB  340.5 KB/s
-    static void http_show_progress(int done, int total, int ms) {
+    // 3:07 or 1:02:03
+    static String http_time_text(int sec) {
+        if sec < 0 { sec = 0; }
+        int h = sec / 3600;
+        int m = (sec % 3600) / 60;
+        int s2 = sec % 60;
+        String ms = str(m);
+        String ss = str(s2);
+        if ss.len < 2 { ss = "0" + ss; }
+        if h > 0 {
+            if ms.len < 2 { ms = "0" + ms; }
+            return str(h) + ":" + ms + ":" + ss;
+        }
+        return ms + ":" + ss;
+    }
+    // the progress line on the error output (replaces the line before it):
+    //   [#########>               ]  45%  1.2 MB / 2.7 MB  340.5 KB/s  ETA 0:04
+    //   [###########]  100%  2.7 MB in 0:03  (840.1 KB/s)                       (last = 1)
+    //   [      <###>      ]  257.2 KB  666.4 KB/s  0:01                          (the size is not known)
+    // The speed is the speed of the last second or so (not the average of everything), the bar fits the width of the terminal.
+    static void http_show_progress(int done, int total, int ms, int last) {
+        // the width of the bar from the width of the terminal
+        char ws[8];
+        int width = 20;
+        if syscall(29, 2, 0x5413, @ws) == 0 {
+            int cols = (ws[2] & 255) | ((ws[3] & 255) << 8);
+            if cols > 0 { width = cols - 56; }
+            if width < 8 { width = 8; }
+            if width > 30 { width = 30; }
+        }
+        // the speed of the last moments
+        if ms < 300 { net_pg_t = 0; net_pg_b = 0; net_pg_sp = 0; }
+        if ms - net_pg_t >= 500 {
+            int now_sp = (done - net_pg_b) * 1000 / (ms - net_pg_t);
+            if net_pg_sp == 0 { net_pg_sp = now_sp; } else { net_pg_sp = (net_pg_sp * 2 + now_sp) / 3; }
+            net_pg_t = ms;
+            net_pg_b = done;
+        }
+        int speed = net_pg_sp;
+        int avg = 0;
+        if ms > 0 { avg = done * 1000 / ms; }
+        if speed == 0 { speed = avg; }
         String line = "\r";
-        int speed = 0;
-        if ms > 0 { speed = done * 1000 / ms; }
+        String bar = "";
         if total > 0 {
             int pct = done * 100 / total;
+            int filled = pct * width / 100;
+            for i in 0..width {
+                if i < filled { bar.push('#'); } else if i == filled && last == 0 { bar.push('>'); } else { bar.push(' '); }
+            }
             String ps = str(pct);
             while ps.len < 3 { ps = " " + ps; }
-            int filled = pct * 24 / 100;
-            String bar = "";
-            for i in 0..24 {
-                if i < filled { bar.push('='); } else if i == filled && pct < 100 { bar.push('>'); } else { bar.push(' '); }
+            if last == 1 {
+                line = line + "[" + bar + "] " + ps + "%  " + Net::http_size_text(done) + " in " + Net::http_time_text(ms / 1000) + "  (" + Net::http_size_text(avg) + "/s)";
+            } else {
+                String eta = "--:--";
+                if speed > 0 { eta = Net::http_time_text((total - done) / speed); }
+                line = line + "[" + bar + "] " + ps + "%  " + Net::http_size_text(done) + " / " + Net::http_size_text(total) + "  " + Net::http_size_text(speed) + "/s  ETA " + eta;
             }
-            line = line + ps + "%  [" + bar + "]  " + Net::http_size_text(done) + " / " + Net::http_size_text(total) + "  " + Net::http_size_text(speed) + "/s   ";
         } else {
-            line = line + Net::http_size_text(done) + "  " + Net::http_size_text(speed) + "/s   ";
+            // the size is not known: a block goes to and fro
+            int span = width - 5;
+            if span < 1 { span = 1; }
+            int pos = (ms / 120) % (2 * span);
+            if pos > span { pos = 2 * span - pos; }
+            for i in 0..width {
+                if i >= pos && i < pos + 5 { bar.push('#'); } else { bar.push(' '); }
+            }
+            if last == 1 {
+                line = line + "[" + bar + "] " + Net::http_size_text(done) + " in " + Net::http_time_text(ms / 1000) + "  (" + Net::http_size_text(avg) + "/s)";
+            } else {
+                line = line + "[" + bar + "] " + Net::http_size_text(done) + "  " + Net::http_size_text(speed) + "/s  " + Net::http_time_text(ms / 1000);
+            }
         }
+        line.push((char)27);                     // ESC [ K : erase the rest of the line
+        line.push('[');
+        line.push('K');
         syscall(64, 2, line.c(), line.len);
     }
     static int http_now_ms() {
@@ -688,7 +752,7 @@ struct Net {
                 }
                 if tty {
                     int now = Net::http_now_ms();
-                    if now - last >= 100 { Net::http_show_progress(done, total, now - t0); last = now; }
+                    if now - last >= 100 { Net::http_show_progress(done, total, now - t0, 0); last = now; }
                 }
             }
             if !finished {
@@ -704,7 +768,7 @@ struct Net {
         Net::http_chan_close(secure, fd);
         syscall(57, wf);
         if tty {
-            Net::http_show_progress(done, total, Net::http_now_ms() - t0);
+            Net::http_show_progress(done, total, Net::http_now_ms() - t0, 1);
             syscall(64, 2, "\n", 1);
         }
         if failed {

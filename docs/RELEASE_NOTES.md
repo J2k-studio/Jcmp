@@ -1,6 +1,8 @@
-# J2K / Jcmp 0.9.184
+# J2K / Jcmp 0.9.185
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
+
+**0.9.185:** the cache is easy (`J2K_CACHE`, `-nocache`, `-clean`); pointer arithmetic from the syntax tree.
 
 **0.9.184:** TLS also speaks AES-128-GCM (more servers are reached).
 

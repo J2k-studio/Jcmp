@@ -782,7 +782,16 @@ bool as1_expr(int n) {
         int ao = ast_val[n];
         bool any_p = as1_pt(ast_ty[a]) || as1_pt(ast_ty[b]);
         if any_p {
-            // pointers are only compared for equality (with a pointer or a whole number)
+            if ao == AO_ADD || ao == AO_SUB {
+                // a pointer moved by a number of bytes (p + n, n + p, p - n), or two pointers subtracted
+                bool pa = as1_pt(ast_ty[a]);
+                bool pb = as1_pt(ast_ty[b]);
+                bool na = !pa && as1_scalar(ast_ty[a]) && !as1_dbl(ast_ty[a]);
+                bool nb = !pb && as1_scalar(ast_ty[b]) && !as1_dbl(ast_ty[b]);
+                if ao == AO_ADD { return (pa && nb) || (na && pb); }
+                return (pa && nb) || (pa && pb);
+            }
+            // otherwise pointers are only compared for equality (with a pointer or a whole number)
             return (ao == AO_EQ || ao == AO_NE) && !as1_dbl(ast_ty[a]) && !as1_dbl(ast_ty[b]);
         }
         bool any_d = as1_dbl(ast_ty[a]) || as1_dbl(ast_ty[b]);

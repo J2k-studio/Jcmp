@@ -521,3 +521,46 @@ void cc_stat(char^ dir) {
     write_err_int(hits);
     write_err(" already in the cache\n");
 }
+
+// jcmp -clean DIR: delete the files of the cache in DIR (*.fn, *.tmp, keys.txt); says how many
+void cc_clean(char^ dir) {
+    int fd = syscall(56, -100, dir, 0x10000, 0);
+    if fd < 0 {
+        write_err("jcmp: -clean: there is no cache folder ");
+        write_err(dir);
+        write_err("\n");
+        syscall(93, 1);
+    }
+    char buf[4096];
+    int files = 0;
+    int bytes = 0;
+    while true {
+        int n = syscall(61, fd, @buf, 4096);
+        if n <= 0 { break; }
+        int pos = 0;
+        while pos < n {
+            int reclen = (buf[pos + 16] & 255) | ((buf[pos + 17] & 255) << 8);
+            char^ name = @buf + pos + 19;
+            int len = str_len(name);
+            bool mine = (len > 3 && name[len - 3] == '.' && name[len - 2] == 'f' && name[len - 1] == 'n') || (len > 4 && name[len - 4] == '.' && name[len - 3] == 't' && name[len - 2] == 'm' && name[len - 1] == 'p') || str_eq(name, "keys.txt");
+            if mine {
+                char path[300];
+                str_copy(@path, dir, 250);
+                append_text(@path, "/");
+                append_text(@path, name);
+                int st[18];
+                if syscall(79, -100, @path, @st, 0) == 0 { bytes += st[6]; }
+                if syscall(35, -100, @path, 0) == 0 { files += 1; }
+            }
+            pos += reclen;
+        }
+    }
+    syscall(57, fd);
+    write_err("jcmp: cache ");
+    write_err(dir);
+    write_err(": ");
+    write_err_int(files);
+    write_err(" files deleted, ");
+    write_err_int(bytes / 1024);
+    write_err(" KB\n");
+}
