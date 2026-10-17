@@ -2,7 +2,7 @@
 // Build:  bin/jcmp jcmp/jcmp.jk -o jcmp1        (see bootstrap.sh)
 // Use:    jcmp1 input.jk -o program
 // the version of the compiler (also in the file VERSION; release.sh checks that they agree)
-#define JCMP_VERSION "0.9.176"
+#define JCMP_VERSION "0.9.177"
 
 #import "jc_base"
 #import "jc_asm"
@@ -20,6 +20,7 @@
 #import "jc_astlow"
 #import "jc_vec"
 #import "jc_peep"
+#import "jc_cache"
 #import "jc_logo"
 
 // ------------------------------------------------ the program (main lives here, not in a .j part)
@@ -109,6 +110,10 @@ bool is_opt(char^ a, char^ name) {
     }
     return a[k + i] == 0;
 }
+
+char^ x_pre;
+char^ x_cachestat;
+char^ x_cachedir;
 
 void main() {
     char^ in_path = null;
@@ -263,6 +268,36 @@ void main() {
         } else if str_eq(a, "-xastdump") {
             ast_report = 1;
             ast_dump = 1;                // hidden: print the tree of every body that is in the subset
+        } else if str_eq(a, "-cache") {
+            ai += 1;
+            if ai >= argc() { usage(); }
+            x_cachedir = arg(ai);            // the folder of the cache of the back end (docs/design/16-separate-compilation.md)
+        } else if str_eq(a, "-xrepeat") {
+            x_repeat = 1;                    // hidden: run the passes twice on each function and say when the result differs
+        } else if str_eq(a, "-xcachecut") {
+            ai += 1;
+            x_cutmax = 0;
+            char^ cv2 = arg(ai);
+            int cp2 = 0;
+            while cv2[cp2] >= '0' && cv2[cp2] <= '9' { x_cutmax = x_cutmax * 10 + (cv2[cp2] - '0'); cp2 += 1; }
+            char^ nx2 = arg(ai + 1);
+            if ai + 1 < argc() && nx2[0] >= '0' && nx2[0] <= '9' {
+                // two numbers: MIN MAX
+                x_cutmin = x_cutmax;
+                x_cutmax = 0;
+                ai += 1;
+                cv2 = arg(ai);
+                cp2 = 0;
+                while cv2[cp2] >= '0' && cv2[cp2] <= '9' { x_cutmax = x_cutmax * 10 + (cv2[cp2] - '0'); cp2 += 1; }
+            }
+        } else if str_eq(a, "-xcachelist") {
+            x_cachelist = 1;                 // hidden: with -cache and -xtime, list the functions that are in the cache
+        } else if str_eq(a, "-xcachestat") {
+            ai += 1;
+            x_cachestat = arg(ai);           // hidden: count the functions already known in this folder (docs/design/16)
+        } else if str_eq(a, "-xpre") {
+            ai += 1;
+            x_pre = arg(ai);                 // hidden: write the assembler text as it is after the code pass (before the back end)
         } else if str_eq(a, "-xtime") {
             x_time = 1;                  // hidden: the time of each stage
         } else if str_eq(a, "-xbadasm") {
@@ -393,6 +428,9 @@ void main() {
         emit_start_stub();
     }
     tm_stage("parse pass 3 (the code)");
+    if x_pre != null { write_file(x_pre, @out_buf, out_len); }
+    if x_cachestat != null { cc_stat(x_cachestat); }
+    if x_cachedir != null { cc_dir = x_cachedir; cc_prepare(); }
     nr_run();
     if ir_mode > 0 && opt_peep == 1 && ir_pre == 1 { peep_run(); }
     tm_stage("nr + first peephole");
@@ -406,6 +444,7 @@ void main() {
     if opt_peep == 1 && opt_regs != 0 { peep_run(); }
     if fr_on == 1 { fr_run(); }
     al_run();
+    if cc_dir != null { cc_finish(); }
     tm_stage("peephole + alignment");
     if out_asm != null {
         if write_file(out_asm, @out_buf, out_len) != 0 {

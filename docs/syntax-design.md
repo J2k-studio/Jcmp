@@ -2084,3 +2084,7 @@ Open (needs the owner): which command asks for the closing. Ways, side by side, 
 
 ### 79.2 The owner's answer on closing (2026-10-17): "just `int c = l.close();` or `free(...)`, that is all"
 No automatic closing, no `defer` needed: the owner closes by hand, as memory is freed by hand. `Listener::close()` and `Connection::close()` give 0, or the number of the system error. Implemented in 0.9.175 (`std/net.j`, test `t453_net_objects`): `Listener::on(port)`, `l.port()`, `l.accept()`, `Connection::to(ip, port)`, `c.receive()`, `c.receive_max(n)`, `c.send(text)`, `c.close()`. The two creating names (`on`, `to`) are the assistant's, adjustable; the owner's direction `Net::open.port(8080)` stays open for a later renaming.
+
+## 80. The interface file of a module has the extension `.jh` (owner, 2026-10-17)
+The file that separate compilation writes for a module (names, types, sizes of structs, signatures with ownership, small functions for inlining, a hash) is named `name.jh`
+(see `docs/design/16-separate-compilation.md`). It is written by the compiler, never by hand; the name of the extension is the owner's decision. The format is not locked yet.

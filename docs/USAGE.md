@@ -78,6 +78,12 @@ version of the compiler, or the compiler stops and tells you to install them aga
 `jcmp -update` replaces the compiler and its library together with the latest release (`jcmp -update 0.9.176` for a given one);
 `install.sh --with-lib` installs the library files next to the compiler.
 
+### `-cache DIR` (experimental)
+`jcmp prog.jk -cache build/cache` keeps the final code of every function in the folder `build/cache` and uses it the next time for the functions that did not change
+(and for everything that they call); only the changed functions go through the optimiser and the register pass again. The program is the same, byte for byte, as without
+`-cache`. The key of a function includes the version of the compiler and the options, so an old cache is never used by another compiler or other options. The folder can
+be deleted at any time. This saves about a third of the time for big programs (the compiler itself: 11.7 s to 7.9 s); small programs do not need it.
+
 ## Should the documentation be a website?
 
 Markdown files are shown nicely by GitHub, and `README.md` is the front page. A website

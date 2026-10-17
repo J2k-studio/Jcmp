@@ -3424,6 +3424,15 @@ void op_licm_exprs() {
 
 void op_licm_run() {
     op_graph();
+    int zc = 0;
+    while zc < 16384 {              // nothing may be left from the function before (docs/design/16-separate-compilation.md, -xrepeat)
+        lc_nst[zc] = 0;
+        lc_ldo[zc] = 0;
+        lc_tot[zc] = 0;
+        lc_tmark[zc] = 0;
+        zc += 1;
+    }
+    lc_ntl = 0;
     int hs[64];
     int hd[64];
     int nh = 0;

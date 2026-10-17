@@ -1636,6 +1636,7 @@ void lw_hint() {
 }
 
 bool lw_function() {
+    lw_tmp_i = 0;                // the choice of x15 / x16 must not depend on the functions lowered before (the cache of the back end)
     // the deepest stack cell
     lw_maxq = 0;
     int i = 0;
@@ -1879,12 +1880,97 @@ void ir_collect() {
     }
 }
 
+// the passes on the IR of one function (the lifted code is in the ir_ arrays); op_changed says whether the text has to be made again
+int rp_h[16];
+int rp_a[16];
+int rp_pass;
+
+void rp_stage(int k) {
+    if x_repeat != 1 { return; }
+    rp_h[k] = ir_text_hash();
+}
+
+void ir_pipeline(char^ name_) {
+            int h0 = op_hoisted;
+            int c0 = op_ra_changes;
+            int vh0 = vn_cellhits;
+            int cnt0 = 0;
+            if (ir_opt & 64) == 0 { cnt0 = op_count(); }
+            int bt0 = bt_changes;
+            int ci0 = ci_changes;
+            if (ir_opt & 8192) != 0 && is_count > 0 && opt_debug == 0 { op_inline(name_); }
+            rp_stage(1);
+            ir_passes_basic();
+            rp_stage(2);
+            int lc0 = lc_moved;
+            if (ir_opt & 1) != 0 { op_run(); }
+            rp_stage(3);
+            int vz0 = vz_count;
+            int ss0 = ss_total;
+            if (ir_opt & 268435456) != 0 {
+                op_vectorize();
+                rp_stage(4);
+                if (ir_opt & 1073741824) != 0 { op_ssr(); }
+                rp_stage(5);
+                if vz_count != vz0 || ss_total != ss0 {
+                    // the addresses of the vector body were computed once for each access: value numbering and cleaning again
+                    if (ir_opt & 8) != 0 { op_cse_run(); }
+                    if (ir_opt & 8) != 0 { op_cell_fwd(); }
+                    if (ir_opt & 8) != 0 { op_vfwd(); }
+                    if (ir_opt & 8) != 0 { op_dead_cells(); }
+                    if (ir_opt & 4) != 0 { op_clean_run(); }
+                    if (ir_opt & 8) != 0 { op_cse_run(); }
+                    if (ir_opt & 4) != 0 { op_clean_run(); }
+                }
+            }
+            if (ir_opt & 8388608) == 0 { op_licm_exprs(); }
+            rp_stage(6);
+            if (ir_opt & 2) != 0 { op_ra_run(); }
+            rp_stage(7);
+            if op_hoisted == h0 && op_ra_changes == c0 && (vn_cellhits == vh0 || (ir_opt & 64) != 0 || op_count() >= cnt0) && bt_changes == bt0 && ci_changes == ci0 && lc_moved == lc0 && vz_count == vz0 && ss_total == ss0 && (ir_opt & 64) == 0 { op_changed = 0; }
+}
+
+// -xrepeat: the passes are run a second time on the same function; if the result is not the same, a pass remembers something from the
+// functions it saw before (this is what makes the result of a function depend on the others; docs/design/16-separate-compilation.md)
+int ir_text_hash() {
+    ir_print();
+    int h = 1469598103934665603;
+    int k = 0;
+    while k < ir_plen {
+        h = (h xor ir_pbuf[k]) * 1099511628211;
+        k += 1;
+    }
+    return h;
+}
+
+void ir_repeat_check(int i, int p) {
+    int h1 = ir_text_hash();
+    int sk = 0;
+    while sk < 16 { rp_a[sk] = rp_h[sk]; sk += 1; }
+    if lf_load(i, p) {
+        if lf_function(@ir_stat_fn) == 1 {
+            ir_pipeline(@ir_stat_fn);
+            int h2 = ir_text_hash();
+            if h1 != h2 {
+                write_err("repeat: the passes give another result the second time: ");
+                write_err(@ir_stat_fn);
+                write_err("  first different stage: ");
+                int st = 1;
+                while st < 8 && rp_a[st] == rp_h[st] { st += 1; }
+                write_err_int(st);
+                write_err("\n");
+            }
+        }
+    }
+}
+
 // every function that can be lifted is lifted (and lowered again in mode 2)
 void ir_run() {
     regs_len = 0;
     lf_lifted = 0;
     lf_failed = 0;
     if (ir_opt & 8192) != 0 && opt_debug == 0 && ir_mode == 2 && inl_off == 0 { ir_collect(); }
+    if cc_dir != null { cc_cut(); }
     int i = 0;
     while i < out_len {
         int en = rg_end(i);
@@ -1932,36 +2018,8 @@ void ir_run() {
                 op_changed = 1;
                 if ir_mode == 1 { op_webs(); }
                 if ir_opt > 0 {
-                    int h0 = op_hoisted;
-                    int c0 = op_ra_changes;
-                    int vh0 = vn_cellhits;
-                    int cnt0 = 0;
-                    if (ir_opt & 64) == 0 { cnt0 = op_count(); }
-                    int bt0 = bt_changes;
-                    int ci0 = ci_changes;
-                    if (ir_opt & 8192) != 0 && is_count > 0 && opt_debug == 0 { op_inline(@ir_stat_fn); }
-                    ir_passes_basic();
-                    int lc0 = lc_moved;
-                    if (ir_opt & 1) != 0 { op_run(); }
-                    int vz0 = vz_count;
-                    int ss0 = ss_total;
-                    if (ir_opt & 268435456) != 0 {
-                        op_vectorize();
-                        if (ir_opt & 1073741824) != 0 { op_ssr(); }
-                        if vz_count != vz0 || ss_total != ss0 {
-                            // the addresses of the vector body were computed once for each access: value numbering and cleaning again
-                            if (ir_opt & 8) != 0 { op_cse_run(); }
-                            if (ir_opt & 8) != 0 { op_cell_fwd(); }
-                            if (ir_opt & 8) != 0 { op_vfwd(); }
-                            if (ir_opt & 8) != 0 { op_dead_cells(); }
-                            if (ir_opt & 4) != 0 { op_clean_run(); }
-                            if (ir_opt & 8) != 0 { op_cse_run(); }
-                            if (ir_opt & 4) != 0 { op_clean_run(); }
-                        }
-                    }
-                    if (ir_opt & 8388608) == 0 { op_licm_exprs(); }
-                    if (ir_opt & 2) != 0 { op_ra_run(); }
-                    if op_hoisted == h0 && op_ra_changes == c0 && (vn_cellhits == vh0 || (ir_opt & 64) != 0 || op_count() >= cnt0) && bt_changes == bt0 && ci_changes == ci0 && lc_moved == lc0 && vz_count == vz0 && ss_total == ss0 && (ir_opt & 64) == 0 { op_changed = 0; }
+                    ir_pipeline(@ir_stat_fn);
+                    if x_repeat == 1 { ir_repeat_check(i, p); }
                 }
                 if ir_mode == 3 || (ir_opt & 2097152) != 0 {
                     ir_print();
