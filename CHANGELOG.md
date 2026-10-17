@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.178
+* **`jget` version 0** (`examples/jget.jk`, built into the release as `jget`): `jget list | install NAME | remove NAME | installed`. A library is one source file; the index is a text file `NAME VERSION URL SHA256`; the download uses `curl`, the SHA-256 is checked before anything is installed (a wrong checksum installs nothing); names with `/` or `..` are refused. The library goes to `~/.j2k/Library` (`JGET_LIB`), where `#import <NAME>` looks. `install.sh` installs `jget` next to `jcmp`. The public index repository does not exist yet (open question): use `JGET_INDEX`.
+* The message "library not found" says that `jget install NAME` fetches a library.
+* Hidden: `-xtime` shows pass 1 and pass 2 separately.
+* Test: `jget` (install, wrong checksum, bad name, remove, import) with a local index.
+
 ## 0.9.177
 * **Cache of the back end (experimental, `-cache DIR`).** The functions that did not change are not compiled again by the back end (IR passes, registers, peephole): their final code is read from the folder DIR. The key of a function is a hash of its code (the numbers of the local labels renumbered), of everything it can call, of the options and of the version of the compiler. The program is **byte for byte the same** as a clean build (checked on 726 builds of all tests and examples, with an empty cache, a full cache and a cache made by other programs). The compiler compiling itself: 11.7 s clean, 7.9 s with a full cache (the front end, 70% of the rest, is the next step: interface files `.jh`). Off by default; the folder can be deleted at any time.
 * **Two bugs fixed that the cache check found** (a function got another code depending on the functions compiled before it): the loop-invariant pass (`op_licm_run`) kept data of the earlier function, and the choice of the scratch registers x15 / x16 (`lw_tmp_i`) was never reset. Programs that were correct stay correct; some now use another scratch register. New check `-xrepeat` (hidden): the passes run twice on every function and must give the same IR.

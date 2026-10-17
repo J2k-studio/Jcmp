@@ -2,7 +2,7 @@
 // Build:  bin/jcmp jcmp/jcmp.jk -o jcmp1        (see bootstrap.sh)
 // Use:    jcmp1 input.jk -o program
 // the version of the compiler (also in the file VERSION; release.sh checks that they agree)
-#define JCMP_VERSION "0.9.177"
+#define JCMP_VERSION "0.9.178"
 
 #import "jc_base"
 #import "jc_asm"
@@ -399,6 +399,7 @@ void main() {
     reset_state(in_path);
     parse_program();
     if err_count > 0 { err_summary(); syscall(93, 1); }      // errors the parser survived (a missing ';')
+    tm_stage("parse pass 1 (names)");
     pass_no = 2;
     reset_state(in_path);
     parse_program();

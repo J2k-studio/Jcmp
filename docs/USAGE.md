@@ -78,6 +78,11 @@ version of the compiler, or the compiler stops and tells you to install them aga
 `jcmp -update` replaces the compiler and its library together with the latest release (`jcmp -update 0.9.176` for a given one);
 `install.sh --with-lib` installs the library files next to the compiler.
 
+### `jget`: libraries from an index (version 0)
+`jget list` shows the libraries of the index, `jget install NAME` downloads one (with `curl`), checks its SHA-256 against the index and puts it in `~/.j2k/Library/NAME.j`, where
+`#import <NAME>` finds it; `jget remove NAME` deletes it, `jget installed` lists the folder. `JGET_INDEX` names another index (an address or a `file://` path), `JGET_LIB` another folder.
+The index is a text file with a line `NAME VERSION URL SHA256` for each library. The source of `jget` is `examples/jget.jk`. The project index is not published yet, so set `JGET_INDEX` to an index of your own for now.
+
 ### `-cache DIR` (experimental)
 `jcmp prog.jk -cache build/cache` keeps the final code of every function in the folder `build/cache` and uses it the next time for the functions that did not change
 (and for everything that they call); only the changed functions go through the optimiser and the register pass again. The program is the same, byte for byte, as without

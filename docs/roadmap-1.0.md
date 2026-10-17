@@ -16,7 +16,7 @@
 | 2 | **ARM32** backend: the same language, the same tests | not started (section 4) |
 | 3 | The compiler builds itself on both targets, reproducibly | ARM64 yes |
 | 4 | Every test passes in every mode, **3 runs in a row**, many fuzz seeds, a fresh install of the public release works | running (section 5) |
-| 5 | `jget`: a library can be fetched and installed (section 3) | not started |
+| 5 | `jget`: a library can be fetched and installed (section 3) | v0 done in 0.9.178 (index repository not created yet) |
 | 6 | Documents: every example compiles; the specification matches the compiler; known limits are listed | in work |
 | 7 | The syntax tree makes all the code (the text parser only reads, checks, warns) | 92.5% (internal; not needed by users) |
 | 8 | Errors: every message says what is wrong, where, and why | good; a list is kept in `docs/error-messages-plan.md` |

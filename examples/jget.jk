@@ -1,0 +1,213 @@
+// jget -- fetch a library for J2K (version 0)
+//   jget list                  the libraries in the index (a * marks the ones that are installed)
+//   jget install NAME          download NAME, check its SHA-256 against the index, put it in the library folder
+//   jget remove NAME           delete an installed library
+//   jget installed             the libraries in the library folder
+// The index is a text file; each line is:  NAME VERSION URL SHA256   (lines that start with # are comments).
+// Where: JGET_INDEX (an address or a file path; curl reads it) - default: the public index of the project.
+//        JGET_LIB   (the library folder) - default: ~/.j2k/Library, where `#import <name>` looks for libraries.
+// A library is one J2K source file NAME.j. Nothing from the library is run when it is installed.
+// This program calls curl (and nothing else) to download.
+#import <stdlib>
+using stdlib;
+
+// the error output (the language has no cerr yet: docs/open-questions.md)
+void err(String m) {
+    syscall(64, 2, m.c(), m.len);
+}
+
+String lib_dir() {
+    switch Env::get("JGET_LIB") {
+        Option::Some(d): return d;
+        Option::None: { }
+    }
+    switch Env::get("HOME") {
+        Option::Some(h): return h + "/.j2k/Library";
+        Option::None: return "./Library";
+    }
+    return "./Library";
+}
+
+String index_address() {
+    switch Env::get("JGET_INDEX") {
+        Option::Some(u): return u;
+        Option::None: return "https://raw.githubusercontent.com/J2k-studio/Jcmp-libs/main/index.txt";
+    }
+    return "";
+}
+
+// a name is letters, digits and _ only: it becomes a file name, so no / and no ..
+bool name_ok(String n) {
+    if n.len == 0 || n.len > 60 { return false; }
+    for i in 0..n.len {
+        int c = n[i];
+        bool good = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_';
+        if !good { return false; }
+    }
+    return true;
+}
+
+// download `address` to the file `to`; false (with a message) when curl cannot
+bool download(String address, String to) {
+    String[] a = arr(0);
+    a.push("-fsSL");
+    a.push("-o");
+    a.push(to);
+    a.push(address);
+    switch Proc::run("curl", a) {
+        Result::Ok(code): {
+            if code != 0 {
+                err("jget: cannot download " + address + " (curl exit code " + str(code) + ")\n");
+                return false;
+            }
+            return true;
+        }
+        Result::Err(e): {
+            err("jget: cannot run curl: " + e.message + "\n");
+            return false;
+        }
+    }
+    return false;
+}
+
+// the index text, fetched into a temporary file in the library folder
+String fetch_index(String dir) {
+    String tmp = dir + "/.index.tmp";
+    if !download(index_address(), tmp) { return ""; }
+    switch Fs::read_text(tmp) {
+        Result::Ok(t): { Fs::remove(tmp); return t; }
+        Result::Err(e): { err("jget: cannot read the index: " + e.message + "\n"); return ""; }
+    }
+    return "";
+}
+
+bool make_dir(String dir) {
+    switch Dir::make_all(dir) {
+        Result::Ok(x): return true;
+        Result::Err(e): { err("jget: cannot make the folder " + dir + ": " + e.message + "\n"); return false; }
+    }
+    return false;
+}
+
+// the line of the index for `name`, split in four; an empty list when there is none
+String[] find_entry(String index, String name) {
+    String[] lines = index.split("\n");
+    for i in 0..lines.len {
+        String line = lines[i].trim();
+        if line.len == 0 || line.starts_with("#") { continue; }
+        String[] w = line.split(" ");
+        if w.len >= 4 && w[0] == name { return w; }
+    }
+    String[] none = arr(0);
+    return none;
+}
+
+int cmd_install(String name) {
+    if !name_ok(name) {
+        err("jget: '" + name + "' is not a library name (letters, digits and _ only)\n");
+        return 1;
+    }
+    String dir = lib_dir();
+    if !make_dir(dir) { return 1; }
+    String index = fetch_index(dir);
+    if index.len == 0 { return 1; }
+    String[] e = find_entry(index, name);
+    if e.len < 4 {
+        err("jget: the index has no library named '" + name + "' (try: jget list)\n");
+        return 1;
+    }
+    String tmp = dir + "/." + name + ".tmp";
+    if !download(e[2], tmp) { return 1; }
+    switch Sha256::file(tmp) {
+        Result::Ok(h): {
+            if h != e[3] {
+                Fs::remove(tmp);
+                err("jget: the checksum of " + name + " does not match the index, nothing was installed\n");
+                err("  index: " + e[3] + "\n");
+                err("  file : " + h + "\n");
+                return 1;
+            }
+        }
+        Result::Err(er): {
+            err("jget: cannot check the file: " + er.message + "\n");
+            return 1;
+        }
+    }
+    String target = dir + "/" + name + ".j";
+    switch Fs::rename(tmp, target) {
+        Result::Ok(x): { cout << "installed " << name << " " << e[1] << " in " << target << nl; return 0; }
+        Result::Err(er): { err("jget: cannot install: " + er.message + "\n"); return 1; }
+    }
+    return 1;
+}
+
+int cmd_remove(String name) {
+    if !name_ok(name) {
+        err("jget: '" + name + "' is not a library name\n");
+        return 1;
+    }
+    String target = lib_dir() + "/" + name + ".j";
+    if !Fs::exists(target) {
+        err("jget: " + name + " is not installed\n");
+        return 1;
+    }
+    switch Fs::remove(target) {
+        Result::Ok(x): { cout << "removed " << name << nl; return 0; }
+        Result::Err(er): { err("jget: cannot remove: " + er.message + "\n"); return 1; }
+    }
+    return 1;
+}
+
+int cmd_list() {
+    String dir = lib_dir();
+    if !make_dir(dir) { return 1; }
+    String index = fetch_index(dir);
+    if index.len == 0 { return 1; }
+    String[] lines = index.split("\n");
+    for i in 0..lines.len {
+        String line = lines[i].trim();
+        if line.len == 0 || line.starts_with("#") { continue; }
+        String[] w = line.split(" ");
+        if w.len < 4 { continue; }
+        String mark = " ";
+        if Fs::exists(dir + "/" + w[0] + ".j") { mark = "*"; }
+        cout << mark << " " << w[0] << " " << w[1] << nl;
+    }
+    return 0;
+}
+
+int cmd_installed() {
+    String dir = lib_dir();
+    switch Dir::list(dir) {
+        Result::Ok(names): {
+            for i in 0..names.len {
+                if names[i].ends_with(".j") && !names[i].starts_with(".") {
+                    cout << names[i].slice(0, names[i].len - 2) << nl;
+                }
+            }
+            return 0;
+        }
+        Result::Err(er): { cout << "(no libraries installed)" << nl; return 0; }
+    }
+    return 0;
+}
+
+int usage() {
+    err("usage: jget list | install NAME | remove NAME | installed\n");
+    return 1;
+}
+
+int main() {
+    String[] av = Env::args();
+    if av.len < 2 { return usage(); }
+    String cmd = av[1];
+    if cmd == "list" { return cmd_list(); }
+    if cmd == "installed" { return cmd_installed(); }
+    if cmd == "install" || cmd == "remove" {
+        if av.len < 3 { return usage(); }
+        String name = av[2];
+        if cmd == "install" { return cmd_install(name); }
+        return cmd_remove(name);
+    }
+    return usage();
+}

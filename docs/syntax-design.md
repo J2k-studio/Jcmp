@@ -2088,3 +2088,11 @@ No automatic closing, no `defer` needed: the owner closes by hand, as memory is 
 ## 80. The interface file of a module has the extension `.jh` (owner, 2026-10-17)
 The file that separate compilation writes for a module (names, types, sizes of structs, signatures with ownership, small functions for inlining, a hash) is named `name.jh`
 (see `docs/design/16-separate-compilation.md`). It is written by the compiler, never by hand; the name of the extension is the owner's decision. The format is not locked yet.
+
+## 81. `jget` version 0 (designed by AI at user request, adjustable; owner: "build jget", 2026-10-17)
+* A library is **one J2K source file** `NAME.j`; `NAME` is letters, digits and `_` only (it becomes a file name). Nothing of a library runs when it is installed.
+* The index is a text file: one line `NAME VERSION URL SHA256`, `#` starts a comment. Where it is read from: the environment variable `JGET_INDEX` (an address or a `file://` path), else the public index of the project
+  (`https://raw.githubusercontent.com/J2k-studio/Jcmp-libs/main/index.txt`; **this repository does not exist yet**, so `jget list` fails until the owner creates it).
+* `jget list`, `jget install NAME`, `jget remove NAME`, `jget installed`. `install` downloads with `curl`, compares the SHA-256 with the index, and only then moves the file into the library folder
+  (`JGET_LIB`, default `~/.j2k/Library`, where `#import <NAME>` looks). A wrong checksum installs nothing.
+* Not in version 0 (open): names with an owner (`owner/name`), versions (`NAME@1.2`), a lock file, signatures, packages of several files, `jget publish`, `jget update`.

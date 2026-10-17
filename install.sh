@@ -77,6 +77,7 @@ install_one() {   # install_one NAME OLD-NAME : releases before 0.2.2 called the
     mv -f "$BINDIR/.$1.new" "$BINDIR/$1"    # a rename also works while the old program is running (jcmp -update)
 }
 install_one jcmp jcmp-linux-arm64
+grep -q " jget\$" "$TMP/SHA256SUMS" && install_one jget jget
 [ "$WITH_ASM" = 1 ] && install_one j2k_asm j2k_asm-linux-arm64
 if [ "$WITH_LIB" = 1 ]; then
     fetch "$BASE/jcmp-library.tar.gz" "$TMP/jcmp-library.tar.gz"
@@ -89,6 +90,7 @@ if [ "$WITH_LIB" = 1 ]; then
     cp "$TMP"/Library/* "$LIBDIR/"
     echo "installed: $(cd "$LIBDIR" && pwd)  (the library of jcmp $(cat "$LIBDIR/VERSION"))"
 fi
+[ -f "$BINDIR/jget" ] && echo "installed: $BINDIR/jget"
 echo "installed: $BINDIR/jcmp  ($("$BINDIR/jcmp" --version))"
 [ "$WITH_ASM" = 1 ] && echo "installed: $BINDIR/j2k_asm"
 case ":$PATH:" in *":$BINDIR:"*) ;; *) echo "add the folder to your PATH:  export PATH=\"$BINDIR:\$PATH\"" ;; esac
