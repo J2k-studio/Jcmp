@@ -193,6 +193,7 @@ void cc_keys() {
     int v = 0;
     char^ vs = JCMP_VERSION;
     while vs[v] != 0 { cc_flags = cc_mix(cc_flags, vs[v]); v += 1; }
+    cc_flags = cc_mix(cc_flags, cc_self_hash());           // the compiler itself: a build of another compiler (even of the same version) never uses these entries
     int f = 0;
     while f < cc_n {
         cc_stamp += 1;
@@ -222,6 +223,54 @@ void cc_keys() {
         cc_key[f] = cc_mix(cc_mix(cc_mix(cc_h[f], sum), cnt), cc_flags);
         f += 1;
     }
+}
+
+// a hash of the bytes of this compiler (its own file)
+int cc_self_hash() {
+    int h = 1469598103934665603;
+    int fd = syscall(56, -100, "/proc/self/exe", 0, 0);
+    if fd < 0 { return h; }
+    int^ w = (int^)@cc_fbuf;
+    while true {
+        int n = syscall(63, fd, @cc_fbuf, 4194304);
+        if n <= 0 { break; }
+        int words = n / 8;
+        int i = 0;
+        while i < words {
+            h = cc_mix(h, w[i]);
+            i += 1;
+        }
+        int rest = n - words * 8;
+        i = 0;
+        while i < rest {
+            h = cc_mix(h, cc_fbuf[words * 8 + i]);
+            i += 1;
+        }
+        h = cc_mix(h, n);
+    }
+    syscall(57, fd);
+    return h;
+}
+
+// make the folder and the folders above it; false when it cannot be done
+bool cc_mkdir_p(char^ dir) {
+    char part[300];
+    int n = str_len(dir);
+    if n == 0 || n > 280 { return false; }
+    int i = 1;
+    while i <= n {
+        if i == n || dir[i] == '/' {
+            int k = 0;
+            while k < i { part[k] = dir[k]; k += 1; }
+            part[i] = 0;
+            syscall(34, -100, @part, 493);
+        }
+        i += 1;
+    }
+    int fd = syscall(56, -100, dir, 16384, 0);
+    if fd < 0 { return false; }
+    syscall(57, fd);
+    return true;
 }
 
 void cc_hex(int v, char^ dst) {
@@ -358,9 +407,9 @@ void cc_put_fresh(int n) {
 
 // -cache DIR, after the code pass: the keys, which functions are in the cache, and the markers around the others
 void cc_prepare() {
+    if !cc_mkdir_p(cc_dir) { cc_dir = null; return; }          // a folder that cannot be made: no cache, the build goes on
     cc_scan();
     cc_keys();
-    syscall(34, -100, cc_dir, 493);
     char path[300];
     cc_wlen = 0;
     int prev = 0;
@@ -370,7 +419,11 @@ void cc_prepare() {
         if cc_okf[f] == 1 {
             cc_path(f, @path, ".fn");
             int len = read_file(@path, @cc_fbuf, 4194000);
-            if len > 0 && cc_fbuf[len - 1] == 10 { cc_hit[f] = 1; cc_hits += 1; }
+            if len > 0 && cc_fbuf[len - 1] == 10 {
+                cc_hit[f] = 1;
+                cc_hits += 1;
+                syscall(88, -100, @path, 0, 0);               // used now: the file is young
+            }
         }
         cc_put_range(@out_buf, prev, cc_from[f]);
         if cc_okf[f] == 1 { cc_marker(";F ", f); }
@@ -563,4 +616,96 @@ void cc_clean(char^ dir) {
     write_err(" files deleted, ");
     write_err_int(bytes / 1024);
     write_err(" KB\n");
+}
+
+// the cache folder must not grow for ever: when the files are more than the limit (J2K_CACHE_MAX_MB, default 512), the files that were not used for the longest time go
+void cc_trim() {
+    int cap = 512;
+    char^ ce = env_get("J2K_CACHE_MAX_MB");
+    if ce != null && ce[0] >= '0' && ce[0] <= '9' {
+        cap = 0;
+        int q = 0;
+        while ce[q] >= '0' && ce[q] <= '9' { cap = cap * 10 + (ce[q] - '0'); q += 1; }
+    }
+    cap = cap * 1048576;
+    int fd = syscall(56, -100, cc_dir, 16384, 0);
+    if fd < 0 { return; }
+    int^ sz = (int^)@cc_edge;               // the arrays of the scan are free now: sizes and ages of the files
+    int^ tm = (int^)@cc_edge + 131072 * 8;
+    int cnt = 0;
+    int total = 0;
+    char buf[4096];
+    while true {
+        int n = syscall(61, fd, @buf, 4096);
+        if n <= 0 { break; }
+        int pos = 0;
+        while pos < n {
+            int reclen = (buf[pos + 16] & 255) | ((buf[pos + 17] & 255) << 8);
+            char^ name = @buf + pos + 19;
+            int len = str_len(name);
+            if len > 3 && name[len - 3] == '.' && name[len - 2] == 'f' && name[len - 1] == 'n' && cnt < 131000 {
+                char path[300];
+                str_copy(@path, cc_dir, 250);
+                append_text(@path, "/");
+                append_text(@path, name);
+                int st[18];
+                if syscall(79, -100, @path, @st, 0) == 0 {
+                    sz[cnt] = st[6];
+                    tm[cnt] = st[11];
+                    total += st[6];
+                    cnt += 1;
+                }
+            }
+            pos += reclen;
+        }
+    }
+    syscall(57, fd);
+    if total <= cap { return; }
+    // delete the oldest first: the age limits get smaller until the folder is under 80% of the limit
+    int now = unix_now_cc();
+    int ages[8];
+    ages[0] = 30 * 86400; ages[1] = 14 * 86400; ages[2] = 7 * 86400; ages[3] = 3 * 86400; ages[4] = 86400; ages[5] = 3600; ages[6] = 60; ages[7] = -1;
+    int target = cap / 5 * 4;
+    int a = 0;
+    while total > target && a < 8 {
+        int limit = now - ages[a];
+        total = cc_delete_older(limit, total, target);
+        a += 1;
+    }
+}
+
+int unix_now_cc() {
+    int ts[2];
+    syscall(113, 0, @ts);
+    return ts[0];
+}
+
+// delete the .fn files with a time before `limit`; gives the size that is left
+int cc_delete_older(int limit, int total, int target) {
+    int fd = syscall(56, -100, cc_dir, 16384, 0);
+    if fd < 0 { return total; }
+    char buf[4096];
+    while total > target {
+        int n = syscall(61, fd, @buf, 4096);
+        if n <= 0 { break; }
+        int pos = 0;
+        while pos < n {
+            int reclen = (buf[pos + 16] & 255) | ((buf[pos + 17] & 255) << 8);
+            char^ name = @buf + pos + 19;
+            int len = str_len(name);
+            if len > 3 && name[len - 3] == '.' && name[len - 2] == 'f' && name[len - 1] == 'n' {
+                char path[300];
+                str_copy(@path, cc_dir, 250);
+                append_text(@path, "/");
+                append_text(@path, name);
+                int st[18];
+                if syscall(79, -100, @path, @st, 0) == 0 && st[11] < limit {
+                    if syscall(35, -100, @path, 0) == 0 { total -= st[6]; }
+                }
+            }
+            pos += reclen;
+        }
+    }
+    syscall(57, fd);
+    return total;
 }

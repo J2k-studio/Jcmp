@@ -10,6 +10,7 @@
 set -u
 cd "$(dirname "$0")"
 O=_test_out/boot
+export J2K_CACHE=          # no cache here: the text of the stages (.jasm) must be the same
 mkdir -p $O
 mkdir -p build
 if [ -f seed/Jcmp-v1.s ]; then

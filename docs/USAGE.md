@@ -93,6 +93,7 @@ roots are read from the file named in `J2K_CA` (or `SSL_CERT_FILE`), else from t
 offered are ChaCha20-Poly1305 and AES-128-GCM with X25519; servers that only know TLS 1.2 or older are not reached. This code is new and has not been audited.
 
 ### `-cache DIR` (experimental)
+The cache is **on by default** for a program that is big enough to gain: the folder is `~/.j2k/cache` (it stays under `J2K_CACHE_MAX_MB`, default 512; the files that were not used for the longest time are deleted first). `J2K_CACHE=` (empty) or `-nocache` turns it off.
 `J2K_CACHE=build/cache` in your shell (or `-cache build/cache` for one build; `-nocache` to refuse it; `jcmp -clean build/cache` to empty it). `jcmp prog.jk -cache build/cache` keeps the final code of every function in the folder `build/cache` and uses it the next time for the functions that did not change
 (and for everything that they call); only the changed functions go through the optimiser and the register pass again. The program is the same, byte for byte, as without
 `-cache`. The key of a function includes the version of the compiler and the options, so an old cache is never used by another compiler or other options. The folder can

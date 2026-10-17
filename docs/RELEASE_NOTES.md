@@ -1,6 +1,8 @@
-# J2K / Jcmp 0.9.187
+# J2K / Jcmp 0.9.188
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
+
+**0.9.188:** the cache is on by default (`~/.j2k/cache`, `J2K_CACHE=` to turn it off); `jcmp -jh FILE` / `-api NAME` write the interface of a file or of a library.
 
 **0.9.187:** the compiler brings the standard library, math, cpu and net; `simd`, `quat`, `complex`, `stats`, `canvas`, `screen` are downloaded with `jget -li install NAME`.
 

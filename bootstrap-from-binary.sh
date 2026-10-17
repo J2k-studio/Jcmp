@@ -7,6 +7,7 @@
 set -eu
 cd "$(dirname "$0")"
 O=_test_out/binboot
+export J2K_CACHE=
 mkdir -p $O
 JCMP_LIB= bin/jcmp jcmp/jcmp.jk -o $O/stage1 && chmod +x $O/stage1
 export JCMP_LIB=$PWD/Library
