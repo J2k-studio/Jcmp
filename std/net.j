@@ -461,6 +461,249 @@ struct Net {
         }
         return Result<String, Error>::Ok(body);
     }
+    // the parts of an http:// address: [host, host:port, path, port]; one text (the reason) when it cannot be used
+    static String[] http_split(String url) {
+        String[] r = arr(0);
+        if url.starts_with("https://") { r.push("https needs TLS, which is not written yet: " + url); return r; }
+        if !url.starts_with("http://") { r.push("not an http address: " + url); return r; }
+        String rest = url.slice(7, url.len);
+        int slash = rest.find("/");
+        String hostport = rest;
+        String path = "/";
+        if slash >= 0 {
+            hostport = rest.slice(0, slash);
+            path = rest.slice(slash, rest.len);
+        }
+        String host = hostport;
+        int port = 80;
+        int colon = hostport.find(":");
+        if colon >= 0 {
+            host = hostport.slice(0, colon);
+            String ps = hostport.slice(colon + 1, hostport.len);
+            port = 0;
+            for i in 0..ps.len {
+                if ps[i] < '0' || ps[i] > '9' { r.push("bad port in " + url); return r; }
+                port = port * 10 + (ps[i] - '0');
+            }
+        }
+        if host.len == 0 { r.push("no host in " + url); return r; }
+        r.push(host);
+        r.push(hostport);
+        r.push(path);
+        r.push(str(port));
+        return r;
+    }
+    // 1.2 MB, 340.5 KB, 17 B
+    static String http_size_text(int n) {
+        if n < 1024 { return str(n) + " B"; }
+        if n < 1048576 { return str(n / 1024) + "." + str((n % 1024) * 10 / 1024) + " KB"; }
+        return str(n / 1048576) + "." + str((n % 1048576) * 10 / 1048576) + " MB";
+    }
+    // the line of the progress bar on the error output:   45%  [=========>               ]  1.2 MB / 2.7 MB  340.5 KB/s
+    static void http_show_progress(int done, int total, int ms) {
+        String line = "\r";
+        int speed = 0;
+        if ms > 0 { speed = done * 1000 / ms; }
+        if total > 0 {
+            int pct = done * 100 / total;
+            String ps = str(pct);
+            while ps.len < 3 { ps = " " + ps; }
+            int filled = pct * 24 / 100;
+            String bar = "";
+            for i in 0..24 {
+                if i < filled { bar.push('='); } else if i == filled && pct < 100 { bar.push('>'); } else { bar.push(' '); }
+            }
+            line = line + ps + "%  [" + bar + "]  " + Net::http_size_text(done) + " / " + Net::http_size_text(total) + "  " + Net::http_size_text(speed) + "/s   ";
+        } else {
+            line = line + Net::http_size_text(done) + "  " + Net::http_size_text(speed) + "/s   ";
+        }
+        syscall(64, 2, line.c(), line.len);
+    }
+    static int http_now_ms() {
+        int ts[2];
+        syscall(113, 1, @ts);
+        return ts[0] * 1000 + ts[1] / 1000000;
+    }
+    static void http_write_all(int fd, String s) {
+        int off = 0;
+        char^ p = s.c();
+        while off < s.len {
+            int n = syscall(64, fd, @p[off], s.len - off);
+            if n <= 0 { return; }
+            off += n;
+        }
+    }
+    // fetch the page into the file `path` as it arrives (written to path.part first, then renamed); show: 1 = a progress bar on the error
+    // output when it is a terminal, 0 = never. Redirects and chunked answers are followed. Gives the number of bytes.
+    static Result<int, Error> http_download_to(String url, String path, int show, int depth) {
+        if depth > 5 { return Result<int, Error>::Err(Error::make(ErrorKind::Invalid, "too many redirects")); }
+        String[] u = Net::http_split(url);
+        if u.len == 1 { return Result<int, Error>::Err(Error::make(ErrorKind::Invalid, u[0])); }
+        String host = u[0];
+        String hostport = u[1];
+        String rpath = u[2];
+        int port = u[3].to_int();
+        String ip = "";
+        switch Net::dns_try_lookup(host) {
+            Result::Ok(a): { ip = a; }
+            Result::Err(e): { return Result<int, Error>::Err(Error::make(e.kind, e.message)); }
+        }
+        int fd = 0;
+        switch Net::tcp_connect(ip, port) {
+            Result::Ok(c): { fd = c; }
+            Result::Err(e): { return Result<int, Error>::Err(Error::make(e.kind, e.message)); }
+        }
+        String req = "GET " + rpath + " HTTP/1.1\r\nHost: " + hostport + "\r\nUser-Agent: jget\r\nAccept: */*\r\nConnection: close\r\n\r\n";
+        switch Net::send(fd, req) {
+            Result::Ok(n): { }
+            Result::Err(e): { Net::close(fd); return Result<int, Error>::Err(Error::make(e.kind, e.message)); }
+        }
+        // the header
+        String buf = "";
+        int he = -1;
+        while he < 0 {
+            switch Net::recv(fd, 65536) {
+                Result::Ok(c): {
+                    if c.len == 0 { Net::close(fd); return Result<int, Error>::Err(Error::make(ErrorKind::Parse, "the answer of " + host + " has no header")); }
+                    buf.append(c);
+                    he = buf.find("\r\n\r\n");
+                }
+                Result::Err(e): { Net::close(fd); return Result<int, Error>::Err(Error::make(e.kind, e.message)); }
+            }
+            if he < 0 && buf.len > 65536 { Net::close(fd); return Result<int, Error>::Err(Error::make(ErrorKind::Parse, "the header of " + host + " is too long")); }
+        }
+        String head = buf.slice(0, he);
+        String lh = Net::http_lower_ascii(head);
+        if head.len < 12 || !head.starts_with("HTTP/") { Net::close(fd); return Result<int, Error>::Err(Error::make(ErrorKind::Parse, "the answer of " + host + " is not HTTP")); }
+        int code = 0;
+        for i in 9..12 {
+            if head[i] < '0' || head[i] > '9' { Net::close(fd); return Result<int, Error>::Err(Error::make(ErrorKind::Parse, "bad status line from " + host)); }
+            code = code * 10 + (head[i] - '0');
+        }
+        if code == 301 || code == 302 || code == 303 || code == 307 || code == 308 {
+            Net::close(fd);
+            int li = lh.find("\r\nlocation:");
+            if li < 0 { return Result<int, Error>::Err(Error::make(ErrorKind::Parse, "a redirect without a place")); }
+            int ls = li + 11;
+            int le = Net::http_find_from(head, "\r\n", ls);
+            if le < 0 { le = head.len; }
+            String loc = head.slice(ls, le).trim();
+            if loc.starts_with("/") { loc = "http://" + hostport + loc; }
+            return Net::http_download_to(loc, path, show, depth + 1);
+        }
+        if code >= 400 { Net::close(fd); return Result<int, Error>::Err(Error::make(ErrorKind::NotFound, "HTTP " + str(code) + " from " + url)); }
+        int total = -1;
+        int cl = lh.find("\r\ncontent-length:");
+        if cl >= 0 {
+            total = 0;
+            int q = cl + 17;
+            while q < lh.len && lh[q] == ' ' { q += 1; }
+            while q < lh.len && lh[q] >= '0' && lh[q] <= '9' {
+                total = total * 10 + (lh[q] - '0');
+                q += 1;
+            }
+        }
+        bool chunked = lh.contains("\r\ntransfer-encoding: chunked");
+        if chunked { total = -1; }
+        String tmp = path + ".part";
+        int wf = syscall(56, -100, tmp.c(), 577, 420);
+        if wf < 0 { Net::close(fd); return Result<int, Error>::Err(Net::fail("cannot write " + tmp, wf)); }
+        char termios[64];
+        bool tty = show == 1 && syscall(29, 2, 21505, @termios) == 0;
+        int t0 = Net::http_now_ms();
+        int last = t0;
+        int done = 0;
+        int cmode = 0;                 // chunked: 0 the size line, 1 the data, 2 the CRLF after the data, 3 the end
+        int csize = 0;
+        int cskip = 0;
+        String cline = "";
+        String data = buf.slice(he + 4, buf.len);
+        bool finished = false;
+        bool failed = false;
+        while !finished {
+            if data.len > 0 {
+                if !chunked {
+                    Net::http_write_all(wf, data);
+                    done += data.len;
+                    if total >= 0 && done >= total { finished = true; }
+                } else {
+                    int p = 0;
+                    while p < data.len && cmode != 3 {
+                        if cmode == 0 {
+                            char c = data[p];
+                            p += 1;
+                            if c == '\n' {
+                                int sz = 0;
+                                for k in 0..cline.len {
+                                    int hv = Net::http_hex_value(cline[k]);
+                                    if hv < 0 { break; }
+                                    sz = sz * 16 + hv;
+                                }
+                                cline = "";
+                                csize = sz;
+                                if sz == 0 { cmode = 3; } else { cmode = 1; }
+                            } else if c != '\r' {
+                                cline.push(c);
+                            }
+                        } else if cmode == 1 {
+                            int take = data.len - p;
+                            if take > csize { take = csize; }
+                            Net::http_write_all(wf, data.slice(p, p + take));
+                            done += take;
+                            p += take;
+                            csize -= take;
+                            if csize == 0 { cmode = 2; cskip = 2; }
+                        } else {
+                            p += 1;
+                            cskip -= 1;
+                            if cskip == 0 { cmode = 0; }
+                        }
+                    }
+                    if cmode == 3 { finished = true; }
+                }
+                if tty {
+                    int now = Net::http_now_ms();
+                    if now - last >= 100 { Net::http_show_progress(done, total, now - t0); last = now; }
+                }
+            }
+            if !finished {
+                switch Net::recv(fd, 65536) {
+                    Result::Ok(c): {
+                        if c.len == 0 { finished = true; if chunked || (total >= 0 && done < total) { failed = true; } }
+                        data = c;
+                    }
+                    Result::Err(e): { finished = true; failed = true; }
+                }
+            }
+        }
+        Net::close(fd);
+        syscall(57, wf);
+        if tty {
+            Net::http_show_progress(done, total, Net::http_now_ms() - t0);
+            syscall(64, 2, "\n", 1);
+        }
+        if failed {
+            syscall(35, -100, tmp.c(), 0);
+            return Result<int, Error>::Err(Error::make(ErrorKind::Io, "the download of " + url + " stopped before the end (" + str(done) + " bytes)"));
+        }
+        int rr = syscall(38, -100, tmp.c(), -100, path.c());
+        if rr < 0 {
+            syscall(35, -100, tmp.c(), 0);
+            return Result<int, Error>::Err(Net::fail("cannot write " + path, rr));
+        }
+        return Result<int, Error>::Ok(done);
+    }
+    static Result<int, Error> http_try_download(String url, String path, int show) {
+        return Net::http_download_to(url, path, show, 0);
+    }
+    // the same, thrown as a text when it fails
+    static int http_download(String url, String path, int show) {
+        switch Net::http_try_download(url, path, show) {
+            Result::Ok(n): return n;
+            Result::Err(e): Error::raise(e.message.c());
+        }
+        return 0;
+    }
     static Result<String, Error> http_try_get(String url) {
         return Net::http_fetch(url, 0);
     }

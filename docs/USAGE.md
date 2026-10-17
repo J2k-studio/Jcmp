@@ -77,11 +77,11 @@ installed together with the compiler. The compiler looks for it in the folder na
 `jcmp -update` replaces the compiler and its library together with the latest release (`jcmp -update 0.9.176` for a given one);
 `install.sh` installs the library files with the compiler.
 
-### `jget`: data from the web, and libraries (version 0)
-`jget -h URL` fetches the data at an address (http, https, ftp, file) and writes it to the screen; `jget -h URL -o FILE` writes it to a file (a bare `jget URL` does the same). An `http://` address is fetched by `jget` itself (it looks the name up with DNS and speaks HTTP/1.1, redirects and chunked answers included); `https://` and other addresses use `curl`, or `wget` when there is no `curl` (jget has no TLS yet).
-`jget -li list` shows the libraries of the index, `jget -li install NAME` downloads one, checks its SHA-256 against the index and puts it in `~/.j2k/Library/NAME.j`, where
-`#import <NAME>` finds it; `jget -li uninstall NAME` deletes it, `jget -li installed` lists the folder. The libraries of the standard set (`cpu`, `net`, `math` ...) come with the compiler and need no install. `JGET_INDEX` names another index (an address or a `file://` path), `JGET_LIB` another folder.
-The index is a text file with a line `NAME VERSION URL SHA256` for each library. The source of `jget` is `examples/jget.jk`. The project index is not published yet, so set `JGET_INDEX` to an index of your own for now.
+### `jget`: a separate tool
+`jget` downloads files (with a progress bar) and installs libraries for J2K. It is a project of its own, [github.com/J2k-studio/jget](https://github.com/J2k-studio/jget), because it is
+useful without the compiler too; install it with
+`curl -fsSL https://raw.githubusercontent.com/J2k-studio/jget/main/install.sh | sh`. A library that `jget -li install NAME` puts in `~/.j2k/Library/NAME.j` is found by `#import <NAME>`.
+The part of its work that is done by the library of the compiler is `Net::http.download(url, file, 1)` (HTTP over TCP, DNS by name) and `Net::dns.lookup(name)`.
 
 ### `-cache DIR` (experimental)
 `jcmp prog.jk -cache build/cache` keeps the final code of every function in the folder `build/cache` and uses it the next time for the functions that did not change

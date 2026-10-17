@@ -386,7 +386,7 @@ void die_name(char^ msg, char^ name) {
         write_err("  help: this is part of the standard library: write #import <stdlib> at the top of the file\n");
     }
     if msg[0] == 'l' && msg[1] == 'i' && msg[2] == 'b' {
-        write_err("  help: looked in the -I folders, J2K_PATH, ~/.j2k/Library and the Library folder next to the compiler (jget install NAME fetches a library from the index); built in: stdlib, core, number, text, files, system, time, data, crypto, math, gfx, cpu, simd\n");
+        write_err("  help: looked in the -I folders, J2K_PATH, ~/.j2k/Library and the Library folder next to the compiler (jget -li install NAME fetches a library from the index; jget is a separate tool); built in: stdlib, core, number, text, files, system, time, data, crypto, math, gfx, cpu, simd\n");
     }
     die_end();
 }

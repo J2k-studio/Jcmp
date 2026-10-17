@@ -53,7 +53,7 @@ You need a Linux **ARM64** machine (a phone with Termux works) and `curl` or `wg
 
 ### 1. `install.sh` (recommended)
 
-It downloads the latest release, checks its SHA-256 and puts `jcmp`, `jget` and the library (`Library`, next to the program folder) in place.
+It downloads the latest release, checks its SHA-256 and puts `jcmp` and the library (`Library`, next to the program folder) in place.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/J2k-studio/Jcmp/main/install.sh | sh

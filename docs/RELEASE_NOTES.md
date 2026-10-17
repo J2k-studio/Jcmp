@@ -1,6 +1,8 @@
-# J2K / Jcmp 0.9.181
+# J2K / Jcmp 0.9.182
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
+
+**0.9.182:** `Net::http.download` (files to disk with a progress bar); `jget` moved to its own project, which downloads files, not only pages.
 
 **0.9.181:** the library is the folder `Library` installed with the compiler (not inside it any more); `Dns` and `Http` in the library; `jget -h http://...` needs no curl.
 
