@@ -885,6 +885,50 @@ void ext_put(char^ name) {
     cur_len += n;
 }
 
+// the file of the library NAME: NAME.j in the folder Library (the libraries that come with the compiler), else in the places of the libraries that
+// are installed later (-I, J2K_PATH, ~/.j2k/Library: jget puts them there). false when there is none.
+bool lib_resolve(char^ name, char^ out) {
+    if lib_external == 1 {
+        str_copy(out, @lib_dir, 250);
+        append_text(out, "/");
+        append_text(out, name);
+        append_text(out, ".j");
+        if file_exists(out) { return true; }
+    }
+    char rel[80];
+    str_copy(@rel, name, 70);
+    return find_library(@rel, out);
+}
+
+// the library NAME becomes a new level that is read next (as the units of the standard library do)
+void push_lib(char^ name) {
+    char path[300];
+    if !lib_resolve(name, @path) {
+        char m[160];
+        str_copy(@m, "the library '", 20);
+        append_text(@m, name);
+        append_text(@m, "' is not installed");
+        die_help(@m, "install it with  jget -li install NAME  (the download tool: https://github.com/J2k-studio/Jget); the libraries that come with jcmp are in its folder Library");
+    }
+    if lx_depth >= 15 { die("imports nested too deeply"); }
+    stk_pos[lx_depth] = cur_pos;
+    stk_line[lx_depth] = cur_line;
+    stk_ls[lx_depth] = cur_line_start;
+    stk_len[lx_depth] = cur_len;
+    str_copy(@lvl_name + (lx_depth + 1) * 128, @path, 128);
+    lx_depth += 1;
+    lvl_lib[lx_depth] = 1;
+    cur_base = lx_depth * 524288;
+    cur_len = 0;
+    int n = read_file(@path, @src_bufs + cur_base, 524000);
+    if n < 0 { die_file(@path); }
+    cur_len = n;
+    src_bufs[cur_base + cur_len] = 0;
+    cur_pos = 0;
+    cur_line = 1;
+    cur_line_start = 0;
+}
+
 void put(char^ text) {
     int i = 0;
     while text[i] != 0 {
@@ -1063,23 +1107,23 @@ void using_math() {
     // the last one pushed is read first: vector comes first, then matrix and quat, and the others
     if (want & 16) != 0 && stats_loaded == 0 {
         stats_loaded = 1;
-        push_stats();
+        push_lib("stats");
     }
     if (want & 8) != 0 && cplx_loaded == 0 {
         cplx_loaded = 1;
-        push_complex();
+        push_lib("complex");
     }
     if (want & 4) != 0 && quat_loaded == 0 {
         quat_loaded = 1;
-        push_quat();
+        push_lib("quat");
     }
     if (want & 2) != 0 && matrix_loaded == 0 {
         matrix_loaded = 1;
-        push_matrix();
+        push_lib("matrix");
     }
     if (want & 1) != 0 && vector_loaded == 0 {
         vector_loaded = 1;
-        push_vector();
+        push_lib("vector");
     }
     next();
 }
@@ -1110,15 +1154,15 @@ void using_gfx() {
     // read first: vector, then canvas / screen
     if (want == 1 || want == 3) && canvas_loaded == 0 {
         canvas_loaded = 1;
-        push_canvas();
+        push_lib("canvas");
     }
     if (want == 2 || want == 3) && screen_loaded == 0 {
         screen_loaded = 1;
-        push_screen();
+        push_lib("screen");
     }
     if vector_loaded == 0 {
         vector_loaded = 1;
-        push_vector();
+        push_lib("vector");
     }
     next();
 }
@@ -1153,15 +1197,9 @@ bool show_library(char^ name) {
     if str_eq(name, "stdlib") || str_eq(name, "std") || str_eq(name, "math") || str_eq(name, "gfx") { mask = 511; }
     if mask != 0 {
         push_std_units(mask);
-    } else if str_eq(name, "simd") { push_simd(); }
-    else if str_eq(name, "cpu") { push_cpu(); }
-    else if str_eq(name, "vector") { push_vector(); }
-    else if str_eq(name, "matrix") { push_matrix(); }
-    else if str_eq(name, "quat") { push_quat(); }
-    else if str_eq(name, "complex") { push_complex(); }
-    else if str_eq(name, "stats") { push_stats(); }
-    else if str_eq(name, "canvas") { push_canvas(); }
-    else if str_eq(name, "screen") { push_screen(); }
+    } else if str_eq(name, "simd") || str_eq(name, "cpu") || str_eq(name, "vector") || str_eq(name, "matrix") || str_eq(name, "quat") || str_eq(name, "complex") || str_eq(name, "stats") || str_eq(name, "canvas") || str_eq(name, "screen") {
+        push_lib(name);
+    }
     else { return false; }
     syscall(64, 1, @src_bufs + cur_base, cur_len);
     return true;
@@ -1199,7 +1237,7 @@ void import_library(char^ name, char^ rel) {
     if str_eq(name, "simd") {
         if simd_loaded == 0 {
             simd_loaded = 1;
-            push_simd();
+            push_lib("simd");
         }
         next();
         return;
@@ -1207,7 +1245,7 @@ void import_library(char^ name, char^ rel) {
     if str_eq(name, "cpu") {
         if cpu_loaded == 0 {
             cpu_loaded = 1;
-            push_cpu();
+            push_lib("cpu");
         }
         next();
         return;

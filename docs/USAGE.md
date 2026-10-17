@@ -77,6 +77,10 @@ installed together with the compiler. The compiler looks for it in the folder na
 `jcmp -update` replaces the compiler and its library together with the latest release (`jcmp -update 0.9.176` for a given one);
 `install.sh` installs the library files with the compiler.
 
+### Libraries that come with jcmp, and libraries you download
+`Library/` has what comes with the compiler: the standard library (`stdlib`), `math` (`vector`, `matrix`), `cpu`. `simd`, `quat`, `complex`, `stats`, `canvas` and `screen` (so `gfx`) are separate libraries in
+[Jcmp-libs](https://github.com/J2k-studio/Jcmp-libs): `jget -li install simd` puts one in `~/.j2k/Library`; the compiler says so when a program imports one that is missing.
+
 ### `jget`: a separate tool
 `jget` downloads files (with a progress bar) and installs libraries for J2K. It is a project of its own, [github.com/J2k-studio/jget](https://github.com/J2k-studio/jget), because it is
 useful without the compiler too; install it with

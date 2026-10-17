@@ -58,16 +58,21 @@ def gen_units(name, units, doc):
             '    cur_line_start = 0;', '}', '']
     return out
 text += gen_units("push_std_units", units, "push_std_units(mask): the units of the standard library in the mask become a new \"file\" that is read next (core, number, text, files, system, time, data, crypto).")
-text += gen("push_cpu", ["cpu"], "push_cpu(): `import cpu` -- threads and locks.", "cpu")
-text += gen("push_simd", ["simd"], "push_simd(): `import <simd>` -- f64x2, i64x2, f32x4, i32x4.", "simd")
-text += gen("push_vector", ["vector"], "push_vector(): `import <vector>` -- Vec2, Vec3, Vec4.", "vector")
-text += gen("push_quat", ["quat"], "push_quat(): `using math::quat` -- quat.", "quat")
-text += gen("push_complex", ["complex"], "push_complex(): `using math::complex` -- cplx.", "complex")
-text += gen("push_stats", ["stats"], "push_stats(): `using math::stats` -- Stats.", "stats")
-text += gen("push_matrix", ["matrix"], "push_matrix(): `import <matrix>` -- Mat3, Mat4.", "matrix")
-text += gen("push_canvas", ["canvas"], "push_canvas(): `using gfx::canvas` -- Canvas.", "canvas")
-text += gen("push_screen", ["screen"], "push_screen(): `using gfx::screen` -- Screen.", "screen")
+# the libraries that come with the compiler (folder Library): cpu, vector and matrix; the others are downloaded with jget (build/libs and Jcmp-libs/libs)
+for lib in ("cpu", "vector", "matrix"):
+    writelib(lib, [lib])
+os.makedirs("build/libs", exist_ok=True)
+for lib in ("simd", "quat", "complex", "stats", "canvas", "screen"):
+    t = libtext([lib])
+    open("build/libs/%s.j" % lib, "w").write(t)
+    if os.path.isdir(os.path.expanduser("~/Jcmp-libs/libs")):
+        open(os.path.expanduser("~/Jcmp-libs/libs/%s.j" % lib), "w").write(t)
 text += gen("push_prelude", ["rt_heap", "rt_hw", "rt_mem", "rt_arr", "rt_str", "rt_in", "rt_fp", "rt_mt"], "push_prelude(): the runtime, read in front of every program: heap + panic, hardware (Cpu Atomic Cache Bit), Mem, dynamic arrays, String, keyboard input, threads.", "runtime")
 open("jcmp/jc_std.j", "w").write("\n".join(text))
+# a file of Library that is not written now is a library that went away (it is downloaded now): delete it
+keep = set(["VERSION"] + [n + ".j" for n in unit_names + ["runtime", "cpu", "vector", "matrix"]])
+for f in os.listdir("Library"):
+    if f not in keep:
+        os.remove(os.path.join("Library", f))
 open("Library/VERSION", "w").write(open("VERSION").read().strip() + "\n")
 PY

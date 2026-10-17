@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.187
+* **Only what is needed comes with the compiler.** The folder `Library` of a release now has the standard library (`core number text files system time data crypto net`), `math` (`vector`, `matrix`) and `cpu`. `simd`, `quat`, `complex`, `stats`, `canvas` and `screen` (so `gfx`) moved to [Jcmp-libs](https://github.com/J2k-studio/Jcmp-libs) and are **downloaded** with `jget -li install NAME` (`gfx` installs `canvas` and `screen`); they are put in `~/.j2k/Library`. The compiler loads them as files (one loader for all: `push_lib`) and, when one is missing, says `the library 'simd' is not installed` and `jget -li install NAME`.
+* `gen_std.sh` writes the bundled libraries to `Library/` and the others to `build/libs/` (and to `~/Jcmp-libs/libs/` when that folder is there); the tests find them through `J2K_PATH`.
+* The line at the end of a download says `in 0:00 (2.2 MB/s)` also for a very short download (it said `0 B/s`).
+
 ## 0.9.186
 * **`Sys`: the system by names** (owner's idea): about 60 functions (`Sys::open_read`, `read`, `write`, `lseek`, `stat`, `rename`, `unlink`, `mkdir`, `pipe`, `fork`, `wait`, `kill`, `clock_gettime`, `sleep_ms`, `random`, `mmap`, sockets ...) with checks of the arguments that would make the kernel touch a wrong place (null buffer, negative size, signal to a group, address that is not a page). The whole standard library now uses `Sys::` and no number of a system call; the runtime (`rt_*.j`) is the layer under it. `Sys::call(number, ...)` for a call that is not there yet.
 * **Warning `-Wsyscall`**: `syscall(number, ...)` in a program says to use `Sys` (an error with `-st`); `#allow syscall` (a new directive) turns it off; the library never warns. The compiler's sources have the directive.

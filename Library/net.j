@@ -567,8 +567,9 @@ struct Net {
             net_pg_b = done;
         }
         int speed = net_pg_sp;
-        int avg = 0;
-        if ms > 0 { avg = done * 1000 / ms; }
+        int ms1 = ms;
+        if ms1 < 1 { ms1 = 1; }
+        int avg = done * 1000 / ms1;
         if speed == 0 { speed = avg; }
         String line = "\r";
         String bar = "";
