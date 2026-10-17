@@ -67,6 +67,23 @@ bool download(String address, String to) {
         a.push(to);
     }
     a.push(address);
+    // an http:// address is fetched by jget itself (Http, Dns); anything else, or a failure, goes to curl / wget
+    String native_err = "";
+    if address.starts_with("http://") {
+        switch Net::http.try_get(address) {
+            Result::Ok(body): {
+                if to.len == 0 {
+                    syscall(64, 1, body.c(), body.len);
+                    return true;
+                }
+                switch Fs::write_text(to, body) {
+                    Result::Ok(x): { return true; }
+                    Result::Err(e): { err("jget: cannot write " + to + ": " + e.message + "\n"); return false; }
+                }
+            }
+            Result::Err(e): { native_err = e.message; }
+        }
+    }
     int code = run_prog("curl", a);
     if code == 127 {
         String[] w = arr(0);
@@ -76,7 +93,7 @@ bool download(String address, String to) {
         w.push(address);
         code = run_prog("wget", w);
         if code == 127 {
-            err("jget: neither curl nor wget was found; install one of them (jget has no web client of its own yet)\n");
+            if native_err.len > 0 { err("jget: " + native_err + "\n"); } else { err("jget: neither curl nor wget was found; install one of them (jget has a client for http:// only)\n"); }
             return false;
         }
     }
@@ -133,7 +150,7 @@ bool builtin_name(String n) {
 
 int cmd_install(String name) {
     if builtin_name(name) {
-        cout << name << " is part of the compiler: write  #import <" << name << ">  in your program; nothing to install" << nl;
+        cout << name << " is part of the standard library (installed with the compiler): write  #import <" << name << ">  in your program; nothing to install" << nl;
         return 0;
     }
     if !name_ok(name) {

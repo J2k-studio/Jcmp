@@ -17,7 +17,9 @@ if [ -f seed/Jcmp-v1.s ]; then
     as -o build/j2k_asm_v1.o seed/j2k_asm_v1.s && ld -o build/j2k_asm_v1 build/j2k_asm_v1.o || exit 1
 fi
 
-bin/jcmp jcmp/jcmp.jk -o $O/jcmp1 --emit-asm $O/jcmp1.jasm  || { echo "stage 0 FAILED"; exit 1; }
+# stage 0 uses its own library (bin/Library, found next to it; the compilers before 0.9.181 have it inside); the others use the library of the sources
+JCMP_LIB= bin/jcmp jcmp/jcmp.jk -o $O/jcmp1 --emit-asm $O/jcmp1.jasm  || { echo "stage 0 FAILED"; exit 1; }
+export JCMP_LIB=$PWD/Library
 $O/jcmp1 jcmp/jcmp.jk -o $O/jcmp2 --emit-asm $O/jcmp2.jasm  || { echo "stage 1 FAILED"; exit 1; }
 $O/jcmp2 jcmp/jcmp.jk -o $O/jcmp3 --emit-asm $O/jcmp3.jasm  || { echo "stage 2 FAILED"; exit 1; }
 chmod +x $O/jcmp1 $O/jcmp2 $O/jcmp3

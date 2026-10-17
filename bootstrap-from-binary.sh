@@ -8,7 +8,8 @@ set -eu
 cd "$(dirname "$0")"
 O=_test_out/binboot
 mkdir -p $O
-bin/jcmp jcmp/jcmp.jk -o $O/stage1 && chmod +x $O/stage1
+JCMP_LIB= bin/jcmp jcmp/jcmp.jk -o $O/stage1 && chmod +x $O/stage1
+export JCMP_LIB=$PWD/Library
 $O/stage1 jcmp/jcmp.jk -o $O/stage2 && chmod +x $O/stage2
 if cmp -s $O/stage1 $O/stage2; then
     echo "stage1 == stage2 ($(wc -c < $O/stage2) bytes)"

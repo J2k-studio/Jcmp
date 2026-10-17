@@ -70,18 +70,17 @@ for e in hello fib shapes heap; do bin/jcmp examples/$e.jk -o /tmp/$e && /tmp/$e
 See [LANGUAGE.md](LANGUAGE.md).
 
 ### Where the library lives, and `jcmp -update`
-The library is inside the `jcmp` file, so one file is enough. The same library is also given as files in the folder `Library/`
-(`jcmp -showlib net` writes one). If the compiler finds a `Library` folder (the folder named in `JCMP_LIB`, `Library` next to `jcmp`, or
-`../Library/jcmp` next to it) it reads the library from there. The compiler and its library are a **pair**: `Library/VERSION` must be the
-version of the compiler, or the compiler stops and tells you to install them again. `#import <net>` is a library of the language;
+The library is not inside the `jcmp` file: it is the folder `Library/` (one file for each part: `net.j`, `text.j` ...; `jcmp -showlib net` writes one), published and
+installed together with the compiler. The compiler looks for it in the folder named in `JCMP_LIB`, then `Library` next to `jcmp`, then `../Library/jcmp` and `../Library` next to it. The compiler and its library are a **pair**:
+`Library/VERSION` must be the version of the compiler, or the compiler stops and tells you to install them again; when the folder is missing the compiler says so. `#import <net>` is a library of the language;
 `#import "dir/file.jk"` is your own file.
 `jcmp -update` replaces the compiler and its library together with the latest release (`jcmp -update 0.9.176` for a given one);
-`install.sh --with-lib` installs the library files next to the compiler.
+`install.sh` installs the library files with the compiler.
 
 ### `jget`: data from the web, and libraries (version 0)
-`jget -h URL` fetches the data at an address (http, https, ftp, file) and writes it to the screen; `jget -h URL -o FILE` writes it to a file (a bare `jget URL` does the same). It uses `curl`, or `wget` when there is no `curl`.
+`jget -h URL` fetches the data at an address (http, https, ftp, file) and writes it to the screen; `jget -h URL -o FILE` writes it to a file (a bare `jget URL` does the same). An `http://` address is fetched by `jget` itself (it looks the name up with DNS and speaks HTTP/1.1, redirects and chunked answers included); `https://` and other addresses use `curl`, or `wget` when there is no `curl` (jget has no TLS yet).
 `jget -li list` shows the libraries of the index, `jget -li install NAME` downloads one, checks its SHA-256 against the index and puts it in `~/.j2k/Library/NAME.j`, where
-`#import <NAME>` finds it; `jget -li uninstall NAME` deletes it, `jget -li installed` lists the folder. The libraries that are inside the compiler (`cpu`, `net`, `math` ...) need no install. `JGET_INDEX` names another index (an address or a `file://` path), `JGET_LIB` another folder.
+`#import <NAME>` finds it; `jget -li uninstall NAME` deletes it, `jget -li installed` lists the folder. The libraries of the standard set (`cpu`, `net`, `math` ...) come with the compiler and need no install. `JGET_INDEX` names another index (an address or a `file://` path), `JGET_LIB` another folder.
 The index is a text file with a line `NAME VERSION URL SHA256` for each library. The source of `jget` is `examples/jget.jk`. The project index is not published yet, so set `JGET_INDEX` to an index of your own for now.
 
 ### `-cache DIR` (experimental)

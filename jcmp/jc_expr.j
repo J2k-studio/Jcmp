@@ -111,7 +111,7 @@ int us_l[256];                // ... inside the current function
 // ---------------------------------------------------------------- modules of the library: Namespace::module.function
 // The names of the library have three layers (docs/syntax-design.md 77): `Fs::fs.read(p)`. `using Fs;` takes the namespace away
 // (`fs.read(p)`), `using Fs::fs.read;` makes only that function available. A row: the namespace, the module, the struct that holds it.
-int mod_count() { return 23; }
+int mod_count() { return 25; }
 char^ mod_row(int i, int col) {
     char^ ns = "";
     char^ md = "";
@@ -140,6 +140,8 @@ char^ mod_row(int i, int col) {
     else if i == 20 { ns = "Hash"; md = "hash"; st = "Hash"; }
     else if i == 21 { ns = "Hex"; md = "hex"; st = "__Text"; pre = "hex_"; }
     else if i == 22 { ns = "Base64"; md = "base64"; st = "__Text"; pre = "base64_"; }
+    else if i == 23 { ns = "Net"; md = "dns"; st = "Net"; pre = "dns_"; }
+    else if i == 24 { ns = "Net"; md = "http"; st = "Net"; pre = "http_"; }
     if col == 0 { return ns; }
     if col == 1 { return md; }
     if col == 3 { return pre; }

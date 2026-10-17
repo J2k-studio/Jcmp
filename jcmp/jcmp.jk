@@ -2,7 +2,7 @@
 // Build:  bin/jcmp jcmp/jcmp.jk -o jcmp1        (see bootstrap.sh)
 // Use:    jcmp1 input.jk -o program
 // the version of the compiler (also in the file VERSION; release.sh checks that they agree)
-#define JCMP_VERSION "0.9.180"
+#define JCMP_VERSION "0.9.181"
 
 #import "jc_base"
 #import "jc_asm"
@@ -205,6 +205,7 @@ void main() {
         } else if str_eq(a, "-showlib") {
             ai += 1;
             if ai >= argc() { write_err("jcmp: -showlib needs the name of a library (stdlib, core, number, text, files, system, time, data, crypto, net, math, gfx, cpu, simd, vector, matrix, quat, complex, stats, canvas, screen)\n"); syscall(93, 1); }
+            lib_init(JCMP_VERSION);
             if !show_library(arg(ai)) { write_err("jcmp: there is no library inside the compiler with this name; the libraries inside are: stdlib, core, number, text, files, system, time, data, crypto, net, math, gfx, cpu, simd, vector, matrix, quat, complex, stats, canvas, screen\n"); syscall(93, 1); }
             syscall(93, 0);
         } else if str_eq(a, "-d") {

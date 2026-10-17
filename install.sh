@@ -18,7 +18,7 @@ REPO="J2k-studio/Jcmp"
 BINDIR=""
 VERSION="${JCMP_VERSION:-}"
 WITH_ASM=0
-WITH_LIB=0
+WITH_LIB=1       # the library is installed with the compiler: they are a pair (0.9.181)
 LIBDIR=""
 usage() { sed -n '2,13p' "$0" 2>/dev/null | sed 's/^# \{0,1\}//' || true; }
 while [ $# -gt 0 ]; do

@@ -48,12 +48,12 @@ Release history: [CHANGELOG.md](CHANGELOG.md).
 ## Install
 
 You need a Linux **ARM64** machine (a phone with Termux works) and `curl` or `wget`
-(Termux: `pkg install curl wget`). The compiler is one file, published as a
+(Termux: `pkg install curl wget`). The compiler `jcmp` and its library (the folder `Library`) are a pair and are published together as a
 [release](https://github.com/J2k-studio/Jcmp/releases).
 
 ### 1. `install.sh` (recommended)
 
-It downloads the latest release, checks its SHA-256 and puts `jcmp` in a folder.
+It downloads the latest release, checks its SHA-256 and puts `jcmp`, `jget` and the library (`Library`, next to the program folder) in place.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/J2k-studio/Jcmp/main/install.sh | sh
@@ -75,12 +75,12 @@ wget -qO- https://raw.githubusercontent.com/J2k-studio/Jcmp/main/install.sh | sh
 | `--version 0.9.158`  | a specific release instead of the latest |
 | `--with-assembler` | also install `j2k_asm`, the stand-alone assembler |
 
-Run it again to update. To uninstall, delete the file.
+Run it again to update (or run `jcmp -update`). To uninstall, delete the files.
 
 ### 2. One command with `tar` (keeps the executable bit)
 
 A plain file downloaded from a release is **not executable** (GitHub does not keep the permission bit; that is why a
-plain download needs `chmod +x`). The file `jcmp.tar.gz` of every release holds only the program `jcmp`, already executable:
+plain download needs `chmod +x`). The file `jcmp.tar.gz` of every release holds the program `jcmp`, already executable, and the folder `Library` that belongs to it (keep them side by side):
 
 ```bash
 mkdir -p ../bin

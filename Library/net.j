@@ -128,6 +128,350 @@ struct Net {
     static void close(int fd) {
         syscall(57, fd);
     }
+    // ---- names and pages: Net::dns.lookup("example.com"), Net::http.get("http://...") (designed by the assistant for jget, 2026-10-17, adjustable)
+    // dns: A records over UDP port 53, no cache. A name that is already an address stays; localhost, the hosts files, then the name server.
+    // http: GET over plain TCP (no https yet: TLS is not written), redirects followed, chunked answers decoded.
+    static bool dns_is_ip(String s) {
+        int a[4];
+        return Net::parse_ip(s, @a);
+    }
+    // the first address after the word `nameserver` in a resolv.conf text
+    static String dns_nameserver_in(String text) {
+        String[] lines = text.split("\n");
+        for i in 0..lines.len {
+            String l = lines[i].trim();
+            if l.starts_with("nameserver") {
+                String ip = l.slice(10, l.len).trim();
+                if Net::dns_is_ip(ip) { return ip; }
+            }
+        }
+        return "";
+    }
+    // the value of an environment variable, or "" (the net unit does not need the system unit)
+    static String dns_env(String name) {
+        int i = argc() + 1;
+        while arg(i) != null {
+            char^ e = (char^)arg(i);
+            int k = 0;
+            while k < name.len && e[k] == name[k] { k += 1; }
+            if k == name.len && e[k] == '=' {
+                String v = "";
+                int j = k + 1;
+                while e[j] != 0 {
+                    v.push(e[j]);
+                    j += 1;
+                }
+                return v;
+            }
+            i += 1;
+        }
+        return "";
+    }
+    // a whole small file as a text, or "" when it cannot be read (the net unit does not need the files unit)
+    static String dns_read(String path) {
+        int fd = syscall(56, -100, path.c(), 0, 0);
+        if fd < 0 { return ""; }
+        char buf[4096];
+        String r = "";
+        while true {
+            int n = syscall(63, fd, @buf, 4096);
+            if n <= 0 { break; }
+            for i in 0..n { r.push(buf[i]); }
+        }
+        syscall(57, fd);
+        return r;
+    }
+    // the name server to ask: J2K_DNS, then the resolv.conf files, else 1.1.1.1
+    static String dns_server() {
+        String e = Net::dns_env("J2K_DNS");
+        if Net::dns_is_ip(e) { return e; }
+        String ns = Net::dns_nameserver_in(Net::dns_read("/etc/resolv.conf"));
+        if ns.len > 0 { return ns; }
+        String prefix = Net::dns_env("PREFIX");
+        if prefix.len > 0 {
+            ns = Net::dns_nameserver_in(Net::dns_read(prefix + "/etc/resolv.conf"));
+            if ns.len > 0 { return ns; }
+        }
+        return "1.1.1.1";
+    }
+    // the address that a hosts file (a text with lines "address name name ...") gives to the name, or ""
+    static String dns_hosts_in(String text, String name) {
+        String[] lines = text.split("\n");
+        for i in 0..lines.len {
+            String l = lines[i].trim();
+            if l.len == 0 || l.starts_with("#") { continue; }
+            String[] w = l.split(" ");
+            if w.len < 2 || !Net::dns_is_ip(w[0]) { continue; }
+            for k in 1..w.len {
+                if w[k].trim() == name { return w[0]; }
+            }
+        }
+        return "";
+    }
+    // the question: the header and one question for the A record of the name
+    static String dns_build_query(String name, int id) {
+        String q = "";
+        q.push((char)((id >> 8) & 255));
+        q.push((char)(id & 255));
+        q.push((char)1);          // recursion desired
+        q.push((char)0);
+        q.push((char)0);
+        q.push((char)1);          // one question
+        for i in 0..6 { q.push((char)0); }
+        String[] parts = name.split(".");
+        for i in 0..parts.len {
+            q.push((char)parts[i].len);
+            q.append(parts[i]);
+        }
+        q.push((char)0);
+        q.push((char)0);
+        q.push((char)1);          // type A
+        q.push((char)0);
+        q.push((char)1);          // class IN
+        return q;
+    }
+    // the position after the name that starts at p (a name ends with 0, or with a pointer of two bytes)
+    static int dns_skip_name(String r, int p) {
+        while p < r.len {
+            int c = r[p] & 255;
+            if c == 0 { return p + 1; }
+            if (c & 192) == 192 { return p + 2; }
+            p += c + 1;
+        }
+        return p;
+    }
+    // the first A record of an answer, as "a.b.c.d", or "" when there is none
+    static String dns_parse_answer(String r) {
+        if r.len < 12 { return ""; }
+        if (r[3] & 15) != 0 { return ""; }
+        int qd = ((r[4] & 255) << 8) | (r[5] & 255);
+        int an = ((r[6] & 255) << 8) | (r[7] & 255);
+        int p = 12;
+        for q in 0..qd {
+            p = Net::dns_skip_name(r, p) + 4;
+        }
+        for a in 0..an {
+            p = Net::dns_skip_name(r, p);
+            if p + 10 > r.len { return ""; }
+            int type = ((r[p] & 255) << 8) | (r[p + 1] & 255);
+            int rdlen = ((r[p + 8] & 255) << 8) | (r[p + 9] & 255);
+            p += 10;
+            if type == 1 && rdlen == 4 && p + 4 <= r.len {
+                return str(r[p] & 255) + "." + str(r[p + 1] & 255) + "." + str(r[p + 2] & 255) + "." + str(r[p + 3] & 255);
+            }
+            p += rdlen;
+        }
+        return "";
+    }
+    // ask the name server (UDP), up to three times, waiting 3 seconds each time
+    static Result<String, Error> dns_ask(String server, String name) {
+        int sv[4];
+        if !Net::parse_ip(server, @sv) { return Result<String, Error>::Err(Error::make(ErrorKind::Invalid, "the name server is not an address: " + server)); }
+        int ts[2];
+        syscall(113, 1, @ts);
+        int id = (ts[1] / 1000) & 65535;
+        String q = Net::dns_build_query(name, id);
+        int fd = syscall(198, 2, 2, 0);          // a datagram socket
+        if fd < 0 { return Result<String, Error>::Err(Net::fail("cannot make a socket", fd)); }
+        char sa[16];
+        Net::make_addr(@sa, sv[0], sv[1], sv[2], sv[3], 53);
+        int cr = syscall(203, fd, @sa, 16);
+        if cr < 0 {
+            syscall(57, fd);
+            return Result<String, Error>::Err(Net::fail("cannot reach the name server " + server, cr));
+        }
+        int tv[2];
+        tv[0] = 3;
+        tv[1] = 0;
+        syscall(208, fd, 1, 20, @tv, 16);        // receive time out
+        char buf[1500];
+        for attempt in 0..3 {
+            syscall(64, fd, q.c(), q.len);
+            int n = syscall(63, fd, @buf, 1500);
+            if n > 12 && (buf[0] & 255) == ((id >> 8) & 255) && (buf[1] & 255) == (id & 255) {
+                String r = "";
+                for i in 0..n { r.push(buf[i]); }
+                syscall(57, fd);
+                String ip = Net::dns_parse_answer(r);
+                if ip.len == 0 { return Result<String, Error>::Err(Error::make(ErrorKind::NotFound, "no address for " + name)); }
+                return Result<String, Error>::Ok(ip);
+            }
+        }
+        syscall(57, fd);
+        return Result<String, Error>::Err(Error::make(ErrorKind::Io, "the name server " + server + " did not answer"));
+    }
+    static Result<String, Error> dns_try_lookup(String name) {
+        if Net::dns_is_ip(name) { return Result<String, Error>::Ok(name); }
+        if name == "localhost" { return Result<String, Error>::Ok("127.0.0.1"); }
+        String h = Net::dns_hosts_in(Net::dns_read("/etc/hosts"), name);
+        if h.len > 0 { return Result<String, Error>::Ok(h); }
+        String prefix = Net::dns_env("PREFIX");
+        if prefix.len > 0 {
+            h = Net::dns_hosts_in(Net::dns_read(prefix + "/etc/hosts"), name);
+            if h.len > 0 { return Result<String, Error>::Ok(h); }
+        }
+        return Net::dns_ask(Net::dns_server(), name);
+    }
+    // the same, thrown as a text when it fails
+    static String dns_lookup(String name) {
+        switch Net::dns_try_lookup(name) {
+            Result::Ok(a): return a;
+            Result::Err(e): Error::raise(e.message.c());
+        }
+        return "";
+    }
+    static String http_lower_ascii(String s) {
+        String r = "";
+        for i in 0..s.len {
+            char c = s[i];
+            if c >= 'A' && c <= 'Z' { c = (char)(c + 32); }
+            r.push(c);
+        }
+        return r;
+    }
+    static int http_find_from(String s, String x, int from) {
+        if from >= s.len { return -1; }
+        int k = s.slice(from, s.len).find(x);
+        if k < 0 { return -1; }
+        return from + k;
+    }
+    static int http_hex_value(char c) {
+        if c >= '0' && c <= '9' { return c - '0'; }
+        if c >= 'a' && c <= 'f' { return c - 'a' + 10; }
+        if c >= 'A' && c <= 'F' { return c - 'A' + 10; }
+        return -1;
+    }
+    // the body of a chunked answer ("size in hex CRLF data CRLF ... 0 CRLF CRLF"); false in ok[0] when it is damaged
+    static String http_unchunk(String body, int^ ok) {
+        String out = "";
+        int p = 0;
+        ok[0] = 0;
+        while p < body.len {
+            int e = Net::http_find_from(body, "\r\n", p);
+            if e < 0 { return out; }
+            int size = 0;
+            int k = p;
+            while k < e && Net::http_hex_value(body[k]) >= 0 {
+                size = size * 16 + Net::http_hex_value(body[k]);
+                k += 1;
+            }
+            if k == p { return out; }
+            if size == 0 { ok[0] = 1; return out; }
+            if e + 2 + size > body.len { return out; }
+            out.append(body.slice(e + 2, e + 2 + size));
+            p = e + 2 + size + 2;
+        }
+        return out;
+    }
+    static Result<String, Error> http_read_all(int fd) {
+        String all = "";
+        while true {
+            Result<String, Error> r = Net::recv(fd, 65536);
+            switch r {
+                Result::Ok(chunk): {
+                    if chunk.len == 0 { return Result<String, Error>::Ok(all); }
+                    all.append(chunk);
+                }
+                Result::Err(e): { return Result<String, Error>::Err(Error::make(e.kind, e.message)); }
+            }
+        }
+        return Result<String, Error>::Ok(all);
+    }
+    static Result<String, Error> http_fetch(String url, int depth) {
+        if depth > 5 { return Result<String, Error>::Err(Error::make(ErrorKind::Invalid, "too many redirects")); }
+        if url.starts_with("https://") {
+            return Result<String, Error>::Err(Error::make(ErrorKind::Invalid, "https needs TLS, which is not written yet: " + url));
+        }
+        if !url.starts_with("http://") {
+            return Result<String, Error>::Err(Error::make(ErrorKind::Invalid, "not an http address: " + url));
+        }
+        String rest = url.slice(7, url.len);
+        int slash = rest.find("/");
+        String hostport = rest;
+        String path = "/";
+        if slash >= 0 {
+            hostport = rest.slice(0, slash);
+            path = rest.slice(slash, rest.len);
+        }
+        String host = hostport;
+        int port = 80;
+        int colon = hostport.find(":");
+        if colon >= 0 {
+            host = hostport.slice(0, colon);
+            String ps = hostport.slice(colon + 1, hostport.len);
+            port = 0;
+            for i in 0..ps.len {
+                if ps[i] < '0' || ps[i] > '9' { return Result<String, Error>::Err(Error::make(ErrorKind::Invalid, "bad port in " + url)); }
+                port = port * 10 + (ps[i] - '0');
+            }
+        }
+        if host.len == 0 { return Result<String, Error>::Err(Error::make(ErrorKind::Invalid, "no host in " + url)); }
+        String ip = "";
+        switch Net::dns_try_lookup(host) {
+            Result::Ok(a): { ip = a; }
+            Result::Err(e): { return Result<String, Error>::Err(Error::make(e.kind, e.message)); }
+        }
+        int fd = 0;
+        switch Net::tcp_connect(ip, port) {
+            Result::Ok(c): { fd = c; }
+            Result::Err(e): { return Result<String, Error>::Err(Error::make(e.kind, e.message)); }
+        }
+        String req = "GET " + path + " HTTP/1.1\r\nHost: " + hostport + "\r\nUser-Agent: jget\r\nAccept: */*\r\nConnection: close\r\n\r\n";
+        switch Net::send(fd, req) {
+            Result::Ok(n): { }
+            Result::Err(e): { Net::close(fd); return Result<String, Error>::Err(Error::make(e.kind, e.message)); }
+        }
+        String all = "";
+        switch Net::http_read_all(fd) {
+            Result::Ok(t): { all = t; }
+            Result::Err(e): { Net::close(fd); return Result<String, Error>::Err(Error::make(e.kind, e.message)); }
+        }
+        Net::close(fd);
+        int he = all.find("\r\n\r\n");
+        if he < 0 { return Result<String, Error>::Err(Error::make(ErrorKind::Parse, "the answer of " + host + " has no header")); }
+        String head = all.slice(0, he);
+        String body = all.slice(he + 4, all.len);
+        String lh = Net::http_lower_ascii(head);
+        if head.len < 12 || !head.starts_with("HTTP/") {
+            return Result<String, Error>::Err(Error::make(ErrorKind::Parse, "the answer of " + host + " is not HTTP"));
+        }
+        int code = 0;
+        for i in 9..12 {
+            if head[i] < '0' || head[i] > '9' { return Result<String, Error>::Err(Error::make(ErrorKind::Parse, "bad status line from " + host)); }
+            code = code * 10 + (head[i] - '0');
+        }
+        if code == 301 || code == 302 || code == 303 || code == 307 || code == 308 {
+            int li = lh.find("\r\nlocation:");
+            if li < 0 { return Result<String, Error>::Err(Error::make(ErrorKind::Parse, "a redirect without a place")); }
+            int ls = li + 11;
+            int le = Net::http_find_from(head, "\r\n", ls);
+            if le < 0 { le = head.len; }
+            String loc = head.slice(ls, le).trim();
+            if loc.starts_with("/") { loc = "http://" + hostport + loc; }
+            return Net::http_fetch(loc, depth + 1);
+        }
+        if code >= 400 {
+            return Result<String, Error>::Err(Error::make(ErrorKind::NotFound, "HTTP " + str(code) + " from " + url));
+        }
+        if lh.contains("\r\ntransfer-encoding: chunked") {
+            int ok[1];
+            String d = Net::http_unchunk(body, @ok);
+            if ok[0] == 0 { return Result<String, Error>::Err(Error::make(ErrorKind::Parse, "the chunks of " + url + " are damaged")); }
+            return Result<String, Error>::Ok(d);
+        }
+        return Result<String, Error>::Ok(body);
+    }
+    static Result<String, Error> http_try_get(String url) {
+        return Net::http_fetch(url, 0);
+    }
+    // the same, thrown as a text when it fails
+    static String http_get(String url) {
+        switch Net::http_try_get(url) {
+            Result::Ok(b): return b;
+            Result::Err(e): Error::raise(e.message.c());
+        }
+        return "";
+    }
 }
 
 // Tcp: the short way (module name `tcp`, written  tcp.listen(8080)  or  Tcp::listen(8080)).

@@ -735,6 +735,9 @@ bool lib_find_dir() {
     str_copy(@lib_dir, @exe, 200);
     append_text(@lib_dir, "/../Library/jcmp");
     if lib_has_version(@lib_dir) { return true; }
+    str_copy(@lib_dir, @exe, 200);
+    append_text(@lib_dir, "/../Library");
+    if lib_has_version(@lib_dir) { return true; }
     lib_dir[0] = 0;
     return false;
 }
@@ -742,7 +745,7 @@ bool lib_find_dir() {
 // at the start of the compiler: choose the source of the library and check that it is the library of this compiler
 void lib_init(char^ ver) {
     lib_external = 0;
-    if !lib_find_dir() { return; }
+    if !lib_find_dir() { return; }       // not found: the first program that needs the library says so (ext_put)
     char vp[300];
     str_copy(@vp, @lib_dir, 250);
     append_text(@vp, "/VERSION");
@@ -849,7 +852,19 @@ void self_update(char^ version) {
 }
 
 // the text of the library file name.j is added to the library "file" that is being made (see the push_ functions)
+void lib_missing() {
+    begin_msg("error");
+    write_err("the library of jcmp was not found");
+    end_msg();
+    write_err("  help: the compiler and its library are installed together; the library is the folder Library next to the compiler (or ../Library/jcmp, or the folder named in JCMP_LIB)\n");
+    write_err("  help: install them again with  jcmp -update  or with the install script\n");
+    err_count += 1;
+    err_summary();
+    syscall(93, 1);
+}
+
 void ext_put(char^ name) {
+    if lib_external == 0 { lib_missing(); }
     char fp[300];
     str_copy(@fp, @lib_dir, 250);
     append_text(@fp, "/");

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.181
+* **The library is no longer inside the compiler** (owner, 2026-10-17: "the library inside the compiler should be a separate Lib, downloaded together with the compiler"). The compiler reads the folder `Library/` (`JCMP_LIB`, `Library` next to `jcmp`, `../Library/jcmp`, `../Library`); the two are a pair (`Library/VERSION` must be the version of the compiler). The compiler is 30% smaller to build (`jc_std.j` went from 6 700 lines to 236) and does not carry the text of the library. If the folder is missing the compiler says so and how to get it. `install.sh` and `jcmp -update` install both; `jcmp.tar.gz` holds `jcmp` and `Library`; `bin/Library` is the library of the committed `bin/jcmp` (stage 0 of the bootstrap).
+* **`Dns` and `Http`** (new, in the `net` unit of the library): `Dns::lookup(name)` (address, `localhost`, the hosts files, then a name server over UDP: `J2K_DNS`, the resolv.conf files, the Android property `net.dns1`, else 1.1.1.1), `Http::get(url)` (http:// only: redirects, chunked answers, status errors). Test `t454_http` (a small server in a child process; no network needed).
+* **`jget -h http://...` is fetched by `jget` itself** (no curl or wget needed); `https://` and other addresses still use curl / wget (TLS is not written yet).
+* Test: the library folder (another version refused, a missing folder explained, `-showlib` writes the file).
+
 ## 0.9.180
 * **`jget` is a fetch tool too, not only for libraries** (owner, 2026-10-17): `jget -h URL [-o FILE]` fetches the data at an address (to the screen or to a file; a bare `jget URL` does the same) with `curl` or `wget`. Libraries: `jget -li install NAME`, `jget -li uninstall NAME`, `jget -li list`, `jget -li installed` (the old words without `-li` still work).
 * `jget -li install cpu` says that `cpu` (and the other libraries of the compiler) is inside the compiler and needs no install, instead of a 404; when the index cannot be fetched the message says that the project index is not published yet and how to set `JGET_INDEX`.
