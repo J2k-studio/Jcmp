@@ -39,7 +39,7 @@ Hello from J2K!
 | Input                                       | `cin` (type decides what is read; bad input throws) |
 | Threads                                     | `#import <cpu>`: `Thread` (create, join, detach), `Mutex` (futex based), `#multithread` loops |
 | Speed                                       | about 1.5 to 4 times slower than `clang -O2` on loops and recursion (a peephole pass, operands in registers, division by a literal without `sdiv`); more is planned |
-| Target                                      | Linux **ARM64** only |
+| Target                                      | Linux **ARM64**; Linux **ARM32** with `-target arm32` (first version, see docs/USAGE.md) |
 
 Release history: [CHANGELOG.md](CHANGELOG.md).
 

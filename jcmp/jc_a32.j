@@ -34,6 +34,7 @@ int a32_vbase;                    // the offset of the cells of the virtual regi
 int a32_bad;                      // 1: the function cannot be made
 char a32_why[128];
 int a32_cur;                      // the number of the function being made
+int a32_wrap_ok;                  // 1: a system call goes through __a32_sys
 
 void a32_w(int v) {
     a32_code[a32_pos] = v & 255;
@@ -836,6 +837,22 @@ bool a32_instr(int i, int b) {
         a32_store(0, 1, d);
         return true;
     }
+    if op == IR_SYSCALL && ir_k[i] == 0 && a32_wrap_ok == 1 {
+        // a system call of the program: through __a32_sys (std/rt_a32.j), which adapts the structures whose layout differs (timespec ...)
+        a32_load(0, 1, ir_a[i]);
+        a32_str(0, 13, 0);
+        a32_str(1, 13, 4);
+        int wk = 0;
+        while wk < 6 {
+            if wk < ir_ac[i] { a32_load(0, 1, ir_args[ir_as[i] + wk]); } else { a32_const(0, 0); a32_const(1, 0); }
+            a32_str(0, 13, 8 * (wk + 1));
+            a32_str(1, 13, 8 * (wk + 1) + 4);
+            wk += 1;
+        }
+        a32_bl("__a32_sys");
+        if d != 0 { a32_store(0, 1, d); }
+        return true;
+    }
     if op == IR_SYSCALL {
         // the number is the one of the ARM64 table (the library and the runtime are written with it): translated here
         int k = 0;
@@ -908,6 +925,7 @@ void a32_function() {
     a32_fok[a32_cur] = 0;
     a32_bad = 0;
     a32_nj = 0;
+    a32_wrap_ok = 1;
     int mark = a32_pos;
     int markc = a32_nc;
     // the frame: the arguments of the calls, the frame of the function (lf_frame), the cells, the cells of the virtual registers
@@ -921,6 +939,7 @@ void a32_function() {
         }
         if (ir_op[i] == IR_CALL || ir_op[i] == IR_CALLIND) && ir_ac[i] > maxargs { maxargs = ir_ac[i]; }
         if (ir_op[i] == IR_SDIV || ir_op[i] == IR_UDIV || ir_op[i] == IR_MULHS) && maxargs < 2 { maxargs = 2; }
+        if ir_op[i] == IR_SYSCALL && ir_k[i] == 0 && maxargs < 7 { maxargs = 7; }
         if (ir_op[i] == IR_FFLOOR || ir_op[i] == IR_FCEIL || ir_op[i] == IR_FTRUNC || ir_op[i] == IR_F2I || ir_op[i] == IR_F32TOI) && maxargs < 1 { maxargs = 1; }
         i += 1;
     }

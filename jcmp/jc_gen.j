@@ -1661,9 +1661,9 @@ bool gen_bare_variant(char^ enum_name, char^ sc_full) {
 }
 
 // accessors for jc_stmt (it is read before this file, so it cannot name these tables)
-char^ dv_name_of(int d) { return @dv_name + d * 64; }
 int dv_count_of() { return dv_count; }
 int dv_nvar_of(int d) { return dv_nvar[d]; }
+char^ dv_name_of(int d) { return @dv_name + d * 64; }
 int dv_first_of(int d) { return dv_first[d]; }
 char^ dv_vname(int g) { return @dvv_name + g * 64; }
 int dv_nparam_of(int g) { return dvv_nparam[g]; }
@@ -1782,6 +1782,7 @@ void gen_try_op() {
         }
     }
     leave_tries(try_depth);
+    ow_site = 7;                                       // the tree knows this place: the early return of `expr?`
     own_free_from(0, 0);
     jump(ret_label);
     place_label(lok);

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.191
+* **ARM32: system calls.** The structures that the ARM64 table passes with 64-bit fields (`timespec`, `timeval`, the `execve` arrays) are turned into the 32-bit form (`__a32_sys` in `std/rt_a32.j`): `sleep`, the clock and time, processes and `ppoll` give the same results as on ARM64. 195 of the 230 tests with an expected output give the same output on ARM32 (`tools/a32sweep.sh`).
+* **`expr?` from the syntax tree** (a Result or an Option whose content is a number, a char, a bool or a pointer), on both targets: an `Err` / `None` goes back to the caller as the text path did.
+* The syntax tree makes 95.5% of the functions of the tests and examples. Also `-target arm32` is described in `docs/USAGE.md`.
+* The programs for ARM64 are the same as in 0.9.190 except those that use `expr?` (made from the tree now).
+
 ## 0.9.190
 * **ARM32 (first working version, `-target arm32`).** `jcmp -target arm32 x.jk -o x` writes a 32-bit ARM program (ELF32, EABI 5) that runs on a 64-bit ARM Linux machine that runs 32-bit programs (Android phones do). `int` stays 64 bits (a pair of registers). It makes: functions, recursion, loops, 64-bit arithmetic and shifts, division, `double` and `float` (VFP), `cout`, strings, dynamic arrays, structs, the heap (`alloc` / `free`), `try` / `catch` / `throw`, threads, atomics, lambdas, function pointers, the SHA / RSA / ECDSA / AES-GCM code of the library. The routines that the ARM64 target has as assembly are written in J2K (`std/rt_a32.j`). 184 of the 230 tests with an expected output give the same output as on ARM64 (`tools/a32sweep.sh`). Not yet: SIMD, `defer`, raw `register { }` blocks, the standard input of `cin` on a terminal, more than a plain build (no register allocation yet: the code is slow). `-target arm64` is the default.
 * **The syntax tree makes more code** (95% of the functions of the tests and examples): `float`, arrays of structs, function pointers and lambdas, methods on a text (`"x".trim()`), `String[]` parameters, `assert` / `exit`, more than 8 arguments (ARM32 only). A bug of the tree was found and fixed: `~x` was made as a logical not.

@@ -25,10 +25,25 @@ jcmp input.jk output                    (the second name is the program; if it e
 | `-st`              | strict: every warning becomes an error |
 | `-I dir`           | where `#import "name"` also looks (after the folder of the importing file) |
 | `-version`, `-help` | print the version / a short list of the options (one or two dashes: `--version`; also `-v`, `-h`) |
+| `-target arm32`    | write a 32-bit ARM program (ELF32) instead of an ARM64 one; `-target arm64` is the default. See "32-bit ARM" below |
 | `-d`               | debug build: array index checks. A bad index prints `runtime error: index out of bounds, array size is N` and the program exits with code 134 |
 
 Exit code of `jcmp`: 0 = success (warnings may have been printed), 1 = error.
 The generated programs exit with the value returned by `main` (or `Sys::exit(n)`).
+
+### 32-bit ARM (`-target arm32`)
+
+```bash
+jcmp -target arm32 hello.jk -o hello32
+./hello32          # runs on a 64-bit ARM Linux that runs 32-bit programs (an Android phone does)
+```
+
+`int` is still 64 bits (a pair of registers), so a program gives the same answer on both targets. Most of the language runs: functions,
+loops, 64-bit arithmetic, `double` and `float`, `cout`, strings, dynamic arrays, structs, the heap, `try` / `catch` / `throw`, threads,
+atomics, lambdas, function pointers, files, processes and the clock. Not yet (the compiler stops with the name of the function): SIMD
+vectors, `defer`, the `register { }` blocks and other machine-specific code. This first version has no register allocation, so the
+programs are much slower than the ARM64 ones; `a * b + c` is not fused into one instruction as it is on ARM64, so the last bit of a
+floating-point result can differ. The tests of the repository run with it (`tools/a32sweep.sh`).
 
 ### Assembler on its own
 

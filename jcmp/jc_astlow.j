@@ -784,6 +784,7 @@ bool as1_expr(int n) {
     if k == AK_FNUM { return true; }
     if k == AK_ENUMV { return as1_enumv(n); }
     if k == AK_LAMBDA { return as1_fnval(n); }
+    if k == AK_TRYQ { return as1_tryq(n); }
     if k == AK_BUILTIN {
         // __fsqrt / __ffloor / __fceil / __ftrunc of a double
         int a1 = ast_a[n];
@@ -815,7 +816,7 @@ bool as1_expr(int n) {
             }
             return opt_debug == 0 && sc >= 1 && sc <= 7;
         }
-        if bo == 29 {
+        if bo == 29 || bo == 30 {
             if x_target != 32 || opt_debug == 1 { return false; }
             int tcnt = 0;
             int te = a1;
@@ -824,6 +825,7 @@ bool as1_expr(int n) {
                 tcnt += 1;
                 te = ast_nx[te];
             }
+            if bo == 30 { return tcnt == 7; }
             return tcnt == 5;
         }
         if bo >= 20 && bo <= 28 {
@@ -970,6 +972,58 @@ bool as1_target(int n) {
 bool as1_fnval(int n) {
     if ast_kind[n] == AK_LAMBDA { return ast_val[n] >= 0 && opt_debug == 0; }
     return ast_kind[n] == AK_ENUMV && ast_cls[n] == 4 && as1_enumv(n);
+}
+
+int as1_fretdyn;                 // 1 when the function being looked at returns a dynamic array of numbers
+int as1_fretstr;                 // 1 when the function being looked at returns a String
+int as1_fret;                    // the struct that the function being looked at returns (its number), else -1
+
+// ---- expr? : the value of a call that gives a Result / Option; an Err / None goes back to the caller (gen_try_op in jc_gen.j)
+// 1 Result, 2 Option, 0 neither: of the data enum that the struct s is
+int as1_family(int s) {
+    if s < 0 || s >= scount { return 0; }
+    int d = dv_find(@sname + s * 64);
+    if d < 0 { return 0; }
+    char^ dn = dv_name_of(d);
+    if dn[0] == 'R' && dn[1] == 'e' && dn[2] == 's' && dn[3] == 'u' && dn[4] == 'l' && dn[5] == 't' && dn[6] == '_' && dn[7] == '_' { return 1; }
+    if dn[0] == 'O' && dn[1] == 'p' && dn[2] == 't' && dn[3] == 'i' && dn[4] == 'o' && dn[5] == 'n' && dn[6] == '_' && dn[7] == '_' { return 2; }
+    return 0;
+}
+
+// the field of the content of the first variant (Ok / Some) of the struct s, -1 if there is none
+int as1_okfield(int s) {
+    int d = dv_find(@sname + s * 64);
+    if d < 0 { return 0 - 1; }
+    return dv_find_field(s, dv_pfield(dv_first_of(d), 0));
+}
+
+// the field of the content of the second variant (Err), -1 if there is none
+int as1_errfield(int s) {
+    int d = dv_find(@sname + s * 64);
+    if d < 0 { return 0 - 1; }
+    return dv_find_field(s, dv_pfield(dv_first_of(d) + 1, 0));
+}
+
+bool as1_tryq(int n) {
+    int c = ast_a[n];
+    if opt_debug == 1 || (ast_kind[c] != AK_CALL && ast_kind[c] != AK_METHOD) { return false; }
+    if !as1_sty(ast_ty[c]) || !as1_sx(c) { return false; }
+    int s = ast_ty[c] % 65536 - 16;
+    int fam = as1_family(s);
+    if fam == 0 || as1_fret < 0 || as1_family(as1_fret) != fam { return false; }
+    int fok = as1_okfield(s);
+    if fok < 0 || flddyn[fok] != 0 || fldkind[fok] != 0 { return false; }
+    if fldptr[fok] == 0 && fldcode[fok] >= 16 { return false; }
+    if fldptr[fok] != 0 { if fldptr[fok] != 1 || fldcode[fok] >= 16 { return false; } }
+    if fam == 1 {
+        int efs = as1_errfield(s);
+        int efd = as1_errfield(as1_fret);
+        if efs < 0 || efd < 0 || fldkind[efs] != 0 || fldkind[efd] != 0 { return false; }
+    }
+    // the content: a whole number, a char, a bool, a pointer (a number of the double kind: the text path)
+    int code = fldcode[fok];
+    if fldptr[fok] == 0 && !(code == 1 || code == 2 || code == 3 || code == 4 || code == 8) { return false; }
+    return true;
 }
 
 // a call whose result is a pointer (the tree types it as a whole number: the result type id of a pointer is 0)
@@ -1142,9 +1196,6 @@ bool as1_assign(int n) {
     return false;
 }
 
-int as1_fretdyn;                 // 1 when the function being looked at returns a dynamic array of numbers
-int as1_fretstr;                 // 1 when the function being looked at returns a String
-int as1_fret;                    // the struct that the function being looked at returns (its number), else -1
 
 // for x in things { }: the elements of a dynamic array (numbers, pointers, members of enums, Strings), the chars of a String, a fixed array
 // of numbers; a list that a call made is freed after the loop
@@ -1191,6 +1242,7 @@ bool as1_stmt(int n) {
         if ast_kind[ex] == AK_METHOD && ast_ty[ast_a[ex]] / 65536 == 4 { return as1_strmethod(ex) != 0; }
         if ast_kind[ex] == AK_METHOD && as1_sdyn(ast_ty[ast_a[ex]]) { return as1_samethod(ex) != 0; }
         if ast_kind[ex] == AK_BUILTIN && (ast_fop_of(ast_val[ex]) >= 8 || ast_fop_of(ast_val[ex]) == 5) { return as1_expr(ex); }      // the result is not used
+        if ast_kind[ex] == AK_TRYQ { return as1_tryq(ex); }
         return (ast_kind[ex] == AK_CALL && as1_call(ex)) || (ast_kind[ex] == AK_METHOD && as1_method(ex));
     }
     if k == AK_IF { return as1_expr(ast_a[n]) && as1_stmt(ast_b[n]) && as1_stmt(ast_c[n]); }
@@ -1286,7 +1338,7 @@ bool as1_stmt(int n) {
 int at_fields(int k) {
     if k == AK_BIN || k == AK_WHILE || k == AK_INDEX { return 3; }
     if k == AK_DEREF || k == AK_ADDR || k == AK_FIELD { return 1; }
-    if k == AK_NEG || k == AK_NOT || k == AK_CALL || k == AK_BLOCK || k == AK_DECL || k == AK_EXPR || k == AK_RET || k == AK_INCDEC || k == AK_CAST { return 1; }
+    if k == AK_NEG || k == AK_NOT || k == AK_CALL || k == AK_BLOCK || k == AK_DECL || k == AK_EXPR || k == AK_RET || k == AK_INCDEC || k == AK_CAST || k == AK_TRYQ { return 1; }
     if k == AK_ASSIGN { return 5; }
     if k == AK_IF || k == AK_FOR { return 7; }
     if k == AK_METHOD || k == AK_SWITCH { return 3; }
@@ -1299,7 +1351,7 @@ int at_fields(int k) {
 // the kinds of nodes that the lowering knows
 bool as1_kind_ok(int k) {
     if k == AK_NUM || k == AK_FNUM || k == AK_VAR || k == AK_GVAR || k == AK_INDEX || k == AK_DEREF || k == AK_ADDR || k == AK_FIELD { return true; }
-    if k == AK_BIN || k == AK_NEG || k == AK_NOT || k == AK_CAST || k == AK_CALL || k == AK_DECL || k == AK_ASSIGN || k == AK_INCDEC { return true; }
+    if k == AK_BIN || k == AK_NEG || k == AK_NOT || k == AK_CAST || k == AK_CALL || k == AK_DECL || k == AK_ASSIGN || k == AK_INCDEC || k == AK_TRYQ { return true; }
     if k == AK_STR || k == AK_COUT || k == AK_ENUMV || k == AK_METHOD || k == AK_SWITCH || k == AK_CASE || k == AK_THROW || k == AK_TRYCATCH { return true; }
     return k == AK_EXPR || k == AK_IF || k == AK_WHILE || k == AK_FOR || k == AK_RET || k == AK_BREAK || k == AK_CONT || k == AK_BLOCK;
 }
@@ -1308,7 +1360,7 @@ int at_rej_n;
 
 // is this node a value (not a statement)?
 bool at_isexpr(int k) {
-    return k == AK_NUM || k == AK_FNUM || k == AK_VAR || k == AK_GVAR || k == AK_BIN || k == AK_NEG || k == AK_NOT || k == AK_CALL || k == AK_INDEX || k == AK_DEREF || k == AK_ADDR || k == AK_CAST || k == AK_STR || k == AK_FIELD || k == AK_METHOD || k == AK_BUILTIN || k == AK_ENUMV || k == AK_LIST;
+    return k == AK_NUM || k == AK_FNUM || k == AK_VAR || k == AK_GVAR || k == AK_BIN || k == AK_NEG || k == AK_NOT || k == AK_CALL || k == AK_INDEX || k == AK_DEREF || k == AK_ADDR || k == AK_CAST || k == AK_STR || k == AK_FIELD || k == AK_METHOD || k == AK_BUILTIN || k == AK_ENUMV || k == AK_LIST || k == AK_TRYQ;
 }
 
 // does the lowering take this value, in any of the ways a value is taken (a number, a String, a list, a struct, a place)?
@@ -1931,8 +1983,8 @@ void gl_operands_l(int b) {
 bool gl_has_call(int n) {
     if n == 0 { return false; }
     int k = at_kind[n];
-    if k == AK_CALL || k == AK_METHOD { return true; }
-    if k == AK_BUILTIN && (at_val[n] == 8 || at_val[n] == 9 || (at_val[n] >= 20 && at_val[n] <= 29)) { return true; }
+    if k == AK_CALL || k == AK_METHOD || k == AK_TRYQ { return true; }
+    if k == AK_BUILTIN && (at_val[n] == 8 || at_val[n] == 9 || (at_val[n] >= 20 && at_val[n] <= 30)) { return true; }
     if k == AK_BIN { return gl_has_call(at_a[n]) || gl_has_call(at_b[n]); }
     if k == AK_NEG || k == AK_NOT || k == AK_CAST || k == AK_DEREF || k == AK_ADDR || k == AK_FIELD || k == AK_BUILTIN { return gl_has_call(at_a[n]); }
     if k == AK_INDEX { return gl_has_call(at_a[n]) || gl_has_call(at_b[n]); }
@@ -2954,6 +3006,10 @@ void gl_expr(int n) {
     gl_ensure();
     if k == AK_STR { gl_sval(n); return; }
     if at_ty[n] == 6 && gl_fexpr(n) { return; }
+    if k == AK_TRYQ {
+        gl_tryq(n);
+        return;
+    }
     if k == AK_ENUMV {
         // a function used as a value
         ir_add(IR_ADDR_FUNC, 1, 0, 0, 0, ir_name_index(@fname + at_val[n] * 64));
@@ -3103,6 +3159,35 @@ void gl_expr(int n) {
         gl_load(2, 29, 0);
         ir_add(IR_ADD, 1, 2, 1, 0, 0);
         gl_load(1, 1, 8);                       // argv[i] is at [sp + 8 + 8 * i]
+        return;
+    }
+    if k == AK_BUILTIN && at_val[n] == 30 {
+        // __syscall_raw(number, a0 .. a5): the real system call (the ARM32 back end turns the number of the ARM64 table into its own)
+        int sbase2 = gl_depth;
+        int sn2 = 0;
+        int sa2 = at_a[n];
+        while sa2 != 0 {
+            gl_expr(sa2);
+            gl_ensure();
+            gl_store(30, gl_cell(gl_depth), 1);
+            gl_depth += 1;
+            sn2 += 1;
+            sa2 = at_nx[sa2];
+        }
+        gl_depth = sbase2;
+        gl_load(9, 30, gl_cell(sbase2));
+        int sk2 = 1;
+        while sk2 < sn2 {
+            gl_load(sk2, 30, gl_cell(sbase2 + sk2));
+            sk2 += 1;
+        }
+        int sev2 = ir_add(IR_SYSCALL, 1, 9, 0, 0, 1);
+        int sr2 = 0;
+        while sr2 < 8 {
+            gl_args[sr2] = sr2 + 1;
+            sr2 += 1;
+        }
+        ir_set_args(sev2, 6, @gl_args);
         return;
     }
     if k == AK_BUILTIN && at_val[n] == 29 {
@@ -3681,6 +3766,49 @@ void go_flush(bool live) {
         gl_depth -= 1;
         gl_load(1, 30, cc);
     }
+}
+
+// expr? : v1 = the content of the Ok / Some of the Result / Option that the call gives; an Err / None becomes the result of this function
+void gl_tryq(int n) {
+    int c = at_a[n];
+    int s = at_ty[c] % 65536 - 16;
+    int fam = as1_family(s);
+    int fok = as1_okfield(s);
+    gl_call(c);
+    gl_ensure();
+    gl_store(30, at_c[n], 1);
+    int lok = gl_label();
+    int lerr = gl_label();
+    gl_load(2, 1, 0);
+    gl_br(IR_EQ, 2, 0, 1, lok, lerr);
+    gl_place(lerr);
+    gl_ensure();
+    gl_load(3, 30, gl_retoff);                      // the result of this function (the caller's slot)
+    ir_add(IR_CONST, 1, 0, 0, 0, 1);
+    gl_store(3, 0, 1);                              // the tag: Err / None
+    if fam == 1 {
+        int efs = as1_errfield(s);
+        int efd = as1_errfield(fret[gl_fidx] - 100);
+        int fsize = size_of(fldcode[efs]);
+        if fldcode[efs] >= 16 && fldptr[efs] == 0 { fsize = ssize[fldcode[efs] - 16]; }
+        if fldkind[efs] == 3 || fldptr[efs] != 0 { fsize = 8; }
+        int bytes = (fsize + 7) / 8 * 8;
+        gl_load(1, 30, at_c[n]);
+        gl_copy(3, fldoff[efd], 1, fldoff[efs], bytes);
+        ir_add(IR_CONST, 2, 0, 0, 0, 0);
+        int zq = 0;
+        while zq < bytes {
+            gl_store(1, fldoff[efs] + zq, 2);
+            zq += 8;
+        }
+    }
+    gl_leave_tries(gl_trydepth);
+    go_site(7, 0);
+    gl_jmp(gl_ret);
+    gl_place(lok);
+    gl_ensure();
+    gl_load(1, 30, at_c[n]);
+    if fldptr[fok] != 0 { gl_load(1, 1, fldoff[fok]); } else { gl_loadw(1, 1, fldoff[fok], as1_flw(fldcode[fok])); }
 }
 
 // ---------------------------------------------------------------- Strings
@@ -4823,6 +4951,14 @@ void gl_stemp(int n) {
 void gl_tmps(int n) {
     if n == 0 { return; }
     int k = at_kind[n];
+    if k == AK_TRYQ {
+        // expr?: the call's own slots first, then the slot `..try` that holds the address of the Result
+        gl_tmps(at_a[n]);
+        at_c[n] = gl_nslot;
+        gl_hint_add(gl_nslot);
+        gl_nslot += 8;
+        return;
+    }
     if at_ty[n] / 65536 == 4 && (k == AK_BIN || (k == AK_METHOD && at_val[n] < 3000) || (k == AK_BUILTIN && at_val[n] == 13)) {
         // a new String: the operands first, then the temporary
         if k == AK_BUILTIN {

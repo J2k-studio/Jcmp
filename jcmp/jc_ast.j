@@ -260,6 +260,30 @@ bool ast_is_flit(int n) {
     return false;
 }
 
+// the type of `call?`: the content of the Ok / Some variant of the Result / Option that the call gives, when it is a whole number, a pointer or a number
+// (8:0, unknown, for the other contents)
+int ast_tryq_ty(int call) {
+    int t = ast_ty[call];
+    if t / 65536 != 3 { return ast_mkty(8, 0); }
+    int s = t % 65536 - 16;
+    if s < 0 || s >= scount { return ast_mkty(8, 0); }
+    int d = dv_find(@sname + s * 64);
+    if d < 0 { return ast_mkty(8, 0); }
+    char^ dn = dv_name_of(d);
+    bool ok = (dn[0] == 'R' && dn[1] == 'e' && dn[2] == 's' && dn[3] == 'u' && dn[4] == 'l' && dn[5] == 't' && dn[6] == '_' && dn[7] == '_')
+        || (dn[0] == 'O' && dn[1] == 'p' && dn[2] == 't' && dn[3] == 'i' && dn[4] == 'o' && dn[5] == 'n' && dn[6] == '_' && dn[7] == '_');
+    if !ok { return ast_mkty(8, 0); }
+    int fok = dv_find_field(s, dv_pfield(dv_first_of(d), 0));
+    if fok < 0 || flddyn[fok] != 0 || fldkind[fok] != 0 { return ast_mkty(8, 0); }
+    if fldptr[fok] != 0 {
+        if fldptr[fok] == 1 && fldcode[fok] < 16 { return ast_mkty(1, fldcode[fok]); }
+        return ast_mkty(8, 0);
+    }
+    int code = fldcode[fok];
+    if code == 1 || code == 2 || code == 3 || code == 4 || code == 8 || code == 7 || code == 6 { return ast_mkty(0, code); }
+    return ast_mkty(8, 0);
+}
+
 // the element of a dynamic array T[]: kept in the base of a kind 5 type as  element kind * 1000 + element code  (the packed type of the
 // parser says it: dyn_code, dyn_ptr, dyn_tid); 0 when it is not known
 int ast_dyn_base(int info) {
@@ -586,9 +610,9 @@ int ast_postfix(int base, int kind, int tb) {
             cur = ast_node(AK_CALL, cargs, cur, 0, 0 - 1);
         } else if tok_is("?") {
             next();
-            ast_pkind = 8;
-            ast_pbase = 0;
-            ast_cur_ty = ast_mkty(8, 0);
+            ast_cur_ty = ast_tryq_ty(cur);
+            ast_pkind = ast_cur_ty / 65536;
+            ast_pbase = ast_cur_ty % 65536;
             cur = ast_node(AK_TRYQ, cur, 0, 0, 0);
         } else if tok_is(".") {
             // a field or a method (not `..` of a range: the caller of a range reads the first `.` itself)
@@ -1067,6 +1091,7 @@ int ast_fop_of(int at) {
     if str_eq(nm, "__fetch_xor") { return 26; }
     if str_eq(nm, "__atomic_load") { return 27; }
     if str_eq(nm, "__atomic_store") { return 28; }
+    if str_eq(nm, "__syscall_raw") { return 30; }     // __syscall_raw(number, 6 arguments): a system call with no adaptation of the structures (std/rt_a32.j; the ARM32 target only)
     if str_eq(nm, "__thread_start") { return 29; }    // __thread_start(function, argument, top of the stack, id word, thread block): the ARM32 target only
     return 0;
 }

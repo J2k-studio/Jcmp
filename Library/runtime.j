@@ -2340,3 +2340,82 @@ void __a32_uncaught(char^ msg) {
     syscall(94, 1);
 }
 
+// ---- the system calls of the program: the structures that the ARM64 table passes (timespec with 64-bit fields ...) have 32-bit fields here
+int __a32_sys(int nr, int a0, int a1, int a2, int a3, int a4, int a5) {
+    if nr == 101 {                                     // nanosleep(req, rem)
+        int^ rq = (int^)a0;
+        i32 b[2];
+        if a0 != 0 {
+            b[0] = (i32)rq[0];
+            b[1] = (i32)rq[1];
+            return __syscall_raw(nr, (int)@b, a1, a2, a3, a4, a5);
+        }
+    }
+    if nr == 115 {                                     // clock_nanosleep(clock, flags, req, rem)
+        int^ rq2 = (int^)a2;
+        i32 b2[2];
+        if a2 != 0 {
+            b2[0] = (i32)rq2[0];
+            b2[1] = (i32)rq2[1];
+            return __syscall_raw(nr, a0, a1, (int)@b2, a3, a4, a5);
+        }
+    }
+    if nr == 113 {                                     // clock_gettime(clock, ts)
+        i32 b3[2];
+        b3[0] = 0;
+        b3[1] = 0;
+        int rc = __syscall_raw(nr, a0, (int)@b3, a2, a3, a4, a5);
+        int^ ts = (int^)a1;
+        if a1 != 0 && rc == 0 {
+            ts[0] = b3[0];
+            ts[1] = b3[1];
+        }
+        return rc;
+    }
+    if nr == 169 {                                     // gettimeofday(tv, tz)
+        i32 b4[2];
+        b4[0] = 0;
+        b4[1] = 0;
+        int rc4 = __syscall_raw(nr, (int)@b4, a1, a2, a3, a4, a5);
+        int^ tv = (int^)a0;
+        if a0 != 0 && rc4 == 0 {
+            tv[0] = b4[0];
+            tv[1] = b4[1];
+        }
+        return rc4;
+    }
+    if nr == 73 {                                      // ppoll(fds, n, timeout, sigmask, size)
+        int^ rq5 = (int^)a2;
+        i32 b5[2];
+        if a2 != 0 {
+            b5[0] = (i32)rq5[0];
+            b5[1] = (i32)rq5[1];
+            return __syscall_raw(nr, a0, a1, (int)@b5, a3, a4, a5);
+        }
+    }
+    if nr == 221 {                                     // execve(path, argv, envp): the arrays of pointers have 4-byte entries here
+        int^ pa = (int^)a1;
+        int^ pe = (int^)a2;
+        i32 av[256];
+        i32 ev[512];
+        int ia = 0;
+        if a1 != 0 {
+            while pa[ia] != 0 && ia < 255 {
+                av[ia] = (i32)pa[ia];
+                ia += 1;
+            }
+        }
+        av[ia] = 0;
+        int ie = 0;
+        if a2 != 0 {
+            while pe[ie] != 0 && ie < 511 {
+                ev[ie] = (i32)pe[ie];
+                ie += 1;
+            }
+        }
+        ev[ie] = 0;
+        return __syscall_raw(nr, a0, (int)@av, (int)@ev, a3, a4, a5);
+    }
+    return __syscall_raw(nr, a0, a1, a2, a3, a4, a5);
+}
+
