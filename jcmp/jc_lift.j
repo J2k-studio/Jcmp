@@ -19,6 +19,8 @@ int lf_nlab;
 int lf_leader[65536];             // 1: the line starts a block (and the number of the block, from 1)
 int lf_depth_at[IR_MAXB];         // the depth of the stack at the start of each block (-1: not known yet)
 int lf_depth;                     // the depth of the stack now (bytes below the frame pointer)
+int lf_inbody;                    // 1: the lines are the body of a defer
+int lf_isent[IR_MAXB];            // 1: the block is called locally (a defer body), ARM32 only
 int lf_cmp_kind;                  // the comparison that is waiting for its jump: 1 whole numbers, 2 doubles, 0 none
 int lf_cmp_a;
 int lf_cmp_b;
@@ -380,6 +382,11 @@ int lf_line(int idx) {
         return 1;
     }
     // sub sp, sp, #N / add sp, sp, #N
+    // add sp, x29, #0: the early return of `?` drops the pushed temporaries
+    if pt_mn(0, "add") && pt_no[0] == 3 && pt_op(0, 0, "sp") && pt_op(0, 1, "x29") && lf_imm(0, 2) && lf_val == 0 {
+        lf_depth = 0;
+        return 1;
+    }
     if (pt_mn(0, "sub") || pt_mn(0, "add")) && pt_no[0] == 3 && pt_op(0, 0, "sp") {
         if !pt_op(0, 1, "sp") || !lf_imm(0, 2) { return lf_fail("a use of sp that is not a push or a pop"); }
         if pt_mn(0, "sub") { lf_depth += lf_val; } else { lf_depth -= lf_val; }
@@ -656,13 +663,42 @@ int lf_line(int idx) {
         lf_emit(IR_I2F, lf_d(pt_regno(0, 0, 'd')), lf_x(pt_regno(0, 1, 'x')), 0, 0, 0);
         return 1;
     }
+    // ucvtf dN, xN (ARM32 only): hi * 2^32 + lo, both halves are exact, so the one rounding is the right one
+    if pt_mn(0, "ucvtf") && pt_no[0] == 2 && pt_regno(0, 0, 'd') >= 0 && pt_regno(0, 1, 'x') >= 0 && x_target == 32 {
+        int uh = ir_vreg(0);
+        int ul = ir_vreg(0);
+        int uc = ir_vreg(0);
+        int fh = ir_vreg(1);
+        int fl = ir_vreg(1);
+        int fc = ir_vreg(1);
+        int fm = ir_vreg(1);
+        int usrc = lf_x(pt_regno(0, 1, 'x'));
+        lf_emit(IR_LSHR, uh, usrc, 32, 1, 0);
+        lf_emit(IR_AND, ul, usrc, 4294967295, 1, 0);
+        lf_emit(IR_I2F, fh, uh, 0, 0, 0);
+        lf_emit(IR_I2F, fl, ul, 0, 0, 0);
+        lf_emit(IR_CONST, uc, 0, 0, 0, 4751297606875873280);
+        lf_emit(IR_BITS2F, fc, uc, 0, 0, 0);
+        lf_emit(IR_FMUL, fm, fh, fc, 0, 0);
+        lf_emit(IR_FADD, lf_d(pt_regno(0, 0, 'd')), fm, fl, 0, 0);
+        return 1;
+    }
     if pt_mn(0, "fcvtzs") && pt_no[0] == 2 && pt_regno(0, 0, 'x') >= 0 && pt_regno(0, 1, 'd') >= 0 {
         lf_emit(IR_F2I, lf_x(pt_regno(0, 0, 'x')), lf_d(pt_regno(0, 1, 'd')), 0, 0, 0);
         return 1;
     }
     // addresses of functions
     if pt_mn(0, "adr") && pt_no[0] == 2 && pt_isreg(0, 0) {
-        if lf_label_of(0, 1) >= 0 { return lf_fail("the address of a label inside the function (a defer)"); }
+        if lf_label_of(0, 1) >= 0 {
+            int abk = lf_block_of_label(lf_label_of(0, 1));
+            bool abok = x_target == 32 && abk >= 0;
+            if abok { abok = lf_isent[abk] == 1; }
+            if !abok { return lf_fail("the address of a label inside the function (a defer or a loop body)"); }
+            lf_depth_at[abk] = 64;
+            int abe = lf_emit(IR_ADDR_BLOCK, lf_x(pt_regno(0, 0, 'x')), 0, 0, 0, 0);
+            ir_t1[abe] = abk;
+            return 1;
+        }
         char nm[64];
         int o = (0 * 4 + 1) * 40;
         int c = 0;
@@ -691,6 +727,21 @@ void lf_set_call_args(int e) {
 // lift the function that is in pt_txt[0 .. pt_n): 1 if it worked, else 0 and the reason in lf_why
 int lf_total;                         // the lines of the body end here (the epilogue is not part of it)
 int lf_nblocks;
+
+// is the label the start of the body of a defer? (sub sp, sp, #16 / str x30, [sp, #0] ... ldr x30, [sp, #0] / add sp, sp, #16 / ret)
+int lf_is_defer_body(int num) {
+    int li = lf_body_start;
+    while li < lf_total {
+        if lf_label_line(li) == num {
+            int lj = li + 1;
+            while lj < lf_total && (lf_starts(lj, ";H") || lf_label_line(lj) >= 0) { lj += 1; }
+            if lj + 1 < lf_total && lf_starts(lj, "sub sp, sp, #16") && lf_starts(lj + 1, "str x30, [sp, #0]") { return 1; }
+            return 0;
+        }
+        li += 1;
+    }
+    return 0;
+}
 
 // the first pass: which lines start a block
 int lf_find_blocks() {
@@ -770,6 +821,29 @@ int lf_function(char^ name) {
     int nblocks = lf_nblocks;
     if nblocks == 0 { return lf_fail("no code"); }
     if nblocks > IR_MAXB - 4 { return lf_fail("too many blocks"); }
+    int ek = 0;
+    while ek < nblocks {
+        lf_isent[ek] = 0;
+        ek += 1;
+    }
+    if x_target == 32 {
+        // the blocks that are the target of `bl L` or `adr xN, L` (the bodies of defer)
+        int ei = lf_body_start;
+        while ei < lf_total {
+            if !lf_starts(ei, ";H") && lf_label_line(ei) < 0 && pt_parse(0, ei) {
+                if (pt_mn(0, "bl") && pt_no[0] == 1) || (pt_mn(0, "adr") && pt_no[0] == 2) {
+                    int ek2 = 1;
+                    if pt_mn(0, "bl") { ek2 = 0; }
+                    int elab = lf_label_of(0, ek2);
+                    if elab >= 0 && lf_is_defer_body(elab) == 1 {
+                        int eb = lf_block_of_label(elab);
+                        if eb >= 0 { lf_isent[eb] = 1; }
+                    }
+                }
+            }
+            ei += 1;
+        }
+    }
     if ast_lower_on == 1 {
         // A1b: the tree of the function (the first subset) gives the IR; when it does not, the text is lifted as before.
         // main has no epilogue (it ends with the exit call): the tree makes that too
@@ -796,11 +870,13 @@ int lf_function(char^ name) {
     }
     lf_fp = lf_x(29);
     lf_depth = 0;
+    lf_inbody = 0;
     lf_cmp_kind = 0;
     lf_qreset();
     int bi = 0;
     while bi < nblocks {
         lf_depth_at[bi] = 0 - 1;
+        if lf_isent[bi] == 1 { lf_depth_at[bi] = 64; }
         bi += 1;
     }
     int cur = 0 - 1;
@@ -832,6 +908,10 @@ int lf_function(char^ name) {
                     pk += 1;
                 }
                 ir_add(IR_ADDR_SLOT, lf_fp, 0, 0, 0, 0);
+            }
+            if lf_isent[nb] == 1 {
+                ir_add(IR_LENTRY, lf_x(30), 0, 0, 0, 0);
+                lf_inbody = 1;
             }
             fell = true;
             lf_cmp_kind = 0;
@@ -881,6 +961,30 @@ int lf_function(char^ name) {
             if lf_depth_at[tb2] >= 0 && lf_depth_at[tb2] != lf_depth { return lf_fail("the depth of the stack is not the same at a jump"); }
             lf_depth_at[tb2] = lf_depth;
             fell = false;
+            i += 1;
+            continue;
+        }
+        if pt_mn(0, "bl") && pt_no[0] == 1 && lf_label_of(0, 0) >= 0 {
+            int lcb0 = lf_block_of_label(lf_label_of(0, 0));
+            bool lcok = x_target == 32 && lcb0 >= 0;
+            if lcok { lcok = lf_isent[lcb0] == 1; }
+            if !lcok { return lf_fail("a call of a label inside the function (a defer)"); }
+            int lcb = lf_block_of_label(lf_label_of(0, 0));
+            if lcb < 0 { return lf_fail("a call of a label that was not found"); }
+            // the body of a defer works above the stack cells of the caller (the caller may have a value pushed)
+            if lf_depth > 64 { return lf_fail("a local call with a deep stack"); }
+            lf_depth_at[lcb] = 64;
+            int lce = ir_add(IR_LCALL, 0, 0, 0, 0, 0);
+            ir_t1[lce] = lcb;
+            lf_cmp_kind = 0;
+            i += 1;
+            continue;
+        }
+        if pt_mn(0, "ret") && x_target == 32 && lf_inbody == 1 {
+            lf_inbody = 0;
+            ir_add(IR_LRET, 0, lf_x(30), 0, 0, 0);
+            fell = false;
+            lf_cmp_kind = 0;
             i += 1;
             continue;
         }

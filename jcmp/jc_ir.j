@@ -80,6 +80,10 @@
 #define IR_FCVT_SD 67        // d (double) = a (float) (fcvt dD, sA)
 #define IR_I2F32 68          // d (float) = the whole number a (scvtf sD, xA)
 #define IR_F32TOI 69         // d (whole number) = the float a towards 0 (fcvtzs xD, sA)
+#define IR_LCALL 72          // call the code of block t1 inside this function (ARM32 only: a defer body; it shares the frame; it returns with IR_LRET)
+#define IR_LRET 73           // return from a local call: jump to the address in v31
+#define IR_LENTRY 74         // the first instruction of a block that is called locally: v31 = the return address
+#define IR_ADDR_BLOCK 75     // d = the address of a routine that runs the block t1 as a local call on the frame of this function (x0 = the frame pointer)
 #define IR_ATOMIC 71         // d = an atomic operation on the word at the address args[0] (ir_k: the code of the built-in, see ast_fop_of 20..28); args[1], args[2] the values
 #define IR_ROTR32 70         // d = the low 32 bits of a turned right by b|k places (0..31); the upper half of d is 0 (ror wD, wA, #k)
 #define IR_VLANE 57          // d (a whole number or a double) = the lane of the vector a that starts at byte ir_k (ir_w: 8, 4 or -4 = signed)
@@ -253,7 +257,7 @@ void ir_set_args(int i, int count, int^ vregs) {
 }
 
 bool ir_is_term(int op) {
-    return op == IR_JMP || op == IR_BR || op == IR_FBR || op == IR_RET || op == IR_TRAP;
+    return op == IR_JMP || op == IR_BR || op == IR_FBR || op == IR_RET || op == IR_TRAP || op == IR_LRET;
 }
 
 // ---------------------------------------------------------------------------------------------- the printer
@@ -298,6 +302,10 @@ char^ ir_opname(int op) {
     if op == IR_CALL { return "call"; }
     if op == IR_CALLIND { return "callind"; }
     if op == IR_ATOMIC { return "atomic"; }
+    if op == IR_LCALL { return "lcall"; }
+    if op == IR_LRET { return "lret"; }
+    if op == IR_LENTRY { return "lentry"; }
+    if op == IR_ADDR_BLOCK { return "addr_block"; }
     if op == IR_SYSCALL { return "syscall"; }
     if op == IR_JMP { return "jmp"; }
     if op == IR_BR { return "br"; }
@@ -521,7 +529,10 @@ void ir_print_instr(int i) {
             ir_pc(' ');
             ir_pv(ir_a[i]);
         }
-    } else if op == IR_TRAP {
+    } else if op == IR_TRAP || op == IR_LRET || op == IR_LENTRY {
+    } else if op == IR_LCALL || op == IR_ADDR_BLOCK {
+        ir_ps(" B");
+        ir_pn(ir_t1[i]);
     } else {
         // the arithmetic: a, b
         ir_pc(' ');
@@ -606,6 +617,12 @@ int ir_check() {
             if ir_uses_b(op) && ir_bi[i] == 0 && (ir_b[i] < 0 || ir_b[i] >= ir_nv) {
                 str_copy(@ir_err, "a vreg that does not exist (second operand)", 200);
                 return 0;
+            }
+            if op == IR_LCALL || op == IR_ADDR_BLOCK {
+                if ir_t1[i] < 0 || ir_t1[i] >= ir_nb {
+                    str_copy(@ir_err, "a local call of a block that does not exist", 200);
+                    return 0;
+                }
             }
             if op == IR_JMP || op == IR_BR || op == IR_FBR {
                 if ir_t1[i] < 0 || ir_t1[i] >= ir_nb {

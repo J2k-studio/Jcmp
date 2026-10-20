@@ -30,6 +30,35 @@ int a32_nvc;
 int a32_total;                    // the frame of the function
 int a32_outb;                     // the bytes of the arguments of the calls that the function makes (at the bottom of the frame)
 int a32_cellbase;                 // the offset of the cells (the negative offsets of the frame pointer) from sp
+int a32_lcat[1024];               // the local calls (bl to a block of the same function): place, block
+int a32_lcblk[1024];
+int a32_nlc;
+int a32_cur2;
+char a32_thn[4096];               // the routines that run a defer body for the unwinder (names), the block of each
+int a32_thblk[64];
+int a32_nth;
+int a32_thg;                      // counts all of them (the names)
+
+// "__a32_defer_N"
+void a32_thname(char^ dst, int n) {
+    str_copy(dst, "__a32_defer_", 64);
+    char dg[12];
+    int nd = 0;
+    int m = n;
+    if m == 0 { dg[0] = '0'; nd = 1; }
+    while m > 0 {
+        dg[nd] = '0' + m % 10;
+        m = m / 10;
+        nd += 1;
+    }
+    int at = 12;
+    while nd > 0 {
+        nd -= 1;
+        dst[at] = dg[nd];
+        at += 1;
+    }
+    dst[at] = 0;
+}
 int a32_vbase;                    // the offset of the cells of the virtual registers from sp
 int a32_bad;                      // 1: the function cannot be made
 char a32_why[128];
@@ -877,6 +906,46 @@ bool a32_instr(int i, int b) {
         }
         return true;
     }
+    if op == IR_LCALL {
+        // a local call (a defer body): bl to the block, filled in at the end of the function
+        if a32_nlc >= 1024 { a32_fail("too many local calls"); return false; }
+        a32_lcat[a32_nlc] = a32_pos;
+        a32_lcblk[a32_nlc] = ir_t1[i];
+        a32_nlc += 1;
+        a32_w(0);
+        return true;
+    }
+    if op == IR_LENTRY {
+        a32_str(14, 13, a32_cell(31));
+        a32_dpi(A32_AL, 13, 0, 1, 0, 0);
+        a32_str(1, 13, a32_cell(31) + 4);
+        return true;
+    }
+    if op == IR_LRET {
+        a32_ldr(0, 13, a32_cell(31));
+        a32_w(0xE12FFF10);                          // bx r0
+        return true;
+    }
+    if op == IR_ADDR_BLOCK {
+        // the address of a routine (made after the code of the function) that runs the block on the frame of this function
+        if a32_nc >= A32_MAXC || a32_nth >= 64 { a32_fail("too many calls"); return false; }
+        char tn[64];
+        a32_thname(@tn, a32_thg);
+        a32_thg += 1;
+        str_copy(@a32_thn + a32_nth * 64, @tn, 64);
+        a32_thblk[a32_nth] = ir_t1[i];
+        a32_nth += 1;
+        a32_cat[a32_nc] = a32_pos;
+        a32_cfn[a32_nc] = a32_cur;
+        a32_ckind[a32_nc] = 1;
+        str_copy(@a32_cname + a32_nc * 64, @tn, 64);
+        a32_nc += 1;
+        a32_w(0xE3000000);
+        a32_w(0xE3400000);
+        a32_const(1, 0);
+        a32_store(0, 1, d);
+        return true;
+    }
     if op == IR_JMP {
         if ir_t1[i] != b + 1 { a32_jump(A32_AL, ir_t1[i]); }
         return true;
@@ -925,6 +994,8 @@ void a32_function() {
     a32_fok[a32_cur] = 0;
     a32_bad = 0;
     a32_nj = 0;
+    a32_nlc = 0;
+    a32_nth = 0;
     a32_wrap_ok = 1;
     int mark = a32_pos;
     int markc = a32_nc;
@@ -980,6 +1051,36 @@ void a32_function() {
         }
         b += 1;
     }
+    // the routines that run a defer body for the unwinder: x0 = the frame pointer; sp becomes the sp of this function, the state of the unwinder is kept in the thread block
+    int tk = 0;
+    while tk < a32_nth && a32_bad == 0 {
+        a32_cur2 = a32_nf;
+        a32_nf += 1;
+        str_copy(@a32_fname + a32_cur2 * 64, @a32_thn + tk * 64, 64);
+        a32_foff[a32_cur2] = a32_pos;
+        a32_fok[a32_cur2] = 1;
+        a32_ldr(0, 13, 0);
+        a32_str(13, 10, 768);
+        a32_str(14, 10, 772);
+        a32_const(1, a32_outb);
+        a32_dp(A32_AL, 2, 0, 13, 0, 1);               // sub sp, r0, r1
+        if a32_nlc >= 1024 { a32_fail("too many local calls"); break; }
+        a32_lcat[a32_nlc] = a32_pos;
+        a32_lcblk[a32_nlc] = a32_thblk[tk];
+        a32_nlc += 1;
+        a32_w(0);
+        a32_ldr(13, 10, 768);
+        a32_ldr(14, 10, 772);
+        a32_w(0xE12FFF1E);                            // bx lr
+        tk += 1;
+    }
+    int lk = 0;
+    while lk < a32_nlc && a32_bad == 0 {
+        int lt = a32_boff[a32_lcblk[lk]];
+        int lrel = (lt - (a32_lcat[lk] + 8)) / 4;
+        a32_set(a32_lcat[lk], 0xEB000000 | (lrel & 16777215));
+        lk += 1;
+    }
     // the jumps
     int j = 0;
     while j < a32_nj && a32_bad == 0 {
@@ -991,6 +1092,7 @@ void a32_function() {
     if a32_bad == 1 {
         a32_pos = mark;
         a32_nc = markc;
+        a32_nf = a32_cur + 1;
         str_copy(@a32_fwhy + a32_cur * 128, @a32_why, 128);
         return;
     }
@@ -1048,7 +1150,7 @@ int a32_find(char^ name) {
 
 // ---- the routines of try / catch / throw, by hand (they work on sp and lr): j2k_try_enter, j2k_try_leave, j2k_throw
 // The block of the thread is at 0x10000048: [0] the thrown value, [8] the depth, entry i at 32 * i: sp [+16], lr [+32], head of the cleanup chain [+40];
-// the head of the cleanup chain (a list of records: next, address, function, mode) is at [784].
+// the head of the cleanup chain (a list of records: next, address, function, mode) is at [784]; [768..783]: sp, lr of a defer body run by the unwinder and the state of the unwinder (the block is 792 bytes).
 int a32_xl_at[8];                 // the places of the labels of the routine being written
 int a32_xp_at[16];                // the branches to patch: place, label, condition
 int a32_xp_lab[16];
@@ -1139,12 +1241,12 @@ void a32_emit_exc() {
     a32_w(0xE0000090 | (2 << 16) | (2 << 8) | 1);     // mul r2, r1, r2
     a32_dp(A32_AL, 4, 0, 3, 11, 2);                   // add r3, r11, r2
     a32_dpi(A32_AL, 2, 0, 13, 13, 32);                // sub sp, sp, #32
-    a32_str(3, 13, 16);
+    a32_str(3, 11, 776);
     a32_ldr(9, 3, 40);
-    a32_str(9, 13, 24);
+    a32_str(9, 11, 780);
     a32_xplace(1);                                    // loop
     a32_ldr(5, 11, 784);
-    a32_ldr(4, 13, 24);
+    a32_ldr(4, 11, 780);
     a32_dp(A32_AL, 10, 1, 0, 5, 4);                   // cmp r5, r4
     a32_xbranch(A32_EQ, 2);
     a32_dpi(A32_AL, 10, 1, 0, 5, 0);                  // cmp r5, #0
@@ -1165,7 +1267,7 @@ void a32_emit_exc() {
     a32_w(0xE12FFF30 | 8);                            // blx r8
     a32_xbranch(A32_AL, 1);
     a32_xplace(2);                                    // done
-    a32_ldr(3, 13, 16);
+    a32_ldr(3, 11, 776);
     a32_dpi(A32_AL, 4, 0, 13, 13, 32);                // add sp, sp, #32
     a32_ldr(4, 3, 16);
     a32_ldr(14, 3, 32);

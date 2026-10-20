@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.192
+* **ARM32: `defer`.** The body of a `defer` runs on the frame of its function (a local call), also when a `throw` leaves the function: a small routine per `defer` gives the unwinder the frame of the owner (the state of the unwinder is kept in the thread block while the body runs).
+* **ARM32: `expr?` with a text or array content** (`Fs::read_text`, `Fs::read_lines`, `t226`, `t440` run) and unsigned whole number to `double`.
+* 205 of the 230 tests with an expected output give the same output on ARM32 (`tools/a32sweep.sh`); not yet: SIMD, the `#multithread` loop, raw `register { }` blocks, `fma`.
+* The programs for ARM64 are the same as in 0.9.191.
+
 ## 0.9.191
 * **ARM32: system calls.** The structures that the ARM64 table passes with 64-bit fields (`timespec`, `timeval`, the `execve` arrays) are turned into the 32-bit form (`__a32_sys` in `std/rt_a32.j`): `sleep`, the clock and time, processes and `ppoll` give the same results as on ARM64. 195 of the 230 tests with an expected output give the same output on ARM32 (`tools/a32sweep.sh`).
 * **`expr?` from the syntax tree** (a Result or an Option whose content is a number, a char, a bool or a pointer), on both targets: an `Err` / `None` goes back to the caller as the text path did.

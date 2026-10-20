@@ -1,6 +1,8 @@
-# J2K / Jcmp 0.9.191
+# J2K / Jcmp 0.9.192
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
+
+**0.9.192:** ARM32: `defer`, `expr?` with a text or array content, unsigned to `double` (205 of 230 tests run the same as on ARM64).
 
 **0.9.191:** ARM32: sleep, the clock and processes work (system calls adapted to the 32-bit structures); `expr?` made from the syntax tree.
 
