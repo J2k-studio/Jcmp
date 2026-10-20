@@ -22,7 +22,6 @@ int lam_line[512];
 char lam_file[65536];        // 512 x 128
 int lam_count;
 int lam_done;
-int lam_seq;
 int lam_warned;
 // data enums (enum class E { A(int x), B, ... }): rewritten as a struct with a tag, see gen_data_enum
 char dv_name[4096];          // 64 x 64

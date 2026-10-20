@@ -80,6 +80,7 @@
 #define IR_FCVT_SD 67        // d (double) = a (float) (fcvt dD, sA)
 #define IR_I2F32 68          // d (float) = the whole number a (scvtf sD, xA)
 #define IR_F32TOI 69         // d (whole number) = the float a towards 0 (fcvtzs xD, sA)
+#define IR_ATOMIC 71         // d = an atomic operation on the word at the address args[0] (ir_k: the code of the built-in, see ast_fop_of 20..28); args[1], args[2] the values
 #define IR_ROTR32 70         // d = the low 32 bits of a turned right by b|k places (0..31); the upper half of d is 0 (ror wD, wA, #k)
 #define IR_VLANE 57          // d (a whole number or a double) = the lane of the vector a that starts at byte ir_k (ir_w: 8, 4 or -4 = signed)
 #define IR_VINS 58           // d (a vector) = a with the lane at byte ir_k replaced by b (ir_w: 8 or 4)
@@ -296,6 +297,7 @@ char^ ir_opname(int op) {
     if op == IR_ADDR_FUNC { return "addr.func"; }
     if op == IR_CALL { return "call"; }
     if op == IR_CALLIND { return "callind"; }
+    if op == IR_ATOMIC { return "atomic"; }
     if op == IR_SYSCALL { return "syscall"; }
     if op == IR_JMP { return "jmp"; }
     if op == IR_BR { return "br"; }

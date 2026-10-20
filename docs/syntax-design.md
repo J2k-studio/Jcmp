@@ -2111,3 +2111,9 @@ that place), and the dangerous calls are guarded. Done in 0.9.186:
   The flags of `open` are the numbers of the machine; `open_read / open_write / open_append / open_dir` need none.
 * The whole standard library (std/*.j except the runtime `rt_*.j`, which is the layer under `Sys`) and the tests of the network were moved from `syscall(...)` to `Sys::`.
 * The compiler warns about `syscall(number, ...)` in a program (not in the library): `[-Wsyscall]`, an error with `-st`. `#allow syscall` (a new directive, next to `#reserve`) turns it off for the program; the compiler's own source has it.
+
+## 83. A compiled J2K library has the extension `.jo` (owner's idea, 2026-10-20: "a lib like `.so` but in J2K, e.g. `libcore.jo`")
+* Replaces the name `.so` of design 11 / section 71 for libraries that only J2K programs use (the C border and plugins stay a later question).
+* What is inside (the assistant's proposal, adjustable): the interface (`.jh`, section 80) and the code of each function as symbolic IR (not ARM64 text), bound to the version of the compiler. A program that uses it is compiled with the IR of the library functions in view (inlining across files stays possible) and is still ONE ELF file; no loader, no libc.
+* It needs the syntax tree to make all the code (A6) and then the IR files per function (`docs/design/16-separate-compilation.md` section 9). The same format serves the ARM32 and x86_64 back ends. Not started; the order is A6, then `.jo`, then `jcmp -lib NAME`.
+* Open points (docs/open-questions.md): the name of the tool command (`jcmp -lib`?), whether a library may hide its source, how the version binding is shown, the rule that owners (String, T[], alloc) do not cross the border of a library that is called, not inlined.

@@ -67,7 +67,7 @@ for lib in ("simd", "quat", "complex", "stats", "canvas", "screen"):
     open("build/libs/%s.j" % lib, "w").write(t)
     if os.path.isdir(os.path.expanduser("~/Jcmp-libs/libs")):
         open(os.path.expanduser("~/Jcmp-libs/libs/%s.j" % lib), "w").write(t)
-text += gen("push_prelude", ["rt_heap", "rt_hw", "rt_mem", "rt_arr", "rt_str", "rt_in", "rt_fp", "rt_mt"], "push_prelude(): the runtime, read in front of every program: heap + panic, hardware (Cpu Atomic Cache Bit), Mem, dynamic arrays, String, keyboard input, threads.", "runtime")
+text += gen("push_prelude", ["rt_heap", "rt_hw", "rt_mem", "rt_arr", "rt_str", "rt_in", "rt_fp", "rt_mt", "rt_a32"], "push_prelude(): the runtime, read in front of every program: heap + panic, hardware (Cpu Atomic Cache Bit), Mem, dynamic arrays, String, keyboard input, threads.", "runtime")
 open("jcmp/jc_std.j", "w").write("\n".join(text))
 # a file of Library that is not written now is a library that went away (it is downloaded now): delete it
 keep = set(["VERSION"] + [n + ".j" for n in unit_names + ["runtime", "cpu", "vector", "matrix"]])

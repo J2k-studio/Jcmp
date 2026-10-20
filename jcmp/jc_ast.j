@@ -90,6 +90,7 @@ int ast_root;                    // the block of the last body read (0: it is no
 
 // the locals of the body: names (the probe's own table; the parameters come first)
 char ast_lname[16384];           // 256 x 64
+int ast_usig[1024];               // by the unique number of a local: the signature (its number) of the function pointer that it is, else -1
 int ast_lid[256];                // the unique number of each local of the body (a slot of this table is reused when a block ends)
 int ast_nuid;
 int ast_uname[1024];             // unique number -> the name (an offset in ast_pool)
@@ -229,6 +230,7 @@ int ast_add_local(char^ name) {
     ast_lid[ast_nl] = ast_nuid;
     if ast_nuid < 1023 {
         ast_uname[ast_nuid] = ast_pool_add(name);
+        ast_usig[ast_nuid] = 0 - 1;
         ast_nuid += 1;
     }
     ast_lkind[ast_nl] = 0;
@@ -246,6 +248,16 @@ int ast_arith_ty(int ta, int tb) {
     if ba == 6 || bb == 6 { return ast_mkty(0, 6); }
     if ba == 13 || bb == 13 { return ast_mkty(0, 13); }
     return ast_mkty(0, 8);
+}
+
+// a decimal literal or a calculation of them: the text path gives it the type "a decimal number", which becomes float or double as needed
+bool ast_is_flit(int n) {
+    if n == 0 { return false; }
+    int k = ast_kind[n];
+    if k == AK_FNUM { return true; }
+    if k == AK_NEG { return ast_is_flit(ast_a[n]); }
+    if k == AK_BIN { return ast_val[n] >= AO_ADD && ast_val[n] <= AO_DIV && ast_is_flit(ast_a[n]) && ast_is_flit(ast_b[n]); }
+    return false;
 }
 
 // the element of a dynamic array T[]: kept in the base of a kind 5 type as  element kind * 1000 + element code  (the packed type of the
@@ -294,13 +306,17 @@ bool ast_value_code(int code) {
 }
 
 // the parameters and the locals that the parser has already: scalars, structs, pointers to them and fixed arrays
+int ast_np0;                       // the locals of the parser when the body began (the parameters): their numbers are the parser's
+
 void ast_load_params() {
     ast_nl = 0;
     ast_plen = 0;
+    ast_np0 = lcount;
     int i = 0;
     while i < lcount {
         int li = ast_add_local(@lname + i * 64);
         if li < 0 { return; }
+        if ltid[i] < 0 && ast_lid[li] < 1023 { ast_usig[ast_lid[li]] = 0 - ltid[i] - 1; }
         // `self` of a method of a generic instance (Option<String>) carries the dynamic type of T: it is still the address of the struct
         bool self_ptr = str_eq(@lname + i * 64, "self") && ldyn[i] != 0 && (lptr[i] != 0 || lelem[i] >= 16);
         if ldyn[i] != 0 && !self_ptr {
@@ -979,7 +995,17 @@ bool ast_lambda_follows() {
     return r;
 }
 
+int ast_lam0;                      // the number of the first lambda that the text path makes in the body being read
+int ast_lam_k;                     // lambdas met so far (not counting those written inside another lambda)
+int ast_lam_depth;
+
 int ast_lambda() {
+    int lam_no = 0 - 1;
+    if ast_lam_depth == 0 {
+        lam_no = ast_lam0 + ast_lam_k;
+        ast_lam_k += 1;
+    }
+    ast_lam_depth += 1;
     next();                                  // the result type
     next();                                  // (
     int saved_nl = ast_nl;
@@ -1009,9 +1035,10 @@ int ast_lambda() {
     int body = ast_block();
     ast_nl = saved_nl;
     ast_loop_depth = saved_loop;
+    ast_lam_depth -= 1;
     if ast_ok == 0 { return 0; }
     ast_cur_ty = ast_mkty(0, 8);
-    return ast_node(AK_LAMBDA, body, 0, 0, 0);
+    return ast_node(AK_LAMBDA, body, 0, 0, lam_no);
 }
 
 // the name in the pool is one of the instructions of the double unit: 1 sqrt, 2 floor, 3 ceil, 4 trunc (0 for another name)
@@ -1031,6 +1058,16 @@ int ast_fop_of(int at) {
     if str_eq(nm, "arg") { return 12; }               // arg(i): the i-th argument, a text
     if str_eq(nm, "__hash") { return 9; }             // __hash(x): a number for a key of a Map / Set (a whole number is hashed, a String too)
     if str_eq(nm, "syscall") { return 8; }          // syscall(number, args ...): the result of the system call, a whole number
+    if str_eq(nm, "__cas") { return 20; }            // the atomic built-ins of std/rt_hw.j (the tree makes them only for the ARM32 target: IR_ATOMIC)
+    if str_eq(nm, "__xchg") { return 21; }
+    if str_eq(nm, "__fetch_add") { return 22; }
+    if str_eq(nm, "__fetch_sub") { return 23; }
+    if str_eq(nm, "__fetch_and") { return 24; }
+    if str_eq(nm, "__fetch_or") { return 25; }
+    if str_eq(nm, "__fetch_xor") { return 26; }
+    if str_eq(nm, "__atomic_load") { return 27; }
+    if str_eq(nm, "__atomic_store") { return 28; }
+    if str_eq(nm, "__thread_start") { return 29; }    // __thread_start(function, argument, top of the stack, id word, thread block): the ARM32 target only
     return 0;
 }
 
@@ -1431,6 +1468,8 @@ int ast_expr(int level) {
             ast_cur_ty = ast_ty[lhs];                  // a pointer moved by a number of bytes (the same type)
         } else if code == AO_ADD && ast_ty[rhs] / 65536 == 1 && ast_ty[lhs] / 65536 == 0 && ast_ty[lhs] % 65536 != 6 && ast_ty[lhs] % 65536 != 7 {
             ast_cur_ty = ast_ty[rhs];
+        } else if (ast_ty[lhs] == 6 && ast_is_flit(rhs)) || (ast_ty[rhs] == 6 && ast_is_flit(lhs)) {
+            ast_cur_ty = ast_mkty(0, 6);               // a float and a decimal literal: a float (the literal adapts)
         } else {
             ast_cur_ty = ast_arith_ty(ast_ty[lhs], ast_ty[rhs]);
         }
@@ -1536,8 +1575,10 @@ int ast_decl(int base) {
         base = 3 + (0 - 10 - base);
     }
     next();                                  // the type
+    bool isfn = false;
     if tok_is("(") {
         // a pointer to a function: int(int, int)^ f
+        isfn = true;
         int fdepth = 0;
         while tok_kind != T_EOF {
             if tok_is("(") { fdepth += 1; }
@@ -1651,6 +1692,7 @@ int ast_decl(int base) {
     }
     next();
     int di = ast_add_local(@dn);
+    if di >= 0 && isfn && ast_lid[di] < 1023 { ast_usig[ast_lid[di]] = 0 - 2; }          // a local that is a function pointer: its signature is looked for when the parser has its locals (as1_sigof)
     if di >= 0 {
         ast_lkind[di] = kind;
         ast_lbase[di] = base;
@@ -2800,6 +2842,9 @@ bool ast_probe(int f_idx) {
     ast_why[0] = 0;
     ast_loop_depth = 0;
     ast_nuid = 0;                            // the numbers of the locals are those of this body
+    ast_lam0 = lam_seq;                      // the text path names the lambdas of this body __lambda_<this number>, +1 ... in the order they are written
+    ast_lam_k = 0;
+    ast_lam_depth = 0;
     ast_load_params();
     int root = 0;
     if ast_ok == 1 { root = ast_block(); }

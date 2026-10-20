@@ -256,3 +256,7 @@ int x_repeat;                   // -xrepeat
 int x_lex;                      // -xlex
 int allow_syscall;               // #allow syscall: no warning about syscall(number, ...)
 int x_allreach;                  // -xall
+
+int lam_seq;                     // the number of the next lambda (__lambda_<n>); the tree reads it to name the lambdas of a body
+int x_target;                    // 32: -target arm32 (the ARM32 back end, jc_a32.j)
+char^ x_map;                     // -xmap FILE: the addresses of the functions (and the labels) of the program

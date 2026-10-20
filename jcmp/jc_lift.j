@@ -2013,6 +2013,15 @@ void ir_run() {
                     if ir_mode == 1 { ir_say("not lifted: ", @ir_stat_fn, ""); ir_say("    ", "a line is too long", ""); }
                 }
             }
+            if ok && x_target == 32 {
+                a32_function();
+                i = p;
+                continue;
+            }
+            if x_target == 32 {
+                // the function cannot be lifted to the IR: it is known, not made (said when something that is made calls it)
+                if done { a32_unlifted(@ir_stat_fn, @lf_why); } else { a32_unlifted(@ir_stat_fn, "its end was not found"); }
+            }
             if ok {
                 lf_lifted += 1;
                 op_changed = 1;

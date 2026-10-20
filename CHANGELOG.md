@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.190
+* **ARM32 (first working version, `-target arm32`).** `jcmp -target arm32 x.jk -o x` writes a 32-bit ARM program (ELF32, EABI 5) that runs on a 64-bit ARM Linux machine that runs 32-bit programs (Android phones do). `int` stays 64 bits (a pair of registers). It makes: functions, recursion, loops, 64-bit arithmetic and shifts, division, `double` and `float` (VFP), `cout`, strings, dynamic arrays, structs, the heap (`alloc` / `free`), `try` / `catch` / `throw`, threads, atomics, lambdas, function pointers, the SHA / RSA / ECDSA / AES-GCM code of the library. The routines that the ARM64 target has as assembly are written in J2K (`std/rt_a32.j`). 184 of the 230 tests with an expected output give the same output as on ARM64 (`tools/a32sweep.sh`). Not yet: SIMD, `defer`, raw `register { }` blocks, the standard input of `cin` on a terminal, more than a plain build (no register allocation yet: the code is slow). `-target arm64` is the default.
+* **The syntax tree makes more code** (95% of the functions of the tests and examples): `float`, arrays of structs, function pointers and lambdas, methods on a text (`"x".trim()`), `String[]` parameters, `assert` / `exit`, more than 8 arguments (ARM32 only). A bug of the tree was found and fixed: `~x` was made as a logical not.
+* `tools/elfcmp.sh` compares the programs of two compilers; `tools/a32sweep.sh` measures ARM32 on the tests; hidden `-xall`.
+* The programs for ARM64 are the same, byte for byte, as in 0.9.189 (checked on all tests and examples).
+
 ## 0.9.189
 * Internal: the syntax tree (the part of the compiler that makes the code) now builds more functions: methods called on a text (`"  x ".trim()`), `String[]` parameters, and `assert` / `exit` / `panic` / `len` when they are functions of the library (`using stdlib::sys`). The programs are the same; new tests `t465`, `t466`. A hidden option `-xall` measures the whole library on the tree.
 

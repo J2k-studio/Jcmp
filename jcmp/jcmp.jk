@@ -3,7 +3,7 @@
 // Use:    jcmp1 input.jk -o program
 // the version of the compiler (also in the file VERSION; release.sh checks that they agree)
 #allow syscall                         // the compiler is the layer under Sys: it calls the system by number on purpose
-#define JCMP_VERSION "0.9.189"
+#define JCMP_VERSION "0.9.190"
 
 #import "jc_base"
 #import "jc_asm"
@@ -19,6 +19,7 @@
 #import "jc_opt"
 #import "jc_lift"
 #import "jc_astlow"
+#import "jc_a32"
 #import "jc_vec"
 #import "jc_peep"
 #import "jc_cache"
@@ -118,7 +119,6 @@ bool is_opt(char^ a, char^ name) {
 }
 
 char^ x_pre;
-char^ x_map;
 char^ x_cachestat;
 char^ x_cachedir;
 char cache_default[300];
@@ -222,6 +222,20 @@ void main() {
             syscall(93, 0);
         } else if str_eq(a, "-irstat") {
             ir_mode = 1;
+        } else if str_eq(a, "-target") {
+            ai += 1;
+            if ai >= argc() { usage(); }
+            if str_eq(arg(ai), "arm32") {
+                x_target = 32;
+                ir_mode = 2;
+                ir_opt = 0;
+                ir_pre = 0;
+                inl_off = 1;
+                x_nocache = 1;
+            } else if !str_eq(arg(ai), "arm64") {
+                write_err("jcmp: -target takes arm64 (the default) or arm32\n");
+                syscall(93, 1);
+            }
         } else if str_eq(a, "-noir") {
             ir_mode = 0;
         } else if str_eq(a, "-irtrip") {
@@ -537,6 +551,7 @@ void main() {
     if ir_mode > 0 && opt_peep == 1 && ir_pre == 1 { peep_run(); }
     tm_stage("nr + first peephole");
     if ir_mode > 0 { ir_run(); }
+    if x_target == 32 { a32_finish(out_elf); }
     tm_stage("ir");
     if x_time == 1 { write_err("    (expressions out of loops: "); write_err_int(lc_us / 1000); write_err(" ms, "); write_err_int(lc_calls); write_err(" functions, "); write_err_int(lc_moved); write_err(" instructions moved)\n"); }
     if opt_peep == 1 { peep_run(); }

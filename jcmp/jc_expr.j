@@ -1936,6 +1936,30 @@ void compute_reach() {
             j += 1;
         }
     }
+    if x_target == 32 {
+        // the ARM32 target: the routines of std/rt_a32.j are called by the back end, not by the program
+        k = 0;
+        while k < fcount {
+            char^ fnm = @fname + k * 64;
+            if fnm[0] == '_' && fnm[1] == '_' { freach[k] = 1; }          // the runtime (__Arr__, __Str__, __a32_ ...): the back end calls it by name
+            if fnm[0] == 'M' && fnm[1] == 'e' && fnm[2] == 'm' && fnm[3] == '_' && fnm[4] == '_' { freach[k] = 1; }
+            if fnm[0] == 'S' && fnm[1] == 'y' && fnm[2] == 's' && fnm[3] == '_' && fnm[4] == '_' { freach[k] = 1; }
+            k += 1;
+        }
+        changed = true;
+        while changed {
+            changed = false;
+            int j2 = 0;
+            while j2 < edge_count {
+                int to2 = find_func(@edge_to + j2 * 64);
+                if to2 >= 0 && freach[to2] == 0 && (edge_from[j2] < 0 || freach[edge_from[j2]] == 1) {
+                    freach[to2] = 1;
+                    changed = true;
+                }
+                j2 += 1;
+            }
+        }
+    }
     if x_allreach == 1 {
         // -xall: every function is wanted (to look at the whole library, not only what main reaches)
         k = 0;
