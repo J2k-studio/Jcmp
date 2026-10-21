@@ -1138,6 +1138,12 @@ void parse_cout() {
     int c_count = 0;
     int c_last = 0;
     int c_float = 0;
+    bool c_err = tok_is("cerr");
+    if c_err {
+        // cerr: the file of the printing routines is the standard error (the word at 864 of the global area holds the number of the file minus 1)
+        emit_line("mov x1, 1");
+        emit_line("str x1, [x28, #864]");
+    }
     if tok_is("coutf") {
         c_float = 1;
         io_float_name();
@@ -1146,8 +1152,13 @@ void parse_cout() {
     while tok_is("<<") {
         next();
         in_cout = 1;
+        ex_isptr = 0;
+        int sq0 = tok_seq;
+        bool starts_at = tok_is("@");
         parse_bitor();
         in_cout = 0;
+        // a pointer is written 0x...: the item is `@something`, or the name of a pointer variable alone (not p^, not (int)p, not p + 1)
+        if ex_isptr == 1 && !starts_at && tok_seq - sq0 != 1 { ex_isptr = 0; }
         c_last = ex_w;
         if ex_ty == 80 {
             dyn_null_check();
@@ -1165,6 +1176,12 @@ void parse_cout() {
             emit_line("bl j2k_print_str");
         } else if c_last == 2 {
             emit_line("bl j2k_print_char");
+        } else if ex_ty == 1 {
+            emit_line("bl __print_bool");
+            note_call("__print_bool");
+        } else if ex_isptr == 1 && ex_ty == 0 && ex_w == 8 {
+            emit_line("bl __print_ptr");
+            note_call("__print_ptr");
         } else {
             if ex_ty == 95 {
                 emit_line("bl j2k_print_uint");
@@ -1184,6 +1201,10 @@ void parse_cout() {
     if c_count == 1 && c_last != 9 && c_last != 2 {
         emit_line("mov x0, 10");
         emit_line("bl j2k_print_char");
+    }
+    if c_err {
+        emit_line("mov x1, 0");
+        emit_line("str x1, [x28, #864]");
     }
 }
 
@@ -2506,7 +2527,7 @@ void parse_statement_inner() {
         parse_cin();
         return;
     }
-    if tok_is("cout") || tok_is("coutf") {
+    if tok_is("cout") || tok_is("coutf") || tok_is("cerr") {
         parse_cout();
         return;
     }
@@ -3452,7 +3473,7 @@ void parse_top_item() {
 bool top_statement_follows() {
     if tok_kind != T_IDENT { return false; }
     if tok_is("while") || tok_is("if") || tok_is("for") || tok_is("loop") || tok_is("switch") || tok_is("return") || tok_is("break") || tok_is("continue") { return true; }
-    if tok_is("cout") || tok_is("cin") || tok_is("coutf") || tok_is("cinf") || tok_is("defer") || tok_is("try") || tok_is("throw") { return true; }
+    if tok_is("cout") || tok_is("cerr") || tok_is("cin") || tok_is("coutf") || tok_is("cinf") || tok_is("defer") || tok_is("try") || tok_is("throw") { return true; }
     if find_struct(@tok_text) >= 0 || find_enum(@tok_text) >= 0 || at_type() { return false; }
     // a name that is not a type, then = or ( : an assignment or a call
     int k = 0;
@@ -3804,7 +3825,8 @@ void emit_print_helpers() {
     emit_line("sub x2, x2, x3");
     emit_line("add x1, sp, #0");
     emit_line("add x1, x1, x3");
-    emit_line("mov x0, 1");
+    emit_line("ldr x0, [x28, #864]");
+    emit_line("add x0, x0, #1");
     emit_line("mov x8, 64");
     emit_line("svc 0");
     emit_line("add sp, sp, #48");
@@ -3820,7 +3842,8 @@ void emit_print_helpers() {
     emit_line("add x2, x2, #1");
     emit_line("b j2k_ps1");
     emit_line("j2k_ps2:");
-    emit_line("mov x0, 1");
+    emit_line("ldr x0, [x28, #864]");
+    emit_line("add x0, x0, #1");
     emit_line("mov x8, 64");
     emit_line("svc 0");
     emit_line("ret");
@@ -3828,7 +3851,8 @@ void emit_print_helpers() {
     emit_line("sub sp, sp, #16");
     emit_line("strb x0, [sp, #0]");
     emit_line("add x1, sp, #0");
-    emit_line("mov x0, 1");
+    emit_line("ldr x0, [x28, #864]");
+    emit_line("add x0, x0, #1");
     emit_line("mov x2, 1");
     emit_line("mov x8, 64");
     emit_line("svc 0");
@@ -4172,7 +4196,8 @@ void emit_uprint_helper() {
     emit_line("sub x2, x2, x3");
     emit_line("add x1, sp, #0");
     emit_line("add x1, x1, x3");
-    emit_line("mov x0, 1");
+    emit_line("ldr x0, [x28, #864]");
+    emit_line("add x0, x0, #1");
     emit_line("mov x8, 64");
     emit_line("svc 0");
     emit_line("add sp, sp, #48");

@@ -99,9 +99,10 @@ installed together with the compiler. The compiler looks for it in the folder na
 [Jcmp-libs](https://github.com/J2k-studio/Jcmp-libs): `jget -li install simd` puts one in `~/.j2k/Library`; the compiler says so when a program imports one that is missing.
 
 ### `jget`: a separate tool
-`jget` downloads files (with a progress bar) and installs libraries for J2K. It is a project of its own, [github.com/J2k-studio/jget](https://github.com/J2k-studio/jget), because it is
-useful without the compiler too; install it with
-`curl -fsSL https://raw.githubusercontent.com/J2k-studio/jget/main/install.sh | sh`. A library that `jget -li install NAME` puts in `~/.j2k/Library/NAME.j` is found by `#import <NAME>`.
+`jget` downloads files (with a progress bar) and installs libraries for J2K. It is one of the tools of [Jcmp-Tools](https://github.com/J2k-studio/Jcmp-Tools) (a repository of its own, because the tools are
+useful without the compiler too); install it with
+`curl -fsSL https://raw.githubusercontent.com/J2k-studio/Jcmp-Tools/main/install-jget.sh | sh`
+(or `install.sh` of that repository, which can install several tools and asks which). A library that `jget -li install NAME` puts in `~/.j2k/Library/NAME.j` is found by `#import <NAME>`.
 The part of its work that is done by the library of the compiler is `Net::http.download(url, file, 1)` (HTTP over TCP, DNS by name) and `Net::dns.lookup(name)`.
 
 ### https

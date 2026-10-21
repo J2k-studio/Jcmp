@@ -81,7 +81,7 @@ bool define_is_expr(char^ s, int n) {
         j += 1;
     }
     w[k] = 0;
-    if str_eq(@w, "return") || str_eq(@w, "if") || str_eq(@w, "else") || str_eq(@w, "while") || str_eq(@w, "for") || str_eq(@w, "loop") || str_eq(@w, "switch") || str_eq(@w, "case") || str_eq(@w, "break") || str_eq(@w, "continue") || str_eq(@w, "goto") || str_eq(@w, "defer") || str_eq(@w, "throw") || str_eq(@w, "try") || str_eq(@w, "catch") || str_eq(@w, "cout") || str_eq(@w, "cin") { return false; }
+    if str_eq(@w, "return") || str_eq(@w, "if") || str_eq(@w, "else") || str_eq(@w, "while") || str_eq(@w, "for") || str_eq(@w, "loop") || str_eq(@w, "switch") || str_eq(@w, "case") || str_eq(@w, "break") || str_eq(@w, "continue") || str_eq(@w, "goto") || str_eq(@w, "defer") || str_eq(@w, "throw") || str_eq(@w, "try") || str_eq(@w, "catch") || str_eq(@w, "cout") || str_eq(@w, "cerr") || str_eq(@w, "cin") { return false; }
     return true;
 }
 
@@ -911,7 +911,7 @@ void push_lib(char^ name) {
         str_copy(@m, "the library '", 20);
         append_text(@m, name);
         append_text(@m, "' is not installed");
-        die_help(@m, "install it with  jget -li install NAME  (the download tool: https://github.com/J2k-studio/Jget); the libraries that come with jcmp are in its folder Library");
+        die_help(@m, "install it with  jget -li install NAME  (the download tool: https://github.com/J2k-studio/Jcmp-Tools); the libraries that come with jcmp are in its folder Library");
     }
     if lx_depth >= 15 { die("imports nested too deeply"); }
     stk_pos[lx_depth] = cur_pos;

@@ -1997,6 +1997,46 @@ struct __In {
 
 
 // Printing a double that is 2^64 or more (coutf calls this from j2k_print_f64): d.dddddde+NN, the sign is written by the caller.
+
+// cout << a bool: true or false
+void __print_bool(int v) {
+    if v != 0 {
+        syscall(64, __out_fd(), "true", 4);
+    } else {
+        syscall(64, __out_fd(), "false", 5);
+    }
+}
+
+// cout << a pointer or an address: 0x and the digits in hex (0x0 for null)
+void __print_ptr(int v) {
+    char buf[24];
+    int at = 22;
+    if v == 0 {
+        buf[at] = '0';
+        at -= 1;
+    }
+    int x = v;
+    int k = 0;
+    while k < 16 && x != 0 {
+        int d = x & 15;
+        if d < 10 { buf[at] = (char)(48 + d); } else { buf[at] = (char)(87 + d); }
+        at -= 1;
+        x = (x >> 4) & 1152921504606846975;
+        k += 1;
+    }
+    buf[at] = 'x';
+    at -= 1;
+    buf[at] = '0';
+    at -= 1;
+    syscall(64, __out_fd(), @buf[at + 1], 22 - at);
+}
+
+// the file that cout writes to: 1, or 2 inside a statement with cerr (the word at 864 of the global area, 0 or 1, plus 1)
+int __out_fd() {
+    int^ gout = (int^)268435456;
+    return gout[108] + 1;
+}
+
 struct __Fp {
     static void huge(int bits) {
         double fl[1];
@@ -2041,7 +2081,7 @@ struct __Fp {
         n += 1;
         buf[n] = (char)(48 + e10 % 10);
         n += 1;
-        syscall(64, 1, @buf, n);
+        syscall(64, __out_fd(), @buf, n);
     }
 }
 
@@ -2179,6 +2219,15 @@ int __a32_fixargs(int sp) {
     i32^ old = (i32^)sp;
     int w = (old[0] & 4294967295) + 2;
     while (old[w] & 4294967295) != 0 { w += 1; }
+    // after the environment come the pairs of the auxiliary vector: (1 << 17) of AT_HWCAP (16) says that the CPU has udiv / sdiv (the global area is at 0x10000000, the flag at 872)
+    int k = w + 1;
+    while (old[k] & 4294967295) != 0 {
+        if (old[k] & 4294967295) == 16 && ((old[k + 1] & 4294967295) & 131072) != 0 {
+            int^ gflag = (int^)268435456;
+            gflag[109] = 1;
+        }
+        k += 2;
+    }
     int mem = syscall(222, 0, (w + 2) * 8, 3, 34, -1, 0);
     int^ nw = (int^)mem;
     int j = 0;
@@ -2243,13 +2292,13 @@ void __a32_errtext(char^ s) {
 void __a32_print_str(char^ s) {
     int n = 0;
     while s[n] != 0 { n += 1; }
-    syscall(64, 1, s, n);
+    syscall(64, __out_fd(), s, n);
 }
 
 void __a32_print_char(int c) {
     char b[8];
     b[0] = c;
-    syscall(64, 1, @b, 1);
+    syscall(64, __out_fd(), @b, 1);
 }
 
 void __a32_print_int(int v) {
@@ -2275,7 +2324,7 @@ void __a32_print_int(int v) {
         buf[at] = '-';
         at -= 1;
     }
-    syscall(64, 1, @buf[at + 1], 31 - at);
+    syscall(64, __out_fd(), @buf[at + 1], 31 - at);
 }
 
 // the end of a function that has to give a value and did not (the ARM64 target jumps to j2k_noret)
@@ -2344,7 +2393,7 @@ void __a32_print_uint(int v) {
         at -= 1;
         v = q;
     }
-    syscall(64, 1, @buf[at + 1], 31 - at);
+    syscall(64, __out_fd(), @buf[at + 1], 31 - at);
 }
 
 // cout of a double: the same text as j2k_print_f64 of the ARM64 target (6 decimals; infinity, nan; 2^64 and more as d.dddddde+NN)

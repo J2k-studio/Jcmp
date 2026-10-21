@@ -1,6 +1,8 @@
-# J2K / Jcmp 0.9.200
+# J2K / Jcmp 0.9.201
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
+
+**0.9.201:** `cout` prints a `bool` as `true` / `false` and a pointer as `0x...`; `cerr`; faster integer division on ARM32.
 
 **0.9.200:** wide arithmetic in `Bit` (carry, 128-bit product, divide with remainder, saturating add) and `Flags::c` in register blocks.
 

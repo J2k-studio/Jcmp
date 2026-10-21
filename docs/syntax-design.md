@@ -2156,3 +2156,14 @@ Answers given by the owner (the words are the owner's; what is marked "AI" is th
 * `Bit::mul_hi(a, b)` is the high 64 bits of the 128-bit product of two unsigned numbers; `Bit::mul_wide(a, b)` gives `BitWide { int lo; int hi; }`; `Bit::div_rem(a, b)` gives `BitDivRem { int q; int r; }` (signed; the quotient goes towards 0; `b` is not 0); `Bit::add_sat(a, b)` is the signed sum that stops at the largest or the smallest number.
 * In this version they are functions of the library that give the same result on both targets (written with the operations of the language). The owner's aim is "one instruction that is guaranteed": the optimizer will turn them into `adds` / `adc`, `umulh` and `sqadd` kind of instructions step by step, and `jcmp -show NAME` shows what was made.
 * `x1 = Flags::c;` (also `z`, `n`, `v`) inside `register { }` and `naked` reads the flag of the CPU, 0 or 1, as the last instruction that sets the flags (`adds`, `subs`, `cmp`, ... written with `Cpu::inst`) left it. ARM64 only (`mrs x1, nzcv` and a shift); not on ARM32.
+
+## 88. `cerr` (owner's choice 7, 2026-10-22: "cerr, put it in stdlib")
+* `cerr << a << b;` is a statement like `cout`, with the same rules, that writes to the standard error (file 2). It is part of the standard library (`#import <stdlib>`), a word that cannot be used as a name, as `cout` is.
+* How: the printing routines of the runtime write to the file `1 + (the word at 864 of the global area)`; a `cerr` statement sets the word to 1 for its length. So an exception thrown in the middle of a `cerr` statement leaves the output on the standard error until the next `cout` statement (a known limit).
+* Not in the syntax tree yet (a function that uses `cerr` is made from the text).
+
+## 89. Printing defaults of `cout` (owner's choice A of design 20, 2026-10-22)
+* A `bool` prints as `true` / `false` (it was `1` / `0`); this holds for variables and for comparisons such as `cout << (n > 3)`.
+* A pointer variable, and the address `@x`, print as `0x` and the address in hex; `null` prints as `0x0`. `(int)p` still prints a number and `p^` the value.
+* The same in the tree path and the text path (`__print_bool`, `__print_ptr` in the runtime). Struct / enum printing, `hex()`, `ptr()`, `bytes()`, `show` and `dbg()` (options B-E) are not decided.
+* Tests: t486 and the changed expected outputs of the tests that printed a `bool`.

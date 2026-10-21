@@ -42,6 +42,7 @@ for jk in test/t*.jk; do
     sed 's/^#import/import/' $jk > test/.seed_$n.jk       # the frozen seed knows only the old spelling `import`
     build/Jcmp test/.seed_$n.jk $O/$n.old.jasm 2>/dev/null; rb=$?
     rm -f test/.seed_$n.jk
+    case $n in t97_*) skip=$((skip+1)); continue;; esac   # cout of a bool: jcmp writes true / false, the frozen asm compiler 1 / 0
     case $n in t57_*|t64_*|t65_*) skip=$((skip+1)); continue;; esac   # i8 arithmetic: jcmp uses int width like C, the frozen asm compiler wraps
     case $n in t13[0-9]_*|t14[0-9]_*|t15[0-9]_*|t16[0-9]_*|t17[0-9]_*|t18[0-9]_*|t19[0-9]_*|t2[0-9][0-9]_*|t3[0-9][0-9]_*|t4[0-9][0-9]_*) skip=$((skip+1)); continue;; esac   # rules only jcmp has (the asm compiler is a frozen seed)
     if [ $ra -ne 0 ] && [ $rb -ne 0 ]; then skip=$((skip+1)); continue; fi

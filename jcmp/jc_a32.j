@@ -1219,6 +1219,50 @@ bool a32_instr(int i, int b) {
         // no instruction for these on the target: a routine of std/rt_a32.j (the arguments at the bottom of the frame, the result in r0:r1)
         a32_load(0, 1, ir_a[i]);
         a32_load_b(i);
+        // the CPU has udiv / sdiv (the flag at 0x10000368 was set by the start: AT_HWCAP) and the numbers are 32 bits: one instruction; else the routine
+        int fb1 = 0 - 1;
+        int fb2 = 0 - 1;
+        int fb3 = 0 - 1;
+        int fb4 = 0 - 1;
+        int fb5 = 0 - 1;
+        int fbd = 0 - 1;
+        if op == IR_UDIV || op == IR_SDIV {
+            if op == IR_UDIV {
+                a32_dp(A32_AL, 12, 1, 12, 1, 3);                 // orrs r12, r1, r3: both high words 0?
+                fb1 = a32_pos;
+                a32_w(0);                                        // bne slow
+            } else {
+                a32_w(0xE1A00040 | (12 << 12) | (31 << 7) | 0);  // mov r12, r0, asr #31
+                a32_dp(A32_AL, 10, 1, 0, 12, 1);                 // cmp r12, r1
+                fb1 = a32_pos;
+                a32_w(0);                                        // bne slow
+                a32_w(0xE1A00040 | (12 << 12) | (31 << 7) | 2);  // mov r12, r2, asr #31
+                a32_dp(A32_AL, 10, 1, 0, 12, 3);                 // cmp r12, r3
+                fb5 = a32_pos;
+                a32_w(0);                                        // bne slow
+                a32_dpi(A32_AL, 11, 1, 0, 2, 1);                 // cmn r2, #1: b = -1 (the quotient may not fit)
+                fb4 = a32_pos;
+                a32_w(0);                                        // beq slow
+            }
+            a32_dpi(A32_AL, 10, 1, 0, 2, 0);                     // cmp r2, #0
+            fb2 = a32_pos;
+            a32_w(0);                                            // beq slow (the routine says: division by zero)
+            a32_const(12, 268435456 + 872);
+            a32_ldr(12, 12, 0);
+            a32_dpi(A32_AL, 10, 1, 0, 12, 0);                    // cmp r12, #0
+            fb3 = a32_pos;
+            a32_w(0);                                            // beq slow
+            if op == IR_UDIV { a32_w(0xE730F210); } else { a32_w(0xE710F210); }       // udiv / sdiv r0, r0, r2
+            if op == IR_UDIV { a32_const(1, 0); } else { a32_w(0xE1A00040 | (1 << 12) | (31 << 7) | 0); }       // r1 = 0, or the sign of r0
+            fbd = a32_pos;
+            a32_w(0);                                            // b done
+            int slow = a32_pos;
+            if fb1 >= 0 { a32_set(fb1, (1 << 28) | 0x0A000000 | (((slow - (fb1 + 8)) / 4) & 16777215)); }          // bne
+            if fb5 >= 0 { a32_set(fb5, (1 << 28) | 0x0A000000 | (((slow - (fb5 + 8)) / 4) & 16777215)); }
+            if fb4 >= 0 { a32_set(fb4, 0x0A000000 | (((slow - (fb4 + 8)) / 4) & 16777215)); }                       // beq
+            a32_set(fb2, 0x0A000000 | (((slow - (fb2 + 8)) / 4) & 16777215));
+            a32_set(fb3, 0x0A000000 | (((slow - (fb3 + 8)) / 4) & 16777215));
+        }
         a32_str(0, 13, 0);
         a32_str(1, 13, 4);
         a32_str(2, 13, 8);
@@ -1226,6 +1270,7 @@ bool a32_instr(int i, int b) {
         if op == IR_SDIV { a32_bl("__a32_sdiv"); }
         else if op == IR_UDIV { a32_bl("__a32_udiv"); }
         else { a32_bl("__a32_mulhs"); }
+        if fbd >= 0 { a32_set(fbd, 0xEA000000 | (((a32_pos - (fbd + 8)) / 4) & 16777215)); }                          // b done
         a32_store(0, 1, d);
         return true;
     }

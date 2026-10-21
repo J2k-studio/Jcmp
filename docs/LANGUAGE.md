@@ -1039,7 +1039,7 @@ int scale = 3;
 ## Libraries that come with jcmp, and libraries you download
 
 The folder `Library` of jcmp holds the libraries that come with it: the standard library (`core number text files system time data crypto net`, all of `#import <stdlib>`), `math` (with `vector`
-and `matrix`) and `cpu`. The others are **downloaded when you need them** with [jget](https://github.com/J2k-studio/Jget): `simd` (`#import <simd>`), `quat`, `complex`, `stats`
+and `matrix`) and `cpu`. The others are **downloaded when you need them** with [jget](https://github.com/J2k-studio/Jcmp-Tools): `simd` (`#import <simd>`), `quat`, `complex`, `stats`
 (`using math::quat;` ...) and `canvas`, `screen` (`#import <gfx>`, `using gfx::canvas;`): `jget -li install simd`, `jget -li install gfx`. A program that imports a library that is not installed gets the message
 `the library 'simd' is not installed` with that command. They are put in `~/.j2k/Library`, where the compiler looks (and in the folders of `J2K_PATH`).
 
@@ -1111,3 +1111,31 @@ void main() {
 ```
 
 On ARM64 a `register { }` block can read the flags that an instruction left: `x4 = Flags::c;` (also `z`, `n`, `v`; 0 or 1).
+
+
+## `cerr`: messages for the standard error
+
+`cerr << ...;` prints like `cout`, but to the standard error. When a program runs as `program > result.txt` the results go to the file and the messages
+of `cerr` still appear on the screen. (`cerr` is part of the standard library, like `cout`: `#import <stdlib>`.)
+
+```jk
+void main() {
+    cout << "result: " << 42 << "\n";
+    cerr << "warning: the input was empty\n";
+}
+```
+
+## What `cout` prints for a `bool` and for a pointer
+
+A `bool` prints as `true` or `false`. A pointer prints as `0x` and its address in hex (`null` as `0x0`); write `(int)p` to print it as a number.
+
+```jk
+int main() {
+    bool ok = 3 > 2;
+    int^ p = null;
+    cout << ok << " " << p << nl;
+    return 0;
+}
+```
+
+Output: `true 0x0`.

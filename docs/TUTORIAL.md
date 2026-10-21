@@ -33,6 +33,15 @@ For the complete list of features see [LANGUAGE.md](LANGUAGE.md); for the comman
 18. Files
 19. A program in several files
 20. A small project: counting words
+21. Bits and bytes
+22. Numbers wider than 64 bits
+23. Looking at the code the compiler made
+24. Keeping the code short: #expect
+25. Threads and atomic operations
+26. Registers: the register block
+27. A function with nothing around it: naked and svc
+28. The flags of the CPU
+29. Machine words you write yourself
 
 ## Lesson 1. Hello, world
 
@@ -537,7 +546,7 @@ Output:
 32 2
 ann is 32
 bob is 25
-5 different, has 3: 1
+5 different, has 3: true
 ```
 
 `ages.get("zed")` would throw `key not found`; ask with `ages.has("zed")` first. `keys_list()` makes a new list that the `for` loop frees for you.
@@ -737,6 +746,301 @@ Output:
 
 Run: `echo "the quick brown fox jumps over the lazy dog" | ./wordcount`.
 **Try:** also print the longest word itself.
+
+# Part 2: toward the machine
+
+## Lesson 21. Bits and bytes
+
+A whole number is 64 bits. `>>` and `<<` shift them, `&` keeps bits, `xor` flips them. `Bit::` has the work that the CPU does in one instruction:
+`popcount` (how many bits are 1), `clz` / `ctz` (zero bits in front / after), `rotl` / `rotr` (turn the bits round), `bswap` (reverse the 8 bytes).
+
+```jk
+#import <stdlib>
+using stdlib;
+
+void main() {
+    int x = 0xB0;
+    cout << x << " " << Bit::popcount(x) << " " << Bit::clz(x) << " " << Bit::ctz(x) << "\n";
+    cout << (x >> 4) << " " << (x & 0xF) << " " << (x << 4) << " " << (x xor 0xFF) << "\n";
+    cout << Bit::rotl(1, 63) << "\n";
+    cout << Bit::bswap(0x0102030405060708) << "\n";
+}
+```
+
+Output:
+
+```
+176 3 56 4
+11 0 2816 79
+-9223372036854775808
+578437695752307201
+```
+
+`0xB0` is `1011 0000` in binary: 3 bits are 1, 56 zero bits stand in front, 4 after. The last line turns the 8 bytes `01 02 ... 08` round to `08 07 ... 01`.
+
+## Lesson 22. Numbers wider than 64 bits
+
+When 64 bits are not enough you keep a number in several words and add word by word. `Bit::add_carry(a, b, carry_in)` gives a struct with the sum and the carry out.
+`Bit::mul_wide` gives the whole 128-bit product, `Bit::div_rem` the quotient and the remainder together, `Bit::add_sat` an addition that stops at the largest number instead of wrapping.
+
+```jk
+#import <stdlib>
+using stdlib;
+
+void main() {
+    // (5, -1) + (0, 1) as numbers of two words: high word first
+    BitCarry lo = Bit::add_carry(-1, 1, 0);
+    BitCarry hi = Bit::add_carry(5, 0, lo.c);
+    cout << hi.sum << " " << lo.sum << " " << hi.c << "\n";
+    BitWide w = Bit::mul_wide(-1, 3);
+    cout << w.hi << " " << w.lo << "\n";
+    BitDivRem d = Bit::div_rem(-17, 5);
+    cout << d.q << " " << d.r << "\n";
+    cout << Bit::add_sat(9223372036854775807, 5) << "\n";
+}
+```
+
+Output:
+
+```
+6 0 0
+2 -3
+-3 -2
+9223372036854775807
+```
+
+The low words `-1 + 1` give 0 with a carry of 1; the carry goes into the high words: `5 + 0 + 1 = 6`. The product `(2^64 - 1) * 3` does not fit in 64 bits: `hi` is 2 and `lo` is -3.
+
+## Lesson 23. Looking at the code the compiler made
+
+The compiler does not hide what it makes: `jcmp program.jk -show NAME` writes the machine code of the function `NAME` and how many instructions it has.
+Small functions are often put inside their callers, so a function that is called once can have no code of its own. Here `scale` is kept because `main` calls it in a loop.
+
+```jk
+#import <stdlib>
+using stdlib;
+
+int scale(int x, int k) {
+    return (x * k) >> 2;
+}
+
+void main() {
+    int total = 0;
+    for i in 0..10 { total += scale(i, 6); }
+    cout << total << "\n";
+}
+```
+
+Output:
+
+```
+65
+```
+
+The code of `scale` that the compiler made:
+
+```
+scale:
+mul x0, x0, x1
+asr x0, x0, #2
+L8014:
+ret
+// 3 instructions
+```
+
+Run `jcmp showcode.jk -show scale` to see the lines above (they are the code of the ARM64 target). On another target the instructions are other ones.
+
+## Lesson 24. Keeping the code short: #expect
+
+A hot function should stay small. `#expect instructions <= N` in front of a function makes the compiler stop, with the real count, when the function grows past N: after a change of your program, or a new compiler.
+
+```jk
+#import <stdlib>
+using stdlib;
+
+#expect instructions <= 12
+int clamp(int x, int lo, int hi) {
+    if x < lo { return lo; }
+    if x > hi { return hi; }
+    return x;
+}
+
+void main() {
+    cout << clamp(-5, 0, 10) << " " << clamp(7, 0, 10) << " " << clamp(99, 0, 10) << "\n";
+}
+```
+
+Output:
+
+```
+0 7 10
+```
+
+Try `#expect instructions <= 2` and compile again: the compiler says how many instructions the function really has.
+
+## Lesson 25. Threads and atomic operations
+
+`Thread` runs a function at the same time as the others. Two threads that do `counter += 1` can lose counts, because the CPU reads, adds and writes in three steps. `Atomic::add` does the three steps as one that nobody can break.
+
+```jk
+#import <stdlib>
+using stdlib;
+
+#import <cpu>
+using cpu::thread;
+
+int counter;
+
+void work(void^ arg) {
+    for i in 0..10000 { Atomic::add(@counter, 1); }
+}
+
+void main() {
+    Thread a = create(work, null);
+    Thread b = create(work, null);
+    Thread c = create(work, null);
+    a.join();
+    b.join();
+    c.join();
+    cout << counter << "\n";
+}
+```
+
+Output:
+
+```
+30000
+```
+
+`Atomic::` also has `cas` (change a value only if it is what you expect), `swap`, `load`, `store`, `bit_or` and others, and `Mem::barrier()` orders the memory accesses of one thread against the others.
+
+## Lesson 26. Registers: the register block
+
+The CPU keeps the numbers it works on in registers, named `x0` ... `x30`. A `register { }` block lets you write instructions with those registers. `in x1 = a;` puts a value in a register before the block, `out x0 = r;` takes one out after it, and `clobber x4;` says that you use `x4` for your own work.
+Inside the block every statement is one instruction.
+
+```jk
+#import <stdlib>
+using stdlib;
+
+int add_mul(int a, int b, int c) {
+    int r = 0;
+    register {
+        in x1 = a;
+        in x2 = b;
+        in x3 = c;
+        clobber x4;
+        x4 = x1 + x2;
+        x0 = x4 * x3;
+        out x0 = r;
+    }
+    return r;
+}
+
+void main() {
+    cout << add_mul(2, 3, 4) << "\n";
+}
+```
+
+Output:
+
+```
+20
+```
+
+`(2 + 3) * 4 = 20`. The same source builds for the ARM64 and the ARM32 target (the names `x0 ...` are the same on both).
+
+## Lesson 27. A function with nothing around it: naked and svc
+
+A `naked` function has no prologue and no epilogue: the body is all there is, and the arguments are in `x0`, `x1`, ... The statement `svc(0);` asks the kernel for a service; the number of the service is in `x8`.
+Here is `write` (number 64) written by hand, with no library at all.
+
+```jk
+#import <stdlib>
+using stdlib;
+
+naked int my_write(int fd, char^ buf, int n) {
+    Reg::x8 = 64;
+    svc(0);
+    ret;
+}
+
+void main() {
+    char msg[6] = {'h', 'e', 'l', 'l', 'o', '\n'};
+    int n = my_write(1, @msg, 6);
+    cout << n << "\n";
+}
+```
+
+Output:
+
+```
+hello
+6
+```
+
+`write(1, buffer, 6)` sends 6 bytes to the standard output and returns how many it wrote. `ret;` goes back to the caller with the result in `x0`.
+
+## Lesson 28. The flags of the CPU
+
+After an addition or a comparison the CPU keeps four flags: `n` (negative), `z` (zero), `c` (carry) and `v` (overflow). C hides them; here you can read them. `Cpu::inst("adds", ...)` is the instruction `adds`, which sets the flags, and `Flags::c` reads one of them as 0 or 1.
+
+```jk
+#import <stdlib>
+using stdlib;
+
+int carry_of(int a, int b) {
+    int r = 0;
+    register {
+        in x1 = a;
+        in x2 = b;
+        Cpu::inst("adds", Reg::x3, Reg::x1, Reg::x2);
+        x0 = Flags::c;
+        out x0 = r;
+    }
+    return r;
+}
+
+void main() {
+    cout << carry_of(-1, 1) << " " << carry_of(1, 2) << "\n";
+}
+```
+
+Output:
+
+```
+1 0
+```
+
+`-1` is all bits 1, so `-1 + 1` carries out of the top: the flag is 1. `1 + 2` does not: 0. (This lesson is for the ARM64 target.)
+
+## Lesson 29. Machine words you write yourself
+
+At the bottom there is nothing but numbers. `raw<u32>[...]` puts a 32-bit machine word in the code, exactly as you wrote it. The instruction `add x1, x1, #2` of the ARM64 CPU is the number `0x91000821`; `nop` is `0xd503201f`.
+
+```jk
+#import <stdlib>
+using stdlib;
+
+void main() {
+    int v = 5;
+    register {
+        in x1 = v + 1;
+        raw<u32>[0xd503201f];
+        raw<u32>[0x91000821];
+        out x1 = v;
+    }
+    cout << v << "\n";
+}
+```
+
+Output:
+
+```
+8
+```
+
+`5 + 1 = 6`, then the word adds 2: 8. These numbers are for ARM64; on the ARM32 target the same instruction is another word (`0xE2811002`), so a program that writes raw words is for one CPU.
 
 ## Where next
 

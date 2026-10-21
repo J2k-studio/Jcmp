@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9.201
+* **`cout` prints a `bool` as `true` / `false` and a pointer as `0x...`** (the owner's choice A of the printing design). `(int)p` still prints a number. docs/syntax-design.md section 89.
+
 ## 0.9.200
 * **Wide arithmetic in `Bit`** (the owner's choice, items 11 and 12 of the decisions for 1.0): `Bit::add_carry(a, b, cin)` and `Bit::sub_borrow(a, b, bin)` give the result and the carry (borrow) out as a struct `BitCarry`; `Bit::mul_hi`, `Bit::mul_wide` (the 128-bit product, `BitWide`), `Bit::div_rem` (`BitDivRem`) and `Bit::add_sat` (the sum that stops at the largest or smallest number). The same result on ARM64 and ARM32.
 * **The flags of the CPU:** `x1 = Flags::c;` (also `z`, `n`, `v`) inside `register { }` reads the flag that the last instruction left (ARM64).

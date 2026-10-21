@@ -3474,6 +3474,12 @@ void gl_cout_int(int it) {
     if at_ty[it] / 65536 == 0 && at_ty[it] % 65536 == 2 {
         gl_rt1("j2k_print_char", 1);
         gl_lastw = 2;
+    } else if at_ty[it] == 3 {
+        gl_rt1("__print_bool", 1);          // a bool is written true / false
+        gl_lastw = 8;
+    } else if as1_pt(at_ty[it]) {
+        gl_rt1("__print_ptr", 1);           // a pointer or an address is written 0x...
+        gl_lastw = 8;
     } else {
         gl_rt1("j2k_print_int", 1);
         gl_lastw = 8;

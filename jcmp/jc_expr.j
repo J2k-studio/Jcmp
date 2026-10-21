@@ -60,6 +60,7 @@ int lpin[8192];              // for each local: its pinned register, or 0
 int pin_used;                // 1 once a variable was pinned to a register
 int ty_tid;                  // type of values: 0 number, 1 bool, 3+n enum number n
 int ex_ty;                   // type of the last operand/result: 0 number, 1 bool, 2 the literal 0 or 1, 3+n enum n
+int ex_isptr;                // 1: the value just read is a pointer or an address (cout writes it 0x...); set by the reading of a pointer variable and by @
 int ex_w;                    // width code of the last operand/result: 0 = a plain number, else 1 i8, 2 char, 3 bool, 4 i32, 8 int
 
 char sname[16384];           // 256 x 64
@@ -1916,6 +1917,11 @@ void compute_reach() {
     }
     int m = find_func("main");
     if m >= 0 { freach[m] = 1; }
+    // the routines that cout uses for a bool and for a pointer (the syntax tree calls them, the parser does not see it)
+    int pbl = find_func("__print_bool");
+    if pbl >= 0 && m >= 0 { freach[pbl] = 1; }
+    int ppt = find_func("__print_ptr");
+    if ppt >= 0 && m >= 0 { freach[ppt] = 1; }
     if bare_mode == 1 {
         // a raw file is the program: every function of it is written (there may be no main)
         k = 0;
@@ -4306,7 +4312,7 @@ void finish_rvalue() {
     load_through(lv_code);
     ex_w = lv_code;
     ex_ty = lv_tid;
-    if lv_ptr != 0 { ex_ty = 0; }
+    if lv_ptr != 0 { ex_ty = 0; ex_isptr = 1; }
     if lv_ptr == 2 { ex_w = 9; }
 }
 
@@ -4614,6 +4620,7 @@ void parse_unary_core() {
         if lv_fresh == 1 && lv_base_local == 1 && lv_kind == 0 && al >= 0 && lalias[al] == 1 { load_through(8); }
         ex_w = 8;
         ex_ty = 0;
+        ex_isptr = 1;
         return;
     }
     die_found("an expression", "a value is a number, a name, a call, a text, or an expression in ( ); check for a missing value before an operator or a stray ; ) ]");
