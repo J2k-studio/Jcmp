@@ -25,6 +25,8 @@ Other libraries are named as before: `#import <math>` (`vector`, `matrix`, `quat
 
 `Sys::name` is a system register when `Sys` has no function of that name; `Sys::write(...)` calls the function.
 
+Every function of every library, with its comment, is in [API.md](API.md) (made from the libraries by `tools/make_api.sh`).
+
 ## Examples
 
 ```jk

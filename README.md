@@ -140,7 +140,7 @@ If the repository or its releases are private, `curl`/`wget` need a token
 
 New to J2K? Start with the tutorial: [docs/TUTORIAL.md](docs/TUTORIAL.md).
 More: [docs/USAGE.md](docs/USAGE.md) (command line, building, testing) and
-[docs/LANGUAGE.md](docs/LANGUAGE.md) (a tour of the language).
+[docs/LANGUAGE.md](docs/LANGUAGE.md) (a tour of the language), [docs/LIMITS.md](docs/LIMITS.md) (what it does not do yet) and [docs/API.md](docs/API.md) (every library function).
 
 ---
 

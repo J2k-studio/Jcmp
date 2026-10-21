@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.197
+* **`jcmp -show NAME`** writes the code of one function as it is in the program (ARM64) and how many instructions it has: you see what the compiler made of your code. (A first step of "the CPU is not hidden from the writer"; the next ones wait for the owner's choices.)
+* **ARM32: the vectorizer (NEON) is on.** The loops over arrays are vectorized as on ARM64: the benchmark `arrays` went from 31 times to 7 times slower than ARM64.
+* **Documents:** `docs/LIMITS.md` (known limits), `docs/API.md` (every function of every library, made by `tools/make_api.sh` and checked by the tests), and the tests compile every example of README, LANGUAGE and TUTORIAL.
+* The programs for ARM64 are the same as in 0.9.196.
+
 ## 0.9.196
 * **The CPU level on ARM32.** `Atomic::*`, `Mem::barrier*`, `Cpu::wait / event / send_event / pause / nop / isb / counter / frequency / id` and `Cache::clean_code / invalidate_code` work with `-target arm32`; so do `register { in / out / clobber }` blocks, `naked` functions, `abi` blocks, named blocks and `raw<u32>[...]` (the machine words of ARM32, put in the code as written). The register names stay `x0 .. x30` (the same source builds for both targets). Not on ARM32 (the compiler says why): `Cpu::inst` of an instruction that ARM32 does not have, `Sys::` registers, `Cache::clean / invalidate / zero`. See docs/syntax-design.md section 84.
 * **Fixed:** `Atomic::cas` on ARM32 looped for ever when the word was not the expected value.
