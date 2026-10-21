@@ -57,6 +57,8 @@ jcmp hello.jk -o hello      # คอมไพล์
 42. spinlock
 43. นับนาฬิกาของ CPU
 44. เวกเตอร์ในฮาร์ดแวร์
+45. สองงาน สองสแตก: การสลับ context
+46. คิวที่ไม่มี lock
 
 ## บทที่ 1. สวัสดีชาวโลก
 
@@ -1555,6 +1557,115 @@ void main() {
 ```
 
 `a + b * 2.0` คือ `(1,2,3) + (8,10,12)` ใช้ `jcmp file.jk -show ชื่อ` (บทที่ 32) กับ loop บนอาร์เรย์ `double` เพื่อดูคำสั่งเวกเตอร์
+
+## บทที่ 45. สองงาน สองสแตก: การสลับ context
+
+thread คือวิธีของ kernel ที่ให้ทำสองอย่างพร้อมกัน ถ้าไม่ใช้ kernel ก็ยังทำสองงานที่ผลัดกันทำได้ ถ้าแต่ละงานมีสแตกของตัวเอง งานหนึ่งก็คือ register ของมัน: `x19` ถึง `x30` และตัวชี้สแตก `sp` `frame Context { x19..x30; sp; }` ตั้งชื่อให้ระเบียน 13 คำนั้น `Context::save(x0)` เขียน register ลงระเบียนที่ `x0` ส่วน `Context::restore(x1)` โหลดกลับจากระเบียนที่ `x1` หลัง `restore` คำสั่ง `ret` จะไปที่ `x30` ที่เก็บไว้ คือเข้าไปในอีกงานหนึ่ง
+
+```jk
+#import <stdlib>
+using stdlib;
+
+frame Context { x19..x30; sp; }
+
+naked void ctx_save(int^ c) {
+    Context::save(x0);
+    ret;
+}
+
+naked void ctx_switch(int^ from, int^ to) {
+    Context::save(x0);
+    Context::restore(x1);
+    ret;
+}
+
+int main_ctx[16];
+int task_ctx[16];
+char task_stack[16384];
+int value;
+
+void squares() {
+    int n = 1;
+    while true {
+        value = n * n;
+        n += 1;
+        ctx_switch(@task_ctx, @main_ctx);
+    }
+}
+
+void main() {
+    ctx_save(@task_ctx);
+    task_ctx[10] = 0;
+    task_ctx[11] = (int)squares;
+    task_ctx[12] = ((int)@task_stack + 16000) & (0 - 16);
+    for k in 0..6 {
+        ctx_switch(@main_ctx, @task_ctx);
+        cout << value << " ";
+    }
+    cout << "\n";
+}
+```
+
+ผลลัพธ์:
+
+```
+1 4 9 16 25 36 
+```
+
+ครั้งแรกยังไม่มีสถานะที่เก็บไว้ `main` จึงสร้างให้: เก็บ register ของตัวเองลง `task_ctx` เป็นจุดเริ่ม แล้วแก้สามคำ: คำที่ 10 (`x29` ตัวชี้เฟรม) เป็น 0, คำที่ 11 (`x30` ที่ที่ switch จะกลับไป) เป็นฟังก์ชัน `squares` และคำที่ 12 (`sp`) เป็นปลายของหน่วยความจำก้อนหนึ่งที่ใช้เป็นสแตก จัดแนว 16 `squares` ไม่เคย return: มันเขียนค่าแล้ว switch กลับ และทุกครั้งที่ `main` switch มา มันก็ทำต่อจากตำแหน่ง switch ครั้งก่อน นี่คือวิธีสร้าง coroutine, green thread และ generator ใช้ได้กับ ARM64 เท่านั้นเพราะ register ที่เก็บเป็นของ ARM64
+
+## บทที่ 46. คิวที่ไม่มี lock
+
+spinlock ทำให้ thread รอกัน ring buffer ที่มีผู้เขียนหนึ่งและผู้อ่านหนึ่งไม่ต้องมี lock เลย: ผู้เขียนเป็นเจ้าของ `head` (เขียนไปกี่ตัว) ผู้อ่านเป็นเจ้าของ `tail` (อ่านไปกี่ตัว) และแต่ละฝ่ายอ่านเลขของอีกฝ่ายเท่านั้น `Atomic::load` และ `Atomic::store` คือการโหลดและเก็บพร้อมลำดับหน่วยความจำที่ทำให้ถูกต้อง: สิ่งที่ผู้เขียนใส่ลงในวงก่อน `Atomic::store(@head, ...)` ผู้อ่านที่เห็น `head` ใหม่จะเห็นด้วย
+
+```jk
+#import <stdlib>
+using stdlib;
+
+#import <cpu>
+using cpu::thread;
+
+int ring[64];
+int head;
+int tail;
+int total;
+
+void producer(void^ arg) {
+    for i in 1..1001 {
+        while Atomic::load(@head) - Atomic::load(@tail) >= 64 { Cpu::pause(); }
+        int h = Atomic::load(@head);
+        ring[h % 64] = i;
+        Atomic::store(@head, h + 1);
+    }
+}
+
+void consumer(void^ arg) {
+    int got = 0;
+    while got < 1000 {
+        int t = Atomic::load(@tail);
+        while Atomic::load(@head) == t { Cpu::pause(); }
+        total += ring[t % 64];
+        Atomic::store(@tail, t + 1);
+        got += 1;
+    }
+}
+
+void main() {
+    Thread a = create(producer, null);
+    Thread b = create(consumer, null);
+    a.join();
+    b.join();
+    cout << total << "\n";
+}
+```
+
+ผลลัพธ์:
+
+```
+500500
+```
+
+ผลรวม 1 ถึง 1000 เท่ากับ 500500 ทุกครั้ง (รันติดกัน 60 ครั้งเพื่อความมั่นใจ) ถ้าวงเต็มผู้เขียนรอ ถ้าว่างผู้อ่านรอ และ `Cpu::pause()` ทำให้การรอเบาต่อ CPU ใช้ได้กับผู้เขียนหนึ่งและผู้อ่านหนึ่งเท่านั้น ถ้ามีผู้เขียนสองตัวจะเขียน `head` ตัวเดียวกัน ต้องใช้ `Atomic::cas` (บท spinlock)
 
 ## ต่อไป
 

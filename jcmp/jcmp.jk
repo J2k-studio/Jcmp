@@ -3,7 +3,7 @@
 // Use:    jcmp1 input.jk -o program
 // the version of the compiler (also in the file VERSION; release.sh checks that they agree)
 #allow syscall                         // the compiler is the layer under Sys: it calls the system by number on purpose
-#define JCMP_VERSION "0.9.203"
+#define JCMP_VERSION "0.9.204"
 
 #import "jc_base"
 #import "jc_asm"
@@ -389,6 +389,20 @@ void main() {
                 write_err("jcmp: -target takes arm64 (the default) or arm32\n");
                 syscall(93, 1);
             }
+        } else if str_eq(a, "-xdirect") {
+            ai += 1;
+            char^ dxv = arg(ai);
+            int dxk = 0;
+            int dxn = 0;
+            while dxv[dxk] >= '0' && dxv[dxk] <= '9' {
+                dxn = dxn * 10 + (dxv[dxk] - '0');
+                dxk += 1;
+            }
+            a32_direct = dxn;             // hidden: which direct register paths of the ARM32 back end are on (to find a mistake)
+        } else if str_eq(a, "-xnoireg") {
+            a32_noireg = 1;               // hidden: ARM32 keeps every whole number vreg in the frame
+        } else if str_eq(a, "-xnodreg") {
+            a32_nodreg = 1;               // hidden: ARM32 keeps every double in the frame
         } else if str_eq(a, "-xnoelide") {
             a32_elide_off = 1;            // hidden: ARM32 keeps every store
         } else if str_eq(a, "-noir") {

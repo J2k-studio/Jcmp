@@ -57,6 +57,8 @@ For the complete list of features see [LANGUAGE.md](LANGUAGE.md); for the comman
 42. A spinlock
 43. Counting the clock of the CPU
 44. Vectors in the hardware
+45. Two tasks, two stacks: a context switch
+46. A queue without a lock
 
 ## Lesson 1. Hello, world
 
@@ -1558,6 +1560,115 @@ Output:
 ```
 
 `a + b * 2.0` is `(1,2,3) + (8,10,12)`. Use `jcmp file.jk -show NAME` (lesson 32) on a loop over a `double` array to see the vector instructions.
+
+## Lesson 45. Two tasks, two stacks: a context switch
+
+A thread is the kernel's way to run two things at once. Without the kernel you can still make two tasks that take turns, if each has its own stack. All that a task is, is its registers: `x19` to `x30` and the stack pointer `sp`. `frame Context { x19..x30; sp; }` names that record of 13 words. `Context::save(x0)` writes the registers to the record at `x0`, `Context::restore(x1)` loads them from the record at `x1`. After a `restore`, the `ret` goes to wherever the saved `x30` points: into the other task.
+
+```jk
+#import <stdlib>
+using stdlib;
+
+frame Context { x19..x30; sp; }
+
+naked void ctx_save(int^ c) {
+    Context::save(x0);
+    ret;
+}
+
+naked void ctx_switch(int^ from, int^ to) {
+    Context::save(x0);
+    Context::restore(x1);
+    ret;
+}
+
+int main_ctx[16];
+int task_ctx[16];
+char task_stack[16384];
+int value;
+
+void squares() {
+    int n = 1;
+    while true {
+        value = n * n;
+        n += 1;
+        ctx_switch(@task_ctx, @main_ctx);
+    }
+}
+
+void main() {
+    ctx_save(@task_ctx);
+    task_ctx[10] = 0;
+    task_ctx[11] = (int)squares;
+    task_ctx[12] = ((int)@task_stack + 16000) & (0 - 16);
+    for k in 0..6 {
+        ctx_switch(@main_ctx, @task_ctx);
+        cout << value << " ";
+    }
+    cout << "\n";
+}
+```
+
+Output:
+
+```
+1 4 9 16 25 36 
+```
+
+The first time, there is no saved state, so `main` makes one: it saves its own registers into `task_ctx` as a start, then changes three words: word 10 (`x29`, the frame pointer) to 0, word 11 (`x30`, where the switch will return to) to the function `squares`, and word 12 (`sp`) to the top of a block of memory used as the stack, aligned to 16. `squares` never returns: it writes a value and switches back, and each switch from `main` resumes it after its last switch. This is how coroutines, green threads and generators are made; it is ARM64 only because the saved registers are those of ARM64.
+
+## Lesson 46. A queue without a lock
+
+A spinlock makes threads wait for each other. A ring buffer with one writer and one reader needs no lock at all: the writer owns `head` (how many it has written), the reader owns `tail` (how many it has read), and each only reads the other's number. `Atomic::load` and `Atomic::store` are the loads and stores with the memory order that makes this correct: what the writer put in the ring before `Atomic::store(@head, ...)` is seen by the reader that sees the new `head`.
+
+```jk
+#import <stdlib>
+using stdlib;
+
+#import <cpu>
+using cpu::thread;
+
+int ring[64];
+int head;
+int tail;
+int total;
+
+void producer(void^ arg) {
+    for i in 1..1001 {
+        while Atomic::load(@head) - Atomic::load(@tail) >= 64 { Cpu::pause(); }
+        int h = Atomic::load(@head);
+        ring[h % 64] = i;
+        Atomic::store(@head, h + 1);
+    }
+}
+
+void consumer(void^ arg) {
+    int got = 0;
+    while got < 1000 {
+        int t = Atomic::load(@tail);
+        while Atomic::load(@head) == t { Cpu::pause(); }
+        total += ring[t % 64];
+        Atomic::store(@tail, t + 1);
+        got += 1;
+    }
+}
+
+void main() {
+    Thread a = create(producer, null);
+    Thread b = create(consumer, null);
+    a.join();
+    b.join();
+    cout << total << "\n";
+}
+```
+
+Output:
+
+```
+500500
+```
+
+The sum of 1 to 1000 is 500500 every time; it was run 60 times in a row to be sure. When the ring is full the writer waits, when it is empty the reader waits, and `Cpu::pause()` makes the waiting kind to the CPU. It works for exactly one writer and one reader: with two writers they would both write the same `head`, and then you need `Atomic::cas` (the spinlock lesson).
 
 ## Where next
 

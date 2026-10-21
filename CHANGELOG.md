@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.204
+* **A faster ARM32 target.** The doubles and the whole numbers that a function uses most now live in registers for the whole function: doubles in d8 to d15, whole numbers in the three pairs r4:r5, r8:r9, r6:r7 (together with the variables of the frame, chosen by how often they are used, a use in a loop counts more). Additions, comparisons, loads and stores work on those registers directly. Measured on the benchmarks (ARM32 time against ARM64 time): nbody 14.1x to 3.5x, sha256 19.2x to 11.2x, qsort 10.4x to 7.4x, strings 4.0x to 2.4x, loop 6.0x to 4.8x; mandel 1.7x, gcd 2.4x, fib 2.7x. The programs give the same results (checked by the whole test suite, the compiler building itself on ARM32 byte for byte, and 1200 random programs).
+* `-xnodreg`, `-xnoireg` and `-xdirect N` (hidden options) switch the new parts off to compare or to find a mistake.
+
 ## 0.9.203
 * **`read` grows** (the names are the assistant's, adjustable): `read.key()` knows Home, End, Delete, PageUp, PageDown, Insert and F1 to F4; `read.key_timeout(ms)` gives -2 when no key came in time; `read.password()` reads a line without an echo; `read.decimal()` reads a number with a decimal part. Tested on a pseudo terminal (t493).
 * The tutorial has 44 lessons (a library tour of 8 lessons).

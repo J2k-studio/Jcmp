@@ -1,6 +1,8 @@
-# J2K / Jcmp 0.9.203
+# J2K / Jcmp 0.9.204
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
+
+**0.9.204:** a much faster ARM32 target (registers for the most used doubles and numbers: nbody 14x to 3.5x of the ARM64 time, sha256 19x to 11x).
 
 **0.9.203:** `#require cpu "crc32"` checks the CPU when the program starts; `read` knows more keys and has `key_timeout`, `password`, `decimal`; the tutorial has 44 lessons.
 

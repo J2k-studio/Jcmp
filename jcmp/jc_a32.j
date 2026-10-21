@@ -60,6 +60,25 @@ int a32_salloc;                   // 1: this function keeps variables in r4 .. r
 int a32_special;                  // 1: this function changes r4, r5, r8 or r9 itself (atomics, bit count, a raw system call, the routines of try and threads)
 int a32_nsave;                    // 4: the registers are saved in the frame (a function that uses them or changes them)
 int a32_bdepth[IR_MAXB];          // how deep in loops a block is (a jump back over it)
+// the doubles that live in d8 .. d15 for the whole function (callee-saved: a function that uses them saves them in its frame)
+int a32_dhome[IR_MAXV];           // the register 8 .. 15 of a double vreg (valid when a32_dst[v] == a32_dstamp)
+int a32_dst[IR_MAXV];
+int a32_dstamp;
+int a32_dcnt[IR_MAXV];            // how often a double vreg is used (a use in a loop counts more)
+int a32_dbad[IR_MAXV];            // a32_dbad[v] == a32_dstamp: it cannot live in a register (a single precision operation or something else reads its cell)
+int a32_dseen[IR_MAXV];            // a32_dseen[v] == a32_dstamp: a32_dcnt[v] is valid in this function
+// the whole numbers that live in a pair of registers (r4:r5, r6:r7, r8:r9) for the whole function, like the variables of the frame
+int a32_ihome[IR_MAXV];           // the low register 4, 6 or 8 (valid when a32_ist[v] == a32_istamp)
+int a32_ist[IR_MAXV];
+int a32_istamp;
+int a32_icnt[IR_MAXV];
+int a32_iseen[IR_MAXV];
+int a32_ialloc;                   // 1: a whole number vreg lives in a pair
+int a32_noireg;                   // -xnoireg: no whole numbers in registers (to compare)
+int a32_direct = 255;             // -xdirect N: which direct register paths are on (bit 0 const, 1 copy, 2 add nohi, 3 add, 4 compare, 5 base register, 6 load into a pair, 7 store from a pair)
+int a32_nodreg;                   // -xnodreg: no doubles in d8 .. d15 (to compare)
+int a32_dmask;                    // bit k: d(8 + k) is saved in the prologue and restored by the epilogue
+int a32_dsoff;                    // where in the frame the saved d registers are
 int a32_selidx[3];                // the slots that were chosen
 int a32_cv;                       // the vreg that r0:r1 hold right after a store (valid while a32_pos == a32_cpos)
 int a32_cpos;
@@ -221,6 +240,18 @@ void a32_vmem(bool load, bool single, int vd, int off) {
     }
 }
 
+// vldr / vstr d(vd), [base, #off] for a double that lives in a register (base: r2 or sp)
+void a32_vmemb(bool load, int vd, int base, int off) {
+    int w = 0xED800B00;
+    if load { w = 0xED900B00; }
+    if off >= 0 && off <= 1020 && off % 4 == 0 {
+        a32_w(w | (base << 16) | (vd << 12) | (off / 4));
+    } else {
+        a32_addr(base, off);
+        a32_w(w | (12 << 16) | (vd << 12));
+    }
+}
+
 void a32_vfp(int base, int vd, int vn, int vm) {
     a32_w(base | (vn << 16) | (vd << 12) | vm);
 }
@@ -339,8 +370,63 @@ bool a32_vop(int i) {
     return true;
 }
 
+// the register d8 .. d15 that holds the double vreg v, or -1
+int a32_dh(int v) {
+    if v <= 0 || v >= IR_MAXV { return 0 - 1; }
+    if a32_dst[v] != a32_dstamp || a32_dhome[v] < 8 { return 0 - 1; }
+    return a32_dhome[v];
+}
+
+// d(vd) = the double vreg v (a copy from its register, or a vldr from its cell)
+void a32_dldv(int vd, int v) {
+    int dh = a32_dh(v);
+    if dh >= 0 {
+        if dh != vd { a32_w(0xEEB00B40 | (vd << 12) | dh); }          // vmov.f64 d(vd), d(dh)
+        return;
+    }
+    a32_vmem(true, false, vd, a32_cell(v));
+}
+
+// the double vreg v = d(vd)
+void a32_dstv(int vd, int v) {
+    int dh = a32_dh(v);
+    if dh >= 0 {
+        if dh != vd { a32_w(0xEEB00B40 | (dh << 12) | vd); }          // vmov.f64 d(dh), d(vd)
+        return;
+    }
+    a32_vmem(false, false, vd, a32_cell(v));
+}
+
+// the low register of the pair that holds the whole number vreg v, or -1
+int a32_ih(int v) {
+    if v <= 0 || v >= IR_MAXV { return 0 - 1; }
+    if a32_ist[v] != a32_istamp || a32_ihome[v] < 4 { return 0 - 1; }
+    return a32_ihome[v];
+}
+
+// the low register of the pair that holds v: its home, or r(scratch) after v was loaded there (its high word in r(scratch + 1))
+int a32_rd(int v, int scratch, int bit) {
+    int h = a32_ih(v);
+    if h >= 0 && (a32_direct & bit) != 0 { return h; }
+    a32_load(scratch, scratch + 1, v);
+    return scratch;
+}
+
+// the same for the low word only
+int a32_rdlo(int v, int scratch, int bit) {
+    int h = a32_ih(v);
+    if h >= 0 && (a32_direct & bit) != 0 { return h; }
+    a32_loadlo(scratch, v);
+    return scratch;
+}
+
 // (rlo, rhi) = the virtual register v
 void a32_load(int rlo, int rhi, int v) {
+    int dhl = a32_dh(v);
+    if dhl >= 0 {
+        a32_vmov_from_d(rlo, rhi, dhl);
+        return;
+    }
     if v == 29 {
         a32_const(rlo, 268435456);                 // the global area is at 0x10000000 (x28 of the ARM64 target)
         a32_const(rhi, 0);
@@ -371,6 +457,12 @@ void a32_load(int rlo, int rhi, int v) {
     }
     if a32_skipped == 1 && v == a32_skipd { a32_ebad = 1; }
     if a32_chp != 0 && v == a32_chp { a32_ebad = 1; }
+    int ihl = a32_ih(v);
+    if ihl >= 0 {
+        a32_mov(rlo, ihl);
+        a32_mov(rhi, ihl + 1);
+        return;
+    }
     int c = a32_cell(v);
     a32_ldr(rlo, 13, c);
     a32_ldr(rhi, 13, c + 4);
@@ -378,6 +470,11 @@ void a32_load(int rlo, int rhi, int v) {
 
 // rlo = the low word of the virtual register v (its high word is not wanted)
 void a32_loadlo(int rlo, int v) {
+    int dhl = a32_dh(v);
+    if dhl >= 0 {
+        a32_w(0xEE100B10 | (dhl << 16) | (rlo << 12));                 // vmov.32 rlo, d(dhl)[0]
+        return;
+    }
     if v == 29 {
         a32_const(rlo, 268435456);
         return;
@@ -402,6 +499,11 @@ void a32_loadlo(int rlo, int v) {
     if v == a32_clo && a32_pos == a32_clopos && rlo == 0 { return; }
     if a32_skipped == 1 && v == a32_skipd { a32_ebad = 1; }
     if a32_chp != 0 && v == a32_chp { a32_ebad = 1; }
+    int ihlo = a32_ih(v);
+    if ihlo >= 0 {
+        a32_mov(rlo, ihlo);
+        return;
+    }
     a32_ldr(rlo, 13, a32_cell(v));
 }
 
@@ -417,6 +519,23 @@ void a32_store(int rlo, int rhi, int v) {
                 a32_clo = v;
                 a32_clopos = a32_pos;
             }
+        }
+        return;
+    }
+    int dhs = a32_dh(v);
+    if dhs >= 0 {
+        a32_vmov_to_d(dhs, rlo, rhi);
+        return;
+    }
+    int ihs = a32_ih(v);
+    if ihs >= 0 {
+        a32_mov(ihs, rlo);
+        if a32_nohi_cur != 1 { a32_mov(ihs + 1, rhi); }
+        if a32_nohi_cur == 1 {
+            if rlo == 0 { a32_clo = v; a32_clopos = a32_pos; }
+        } else if rlo == 0 && rhi == 1 {
+            a32_cv = v;
+            a32_cpos = a32_pos;
         }
         return;
     }
@@ -503,26 +622,27 @@ int a32_const_of(int v, int i, int b) {
 
 // the condition after a 64-bit compare: sets the flags and returns the ARM condition that means "a cc b"
 int a32_compare(int cc, int a, int b, int bi, int bnum) {
-    a32_load(0, 1, a);
+    int ra = a32_rd(a, 0, 16);                  // the registers that hold the operands: their homes, or r0:r1 / r2:r3
+    int rb = 2;
     if bi == 1 {
         a32_const64(2, 3, bnum);
     } else {
-        a32_load(2, 3, b);
+        rb = a32_rd(b, 2, 16);
     }
     if cc == IR_EQ || cc == IR_NE {
-        a32_dp(A32_AL, 1, 0, 12, 0, 2);         // eor r12, r0, r2
-        a32_dp(A32_AL, 1, 0, 14, 1, 3);         // eor r14, r1, r3
+        a32_dp(A32_AL, 1, 0, 12, ra, rb);               // eor r12, a.lo, b.lo
+        a32_dp(A32_AL, 1, 0, 14, ra + 1, rb + 1);       // eor r14, a.hi, b.hi
         a32_dp(A32_AL, 12, 1, 12, 12, 14);      // orrs r12, r12, r14
         if cc == IR_EQ { return A32_EQ; }
         return A32_NE;
     }
     bool swap = cc == IR_GT || cc == IR_LE || cc == IR_UGT || cc == IR_ULE;
     if swap {
-        a32_dp(A32_AL, 10, 1, 0, 2, 0);         // cmp r2, r0
-        a32_dp(A32_AL, 6, 1, 12, 3, 1);         // sbcs r12, r3, r1
+        a32_dp(A32_AL, 10, 1, 0, rb, ra);               // cmp b.lo, a.lo
+        a32_dp(A32_AL, 6, 1, 12, rb + 1, ra + 1);       // sbcs r12, b.hi, a.hi
     } else {
-        a32_dp(A32_AL, 10, 1, 0, 0, 2);         // cmp r0, r2
-        a32_dp(A32_AL, 6, 1, 12, 1, 3);         // sbcs r12, r1, r3
+        a32_dp(A32_AL, 10, 1, 0, ra, rb);               // cmp a.lo, b.lo
+        a32_dp(A32_AL, 6, 1, 12, ra + 1, rb + 1);       // sbcs r12, a.hi, b.hi
     }
     if cc == IR_LT || cc == IR_GT { return A32_LT; }
     if cc == IR_GE || cc == IR_LE { return A32_GE; }
@@ -538,6 +658,13 @@ void a32_epilogue() {
         a32_ldr(7, 13, a32_cellbase + 12);
         a32_ldr(8, 13, a32_cellbase + 16);
         a32_ldr(9, 13, a32_cellbase + 20);
+    }
+    if a32_dmask != 0 {
+        int rk = 0;
+        while rk < 8 {
+            if ((a32_dmask >> rk) & 1) == 1 { a32_vmem(true, false, 8 + rk, a32_dsoff + rk * 8); }
+            rk += 1;
+        }
     }
     a32_ldr(14, 13, a32_outb + 8);
     a32_const(12, a32_total);
@@ -566,6 +693,11 @@ bool a32_instr(int i, int b) {
     int op = ir_op[i];
     int d = ir_d[i];
     if op == IR_NOP { return true; }
+    if op == IR_CONST && a32_ih(d) >= 0 && a32_skipd != d && (a32_direct & 1) != 0 {
+        int ch = a32_ih(d);
+        if a32_nohi_cur == 1 { a32_const(ch, ir_k[i] & 4294967295); } else { a32_const64(ch, ch + 1, ir_k[i]); }
+        return true;
+    }
     if op == IR_CONST {
         if a32_nohi_cur == 1 {
             a32_const(0, ir_k[i] & 4294967295);
@@ -666,6 +798,30 @@ bool a32_instr(int i, int b) {
         }
         return true;
     }
+    if op == IR_COPY && ir_vcls[d] == 1 && (a32_dh(ir_a[i]) >= 0 || a32_dh(d) >= 0) {
+        // a double that lives in a register: copied with the VFP, not through r0:r1
+        int cpa = a32_dh(ir_a[i]);
+        int cpd = a32_dh(d);
+        if cpa >= 0 && cpd >= 0 {
+            if cpa != cpd { a32_w(0xEEB00B40 | (cpd << 12) | cpa); }
+        } else if cpa >= 0 {
+            a32_vmem(false, false, cpa, a32_cell(d));
+        } else {
+            a32_vmem(true, false, cpd, a32_cell(ir_a[i]));
+        }
+        return true;
+    }
+    if op == IR_COPY && ir_vcls[d] == 0 && (a32_ih(ir_a[i]) >= 0 || a32_ih(d) >= 0) && a32_skipd != d && ir_a[i] != d && (a32_direct & 2) != 0 {
+        int cd = a32_ih(d);
+        if a32_nohi_cur == 1 {
+            int rs0 = a32_rdlo(ir_a[i], 0, 2);
+            if cd >= 0 { a32_mov(cd, rs0); } else { a32_store(rs0, 1, d); }
+        } else {
+            int rs1 = a32_rd(ir_a[i], 0, 2);
+            if cd >= 0 { a32_mov(cd, rs1); a32_mov(cd + 1, rs1 + 1); } else { a32_store(rs1, rs1 + 1, d); }
+        }
+        return true;
+    }
     if op == IR_COPY {
         if a32_nohi_cur == 1 && ir_vcls[d] == 0 {
             a32_loadlo(0, ir_a[i]);
@@ -676,16 +832,20 @@ bool a32_instr(int i, int b) {
         a32_store(0, 1, d);
         return true;
     }
-    if (op == IR_ADD || op == IR_SUB || op == IR_AND || op == IR_OR || op == IR_XOR) && a32_nohi_cur == 1 && ir_a[i] != 30 {
-        // only the low word is wanted: one instruction on the low words
-        a32_loadlo(0, ir_a[i]);
-        if ir_bi[i] == 1 { a32_const(2, ir_b[i] & 4294967295); } else { a32_loadlo(2, ir_b[i]); }
-        if op == IR_ADD { a32_dp(A32_AL, 4, 0, 0, 0, 2); }
-        else if op == IR_SUB { a32_dp(A32_AL, 2, 0, 0, 0, 2); }
-        else if op == IR_AND { a32_dp(A32_AL, 0, 0, 0, 0, 2); }
-        else if op == IR_OR { a32_dp(A32_AL, 12, 0, 0, 0, 2); }
-        else { a32_dp(A32_AL, 1, 0, 0, 0, 2); }
-        a32_store(0, 1, d);
+    if (op == IR_ADD || op == IR_SUB || op == IR_AND || op == IR_OR || op == IR_XOR) && a32_nohi_cur == 1 && ir_a[i] != 30 && (a32_direct & 4) != 0 {
+        // only the low word is wanted: one instruction on the low words (the operands and the result are used where they live)
+        int nra = a32_rdlo(ir_a[i], 0, 4);
+        int nrb = 2;
+        if ir_bi[i] == 1 { a32_const(2, ir_b[i] & 4294967295); } else { nrb = a32_rdlo(ir_b[i], 2, 4); }
+        int nrd = 0;
+        bool ndir = a32_ih(d) >= 0 && a32_skipd != d;
+        if ndir { nrd = a32_ih(d); }
+        if op == IR_ADD { a32_dp(A32_AL, 4, 0, nrd, nra, nrb); }
+        else if op == IR_SUB { a32_dp(A32_AL, 2, 0, nrd, nra, nrb); }
+        else if op == IR_AND { a32_dp(A32_AL, 0, 0, nrd, nra, nrb); }
+        else if op == IR_OR { a32_dp(A32_AL, 12, 0, nrd, nra, nrb); }
+        else { a32_dp(A32_AL, 1, 0, nrd, nra, nrb); }
+        if !ndir { a32_store(0, 1, d); }
         return true;
     }
     if op == IR_ADD || op == IR_SUB || op == IR_AND || op == IR_OR || op == IR_XOR {
@@ -697,14 +857,18 @@ bool a32_instr(int i, int b) {
             a32_store(0, 1, d);
             return true;
         }
-        a32_load(0, 1, ir_a[i]);
-        a32_load_b(i);
-        if op == IR_ADD { a32_dp(A32_AL, 4, 1, 0, 0, 2); a32_dp(A32_AL, 5, 0, 1, 1, 3); }
-        else if op == IR_SUB { a32_dp(A32_AL, 2, 1, 0, 0, 2); a32_dp(A32_AL, 6, 0, 1, 1, 3); }
-        else if op == IR_AND { a32_dp(A32_AL, 0, 0, 0, 0, 2); a32_dp(A32_AL, 0, 0, 1, 1, 3); }
-        else if op == IR_OR { a32_dp(A32_AL, 12, 0, 0, 0, 2); a32_dp(A32_AL, 12, 0, 1, 1, 3); }
-        else { a32_dp(A32_AL, 1, 0, 0, 0, 2); a32_dp(A32_AL, 1, 0, 1, 1, 3); }
-        a32_store(0, 1, d);
+        int fra = a32_rd(ir_a[i], 0, 8);
+        int frb = 2;
+        if ir_bi[i] == 1 { a32_const64(2, 3, ir_b[i]); } else { frb = a32_rd(ir_b[i], 2, 8); }
+        int frd = 0;
+        bool fdir = a32_ih(d) >= 0 && a32_skipd != d;
+        if fdir { frd = a32_ih(d); }
+        if op == IR_ADD { a32_dp(A32_AL, 4, 1, frd, fra, frb); a32_dp(A32_AL, 5, 0, frd + 1, fra + 1, frb + 1); }
+        else if op == IR_SUB { a32_dp(A32_AL, 2, 1, frd, fra, frb); a32_dp(A32_AL, 6, 0, frd + 1, fra + 1, frb + 1); }
+        else if op == IR_AND { a32_dp(A32_AL, 0, 0, frd, fra, frb); a32_dp(A32_AL, 0, 0, frd + 1, fra + 1, frb + 1); }
+        else if op == IR_OR { a32_dp(A32_AL, 12, 0, frd, fra, frb); a32_dp(A32_AL, 12, 0, frd + 1, fra + 1, frb + 1); }
+        else { a32_dp(A32_AL, 1, 0, frd, fra, frb); a32_dp(A32_AL, 1, 0, frd + 1, fra + 1, frb + 1); }
+        if !fdir { a32_store(0, 1, d); }
         return true;
     }
     if op == IR_MUL {
@@ -833,8 +997,29 @@ bool a32_instr(int i, int b) {
         if ir_a[i] == 30 {
             off = a32_frame_off(ir_k[i]);
         } else {
-            a32_loadlo(2, ir_a[i]);
-            base = 2;
+            base = a32_rdlo(ir_a[i], 2, 32);
+        }
+        if op == IR_LOAD && aw == 8 && ir_vcls[d] == 1 && a32_dh(d) >= 0 {
+            a32_vmemb(true, a32_dh(d), base, off);
+            return true;
+        }
+        if op == IR_STORE && aw == 8 && ir_vcls[ir_b[i]] == 1 && a32_dh(ir_b[i]) >= 0 {
+            a32_vmemb(false, a32_dh(ir_b[i]), base, off);
+            return true;
+        }
+        if op == IR_LOAD && (aw == 8 || aw == 4) && a32_ih(d) >= 0 && a32_skipd != d && (a32_direct & 64) != 0 {
+            // into the pair where d lives: the high word first (the base may be the low register of that pair)
+            int lh = a32_ih(d);
+            if aw == 8 {
+                if a32_nohi_cur != 1 { a32_ldr(lh + 1, base, off + 4); }
+                a32_ldr(lh, base, off);
+            } else {
+                a32_ldr(lh, base, off);
+                if a32_nohi_cur != 1 {
+                    if w < 0 { a32_w(0xE1A00040 | ((lh + 1) << 12) | (31 << 7) | lh); } else { a32_const(lh + 1, 0); }
+                }
+            }
+            return true;
         }
         if op == IR_LOAD {
             if aw == 8 {
@@ -858,13 +1043,13 @@ bool a32_instr(int i, int b) {
             }
             a32_store(0, 1, d);
         } else {
-            if aw == 8 { a32_load(0, 1, ir_b[i]); } else { a32_loadlo(0, ir_b[i]); }
-            if aw == 8 {
-                a32_str(0, base, off);
-                a32_str(1, base, off + 4);
-            } else if aw == 4 {
-                a32_str(0, base, off);
+            if aw == 8 || aw == 4 {
+                int sv = 0;
+                if aw == 8 { sv = a32_rd(ir_b[i], 0, 128); } else { sv = a32_rdlo(ir_b[i], 0, 128); }
+                a32_str(sv, base, off);
+                if aw == 8 { a32_str(sv + 1, base, off + 4); }
             } else {
+                a32_loadlo(0, ir_b[i]);
                 a32_addr(base, off);
                 if aw == 1 { a32_w(0xE5C00000 | (12 << 16) | (0 << 12)); }          // strb r0, [r12]
                 else { a32_w(0xE1C000B0 | (12 << 16) | (0 << 12)); }                // strh r0, [r12]
@@ -1091,21 +1276,31 @@ bool a32_instr(int i, int b) {
         return true;
     }
     if op == IR_FADD || op == IR_FSUB || op == IR_FMUL || op == IR_FDIV {
-        a32_vmem(true, false, 0, a32_cell(ir_a[i]));
-        a32_vmem(true, false, 1, a32_cell(ir_b[i]));
-        if op == IR_FADD { a32_vfp(0xEE300B00, 0, 0, 1); }
-        else if op == IR_FSUB { a32_vfp(0xEE300B40, 0, 0, 1); }
-        else if op == IR_FMUL { a32_vfp(0xEE200B00, 0, 0, 1); }
-        else { a32_vfp(0xEE800B00, 0, 0, 1); }
-        a32_vmem(false, false, 0, a32_cell(d));
+        // the operands and the result are used where they are when they live in d8 .. d15
+        int fa = a32_dh(ir_a[i]);
+        int fb = a32_dh(ir_b[i]);
+        int fd = a32_dh(d);
+        if fa < 0 { a32_dldv(0, ir_a[i]); fa = 0; }
+        if fb < 0 { a32_dldv(1, ir_b[i]); fb = 1; }
+        int fr = 0;
+        if fd >= 0 { fr = fd; }
+        if op == IR_FADD { a32_vfp(0xEE300B00, fr, fa, fb); }
+        else if op == IR_FSUB { a32_vfp(0xEE300B40, fr, fa, fb); }
+        else if op == IR_FMUL { a32_vfp(0xEE200B00, fr, fa, fb); }
+        else { a32_vfp(0xEE800B00, fr, fa, fb); }
+        if fd < 0 { a32_dstv(0, d); }
         return true;
     }
     if op == IR_FNEG || op == IR_FABS || op == IR_FSQRT {
-        a32_vmem(true, false, 0, a32_cell(ir_a[i]));
-        if op == IR_FNEG { a32_vfp(0xEEB10B40, 0, 0, 0); }
-        else if op == IR_FABS { a32_vfp(0xEEB00BC0, 0, 0, 0); }
-        else { a32_vfp(0xEEB10BC0, 0, 0, 0); }
-        a32_vmem(false, false, 0, a32_cell(d));
+        int ua = a32_dh(ir_a[i]);
+        int ud = a32_dh(d);
+        if ua < 0 { a32_dldv(0, ir_a[i]); ua = 0; }
+        int ur = 0;
+        if ud >= 0 { ur = ud; }
+        if op == IR_FNEG { a32_vfp(0xEEB10B40, ur, 0, ua); }
+        else if op == IR_FABS { a32_vfp(0xEEB00BC0, ur, 0, ua); }
+        else { a32_vfp(0xEEB10BC0, ur, 0, ua); }
+        if ud < 0 { a32_dstv(0, d); }
         return true;
     }
     if op == IR_FFLOOR || op == IR_FCEIL || op == IR_FTRUNC || op == IR_F2I {
@@ -1133,7 +1328,7 @@ bool a32_instr(int i, int b) {
         a32_vfp(0xEE200B00, 1, 1, 2);                        // vmul.f64 d1, d1, d2
         a32_vfp(0xEE300B00, 0, 0, 1);                        // vadd.f64 d0, d0, d1
         if op == IR_I2F {
-            a32_vmem(false, false, 0, a32_cell(d));
+            a32_dstv(0, d);
         } else {
             a32_vfp(0xEEB70BC0, 0, 0, 0);                    // vcvt.f32.f64 s0, d0
             a32_vmem(false, true, 0, a32_cell(d));
@@ -1141,9 +1336,11 @@ bool a32_instr(int i, int b) {
         return true;
     }
     if op == IR_FSETCC || op == IR_FBR {
-        a32_vmem(true, false, 0, a32_cell(ir_a[i]));
-        a32_vmem(true, false, 1, a32_cell(ir_b[i]));
-        a32_w(0xEEB40B40 | (0 << 12) | 1);                  // vcmp.f64 d0, d1
+        int ca = a32_dh(ir_a[i]);
+        int cb = a32_dh(ir_b[i]);
+        if ca < 0 { a32_dldv(0, ir_a[i]); ca = 0; }
+        if cb < 0 { a32_dldv(1, ir_b[i]); cb = 1; }
+        a32_w(0xEEB40B40 | (ca << 12) | cb);                // vcmp.f64 d(ca), d(cb)
         a32_w(0xEEF1FA10);                                   // vmrs APSR_nzcv, fpscr
         int fcc = ir_k[i];
         int arm = A32_NE;
@@ -1188,7 +1385,7 @@ bool a32_instr(int i, int b) {
         return true;
     }
     if op == IR_FCVT_DS {
-        a32_vmem(true, false, 0, a32_cell(ir_a[i]));
+        a32_dldv(0, ir_a[i]);
         a32_vfp(0xEEB70BC0, 0, 0, 0);                        // vcvt.f32.f64 s0, d0
         a32_vmem(false, true, 0, a32_cell(d));
         return true;
@@ -1197,7 +1394,7 @@ bool a32_instr(int i, int b) {
         a32_vmem(true, true, 0, a32_cell(ir_a[i]));
         a32_vfp(0xEEB70AC0, 0, 0, 0);                        // vcvt.f64.f32 d0, s0
         if op == IR_FCVT_SD {
-            a32_vmem(false, false, 0, a32_cell(d));
+            a32_dstv(0, d);
         } else {
             a32_vmov_from_d(0, 1, 0);
             a32_str(0, 13, 0);
@@ -1440,11 +1637,91 @@ void a32_slot_bad_range(int k, int w) {
     }
 }
 
+void a32_itouch(int v, int w) {
+    if v <= 0 || v >= IR_MAXV || v == 28 || v == 29 || v == 30 || v == 31 { return; }
+    if ir_vcls[v] != 0 { return; }
+    if a32_iseen[v] != a32_istamp {
+        a32_iseen[v] = a32_istamp;
+        a32_icnt[v] = 0;
+    }
+    a32_icnt[v] += w;
+}
+
+void a32_dtouch(int v, int w) {
+    if v <= 0 || v >= IR_MAXV { return; }
+    if ir_vcls[v] != 1 { return; }
+    if a32_dseen[v] != a32_dstamp {
+        a32_dseen[v] = a32_dstamp;
+        a32_dcnt[v] = 0;
+    }
+    a32_dcnt[v] += w;
+}
+
+void a32_dnot(int v) {
+    if v > 0 && v < IR_MAXV { a32_dbad[v] = a32_dstamp; }
+}
+
+// the doubles that are used most go to d8 .. d15 for the whole function (a vreg that a single precision operation reads or writes does not)
+void a32_plan_doubles() {
+    int b = 0;
+    while b < ir_nb {
+        int wgt = 1;
+        int dd = a32_bdepth[b];
+        while dd > 0 && wgt < 4096 { wgt = wgt * 8; dd -= 1; }
+        int j = ir_bs[b];
+        while j < ir_be[b] {
+            int o = ir_op[j];
+            a32_dtouch(ir_d[j], wgt);
+            if ir_a[j] > 0 { a32_dtouch(ir_a[j], wgt); }
+            if ir_uses_b(o) && ir_bi[j] == 0 && ir_b[j] > 0 { a32_dtouch(ir_b[j], wgt); }
+            if o == IR_CALL || o == IR_CALLIND || o == IR_SYSCALL || o == IR_ATOMIC {
+                int ak = 0;
+                while ak < ir_ac[j] {
+                    a32_dtouch(ir_args[ir_as[j] + ak], wgt);
+                    ak += 1;
+                }
+            }
+            if o == IR_FADD32 || o == IR_FSUB32 || o == IR_FMUL32 || o == IR_FDIV32 {
+                a32_dnot(ir_d[j]);
+                a32_dnot(ir_a[j]);
+                a32_dnot(ir_b[j]);
+            }
+            if o == IR_FUN32 { a32_dnot(ir_d[j]); a32_dnot(ir_a[j]); }
+            if o == IR_FCVT_DS || o == IR_I2F32 { a32_dnot(ir_d[j]); }
+            if o == IR_FCVT_SD || o == IR_F32TOI { a32_dnot(ir_a[j]); }
+            j += 1;
+        }
+        b += 1;
+    }
+    int k = 0;
+    while k < 8 {
+        int best = 0 - 1;
+        int bw = 3;
+        int v = 1;
+        while v < ir_nv && v < IR_MAXV {
+            if a32_dseen[v] == a32_dstamp && a32_dbad[v] != a32_dstamp && a32_dst[v] != a32_dstamp && ir_vcls[v] == 1 && a32_dcnt[v] > bw {
+                best = v;
+                bw = a32_dcnt[v];
+            }
+            v += 1;
+        }
+        if best < 0 { break; }
+        a32_dst[best] = a32_dstamp;
+        a32_dhome[best] = 8 + k;
+        a32_dmask = a32_dmask | (1 << k);
+        k += 1;
+    }
+}
+
 // which variables of the frame go to registers (r4 r5 and r8 r9), and which functions have to save the registers
 void a32_plan_regs() {
     a32_salloc = 0;
     a32_special = 0;
     a32_nsave = 0;
+    a32_dmask = 0;
+    a32_dstamp += 1;
+    a32_istamp += 1;
+    a32_ialloc = 0;
     a32_sstamp += 1;
     bool noalloc = a32_elide_off == 2;
     bool negescape = false;
@@ -1457,6 +1734,7 @@ void a32_plan_regs() {
         if op == IR_CALL {
             char^ cn = @ir_name + ir_k[i] * 64;
             if str_eq(cn, "j2k_try_enter") || str_eq(cn, "j2k_try_leave") || str_eq(cn, "j2k_throw") || str_eq(cn, "j2k_thread_start") { a32_special = 1; noalloc = true; }
+            if str_eq(cn, "j2k_try_enter") { a32_dmask = 255; }          // a catch point: d8 .. d15 come back as they were when it was entered
             if str_eq(cn, "__Mt__run") { noalloc = true; }
         }
         // the frame pointer as a value (not as the base of an access, not in `add v30, number`): the frame is reached in other ways
@@ -1516,6 +1794,18 @@ void a32_plan_regs() {
                 // the address of something in the frame: a word that it starts at cannot be in a register
                 a32_slot_bad_range(ir_b[j], 8);
             }
+            if a32_noireg == 0 {
+                a32_itouch(ir_d[j], wgt);
+                if ir_a[j] > 0 { a32_itouch(ir_a[j], wgt); }
+                if ir_uses_b(o) && ir_bi[j] == 0 && ir_b[j] > 0 { a32_itouch(ir_b[j], wgt); }
+                if o == IR_CALL || o == IR_CALLIND || o == IR_SYSCALL || o == IR_ATOMIC {
+                    int iak = 0;
+                    while iak < ir_ac[j] {
+                        a32_itouch(ir_args[ir_as[j] + iak], wgt);
+                        iak += 1;
+                    }
+                }
+            }
             j += 1;
         }
         b += 1;
@@ -1539,12 +1829,36 @@ void a32_plan_regs() {
             }
             j2 += 1;
         }
-        if best < 0 { break; }
-        a32_sreg[best] = pick;
-        a32_salloc = 1;
-        pick += 1;
+        // a whole number vreg that is used more than the best slot
+        int vbest = 0 - 1;
+        if a32_noireg == 0 {
+            int vw = bw;
+            if best < 0 { vw = 3; }
+            int vv = 1;
+            while vv < ir_nv && vv < IR_MAXV {
+                if a32_iseen[vv] == a32_istamp && a32_ist[vv] != a32_istamp && a32_icnt[vv] > vw {
+                    vbest = vv;
+                    vw = a32_icnt[vv];
+                }
+                vv += 1;
+            }
+        }
+        if vbest >= 0 {
+            a32_ist[vbest] = a32_istamp;
+            a32_ihome[vbest] = 4;                                 // the pairs go in the order r4:r5, r8:r9, r6:r7 (as for the variables of the frame)
+            if pick == 1 { a32_ihome[vbest] = 8; }
+            if pick == 2 { a32_ihome[vbest] = 6; }
+            a32_ialloc = 1;
+            pick += 1;
+        } else {
+            if best < 0 { break; }
+            a32_sreg[best] = pick;
+            a32_salloc = 1;
+            pick += 1;
+        }
     }
-    if a32_salloc == 1 || a32_special == 1 { a32_nsave = 4; }
+    if a32_salloc == 1 || a32_ialloc == 1 || a32_special == 1 { a32_nsave = 4; }
+    if a32_nodreg == 0 { a32_plan_doubles(); }
 }
 
 // which results are never read: a backward walk over every block from the live-out registers of the function's liveness
@@ -1671,7 +1985,10 @@ void a32_function() {
     a32_outb = maxargs * 8;
     a32_cellbase = a32_outb + lf_frame + maxq;
     a32_vbase = a32_cellbase;
-    if a32_nsave > 0 { a32_vbase = a32_cellbase + 24; }          // r4 .. r9 are saved here
+    a32_dsoff = a32_cellbase;
+    if a32_nsave > 0 { a32_dsoff = a32_cellbase + 24; }          // r4 .. r9 are saved here
+    a32_vbase = a32_dsoff;
+    if a32_dmask != 0 { a32_vbase = a32_dsoff + 64; }            // d8 .. d15 are saved here
     int v = 0;
     while v < ir_nv && v < IR_MAXV {
         a32_vmap[v] = 0 - 1;
@@ -1704,6 +2021,13 @@ void a32_function() {
         a32_str(8, 13, a32_cellbase + 16);
         a32_str(9, 13, a32_cellbase + 20);
     }
+    if a32_dmask != 0 {
+        int sk = 0;
+        while sk < 8 {
+            if ((a32_dmask >> sk) & 1) == 1 { a32_vmem(false, false, 8 + sk, a32_dsoff + sk * 8); }
+            sk += 1;
+        }
+    }
     b = 0;
     while b < ir_nb && a32_bad == 0 {
         a32_boff[b] = a32_pos;
@@ -1720,8 +2044,10 @@ void a32_function() {
             a32_chp = a32_chn;
             a32_chn = 0;
             a32_chmode = 0;
-            if a32_elide == 1 && a32_chain[k2] == 1 { a32_chmode = 1; }
-            if a32_elide == 1 && a32_dead[k2] == 1 { a32_skipd = ir_d[k2]; }
+            // a result that lives in a register of its own is always written there: never left out, never only in r0:r1
+            bool dhome = ir_d[k2] > 0 && a32_ih(ir_d[k2]) >= 0;
+            if a32_elide == 1 && a32_chain[k2] == 1 && !dhome { a32_chmode = 1; }
+            if a32_elide == 1 && a32_dead[k2] == 1 && !dhome { a32_skipd = ir_d[k2]; }
             if a32_elide == 1 && a32_nohi[k2] == 1 { a32_nohi_cur = 1; }
             if !a32_instr(k2, b) { a32_fail("an instruction"); }
             a32_skipd = 0;
