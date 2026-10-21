@@ -385,6 +385,9 @@ void die_name(char^ msg, char^ name) {
     } else if str_eq(msg, "unknown function") && (str_eq(name, "alloc") || str_eq(name, "free") || str_eq(name, "arr")) {
         write_err("  help: this is part of the standard library: write #import <stdlib> at the top of the file\n");
     }
+    if str_eq(msg, "this is not a system register that jcmp knows (see docs/LANGUAGE.md; the general form is s3_0_c12_c0_0)") {
+        write_err("  help: Sys:: is also the system layer of the library: write #import <stdlib> and using stdlib; (or using system;) to call Sys::name(...)\n");
+    }
     if msg[0] == 'l' && msg[1] == 'i' && msg[2] == 'b' {
         write_err("  help: looked in the -I folders, J2K_PATH, ~/.j2k/Library and the Library folder next to the compiler (jget -li install NAME fetches a library from the index; jget is a separate tool); built in: stdlib, core, number, text, files, system, time, data, crypto, math, gfx, cpu, simd\n");
     }

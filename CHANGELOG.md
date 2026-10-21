@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.195
+* **Faster loops of `float`.** A float literal in an expression of floats (`fa[i] * k + 2.0`) is a whole number constant for the optimizer now, so these loops are vectorized: the benchmark `widths` went from 6x to 1x of clang `-O2`. All the benchmarks are within 1.5x of clang `-O2` except `loop` (3.6x: clang proves that the counter fits in 32 bits and vectorizes `i % 7`).
+* **The examples of the documents compile.** The README example lacked a `;` after `using stdlib`, the thread example of LANGUAGE.md lacked `#import <stdlib>`; `tools/doccheck.py` compiles every program of README.md, LANGUAGE.md and TUTORIAL.md and is part of the test suite. `Sys::name` without the library now says how to get it.
+* Checked again for 1.0: the fuzzers (numbers and texts, also with `-target arm32`) and `diffcheck` give no new difference.
+* The programs for ARM64 are the same as in 0.9.194 except the loops of float that use a literal.
+
 ## 0.9.194
 * **The compiler runs as an ARM32 program.** `jcmp jcmp/jcmp.jk -target arm32` builds the whole compiler for ARM32 (5.7 MB); it compiles programs and **itself**, and the ARM64 compiler and the ARM32 compiler that it makes are the same, byte for byte, as the ones made by the ARM64 compiler (`tools/selfhost32.sh`, part of the test suite). To get there the ARM32 back end got bigger tables, the start values of the global area are kept as records that the start code copies (the file stays small however big the global area is), and the global area is mapped by the start code. The syntax tree keeps more functions at once (a bigger store).
 * ARM32 programs are about 10% faster (a number made in a block and the value just stored are not loaded again).

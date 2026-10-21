@@ -1013,6 +1013,17 @@ int cp_flip(int cc) {
     return cc;
 }
 
+// the bits of a float made from the bits of a double (fcvt sD, dA), worked out here
+int cp_fbits(int dbits) {
+    double dd[1];
+    int^ db = (int^)@dd[0];
+    db[0] = dbits;
+    float ff[2];
+    ff[0] = (float)dd[0];
+    i32^ fb = (i32^)@ff[0];
+    return fb[0] & 4294967295;
+}
+
 int cp_done[IR_MAXB];
 int cp_pc[IR_MAXB];
 
@@ -1116,6 +1127,15 @@ void op_prop_block(int b, int cont) {
                 }
             }
         }
+        // the bits of a float that is a known constant: a whole number constant (a float literal in an expression of floats)
+        if op == IR_F32OUT && cp_get(ir_a[i]) == 4 && ir_d[i] > 0 && ir_vcls[ir_d[i]] == 0 {
+            ir_op[i] = IR_CONST;
+            ir_k[i] = cp_val[ir_a[i]];
+            ir_a[i] = 0;
+            ir_bi[i] = 1;
+            op_clean_changes += 1;
+            op = IR_CONST;
+        }
         // a double made from a known whole number: a double constant (one instruction when the number fits in 8 bits)
         if op == IR_BITS2F && cp_get(ir_a[i]) == 1 && ir_vcls[ir_d[i]] == 1 {
             ir_op[i] = IR_FCONST;
@@ -1131,9 +1151,16 @@ void op_prop_block(int b, int cont) {
             cp_cur += 1;
             cp_nact = 0;
         } else if d != 0 {
+            int akind = 0;
+            int aval = 0;
+            if ir_a[i] > 0 { akind = cp_get(ir_a[i]); aval = cp_val[ir_a[i]]; }
             cp_kill(d);
             if op == IR_CONST && ir_vcls[d] == 0 {
                 cp_set(d, 1, ir_k[i]);
+            } else if op == IR_FCONST && ir_vcls[d] == 1 {
+                cp_set(d, 3, ir_k[i]);
+            } else if op == IR_FCVT_DS && akind == 3 && ir_vcls[d] == 1 {
+                cp_set(d, 4, cp_fbits(aval));
             } else if op == IR_COPY && ir_a[i] != d {
                 int src = ir_a[i];
                 if cp_get(src) == 1 && ir_vcls[d] == 0 {

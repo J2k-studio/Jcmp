@@ -782,6 +782,8 @@ void main() {
 ## Threads and locks
 
 ```jk
+#import <stdlib>
+using stdlib;
 #import <cpu>
 using cpu::thread;
 using cpu::mutex;

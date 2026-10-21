@@ -148,7 +148,7 @@ More: [docs/USAGE.md](docs/USAGE.md) (command line, building, testing) and
 
 ```jk
 #import <stdlib>                      // the standard library: Sys, Mem, Str, Math, File (and cout, cin)
-using stdlib                       // use its names without the prefix (cout needs both lines)
+using stdlib;                      // use its names without the prefix (cout needs both lines)
 
 enum class Color { Red, Green, Blue };
 
