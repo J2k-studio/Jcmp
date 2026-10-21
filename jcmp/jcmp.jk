@@ -3,7 +3,7 @@
 // Use:    jcmp1 input.jk -o program
 // the version of the compiler (also in the file VERSION; release.sh checks that they agree)
 #allow syscall                         // the compiler is the layer under Sys: it calls the system by number on purpose
-#define JCMP_VERSION "0.9.192"
+#define JCMP_VERSION "0.9.193"
 
 #import "jc_base"
 #import "jc_asm"
@@ -426,6 +426,10 @@ void main() {
         ai += 1;
     }
     if in_path == null { usage(); }
+    if x_target == 32 && opt_debug == 1 {
+        write_err("jcmp: -d (the checks of memory and bounds) is not available for -target arm32 yet; build the program with -d for ARM64\n");
+        syscall(93, 1);
+    }
     lib_init(JCMP_VERSION);
     if x_cachedir == null && x_nocache == 0 {
         // the cache is on by default (from 0.9.188): J2K_CACHE=dir chooses the folder, J2K_CACHE= (empty) turns it off, else ~/.j2k/cache

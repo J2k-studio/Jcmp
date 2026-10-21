@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.193
+* **ARM32: SIMD** (`f64x2`, `f32x4`, `i32x4`, `i64x2`, byte vectors: NEON for the whole numbers and the float lanes, VFP for the two doubles), **`#multithread` loops** (the worker is a function of its own), arrays of structs that free themselves (`S__free_arr`), and a `double` after the eighth argument of a call from the syntax tree.
+* `-d` with `-target arm32` stops with a clear message (it is for ARM64 builds).
+* 214 of the 230 tests with an expected output give the same output on ARM32 (`tools/a32sweep.sh`); the others need machine-specific code (`register { }`, naked / abi, `Cpu` atomics, `#pragma read`), `-d`, `fma` (not fused on ARM32), or arguments / a network that the sweep does not give.
+* The programs for ARM64 are the same as in 0.9.192.
+
 ## 0.9.192
 * **ARM32: `defer`.** The body of a `defer` runs on the frame of its function (a local call), also when a `throw` leaves the function: a small routine per `defer` gives the unwinder the frame of the owner (the state of the unwinder is kept in the thread block while the body runs).
 * **ARM32: `expr?` with a text or array content** (`Fs::read_text`, `Fs::read_lines`, `t226`, `t440` run) and unsigned whole number to `double`.

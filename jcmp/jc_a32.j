@@ -241,8 +241,61 @@ int a32_cell(int v) {
     if a32_vmap[v] < 0 {
         a32_vmap[v] = a32_nvc;
         a32_nvc += 1;
+        if ir_vcls[v] == 2 { a32_nvc += 1; }              // a vector: 16 bytes
     }
     return a32_vbase + a32_vmap[v] * 8;
+}
+
+// the vector registers of the code are q0 (d0, d1) and q1 (d2, d3); the vectors of the IR live in cells of 16 bytes
+void a32_vload(int q, int v) {
+    a32_const(12, a32_cell(v));
+    a32_dp(A32_AL, 4, 0, 12, 13, 12);                 // add r12, sp, r12
+    if q == 0 { a32_w(0xF42C0A0F); } else { a32_w(0xF42C2A0F); }          // vld1.8 {d0, d1} / {d2, d3}, [r12]
+}
+
+void a32_vstore(int v) {
+    a32_const(12, a32_cell(v));
+    a32_dp(A32_AL, 4, 0, 12, 13, 12);
+    a32_w(0xF40C0A0F);                                // vst1.8 {d0, d1}, [r12]
+}
+
+// d = a op b on vectors (the codes of IR_VOP: 0 fadd 1 fsub 2 fmul 3 fdiv 4 add 5 sub 6 mul 7 and 8 orr 9 eor 10 ushl; w: 1 = 2 x 64 bits, 2 = 4 x 32, 3 = 16 x 8)
+bool a32_vop(int i) {
+    int k = ir_k[i];
+    int w = ir_w[i];
+    a32_vload(0, ir_a[i]);
+    a32_vload(1, ir_b[i]);
+    if k == 7 { a32_w(0xF2000152); }
+    else if k == 8 { a32_w(0xF2200152); }
+    else if k == 9 { a32_w(0xF3000152); }
+    else if w == 1 {
+        if k == 0 { a32_w(0xEE300B02); a32_w(0xEE311B03); }
+        else if k == 1 { a32_w(0xEE300B42); a32_w(0xEE311B43); }
+        else if k == 2 { a32_w(0xEE200B02); a32_w(0xEE211B03); }
+        else if k == 3 { a32_w(0xEE800B02); a32_w(0xEE811B03); }
+        else if k == 4 { a32_w(0xF2300842); }
+        else if k == 5 { a32_w(0xF3300842); }
+        else if k == 10 { a32_w(0xF3320440); }
+        else { a32_fail("a vector operation of 2 x 64 bits"); return false; }
+    } else if w == 2 {
+        if k == 0 { a32_w(0xF2000D42); }
+        else if k == 1 { a32_w(0xF2200D42); }
+        else if k == 2 { a32_w(0xF3000D52); }
+        else if k == 3 { a32_w(0xEE800A02); a32_w(0xEEC00AA2); a32_w(0xEE811A03); a32_w(0xEEC11AA3); }
+        else if k == 4 { a32_w(0xF2200842); }
+        else if k == 5 { a32_w(0xF3200842); }
+        else if k == 6 { a32_w(0xF2200952); }
+        else if k == 10 { a32_w(0xF3220440); }
+        else { a32_fail("a vector operation of 4 x 32 bits"); return false; }
+    } else {
+        if k == 4 { a32_w(0xF2000842); }
+        else if k == 5 { a32_w(0xF3000842); }
+        else if k == 6 { a32_w(0xF2000952); }
+        else if k == 10 { a32_w(0xF3020440); }
+        else { a32_fail("a vector operation of 16 x 8 bits"); return false; }
+    }
+    a32_vstore(ir_d[i]);
+    return true;
 }
 
 // (rlo, rhi) = the virtual register v
@@ -392,6 +445,64 @@ bool a32_instr(int i, int b) {
     if op == IR_CONST {
         a32_const64(0, 1, ir_k[i]);
         a32_store(0, 1, d);
+        return true;
+    }
+    if op == IR_VOP { return a32_vop(i); }
+    if op == IR_VDUP {
+        a32_load(0, 1, ir_a[i]);
+        if ir_w[i] == 1 { a32_w(0xEC410B10); a32_w(0xEC410B11); }          // vmov d0, r0, r1 / d1, r0, r1
+        else if ir_w[i] == 2 { a32_w(0xEEA00B10); }                         // vdup.32 q0, r0
+        else { a32_w(0xEEE00B10); }                                         // vdup.8 q0, r0
+        a32_vstore(d);
+        return true;
+    }
+    if op == IR_VLANE {
+        // the lane is read from the cell of the vector
+        int lc = a32_cell(ir_a[i]) + ir_k[i];
+        a32_ldr(0, 13, lc);
+        if ir_w[i] == 8 {
+            a32_ldr(1, 13, lc + 4);
+        } else if ir_w[i] < 0 {
+            a32_w(0xE1A00040 | (1 << 12) | (31 << 7) | 0);                  // mov r1, r0, asr #31
+        } else {
+            a32_const(1, 0);
+        }
+        a32_store(0, 1, d);
+        return true;
+    }
+    if op == IR_VINS {
+        if ir_vcls[ir_a[i]] == 2 && ir_a[i] != d {
+            a32_vload(0, ir_a[i]);
+            a32_vstore(d);
+        }
+        a32_load(0, 1, ir_b[i]);
+        int ic = a32_cell(d) + ir_k[i];
+        a32_str(0, 13, ic);
+        if ir_w[i] == 8 { a32_str(1, 13, ic + 4); }
+        return true;
+    }
+    if op == IR_COPY && ir_vcls[d] == 2 {
+        a32_vload(0, ir_a[i]);
+        a32_vstore(d);
+        return true;
+    }
+    if (op == IR_LOAD || op == IR_STORE) && ir_w[i] == 16 {
+        int vb = 13;
+        int vo = ir_k[i];
+        if op == IR_STORE { a32_vload(0, ir_b[i]); }
+        if ir_a[i] == 30 {
+            vo = a32_frame_off(ir_k[i]);
+        } else {
+            a32_load(6, 7, ir_a[i]);
+            vb = 6;
+        }
+        a32_addr(vb, vo);
+        if op == IR_LOAD {
+            a32_w(0xF42C0A0F);
+            a32_vstore(d);
+        } else {
+            a32_w(0xF40C0A0F);
+        }
         return true;
     }
     if op == IR_COPY {

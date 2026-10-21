@@ -678,6 +678,7 @@ int fptid[131072];            // type of each parameter (8 per function)
 int fop[16384];               // 1 if the method was declared with the word `operator` (a + b calls a.add(b))
 int op_pending;              // the word `operator` was read in front of the method being declared
 int fself[16384];             // 1 if the function is a method with self (not static)
+int fpd8[16384];             // bit k: the declared parameter 8 + k is a double (the tables above hold 8 parameters)
 int farr[16384];              // bit k: the declared parameter k is an array (T name[])
 int fcount;
 
@@ -5670,9 +5671,24 @@ void emit_free_thunks() {
             append_text(@sf, "__free");
             emit_str(@tn);
             emit_line(":");
-            emit_str("adr x1, ");
-            emit_line(@sf);
-            emit_line("b __Arr__free_each");
+            if x_target == 32 {
+                // a whole function (the ARM32 back end makes functions that have a frame)
+                emit_line("sub sp, sp, #0000032");
+                emit_line("str x29, [sp, #0]");
+                emit_line("str x30, [sp, #8]");
+                emit_line("add x29, sp, #0");
+                emit_str("adr x1, ");
+                emit_line(@sf);
+                emit_line("bl __Arr__free_each");
+                emit_line("ldr x29, [sp, #0]");
+                emit_line("ldr x30, [sp, #8]");
+                emit_line("add sp, sp, #0000032");
+                emit_line("ret");
+            } else {
+                emit_str("adr x1, ");
+                emit_line(@sf);
+                emit_line("b __Arr__free_each");
+            }
         }
         i += 1;
     }

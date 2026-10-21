@@ -359,7 +359,8 @@ bool as1_args(int fi, int a2, int pk) {
         } else {
             if !as1_expr(a2) || !as1_tid(pt) { return false; }
             // a double goes to a double parameter, a whole number (or a pointer) to a whole number one
-            if (pt == 91) != as1_dbl(ast_ty[a2]) { return false; }
+            if pk < 8 && (pt == 91) != as1_dbl(ast_ty[a2]) { return false; }
+            if pk >= 8 && as1_dbl(ast_ty[a2]) != ((fpd8[fi] >> (pk - 8)) % 2 == 1) { return false; }
         }
         pk += 1;
         a2 = ast_nx[a2];

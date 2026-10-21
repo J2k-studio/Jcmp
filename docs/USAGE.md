@@ -40,8 +40,9 @@ jcmp -target arm32 hello.jk -o hello32
 
 `int` is still 64 bits (a pair of registers), so a program gives the same answer on both targets. Most of the language runs: functions,
 loops, 64-bit arithmetic, `double` and `float`, `cout`, strings, dynamic arrays, structs, the heap, `try` / `catch` / `throw`, threads,
-atomics, lambdas, function pointers, files, processes and the clock. Not yet (the compiler stops with the name of the function): SIMD
-vectors, `defer`, the `register { }` blocks and other machine-specific code. This first version has no register allocation, so the
+atomics, lambdas, function pointers, `defer`, `#multithread` loops, SIMD vectors (`f64x2`, `f32x4`, `i32x4` ... with NEON), files,
+processes and the clock. Not yet (the compiler stops with the name of the function, or says so): `-d` (the checks of memory and bounds),
+the `register { }` blocks and other machine-specific code (naked / abi functions, the `Cpu` atomics), `#pragma read`. This version has no register allocation, so the
 programs are much slower than the ARM64 ones; `a * b + c` is not fused into one instruction as it is on ARM64, so the last bit of a
 floating-point result can differ. The tests of the repository run with it (`tools/a32sweep.sh`).
 

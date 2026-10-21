@@ -1,6 +1,8 @@
-# J2K / Jcmp 0.9.192
+# J2K / Jcmp 0.9.193
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
+
+**0.9.193:** ARM32: SIMD vectors, `#multithread` loops (214 of 230 tests run the same as on ARM64).
 
 **0.9.192:** ARM32: `defer`, `expr?` with a text or array content, unsigned to `double` (205 of 230 tests run the same as on ARM64).
 

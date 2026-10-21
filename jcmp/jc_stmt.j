@@ -989,6 +989,9 @@ void parse_for() {
     lcount = for_mark;
 }
 
+char mt_buf[1048576];        // ARM32: the workers of the #multithread loops of the function, as functions of their own (they follow the function)
+int mt_len;
+int mt_seq;
 int mt_active;               // 1 while the body of a #multithread loop is compiled
 int mt_base;                 // loop_depth at its start
 
@@ -1023,13 +1026,21 @@ void parse_mt_for() {
     emit_line("ldr x2, [sp, #0]");
     emit_line("add sp, sp, #16");
     emit_line("mov x1, x29");
+    bool mt_cut = x_target == 32 && pass_no == 3;
+    char mt_name[64];
+    str_copy(@mt_name, "__mtw_", 64);
+    mt_name[6] = 'a' + (mt_seq / 100) % 10;
+    mt_name[7] = 'a' + (mt_seq / 10) % 10;
+    mt_name[8] = 'a' + mt_seq % 10;
+    mt_name[9] = 0;
     emit_str("adr x0, ");
-    emit_lab(lworker);
+    if mt_cut { emit_str(@mt_name); } else { emit_lab(lworker); }
     emit_nl();
     rt_call("__Mt__run");
     jump(lafter);
     // ---- the worker: x0 = [enclosing frame, from, to]
-    place_label(lworker);
+    int wcut = out_len;
+    if !mt_cut { place_label(lworker); }
     int sv_frame = frame_bytes;
     int sv_try = try_depth;
     int sv_own = own_count;
@@ -1089,6 +1100,27 @@ void parse_mt_for() {
     int wframe = (frame_bytes + 15) / 16 * 16;
     patch_number(pa, wframe);
     patch_number(pb, wframe);
+    if mt_cut {
+        // a function of its own: the ARM32 back end makes functions, not routines inside a function
+        int mk = 0;
+        while mt_name[mk] != 0 {
+            mt_buf[mt_len] = mt_name[mk];
+            mt_len += 1;
+            mk += 1;
+        }
+        mt_buf[mt_len] = ':';
+        mt_buf[mt_len + 1] = 10;
+        mt_len += 2;
+        if mt_len + (out_len - wcut) >= 1048000 { die("too many #multithread loops in one function"); }
+        mk = wcut;
+        while mk < out_len {
+            mt_buf[mt_len] = out_buf[mk];
+            mt_len += 1;
+            mk += 1;
+        }
+        out_len = wcut;
+        mt_seq += 1;
+    }
     frame_bytes = sv_frame;
     try_depth = sv_try;
     own_count = sv_own;
@@ -2885,6 +2917,8 @@ void parse_function() {
             int p_dyn = ty_dyn;
             if ty_ptr != 0 { p_tid = 0; }
             if f_declared < 8 { fptid[f_idx * 8 + f_declared] = p_tid; }
+            if f_declared == 8 { fpd8[f_idx] = 0; }
+            if f_declared >= 8 && f_declared < 16 && ty_ptr == 0 && p_tid == 91 && ty_dyn == 0 { fpd8[f_idx] = fpd8[f_idx] + (1 << (f_declared - 8)); }
             if f_declared < 8 { fpstr[f_idx * 8 + f_declared] = 0; if ty_ptr != 0 { fpstr[f_idx * 8 + f_declared] = 2; } if is_str_dyn(p_dyn) { fpstr[f_idx * 8 + f_declared] = 1; } }
             next();
             if tok_is("[") {
@@ -3086,6 +3120,16 @@ void parse_function() {
         used_try = sv_try;
         used_uprint = sv_up;
         used_thread = sv_thr;
+        mt_len = 0;
+    }
+    if mt_len > 0 {
+        int mf = 0;
+        while mf < mt_len {
+            out_buf[out_len] = mt_buf[mf];
+            out_len += 1;
+            mf += 1;
+        }
+        mt_len = 0;
     }
     f_void = f_void + 0;
 }
