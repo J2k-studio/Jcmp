@@ -504,9 +504,18 @@ struct Input {
     static void enter();
     // asks and waits for y or n (Enter alone is no); true for y / Y
     static bool yes(String question);
-    // one key without Enter and without an echo. A letter is its code; the arrows are 257 up, 258 down, 259 right, 260 left;
-    // Escape is 27; -1 at the end of the input. When the input is not a terminal it is the next byte.
+    // true when the file 0 has something to read within ms milliseconds (ms < 0: wait for ever)
+    static bool ready(int ms);
+    // one key without Enter and without an echo. A letter is its code; Escape is 27; the other keys are 257 up, 258 down, 259 right,
+    // 260 left, 261 Home, 262 End, 263 Delete, 264 PageUp, 265 PageDown, 266 Insert, 270 .. 273 F1 .. F4; -1 at the end of the input.
+    // When the input is not a terminal it is the next byte.
     static int key();
+    // the same, but it waits at most ms milliseconds; -2 when no key was pressed in that time
+    static int key_wait(int ms);
+    // a line typed without an echo (a password); on a terminal the new line is written for the user
+    static String password();
+    // a line as a decimal number (an error when it is not one)
+    static double decimal();
 }
 
 // env, proc, term, read: the short names (Env::env.get(name), with  using Env;  env.get(name))
@@ -529,6 +538,9 @@ struct __System {
     static void read_enter();
     static bool read_yes(String question);
     static int read_key();
+    static int read_key_timeout(int ms);
+    static String read_password();
+    static double read_decimal();
 }
 
 // Log: messages for the person who runs the program, on the error output (standard error), with a level.

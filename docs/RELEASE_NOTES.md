@@ -1,6 +1,8 @@
-# J2K / Jcmp 0.9.202
+# J2K / Jcmp 0.9.203
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
+
+**0.9.203:** `#require cpu "crc32"` checks the CPU when the program starts; `read` knows more keys and has `key_timeout`, `password`, `decimal`; the tutorial has 44 lessons.
 
 **0.9.202:** `reg<int x19> c` (a variable in a register), `Cache::prefetch`, `Cpu::speculation_barrier`, `#require cpu "crc32"` with `Cpu::crc32` / `crc32c`, the `read` module for the keyboard, and a longer tutorial (36 lessons).
 

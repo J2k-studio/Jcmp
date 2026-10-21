@@ -3074,8 +3074,9 @@ void parse_function() {
     fn_col = err_col;
     fn_base = err_base;
     fn_ls = err_ls;
+    if cur_is_main == 1 && req_cpu != 0 { rt_call("Cpu__require_check"); }                // #require cpu "...": stop at once when the CPU lacks the extension
     if cur_is_main == 1 && opt_debug == 1 { rt_call("Mem__debug_on"); }       // the checks of the heap are on
-    if pass_no == 3 && f_skip == 0 && f_naked == 0 && f_interrupt == 0 && (ast_report != 0 || ast_lower_on != 0) && (lvl_lib[lx_depth] == 0 || x_target == 32) { ast_probe(f_idx); }
+    if pass_no == 3 && f_skip == 0 && f_naked == 0 && f_interrupt == 0 && !(cur_is_main == 1 && req_cpu != 0) && (ast_report != 0 || ast_lower_on != 0) && (lvl_lib[lx_depth] == 0 || x_target == 32) { ast_probe(f_idx); }
     parse_block();
     ow_site = 5;
     ow_id = 0;

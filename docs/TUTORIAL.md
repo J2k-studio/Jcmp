@@ -34,21 +34,29 @@ For the complete list of features see [LANGUAGE.md](LANGUAGE.md); for the comman
 19. Files
 20. A program in several files
 21. A small project: counting words
-22. Bits and bytes
-23. Numbers wider than 64 bits
-24. Looking at the code the compiler made
-25. Keeping the code short: #expect
-26. Threads and atomic operations
-27. Registers: the register block
-28. A function with nothing around it: naked and svc
-29. The flags of the CPU
-30. Machine words you write yourself
-31. Addresses and bytes
-32. Talking to the kernel
-33. Your own allocator
-34. A spinlock
-35. Counting the clock of the CPU
-36. Vectors in the hardware
+22. Option, Result and ?
+23. defer: clean up on every way out
+24. Operators for your own types
+25. Dates, time and random numbers
+26. JSON
+27. CSV and formatting numbers
+28. Patterns, hashes and encodings
+29. Paths, other programs and the log
+30. Bits and bytes
+31. Numbers wider than 64 bits
+32. Looking at the code the compiler made
+33. Keeping the code short: #expect
+34. Threads and atomic operations
+35. Registers: the register block
+36. A function with nothing around it: naked and svc
+37. The flags of the CPU
+38. Machine words you write yourself
+39. Addresses and bytes
+40. Talking to the kernel
+41. Your own allocator
+42. A spinlock
+43. Counting the clock of the CPU
+44. Vectors in the hardware
 
 ## Lesson 1. Hello, world
 
@@ -314,7 +322,7 @@ name? age? Ann will be 31 next year
 again? [y/n] ok
 ```
 
-`read.number()` throws an error when the line is not a whole number (`read.try_number()` gives a `Result` instead). `read.key()` gives the code of the key, with no echo and no Enter: letters are their codes, Escape is 27, and the arrows are 257 (up), 258 (down), 259 (right), 260 (left); at the end of the input it is -1. That is how a game or a menu reads the keyboard. Use `read` or `cin` in one program, not both.
+`read.number()` throws an error when the line is not a whole number (`read.try_number()` gives a `Result` instead). `read.key()` gives the code of the key, with no echo and no Enter: letters are their codes, Escape is 27, and the arrows are 257 (up), 258 (down), 259 (right), 260 (left), with Home, End, Delete, the page keys and F1 to F4 after them; at the end of the input it is -1. `read.key_timeout(ms)` gives up after that time (-2), `read.password()` hides what is typed, and `read.decimal()` reads a number with a decimal part. That is how a game or a menu reads the keyboard. Use `read` or `cin` in one program, not both.
 
 ## Lesson 9. Structs and methods
 
@@ -786,9 +794,286 @@ Output:
 Run: `echo "the quick brown fox jumps over the lazy dog" | ./wordcount`.
 **Try:** also print the longest word itself.
 
+# More of the library
+
+## Lesson 22. Option, Result and ?
+
+An operation that can fail gives a `Result<T, Error>`; a value that may be missing is an `Option<T>`. You take a `Result` apart with `switch`, or you pass the failure on with `?`: `int x = parse(a)?;` returns the error to the caller at once and otherwise gives the value.
+
+```jk
+#import <stdlib>
+using stdlib;
+
+Result<int, Error> parse(String s) {
+    if s.len == 0 { return Result<int, Error>::Err(Error::make(ErrorKind::Invalid, "empty text")); }
+    return Result<int, Error>::Ok(s.to_int());
+}
+
+Result<int, Error> add(String a, String b) {
+    int x = parse(a)?;
+    int y = parse(b)?;
+    return Result<int, Error>::Ok(x + y);
+}
+
+void show(Result<int, Error> r) {
+    switch r {
+        Result::Ok(v): cout << "sum = " << v << "\n";
+        Result::Err(e): cout << "error: " << e.message << "\n";
+    }
+}
+
+void main() {
+    show(add("20", "22"));
+    show(add("20", ""));
+    Option<String> home = Env::get("J2K_SURELY_NOT_SET");
+    cout << home.is_none() << " " << Env::get("PATH").is_some() << "\n";
+}
+```
+
+Output:
+
+```
+sum = 42
+error: empty text
+true true
+```
+
+`add` has no `if` for the errors: `?` does it. `Env::get` gives an `Option`: `is_none()` / `is_some()` ask it. Other helpers: `unwrap()` (throws when there is no value) and `or(fallback)`. `try` / `catch` (lesson 17) is the other way, for when throwing is better.
+
+## Lesson 23. defer: clean up on every way out
+
+`defer statement;` runs when the block is left, whichever way it is left: at the end, by `return`, `break` or `continue`, or when an error passes through. The last `defer` runs first. It is the place for `close`, `free`, `unlock`: you write it next to the thing it undoes and you cannot forget it on one of the paths.
+
+```jk
+#import <stdlib>
+using stdlib;
+
+void work(int n) {
+    defer cout << "leaving work(" << n << ")\n";
+    if n > 5 {
+        cout << "big\n";
+        return;
+    }
+    cout << "small\n";
+}
+
+void main() {
+    work(3);
+    work(9);
+    for i in 0..2 {
+        defer cout << "end of round " << i << "\n";
+        cout << "round " << i << "\n";
+    }
+    defer cout << "first defer\n";
+    defer cout << "second defer\n";
+    cout << "main body\n";
+}
+```
+
+Output:
+
+```
+small
+leaving work(3)
+big
+leaving work(9)
+round 0
+end of round 0
+round 1
+end of round 1
+main body
+second defer
+first defer
+```
+
+`work(9)` returns in the middle and the message still comes. Inside a loop the `defer` runs at the end of every round. A deferred statement cannot itself `return`, `break` or `continue`.
+
+## Lesson 24. Operators for your own types
+
+A struct can say which of its methods an operator calls: write `operator` in front of the method. `+` calls `add`, `-` calls `sub`, `*` calls `mul`, `/` calls `div`, `==` and `!=` call `eq`, `-v` calls `neg`. Then `a + b * 2` reads like arithmetic, and the vectors, matrices and complex numbers of the math libraries are made the same way.
+
+```jk
+#import <stdlib>
+using stdlib;
+
+struct Money {
+    int cents;
+    operator Money add(self, Money o) { Money r = {self.cents + o.cents}; return r; }
+    operator Money mul(self, int k) { Money r = {self.cents * k}; return r; }
+    operator bool eq(self, Money o) { return self.cents == o.cents; }
+}
+
+void main() {
+    Money a = {250};
+    Money b = a + a * 3;
+    Money c = 2 * a;
+    cout << b.cents << " " << c.cents << " " << (a + a == c) << "\n";
+}
+```
+
+Output:
+
+```
+1000 500 true
+```
+
+`a + a * 3` is `a.add(a.mul(3))`: 250 + 750 = 1000. `2 * a` (a number on the left of `*`) is the same as `a.mul(2)`. A method without the word `operator` is never called by an operator, so nothing happens behind your back.
+
+## Lesson 25. Dates, time and random numbers
+
+`Date` is a day and a time on the calendar (UTC): `set_unix(seconds)` fills it from the seconds since 1970, `text()` writes it, `add_days` moves it, `weekday()` is 0 for Sunday. `Time::mono_ns()` is a clock that only goes forward (for measuring) and `Time::sleep_ms` waits. `Random::seed` starts the random numbers; `Random::range(1, 7)` is 1 to 6.
+
+```jk
+#import <stdlib>
+using stdlib;
+
+void main() {
+    Date d;
+    d.set_unix(86400 * 365);
+    cout << d.text() << " weekday " << d.weekday() << "\n";
+    d.add_days(60);
+    cout << d.text() << " day of year " << d.day_of_year() << "\n";
+    cout << Date::is_leap(2024) << " " << Date::days_in_month(2024, 2) << "\n";
+    Random::seed(42);
+    int r = Random::range(1, 7);
+    cout << (r >= 1 && r < 7) << " " << (Random::unit() < 1.0) << "\n";
+    int t0 = Time::mono_ns();
+    Time::sleep_ms(20);
+    cout << (Time::mono_ns() - t0 >= 20000000) << "\n";
+}
+```
+
+Output:
+
+```
+1971-01-01 00:00:00 weekday 5
+1971-03-02 00:00:00 day of year 61
+true 29
+true true
+true
+```
+
+One year after 1970-01-01 is 1971-01-01, a Friday (5). 2024 is a leap year, so February has 29 days. The same seed always gives the same random numbers, which makes a program with random numbers testable.
+
+## Lesson 26. JSON
+
+`Json::parse(text)` reads JSON into a document. You walk it with node numbers: `doc.root()` is the top, `doc.get(node, "name")` is a member of an object, `doc.at(node, i)` an element of an array, `doc.len(node)` how many, and `doc.text`, `doc.number`, `doc.boolean` read the value. `doc.dump(node)` writes a node back as JSON text, and `Json::quote` makes a safe string literal.
+
+```jk
+#import <stdlib>
+using stdlib;
+
+void main() {
+    String text = "{\"name\": \"J2K\", \"version\": 0.9, \"tags\": [\"fast\", \"small\"], \"ok\": true}";
+    JsonDoc doc = Json::parse(text).unwrap();
+    int root = doc.root();
+    cout << doc.text(doc.get(root, "name")) << " " << doc.number(doc.get(root, "version")) << "\n";
+    int tags = doc.get(root, "tags");
+    for i in 0..doc.len(tags) { cout << doc.text(doc.at(tags, i)) << " "; }
+    cout << doc.boolean(doc.get(root, "ok")) << "\n";
+    cout << doc.dump(tags) << "\n";
+    cout << Json::quote("say \"hi\"") << "\n";
+}
+```
+
+Output:
+
+```
+J2K 0.900000
+fast small true
+["fast","small"]
+"say \"hi\""
+```
+
+A node that is not there is -1 and gives an empty answer, so a wrong name does not crash. `unwrap()` throws the parse error when the text is not JSON; `switch` on the `Result` to handle it yourself.
+
+## Lesson 27. CSV and formatting numbers
+
+`Csv::split_line` cuts one line of comma separated values into fields (a field in quotes may hold commas) and `Csv::join_line` does the opposite. `Fmt` writes numbers the way people read them: `fixed` (decimals), `pad_left`, `thousands`, `hex`, `bin`, `percent`, `bytes`.
+
+```jk
+#import <stdlib>
+using stdlib;
+
+void main() {
+    String[] f = Csv::split_line("Ann,\"Lee, Jr\",30");
+    cout << f.len << ": " << f[0] << " | " << f[1] << " | " << f[2] << "\n";
+    cout << Csv::join_line(f) << "\n";
+    cout << Fmt::fixed(3.14159, 2) << " " << Fmt::pad_left("7", 3, '0') << " " << Fmt::thousands(1234567) << "\n";
+    cout << Fmt::hex(255) << " " << Fmt::bin(5) << " " << Fmt::percent(0.256, 1) << " " << Fmt::bytes(1536) << "\n";
+}
+```
+
+Output:
+
+```
+3: Ann | Lee, Jr | 30
+Ann,"Lee, Jr",30
+3.14 007 1,234,567
+ff 101 25.6% 1.5 KB
+```
+
+The field `Lee, Jr` keeps its comma, and `join_line` puts the quotes back because the field needs them. `Fmt::bytes(1536)` is `1.5 KB`.
+
+## Lesson 28. Patterns, hashes and encodings
+
+`Regex` is a small pattern matcher: `matches` (the whole text), `find` (where the first match starts, or -1), `find_text` (the matching text). `Sha256::hex` is the SHA-256 hash of a text (and `Sha256::file` of a file), `Hex::encode` writes bytes as two hex digits each, and `Base64` is the text form that mails and web pages use for bytes.
+
+```jk
+#import <stdlib>
+using stdlib;
+
+void main() {
+    cout << Regex::matches("[a-z]+@[a-z]+\\.com", "ann@mail.com") << " " << Regex::find("[0-9]+", "room 42, floor 7") << " " << Regex::find_text("[0-9]+", "room 42, floor 7") << "\n";
+    cout << Sha256::hex("abc") << "\n";
+    cout << Hex::encode("Hi") << " " << Base64::encode("Man") << " " << Base64::decode("TWFu").unwrap() << "\n";
+}
+```
+
+Output:
+
+```
+true 5 42
+ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad
+4869 TWFu Man
+```
+
+The hash of `abc` is a well-known test value of SHA-256 (`ba7816bf...`). `Base64::decode` gives a `Result` because the text may not be valid.
+
+## Lesson 29. Paths, other programs and the log
+
+`Path::join` builds a path with the right separator. `Proc::output(program, args)` runs another program and gives what it wrote; `Proc::run` gives its exit code. `Env::args()` is the list of arguments of your own program (the first is its name). `Log` writes messages to the standard error with a level: `Log::set_level(2)` hides the `info` messages and keeps the errors.
+
+```jk
+#import <stdlib>
+using stdlib;
+
+void main() {
+    cout << Path::join("dir", "file.txt") << "\n";
+    String[] args = arr(0);
+    args.push("hello from a child");
+    String out = Proc::output("echo", args).unwrap();
+    cout << out;
+    cout << Env::args().len << "\n";
+    Log::set_level(2);
+    Log::info("not shown");
+    Log::error("shown on the standard error");
+}
+```
+
+Output:
+
+```
+dir/file.txt
+hello from a child
+1
+```
+
+`String[] args = arr(0);` makes an empty list of Strings and `push` adds to it. The log line went to the standard error, so it is not in the output above; run the program in a terminal to see both.
+
 # Part 2: toward the machine
 
-## Lesson 22. Bits and bytes
+## Lesson 30. Bits and bytes
 
 A whole number is 64 bits. `>>` and `<<` shift them, `&` keeps bits, `xor` flips them. `Bit::` has the work that the CPU does in one instruction:
 `popcount` (how many bits are 1), `clz` / `ctz` (zero bits in front / after), `rotl` / `rotr` (turn the bits round), `bswap` (reverse the 8 bytes).
@@ -817,7 +1102,7 @@ Output:
 
 `0xB0` is `1011 0000` in binary: 3 bits are 1, 56 zero bits stand in front, 4 after. The last line turns the 8 bytes `01 02 ... 08` round to `08 07 ... 01`.
 
-## Lesson 23. Numbers wider than 64 bits
+## Lesson 31. Numbers wider than 64 bits
 
 When 64 bits are not enough you keep a number in several words and add word by word. `Bit::add_carry(a, b, carry_in)` gives a struct with the sum and the carry out.
 `Bit::mul_wide` gives the whole 128-bit product, `Bit::div_rem` the quotient and the remainder together, `Bit::add_sat` an addition that stops at the largest number instead of wrapping.
@@ -850,7 +1135,7 @@ Output:
 
 The low words `-1 + 1` give 0 with a carry of 1; the carry goes into the high words: `5 + 0 + 1 = 6`. The product `(2^64 - 1) * 3` does not fit in 64 bits: `hi` is 2 and `lo` is -3.
 
-## Lesson 24. Looking at the code the compiler made
+## Lesson 32. Looking at the code the compiler made
 
 The compiler does not hide what it makes: `jcmp program.jk -show NAME` writes the machine code of the function `NAME` and how many instructions it has.
 Small functions are often put inside their callers, so a function that is called once can have no code of its own. Here `scale` is kept because `main` calls it in a loop.
@@ -882,14 +1167,14 @@ The code of `scale` that the compiler made:
 scale:
 mul x0, x0, x1
 asr x0, x0, #2
-L8118:
+L8182:
 ret
 // 3 instructions
 ```
 
 Run `jcmp showcode.jk -show scale` to see the lines above (they are the code of the ARM64 target). On another target the instructions are other ones.
 
-## Lesson 25. Keeping the code short: #expect
+## Lesson 33. Keeping the code short: #expect
 
 A hot function should stay small. `#expect instructions <= N` in front of a function makes the compiler stop, with the real count, when the function grows past N: after a change of your program, or a new compiler.
 
@@ -917,7 +1202,7 @@ Output:
 
 Try `#expect instructions <= 2` and compile again: the compiler says how many instructions the function really has.
 
-## Lesson 26. Threads and atomic operations
+## Lesson 34. Threads and atomic operations
 
 `Thread` runs a function at the same time as the others. Two threads that do `counter += 1` can lose counts, because the CPU reads, adds and writes in three steps. `Atomic::add` does the three steps as one that nobody can break.
 
@@ -953,7 +1238,7 @@ Output:
 
 `Atomic::` also has `cas` (change a value only if it is what you expect), `swap`, `load`, `store`, `bit_or` and others, and `Mem::barrier()` orders the memory accesses of one thread against the others.
 
-## Lesson 27. Registers: the register block
+## Lesson 35. Registers: the register block
 
 The CPU keeps the numbers it works on in registers, named `x0` ... `x30`. A `register { }` block lets you write instructions with those registers. `in x1 = a;` puts a value in a register before the block, `out x0 = r;` takes one out after it, and `clobber x4;` says that you use `x4` for your own work.
 Inside the block every statement is one instruction.
@@ -989,7 +1274,7 @@ Output:
 
 `(2 + 3) * 4 = 20`. The same source builds for the ARM64 and the ARM32 target (the names `x0 ...` are the same on both).
 
-## Lesson 28. A function with nothing around it: naked and svc
+## Lesson 36. A function with nothing around it: naked and svc
 
 A `naked` function has no prologue and no epilogue: the body is all there is, and the arguments are in `x0`, `x1`, ... The statement `svc(0);` asks the kernel for a service; the number of the service is in `x8`.
 Here is `write` (number 64) written by hand, with no library at all.
@@ -1020,7 +1305,7 @@ hello
 
 `write(1, buffer, 6)` sends 6 bytes to the standard output and returns how many it wrote. `ret;` goes back to the caller with the result in `x0`.
 
-## Lesson 29. The flags of the CPU
+## Lesson 37. The flags of the CPU
 
 After an addition or a comparison the CPU keeps four flags: `n` (negative), `z` (zero), `c` (carry) and `v` (overflow). C hides them; here you can read them. `Cpu::inst("adds", ...)` is the instruction `adds`, which sets the flags, and `Flags::c` reads one of them as 0 or 1.
 
@@ -1053,7 +1338,7 @@ Output:
 
 `-1` is all bits 1, so `-1 + 1` carries out of the top: the flag is 1. `1 + 2` does not: 0. (This lesson is for the ARM64 target.)
 
-## Lesson 30. Machine words you write yourself
+## Lesson 38. Machine words you write yourself
 
 At the bottom there is nothing but numbers. `raw<u32>[...]` puts a 32-bit machine word in the code, exactly as you wrote it. The instruction `add x1, x1, #2` of the ARM64 CPU is the number `0x91000821`; `nop` is `0xd503201f`.
 
@@ -1083,7 +1368,7 @@ Output:
 
 # Part 3: to the bone
 
-## Lesson 31. Addresses and bytes
+## Lesson 39. Addresses and bytes
 
 A variable lives at an address. `@x` is that address and a pointer holds it. A `char^` looks at memory one byte at a time, so you can see how an `int` is stored: the CPU is little-endian, the lowest byte comes first. Pointers into one array are as far apart as the size of the elements. `(int)q - (int)p` is the distance in bytes.
 
@@ -1115,7 +1400,7 @@ Output:
 
 `0x0102030405060708` is stored as `08 07 ... 01`. Four `int`s are 32 bytes, so `a[3]` is 24 bytes after `a[0]`. When you print the address of a variable (`cout << p;`) you get `0x...`; here we print distances because an address changes from run to run.
 
-## Lesson 32. Talking to the kernel
+## Lesson 40. Talking to the kernel
 
 A program does nothing alone: writing, memory and the process id all come from the kernel through system calls. `Sys::` is a thin layer over them: `Sys::write(file, buffer, bytes)`, `Sys::getpid()`, `Sys::mmap(bytes)` (a fresh block of memory from the system, the base of every allocator) and `Sys::munmap`. No library code sits in between, one call is one `svc` instruction.
 
@@ -1145,9 +1430,9 @@ true
 261121
 ```
 
-`mmap` gives whole pages (4096 bytes) that are zero at the start. `cout` itself ends in `Sys::write`. For any call the library does not name there is `Sys::call(number, a0 ... a5)` and the `svc` of lesson 28.
+`mmap` gives whole pages (4096 bytes) that are zero at the start. `cout` itself ends in `Sys::write`. For any call the library does not name there is `Sys::call(number, a0 ... a5)` and the `svc` of lesson 36.
 
-## Lesson 33. Your own allocator
+## Lesson 41. Your own allocator
 
 The fastest allocator is a pointer that only moves forward (a bump allocator): ask for a block, add its size to `top`, done. There is no `free` for one object; you give the whole block back at once. This is what an arena does, and it is why compilers and games use it. The block comes from `mmap`.
 
@@ -1182,9 +1467,9 @@ Output:
 
 Both blocks sit side by side: `b` is 32 bytes after `a`, and `top` counts 8 `int`s. The standard library has this ready as `Arena`; writing it once shows there is no magic in an allocator.
 
-## Lesson 34. A spinlock
+## Lesson 42. A spinlock
 
-Lesson 26 used `Atomic::add`. For a bigger piece of work (several statements that must not be mixed) you need a lock. A spinlock is one `int`: 0 is free, 1 is taken. `Atomic::cas(@lock, 0, 1)` changes it to 1 only if it was 0 and gives the old value, so exactly one thread wins. The others spin; `Cpu::pause()` tells the CPU it is a spin loop (it saves power and helps the other hyper-thread).
+Lesson 34 used `Atomic::add`. For a bigger piece of work (several statements that must not be mixed) you need a lock. A spinlock is one `int`: 0 is free, 1 is taken. `Atomic::cas(@lock, 0, 1)` changes it to 1 only if it was 0 and gives the old value, so exactly one thread wins. The others spin; `Cpu::pause()` tells the CPU it is a spin loop (it saves power and helps the other hyper-thread).
 
 ```jk
 #import <stdlib>
@@ -1221,7 +1506,7 @@ Output:
 
 `counter += 1` is now safe although it is three steps, because only the thread that holds the lock runs it. `Atomic::store` releases the lock with the right memory order, so the new `counter` is seen by the next thread. A spinlock is right for very short work; for long waits use a lock that sleeps.
 
-## Lesson 35. Counting the clock of the CPU
+## Lesson 43. Counting the clock of the CPU
 
 `Cpu::counter()` reads the system counter of the CPU (no system call, a few cycles) and `Cpu::frequency()` says how many ticks make a second. It is the most exact stopwatch you have. To time code: read, run, read, subtract. `Bit::popcount` is one instruction on the CPU, so a million of them are quick.
 
@@ -1244,9 +1529,9 @@ Output:
 9884992 true true
 ```
 
-The sum is fixed, the time is not, so the program prints only whether the time was measured. Measure more than once: the first run warms the cache. With `#expect instructions <= N` (lesson 25) you guard the size, with the counter you guard the time.
+The sum is fixed, the time is not, so the program prints only whether the time was measured. Measure more than once: the first run warms the cache. With `#expect instructions <= N` (lesson 33) you guard the size, with the counter you guard the time.
 
-## Lesson 36. Vectors in the hardware
+## Lesson 44. Vectors in the hardware
 
 Graphics and physics work on groups of numbers. `vec3` is three `double`s with the operators `+ - *`, and its parts are picked by letter (`c.zyx` is the same three numbers in the reverse order). For many numbers at once the CPU has SIMD registers (NEON on ARM): the compiler turns loops over arrays into vector instructions by itself, and `#import <simd>` gives the lanes by name.
 
@@ -1272,7 +1557,7 @@ Output:
 15.000000
 ```
 
-`a + b * 2.0` is `(1,2,3) + (8,10,12)`. Use `jcmp file.jk -show NAME` (lesson 24) on a loop over a `double` array to see the vector instructions.
+`a + b * 2.0` is `(1,2,3) + (8,10,12)`. Use `jcmp file.jk -show NAME` (lesson 32) on a loop over a `double` array to see the vector instructions.
 
 ## Where next
 

@@ -11,6 +11,24 @@ struct Cpu {
     static int crc32c(int crc, int data) { return __cpu_crc32c(crc, data); }
     static int crc32_u8(int crc, int data) { return __cpu_crc32_u8(crc, data); }
     static int crc32c_u8(int crc, int data) { return __cpu_crc32c_u8(crc, data); }
+    // what `#require cpu "crc32"` runs at the start of main: the bits of AT_HWCAP (the auxiliary vector after the environment); bit 7 is crc32
+    static void require_check() {
+        int i = argc() + 1;
+        while (int)arg(i) != 0 { i += 1; }
+        i += 1;
+        int cap = 0;
+        while (int)arg(i) != 0 {
+            if (int)arg(i) == 16 { cap = (int)arg(i + 1); }
+            i += 2;
+        }
+        if ((cap >> 7) & 1) == 0 {
+            char^ msg = "this program needs the CPU extension crc32 (#require cpu \"crc32\"), and this CPU does not have it\n";
+            int n = 0;
+            while msg[n] != 0 { n += 1; }
+            syscall(64, 2, msg, n);
+            syscall(93, 1);
+        }
+    }
     static void speculation_barrier() { __cpu_speculation_barrier(); }   // nothing after it runs ahead of the branches before it (dsb nsh + isb; Spectre)
     static void isb() { __cpu_isb(); }                    // the instructions after it see what happened before
     static int counter() { return __cpu_counter(); }      // the system counter (cntvct_el0): ticks since boot, no system call

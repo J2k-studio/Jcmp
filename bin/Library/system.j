@@ -198,9 +198,26 @@ struct Input {
         if a.len > 0 && (a[0] == 121 || a[0] == 89) { return true; }
         return false;
     }
-    // one key without Enter and without an echo. A letter is its code; the arrows are 257 up, 258 down, 259 right, 260 left;
-    // Escape is 27; -1 at the end of the input. When the input is not a terminal it is the next byte.
+    // true when the file 0 has something to read within ms milliseconds (ms < 0: wait for ever)
+    static bool ready(int ms) {
+        int pfd[1];
+        int ts[2];
+        pfd[0] = 1 << 32;                               // fd 0, events POLLIN (the next 2 bytes), revents 0
+        if ms >= 0 {
+            ts[0] = ms / 1000;
+            ts[1] = (ms % 1000) * 1000000;
+            return Sys::ppoll(@pfd, 1, @ts) > 0;
+        }
+        return Sys::ppoll(@pfd, 1, null) > 0;
+    }
+    // one key without Enter and without an echo. A letter is its code; Escape is 27; the other keys are 257 up, 258 down, 259 right,
+    // 260 left, 261 Home, 262 End, 263 Delete, 264 PageUp, 265 PageDown, 266 Insert, 270 .. 273 F1 .. F4; -1 at the end of the input.
+    // When the input is not a terminal it is the next byte.
     static int key() {
+        return Input::key_wait(0 - 1);
+    }
+    // the same, but it waits at most ms milliseconds; -2 when no key was pressed in that time
+    static int key_wait(int ms) {
         char t[64];
         bool tty = Sys::isatty(0) == 0;
         if tty {
@@ -212,35 +229,65 @@ struct Input {
             raw[22] = 0;                                // VTIME: no time limit
             syscall(29, 0, 21506, @raw);                // TCSETS
         }
-        char b[4];
-        int n = Sys::read(0, @b, 1);
-        int k = 0 - 1;
-        if n > 0 {
-            k = b[0] & 255;
-            if k == 27 && tty {
-                char ts[16];
-                char pfd[8];
-                for i in 0..16 { ts[i] = 0; }
-                for i in 0..8 { pfd[i] = 0; }
-                ts[9] = 144;                            // tv_nsec = 64000000 (64 milliseconds) = 0x03D09000
-                ts[10] = 208;
-                ts[11] = 3;
-                pfd[4] = 1;
-                if Sys::ppoll(@pfd, 1, @ts) > 0 {
+        int k = 0 - 2;
+        if ms < 0 || Input::ready(ms) {
+            char b[4];
+            int n = Sys::read(0, @b, 1);
+            k = 0 - 1;
+            if n > 0 {
+                k = b[0] & 255;
+                if k == 27 && tty && Input::ready(40) {
                     char e[2];
                     Sys::read(0, @e, 1);
-                    if e[0] == 91 {
+                    if e[0] == 91 && Input::ready(40) {
                         Sys::read(0, @e, 1);
                         if e[0] == 65 { k = 257; }
                         else if e[0] == 66 { k = 258; }
                         else if e[0] == 67 { k = 259; }
                         else if e[0] == 68 { k = 260; }
+                        else if e[0] == 72 { k = 261; }
+                        else if e[0] == 70 { k = 262; }
+                        else if e[0] >= 49 && e[0] <= 54 {
+                            int code = e[0] - 48;                    // ESC [ n ~
+                            if Input::ready(40) { Sys::read(0, @e, 1); }
+                            if code == 1 { k = 261; }
+                            else if code == 2 { k = 266; }
+                            else if code == 3 { k = 263; }
+                            else if code == 4 { k = 262; }
+                            else if code == 5 { k = 264; }
+                            else { k = 265; }
+                        }
+                    } else if e[0] == 79 && Input::ready(40) {
+                        Sys::read(0, @e, 1);                         // ESC O P .. S: F1 .. F4
+                        if e[0] >= 80 && e[0] <= 83 { k = 270 + e[0] - 80; }
                     }
                 }
             }
         }
         if tty { syscall(29, 0, 21506, @t); }
         return k;
+    }
+    // a line typed without an echo (a password); on a terminal the new line is written for the user
+    static String password() {
+        char t[64];
+        bool tty = Sys::isatty(0) == 0;
+        if tty {
+            syscall(29, 0, 21505, @t);
+            char raw[64];
+            for i in 0..64 { raw[i] = t[i]; }
+            raw[12] = raw[12] & 247;                    // no ECHO (8)
+            syscall(29, 0, 21506, @raw);
+        }
+        String r = Input::line();
+        if tty {
+            syscall(29, 0, 21506, @t);
+            cout << "\n";
+        }
+        return r;
+    }
+    // a line as a decimal number (an error when it is not one)
+    static double decimal() {
+        return Input::line().to_double();
     }
 }
 
@@ -271,6 +318,9 @@ struct __System {
     static void read_enter() { Input::enter(); }
     static bool read_yes(String question) { return Input::yes(question); }
     static int read_key() { return Input::key(); }
+    static int read_key_timeout(int ms) { return Input::key_wait(ms); }
+    static String read_password() { return Input::password(); }
+    static double read_decimal() { return Input::decimal(); }
 }
 
 // Log: messages for the person who runs the program, on the error output (standard error), with a level.

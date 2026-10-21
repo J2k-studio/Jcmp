@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.203
+* **`read` grows** (the names are the assistant's, adjustable): `read.key()` knows Home, End, Delete, PageUp, PageDown, Insert and F1 to F4; `read.key_timeout(ms)` gives -2 when no key came in time; `read.password()` reads a line without an echo; `read.decimal()` reads a number with a decimal part. Tested on a pseudo terminal (t493).
+* The tutorial has 44 lessons (a library tour of 8 lessons).
+* A program with `#require cpu "crc32"` checks the CPU at the start of `main` and stops with a clear message when the extension is missing.
+
 ## 0.9.202
 * **A variable in a register: `reg<int x19> c = 0;`** (the owner's choice 13; the form `int c @ x19 = 0;` stays). docs/syntax-design.md section 91.
 * **`Cache::prefetch(p)`** (a hint that a line is wanted soon) and **`Cpu::speculation_barrier()`** (the owner's choice 15), on ARM64 and ARM32.

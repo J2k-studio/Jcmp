@@ -1157,7 +1157,7 @@ void main() {
 }
 ```
 
-`read.key()` waits for one key without Enter and without showing it; it gives the code of the key (arrows 257 up, 258 down, 259 right, 260 left, Escape 27, -1 at the end of the input). `read.enter()` waits for Enter, `read.try_number()` gives a `Result` instead of throwing. Use `read` or `cin` in one program, not both.
+`read.key()` waits for one key without Enter and without showing it; it gives the code of the key (letters are their codes, Escape 27; 257 up, 258 down, 259 right, 260 left, 261 Home, 262 End, 263 Delete, 264 PageUp, 265 PageDown, 266 Insert, 270 .. 273 F1 .. F4; -1 at the end of the input). `read.key_timeout(ms)` waits at most that long and gives -2 when no key came. `read.password()` reads a line without showing it and `read.decimal()` reads a number with a decimal part. `read.enter()` waits for Enter, `read.try_number()` gives a `Result` instead of throwing. Use `read` or `cin` in one program, not both.
 
 ## A variable in a register: `reg<int x19> c`
 
