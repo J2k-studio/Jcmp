@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.199
+* **`#expect instructions <= N`** (the owner's idea, item 14 of the decisions for 1.0): a directive in front of a function; when the function is made of more than N instructions the compiler stops and says how many it has (`jcmp FILE -show NAME` shows the code). It guards the size of the code of a hot function against a change of the program or of the compiler. The count is for ARM64; `-target arm32` does not check it. See docs/LANGUAGE.md and docs/syntax-design.md section 86.
+* The programs are the same as in 0.9.198.
+
 ## 0.9.198
 * **`Cpu::inst` on ARM32:** `ubfx sbfx udiv sdiv umull smull mla mul uxtb uxth sxtb sxth ldrex strex` and the data processing forms are assembled into machine words (docs/syntax-design.md section 84). **Fixed:** after raw machine words the compiler still believed it knew the value of a register (a wrong result).
 * **ARM32 is faster again (10 to 25%):** the high word of a result that nobody reads (an address, a counter) is not worked out or stored, and a result that only the next instruction reads stays in the registers.

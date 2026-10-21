@@ -2125,3 +2125,28 @@ The statements of the low level (section 63, `register { }`, `naked`, `abi`, `ra
 * `Cpu::inst("name", ...)` on ARM32: an instruction that the compiler has a meaning for (`add`, `sub`, `mov` ... the same as on ARM64) is compiled like the other code; these ARM32 instructions are assembled into machine words (the registers are `Reg::x0 .. Reg::x9`, which are `r0 .. r9`): `and eor sub rsb add adc sbc rsc orr bic` (a register or a number that fits the immediate form of ARM; a trailing `s` sets the flags), `mov mvn tst teq cmn`, `mul mla umull smull udiv sdiv`, `uxtb uxth sxtb sxth`, `ubfx sbfx`, `ldr str ldrb strb ldrex strex`.
 * Not on ARM32 (the compiler says so): `Sys::name` registers (`mrs` / `msr`), `Cache::clean / invalidate / zero` (privileged), the other instructions of ARM64 written as text.
 * `Cpu::wait / event / send_event / pause / nop / isb` are `wfi wfe sev yield nop isb`; `Cpu::counter / frequency` read the virtual counter (`mrrc` / `mrc p15`); `Cpu::id` is the system call `getcpu`; `Mem::barrier*` are `dmb` / `dsb`; `Cache::clean_code / invalidate_code` are `cacheflush`; `Atomic::*` are `ldrexd` / `strexd` loops on the 8-byte word.
+
+## 85. Decisions of the owner on `docs/decisions-for-1.0.md` (2026-10-22)
+Answers given by the owner (the words are the owner's; what is marked "AI" is the assistant's design at the owner's request, adjustable):
+* 1 `.jo` is the extension of a compiled J2K library: **confirmed**. Its goal (owner, 2026-10-22): **like a `.so` when making apps** — a library that is built once, shipped and replaced on its own, and used by programs and apps without building them again. (This changes the answer to 2 below.)
+* 3 The command is  `jcmp core.jk -o core -l`  (the option `-l` turns the source into a library: `core.jo`).  Not written yet; waits for the syntax tree to make all the code (A6).
+* 5 The register names stay `x0 .. x30` on ARM32 (the same source for both targets): **ok**.
+* 8 The wording of the ownership messages: the assistant drafts, the owner edits: **ok**.
+* 9 `Regex` and `Toml` grow later (planned after 1.0): **ok**.
+* 10 `net` as objects (`Listener` / `Connection`): **ok** (as answered before; after 1.0).
+* 11 Flags of the CPU for the writer: **ok** — `Bit::add_carry(a, b, c)` (the sum and the carry out) and `Flags::c / z / n / v` readable inside `register { }` (AI: the shape of the result of `add_carry` is a struct with two fields, to be written).
+* 12 Single-instruction wide arithmetic: **ok** — `Bit::mul_hi`, `Bit::mul_wide`, `Bit::div_rem`, `Bit::add_sat` (AI: names as written here).
+* 13 A variable pinned to a register: the owner's final form (2026-10-22) is **`reg<int x19> c = 0;`** (the type and the register inside `< >`, then the name and `= value` as for every variable).
+* The export marker for JNI (2026-10-22): the owner does not want both words (option C); between `export` (C rules) and `jni` (names of JNI) the owner has not chosen yet; JNI waits ("follow the plan first").
+* 14 `jcmp -show NAME` (done) and `#expect instructions <= N`: **ok**.
+* 15 `Cache::prefetch(p)`, `Cpu::speculation_barrier()`: **ok**.
+* 16 `#require cpu "crc32"` and the functions of that extension: **ok**.
+* 17 The order 14, 11, 12, 13, 15, 16 (one release for each): **acknowledged**.
+* **1b, the real aim of `-l` (owner, 2026-10-22): "like C: write the `.jk`, compile it to a library, link it with JNI, and it is the brain"** — the library must be a real native shared library that an Android app (Java/Kotlin through JNI) loads: an ELF shared object with exported functions in the C calling rules (`libcore.so` for `System.loadLibrary("core")`; the Android loader wants that name), for ARM64 and ARM32. This replaces the idea of an IR file as the base: IR stays an optional extra for J2K-to-J2K inlining. Needs (not started): an ELF shared-object writer, exported functions with C-ABI entry thunks, a way to mark an export (the owner's syntax, not chosen yet), calls out to C (the JNI function table) through `abi`, and a global area that does not sit at a fixed address. See docs/open-questions.md, "JNI".
+* 2 (what is inside `.jo`): the owner's worry (2026-10-22): *if it has to be built again often there may be problems* — so IR alone (it is tied to the compiler version) is not enough for a library that apps load like a `.so`. Proposed: **machine code with a fixed interface (C) plus the interface file `.jh`**, loaded at run time; the IR for inlining is an addition, not the base. Waits for the owner.
+* Still open (the owner asked for more explanation): 4 (the input functions: wait for Enter, a raw line, the keys one by one), 6 (the hardware divide on ARM32), 7 (`cerr`). 4 (the input functions: wait for Enter, a raw line, the keys one by one), 6 (the hardware divide on ARM32), 7 (`cerr`).
+
+## 86. `#expect instructions <= N` (owner's idea, 2026-10-22, item 14 of the decisions for 1.0; the form is the assistant's, adjustable)
+* A directive in front of a function: after the code is made, the function must have **N instructions or fewer**; if it has more the compiler stops with `file:line:1: error: the function 'f' is made of K instructions, but #expect allows N at most` and a `help:` line (`jcmp FILE -show NAME` shows the code).
+* The count is the number of instruction lines of the function in the final assembler text (ARM64), after the optimizer and the inlining; a function that is inlined everywhere is not counted (it is part of its callers). The limit is a guard against a change of the program or of the compiler that makes the code longer without notice.
+* On the ARM32 target the limits are not checked (the code has no register allocation yet, so its counts are another thing).

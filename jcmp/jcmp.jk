@@ -3,7 +3,7 @@
 // Use:    jcmp1 input.jk -o program
 // the version of the compiler (also in the file VERSION; release.sh checks that they agree)
 #allow syscall                         // the compiler is the layer under Sys: it calls the system by number on purpose
-#define JCMP_VERSION "0.9.198"
+#define JCMP_VERSION "0.9.199"
 
 #import "jc_base"
 #import "jc_asm"
@@ -225,6 +225,91 @@ void show_function(char^ name) {
     write_out("// ");
     write_out(@num);
     write_out(" instructions\n");
+}
+
+// the number of instructions of the function NAME in the final assembler text (-1: it is not there: inlined everywhere, or never called)
+int count_instructions(char^ name) {
+    int nl = str_len(name);
+    int p = 0;
+    int start = 0 - 1;
+    while p < out_len {
+        int e = p;
+        while e < out_len && out_buf[e] != 10 { e += 1; }
+        if e - p == nl + 1 && out_buf[e - 1] == ':' {
+            int k = 0;
+            while k < nl && out_buf[p + k] == name[k] { k += 1; }
+            if k == nl {
+                start = p;
+                break;
+            }
+        }
+        p = e + 1;
+    }
+    if start < 0 { return 0 - 1; }
+    int count = 0;
+    p = start;
+    bool first = true;
+    while p < out_len {
+        int e2 = p;
+        while e2 < out_len && out_buf[e2] != 10 { e2 += 1; }
+        bool label = out_buf[e2 - 1] == ':';
+        bool localab = label && out_buf[p] == 'L' && out_buf[p + 1] >= '0' && out_buf[p + 1] <= '9';
+        if !first && ((label && !localab) || out_buf[p] == '.') { break; }
+        first = false;
+        if out_buf[p] != ';' && !label { count += 1; }
+        p = e2 + 1;
+    }
+    return count;
+}
+
+// #expect instructions <= N : every function that has a limit is looked at (ARM64: the text; ARM32: the code between two functions)
+void check_expectations() {
+    int f = 0;
+    while f < fcount {
+        if fexp_n[f] > 0 {
+            int got = 0 - 1;
+            if x_target == 32 { got = a32_instr_count(@fname + f * 64); } else { got = count_instructions(@fname + f * 64); }
+            if got > fexp_n[f] {
+                write_err(@fexp_file + f * 128);
+                write_err(":");
+                char nb[24];
+                int nn = 0;
+                int lv = fexp_line[f];
+                char rv[24];
+                int rk = 0;
+                if lv == 0 { nb[0] = '0'; nn = 1; }
+                while lv > 0 { rv[rk] = '0' + lv % 10; lv = lv / 10; rk += 1; }
+                while rk > 0 { rk -= 1; nb[nn] = rv[rk]; nn += 1; }
+                nb[nn] = 0;
+                write_err(@nb);
+                write_err(":1: error: the function '");
+                write_err(@fname + f * 64);
+                write_err("' is made of ");
+                char gb[24];
+                int gn = 0;
+                int gv = got;
+                int gk = 0;
+                if gv == 0 { gb[0] = '0'; gn = 1; }
+                while gv > 0 { rv[gk] = '0' + gv % 10; gv = gv / 10; gk += 1; }
+                while gk > 0 { gk -= 1; gb[gn] = rv[gk]; gn += 1; }
+                gb[gn] = 0;
+                write_err(@gb);
+                write_err(" instructions, but  #expect  allows ");
+                char lb[24];
+                int ln = 0;
+                int lw = fexp_n[f];
+                int lk = 0;
+                while lw > 0 { rv[lk] = '0' + lw % 10; lw = lw / 10; lk += 1; }
+                while lk > 0 { lk -= 1; lb[ln] = rv[lk]; ln += 1; }
+                lb[ln] = 0;
+                write_err(@lb);
+                write_err(" at most\n  help: look at the code with  jcmp FILE -show NAME  (a function that is inlined into another one counts there)\n");
+                err_count += 1;
+            }
+        }
+        f += 1;
+    }
+    if err_count > 0 { syscall(93, 1); }
 }
 
 void main() {
@@ -644,6 +729,7 @@ void main() {
         if cc_stored > 0 && (cc_stored > 200 || (unix_now_cc() & 15) == 0) { cc_trim(); }
     }
     tm_stage("peephole + alignment");
+    if x_target != 32 { check_expectations(); }          // ARM32 has no register allocation yet: its counts are not comparable, so the limits are not checked there
     if x_show != null {
         show_function(x_show);
         syscall(93, 0);

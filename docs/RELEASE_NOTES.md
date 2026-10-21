@@ -1,6 +1,8 @@
-# J2K / Jcmp 0.9.198
+# J2K / Jcmp 0.9.199
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
+
+**0.9.199:** `#expect instructions <= N` keeps the code of a function short (the compiler stops when it grows).
 
 **0.9.198:** `Cpu::inst` instructions on ARM32, a faster ARM32 (10 to 25%).
 

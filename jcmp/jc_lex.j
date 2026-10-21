@@ -1557,6 +1557,39 @@ void next() {
             next();
             return;
         }
+        if str_eq(@dw, "expect") {
+            // #expect instructions <= N : the next function must be made of N instructions or fewer (the compiler stops when it is not)
+            while lc(0) == 32 || lc(0) == 9 { adv(); }
+            char ew[32];
+            int ek = 0;
+            while is_letter(lc(0)) && ek < 30 {
+                ew[ek] = lc(0);
+                ek += 1;
+                adv();
+            }
+            ew[ek] = 0;
+            if !str_eq(@ew, "instructions") { die("after #expect can follow:  instructions <= N"); }
+            while lc(0) == 32 || lc(0) == 9 { adv(); }
+            if lc(0) != '<' { die("write  #expect instructions <= N  (a number after <=)"); }
+            adv();
+            if lc(0) != '=' { die("write  #expect instructions <= N  (a number after <=)"); }
+            adv();
+            while lc(0) == 32 || lc(0) == 9 { adv(); }
+            int en = 0;
+            int ed = 0;
+            while is_digit(lc(0)) {
+                en = en * 10 + (lc(0) - '0');
+                ed += 1;
+                adv();
+            }
+            if ed == 0 || en < 1 { die("write  #expect instructions <= N  (a number of 1 or more after <=)"); }
+            expect_pending = en;
+            expect_line = err_line;
+            str_copy(@expect_file, @err_file, 128);
+            while lc(0) != 10 && lc(0) != 0 { adv(); }
+            next();
+            return;
+        }
         if str_eq(@dw, "allow") {
             // #allow syscall : this program calls the system by number on purpose (no warning about syscall(...))
             while lc(0) == 32 || lc(0) == 9 { adv(); }

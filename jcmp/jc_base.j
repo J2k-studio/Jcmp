@@ -254,6 +254,12 @@ int x_cutmax = 1000000;          // -xcachecut N: only the first N functions tha
 int x_cutmin;                   // -xcachecut MIN MAX: the first hit that is cut
 int x_repeat;                   // -xrepeat
 int x_lex;                      // -xlex
+int expect_pending;              // #expect instructions <= N: the limit for the next function (0: none)
+int expect_line;                 // the line of that directive
+char expect_file[128];           // and its file
+int fexp_n[16384];               // the limit of each function (0: none)
+int fexp_line[16384];
+char fexp_file[2097152];         // 128 characters each
 int allow_syscall;               // #allow syscall: no warning about syscall(number, ...)
 int x_allreach;                  // -xall
 

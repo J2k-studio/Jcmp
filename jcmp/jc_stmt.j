@@ -2750,6 +2750,12 @@ void parse_function() {
         ft_add(fcount);
         fcount += 1;
     }
+    if expect_pending > 0 && f_idx >= 0 && f_idx < 16384 {
+        fexp_n[f_idx] = expect_pending;
+        fexp_line[f_idx] = expect_line;
+        str_copy(@fexp_file + f_idx * 128, @expect_file, 128);
+    }
+    expect_pending = 0;
     int f_declared = 0;
     // pass 3: a function that main cannot reach is parsed but not emitted
     int f_skip = 0;

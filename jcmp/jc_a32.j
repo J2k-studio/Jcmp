@@ -1763,6 +1763,24 @@ void a32_scan(int i) {
     }
 }
 
+// -target arm32: the number of instructions of the function name (the code up to the next function), -1 when it was not made
+int a32_instr_count(char^ name) {
+    int g = 0 - 1;
+    int f = 0;
+    while f < a32_nf {
+        if str_eq(@a32_fname + f * 64, name) { g = f; }
+        f += 1;
+    }
+    if g < 0 || a32_fok[g] == 0 { return 0 - 1; }
+    int end = a32_pos;
+    f = 0;
+    while f < a32_nf {
+        if a32_fok[f] == 1 && a32_foff[f] > a32_foff[g] && a32_foff[f] < end { end = a32_foff[f]; }
+        f += 1;
+    }
+    return (end - a32_foff[g]) / 4;
+}
+
 // does the text hold the word?
 bool a32_has(char^ text, char^ word) {
     int n = str_len(word);
