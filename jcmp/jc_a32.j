@@ -75,7 +75,7 @@ int a32_icnt[IR_MAXV];
 int a32_iseen[IR_MAXV];
 int a32_ialloc;                   // 1: a whole number vreg lives in a pair
 int a32_noireg;                   // -xnoireg: no whole numbers in registers (to compare)
-int a32_direct = 255;             // -xdirect N: which direct register paths are on (bit 0 const, 1 copy, 2 add nohi, 3 add, 4 compare, 5 base register, 6 load into a pair, 7 store from a pair)
+int a32_direct = 4095;             // -xdirect N: which direct register paths are on (bit 0 const, 1 copy, 2 add nohi, 3 add, 4 compare, 5 base register, 6 load into a pair, 7 store from a pair)
 int a32_nodreg;                   // -xnodreg: no doubles in d8 .. d15 (to compare)
 int a32_dmask;                    // bit k: d(8 + k) is saved in the prologue and restored by the epilogue
 int a32_dsoff;                    // where in the frame the saved d registers are
@@ -154,6 +154,24 @@ void a32_dp(int cond, int opc, int s, int rd, int rn, int rm) {
 }
 
 // data processing with a small number (0 .. 255)
+// the 12 bits (rotation and 8 bits) of an immediate of a data processing instruction for the 32-bit value v (0 .. 2^32 - 1), or -1 if it has none
+int a32_imm12(int v) {
+    int r = 0;
+    while r < 16 {
+        int sh = 2 * r;
+        int rl = v;
+        if sh != 0 { rl = ((v << sh) | (v >> (32 - sh))) & 4294967295; }
+        if rl <= 255 { return (r << 8) | rl; }
+        r += 1;
+    }
+    return 0 - 1;
+}
+
+// a data processing instruction with an immediate that a32_imm12 made
+void a32_dpi12(int cond, int opc, int s, int rd, int rn, int enc) {
+    a32_w((cond << 28) | 0x02000000 | (opc << 21) | (s << 20) | (rn << 16) | (rd << 12) | enc);
+}
+
 void a32_dpi(int cond, int opc, int s, int rd, int rn, int imm) {
     a32_w((cond << 28) | 0x02000000 | (opc << 21) | (s << 20) | (rn << 16) | (rd << 12) | (imm & 255));
 }
@@ -622,6 +640,32 @@ int a32_const_of(int v, int i, int b) {
 
 // the condition after a 64-bit compare: sets the flags and returns the ARM condition that means "a cc b"
 int a32_compare(int cc, int a, int b, int bi, int bnum) {
+    if bi == 1 && bnum >= 0 && bnum < 4294967296 && (a32_direct & 2048) != 0 {
+        int celo = a32_imm12(bnum & 4294967295);
+        int cehi = a32_imm12((bnum >> 32) & 4294967295);
+        if celo >= 0 && cehi >= 0 {
+            // a small number on the right: compared as an immediate
+            int ca = a32_rd(a, 0, 2048);
+            if cc == IR_EQ || cc == IR_NE {
+                a32_dpi12(A32_AL, 10, 1, 0, ca, celo);                   // cmp a.lo, #lo
+                a32_dpi12(A32_EQ, 10, 1, 0, ca + 1, cehi);               // cmpeq a.hi, #hi
+                if cc == IR_EQ { return A32_EQ; }
+                return A32_NE;
+            }
+            bool cswap = cc == IR_GT || cc == IR_LE || cc == IR_UGT || cc == IR_ULE;
+            if cswap {
+                a32_dpi12(A32_AL, 3, 1, 12, ca, celo);                   // rsbs r12, a.lo, #lo
+                a32_dpi12(A32_AL, 7, 1, 12, ca + 1, cehi);               // rscs r12, a.hi, #hi
+            } else {
+                a32_dpi12(A32_AL, 10, 1, 0, ca, celo);                   // cmp a.lo, #lo
+                a32_dpi12(A32_AL, 6, 1, 12, ca + 1, cehi);               // sbcs r12, a.hi, #hi
+            }
+            if cc == IR_LT || cc == IR_GT { return A32_LT; }
+            if cc == IR_GE || cc == IR_LE { return A32_GE; }
+            if cc == IR_ULT || cc == IR_UGT { return A32_CC; }
+            return A32_CS;
+        }
+    }
     int ra = a32_rd(a, 0, 16);                  // the registers that hold the operands: their homes, or r0:r1 / r2:r3
     int rb = 2;
     if bi == 1 {
@@ -832,6 +876,45 @@ bool a32_instr(int i, int b) {
         a32_store(0, 1, d);
         return true;
     }
+    if (op == IR_ADD || op == IR_SUB || op == IR_AND || op == IR_OR || op == IR_XOR) && ir_bi[i] == 1 && ir_a[i] != 30 && (a32_direct & 1024) != 0 && a32_skipd != d {
+        // a number as the second operand that fits the instruction: no registers for it
+        int kb = ir_b[i];
+        int kop = op;
+        if kop == IR_ADD && kb < 0 && kb > 0 - 4294967296 { kop = IR_SUB; kb = 0 - kb; }
+        else if kop == IR_SUB && kb < 0 && kb > 0 - 4294967296 { kop = IR_ADD; kb = 0 - kb; }
+        int klo = kb & 4294967295;
+        int khi = (kb >> 32) & 4294967295;
+        int elo = a32_imm12(klo);
+        int ehi = a32_imm12(khi);
+        bool kmask = kop == IR_AND && klo == 4294967295 && khi == 0;         // & 0xFFFFFFFF: the low word stays, the high word is 0
+        bool kok = (elo >= 0 && ehi >= 0) || kmask;
+        if kop != IR_ADD && kop != IR_SUB && kop != IR_AND && kop != IR_OR && kop != IR_XOR { kok = false; }
+        if kok {
+            int kra = a32_rd(ir_a[i], 0, 1024);
+            int krd = 0;
+            bool kdir = a32_ih(d) >= 0;
+            if kdir { krd = a32_ih(d); }
+            bool khiw = a32_nohi_cur != 1;
+            if kmask {
+                if krd != kra { a32_mov(krd, kra); }
+                if khiw { a32_const(krd + 1, 0); }
+            } else if kop == IR_ADD {
+                if khiw { a32_dpi12(A32_AL, 4, 1, krd, kra, elo); a32_dpi12(A32_AL, 5, 0, krd + 1, kra + 1, ehi); }
+                else { a32_dpi12(A32_AL, 4, 0, krd, kra, elo); }
+            } else if kop == IR_SUB {
+                if khiw { a32_dpi12(A32_AL, 2, 1, krd, kra, elo); a32_dpi12(A32_AL, 6, 0, krd + 1, kra + 1, ehi); }
+                else { a32_dpi12(A32_AL, 2, 0, krd, kra, elo); }
+            } else {
+                int kopc = 0;
+                if kop == IR_OR { kopc = 12; }
+                if kop == IR_XOR { kopc = 1; }
+                a32_dpi12(A32_AL, kopc, 0, krd, kra, elo);
+                if khiw { a32_dpi12(A32_AL, kopc, 0, krd + 1, kra + 1, ehi); }
+            }
+            if !kdir { a32_store(0, 1, d); }
+            return true;
+        }
+    }
     if (op == IR_ADD || op == IR_SUB || op == IR_AND || op == IR_OR || op == IR_XOR) && a32_nohi_cur == 1 && ir_a[i] != 30 && (a32_direct & 4) != 0 {
         // only the low word is wanted: one instruction on the low words (the operands and the result are used where they live)
         int nra = a32_rdlo(ir_a[i], 0, 4);
@@ -871,6 +954,18 @@ bool a32_instr(int i, int b) {
         if !fdir { a32_store(0, 1, d); }
         return true;
     }
+    if op == IR_MUL && ir_bi[i] == 1 && ir_b[i] > 0 && (ir_b[i] & (ir_b[i] - 1)) == 0 && (a32_direct & 256) != 0 && a32_skipd != d {
+        // a multiplication by a power of two is a shift
+        int mk = 0;
+        while (1 << mk) < ir_b[i] { mk += 1; }
+        int mb = ir_b[i];
+        ir_op[i] = IR_SHL;
+        ir_b[i] = mk;
+        bool mr = a32_instr(i, b);
+        ir_op[i] = IR_MUL;
+        ir_b[i] = mb;
+        return mr;
+    }
     if op == IR_MUL {
         a32_load(0, 1, ir_a[i]);
         a32_load_b(i);
@@ -891,6 +986,57 @@ bool a32_instr(int i, int b) {
             a32_dp(A32_AL, 15, 0, 1, 0, 1);          // mvn r1, r1
         }
         a32_store(0, 1, d);
+        return true;
+    }
+    if (op == IR_SHL || op == IR_LSHR || op == IR_ASHR) && ir_bi[i] == 1 && (a32_direct & 256) != 0 && a32_skipd != d && (a32_ih(ir_a[i]) >= 0 || a32_ih(d) >= 0) {
+        // a shift by a number, from the registers where the operand lives into the registers where the result lives
+        int sn = ir_b[i] & 63;
+        bool sdh = a32_ih(d) >= 0;
+        int dlo = 0;
+        if sdh { dlo = a32_ih(d); }
+        int dhi = dlo + 1;
+        int alo = a32_rd(ir_a[i], 0, 256);
+        int ahi = alo + 1;
+        bool snohi = a32_nohi_cur == 1;
+        if op == IR_SHL {
+            if sn == 0 {
+                if dlo != alo { a32_mov(dlo, alo); if !snohi { a32_mov(dhi, ahi); } }
+            } else if sn < 32 {
+                if !snohi {
+                    a32_w(0xE1A00000 | (dhi << 12) | (sn << 7) | ahi);                              // lsl dhi, ahi, #n
+                    a32_w(0xE1800020 | (dhi << 16) | (dhi << 12) | ((32 - sn) << 7) | alo);        // orr dhi, dhi, alo, lsr #(32-n)
+                }
+                a32_w(0xE1A00000 | (dlo << 12) | (sn << 7) | alo);                                  // lsl dlo, alo, #n
+            } else {
+                if !snohi { a32_w(0xE1A00000 | (dhi << 12) | ((sn - 32) << 7) | alo); }            // lsl dhi, alo, #(n-32)
+                a32_const(dlo, 0);
+            }
+        } else if op == IR_LSHR {
+            if sn == 0 {
+                if dlo != alo { a32_mov(dlo, alo); if !snohi { a32_mov(dhi, ahi); } }
+            } else if sn < 32 {
+                a32_w(0xE1A00020 | (dlo << 12) | (sn << 7) | alo);                                  // lsr dlo, alo, #n
+                a32_w(0xE1800000 | (dlo << 16) | (dlo << 12) | ((32 - sn) << 7) | ahi);            // orr dlo, dlo, ahi, lsl #(32-n)
+                if !snohi { a32_w(0xE1A00020 | (dhi << 12) | (sn << 7) | ahi); }                    // lsr dhi, ahi, #n
+            } else {
+                int sh = sn - 32;
+                if sh == 0 { a32_mov(dlo, ahi); } else { a32_w(0xE1A00020 | (dlo << 12) | (sh << 7) | ahi); }
+                if !snohi { a32_const(dhi, 0); }
+            }
+        } else {
+            if sn == 0 {
+                if dlo != alo { a32_mov(dlo, alo); if !snohi { a32_mov(dhi, ahi); } }
+            } else if sn < 32 {
+                a32_w(0xE1A00020 | (dlo << 12) | (sn << 7) | alo);                                  // lsr dlo, alo, #n
+                a32_w(0xE1800000 | (dlo << 16) | (dlo << 12) | ((32 - sn) << 7) | ahi);            // orr dlo, dlo, ahi, lsl #(32-n)
+                if !snohi { a32_w(0xE1A00040 | (dhi << 12) | (sn << 7) | ahi); }                    // asr dhi, ahi, #n
+            } else {
+                int sh2 = sn - 32;
+                if sh2 == 0 { a32_mov(dlo, ahi); } else { a32_w(0xE1A00040 | (dlo << 12) | (sh2 << 7) | ahi); }
+                if !snohi { a32_w(0xE1A00040 | (dhi << 12) | (31 << 7) | ahi); }                    // asr dhi, ahi, #31
+            }
+        }
+        if !sdh { a32_store(0, 1, d); }
         return true;
     }
     if op == IR_SHL || op == IR_LSHR || op == IR_ASHR {
