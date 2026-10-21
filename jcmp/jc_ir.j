@@ -84,6 +84,7 @@
 #define IR_LRET 73           // return from a local call: jump to the address in v31
 #define IR_LENTRY 74         // the first instruction of a block that is called locally: v31 = the return address
 #define IR_ADDR_BLOCK 75     // d = the address of a routine that runs the block t1 as a local call on the frame of this function (x0 = the frame pointer)
+#define IR_RAW 76             // ARM32 only: one machine word that the program wrote itself (raw<u32>[...], ir_k = the word); the registers r0 .. r9 hold x0 .. x9 around a run of them
 #define IR_ATOMIC 71         // d = an atomic operation on the word at the address args[0] (ir_k: the code of the built-in, see ast_fop_of 20..28); args[1], args[2] the values
 #define IR_ROTR32 70         // d = the low 32 bits of a turned right by b|k places (0..31); the upper half of d is 0 (ror wD, wA, #k)
 #define IR_VLANE 57          // d (a whole number or a double) = the lane of the vector a that starts at byte ir_k (ir_w: 8, 4 or -4 = signed)
@@ -302,6 +303,7 @@ char^ ir_opname(int op) {
     if op == IR_CALL { return "call"; }
     if op == IR_CALLIND { return "callind"; }
     if op == IR_ATOMIC { return "atomic"; }
+    if op == IR_RAW { return "raw"; }
     if op == IR_LCALL { return "lcall"; }
     if op == IR_LRET { return "lret"; }
     if op == IR_LENTRY { return "lentry"; }

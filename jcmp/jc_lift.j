@@ -233,6 +233,13 @@ bool lf_starts(int idx, char^ t) {
     return true;
 }
 
+int lf_naked;                     // 1: the function is naked (ARM32: lifted like the others, with no frame; `ret` returns v1)
+// a line that holds no instruction: the hint line ";H ...", the markers ";N" ";NB" ";NE" of the low level statements
+bool lf_marker(int idx) {
+    return lf_starts(idx, ";H") || (x_target == 32 && lf_starts(idx, ";N"));          // on ARM64 a function with them stays text (the instructions are the ones written)
+}
+
+
 // is the line a label "L<number>:" ? then the number, else -1
 int lf_label_line(int idx) {
     int b = idx * 64;
@@ -320,6 +327,11 @@ int lf_line(int idx) {
     if pt_no[0] >= 1 && pt_isreg(0, 0) && pt_writes_first(0) {
         int wr = pt_regno(0, 0, 'x');
         if wr == 27 || wr == 28 || wr == 29 { return lf_fail("a write to x27, x28 or x29"); }
+    }
+    // a machine word written by the program (raw<u32>[...]): the ARM32 target puts it in the code as it is
+    if x_target == 32 && pt_mn(0, ".word") && pt_no[0] == 1 && lf_imm(0, 0) {
+        ir_add(IR_RAW, 0, 0, 0, 0, lf_val & 4294967295);
+        return 1;
     }
     // 128-bit vectors: ldr / str qN, [..]; fadd fsub fmul fdiv add sub mul vD.T, vN.T, vM.T; dup vD.T, xN | wN
     if (pt_mn(0, "ldr") || pt_mn(0, "str")) && pt_no[0] == 2 && lf_vnum(0, 0, 'q') >= 0 {
@@ -734,7 +746,7 @@ int lf_is_defer_body(int num) {
     while li < lf_total {
         if lf_label_line(li) == num {
             int lj = li + 1;
-            while lj < lf_total && (lf_starts(lj, ";H") || lf_label_line(lj) >= 0) { lj += 1; }
+            while lj < lf_total && (lf_marker(lj) || lf_label_line(lj) >= 0) { lj += 1; }
             if lj + 1 < lf_total && lf_starts(lj, "sub sp, sp, #16") && lf_starts(lj + 1, "str x30, [sp, #0]") { return 1; }
             return 0;
         }
@@ -756,7 +768,7 @@ int lf_find_blocks() {
         li += 1;
     }
     while i < lf_total {
-        if lf_starts(i, ";H") {
+        if lf_marker(i) {
             i += 1;
             continue;
         }
@@ -798,25 +810,34 @@ int lf_find_blocks() {
 
 int lf_function(char^ name) {
     lf_why[0] = 0;
-    // the prologue: name: / sub sp, sp, #N / str x29, [sp, #0] / str x30, [sp, #8] / add x29, sp, #0
-    if pt_n < 8 || !lf_starts(1, "sub sp, sp, #") || !lf_starts(2, "str x29, [sp, #0]") || !lf_starts(3, "str x30, [sp, #8]") || !lf_starts(4, "add x29, sp, #0") {
-        return lf_fail("the function does not start with the usual prologue");
-    }
-    lf_body_start = 5;
-    lf_frame = 0;
-    int pi = 13;
-    while pt_txt[64 + pi] >= '0' && pt_txt[64 + pi] <= '9' {
-        lf_frame = lf_frame * 10 + (pt_txt[64 + pi] - '0');
-        pi += 1;
-    }
-    // the end: the epilogue (ldr x29, ldr x30, add sp, ret) or, in main, the exit call
-    int last = pt_n - 1;
-    while last >= 0 && lf_starts(last, ";H") { last -= 1; }
+    lf_naked = 0;
+    if x_target == 32 && pt_n >= 3 && lf_starts(1, ";N") { lf_naked = 1; }
     lf_epi_line = 0 - 1;
-    if lf_starts(last, "ret") && last >= 8 && lf_starts(last - 1, "add sp, sp, #") && lf_starts(last - 2, "ldr x30, [sp, #8]") && lf_starts(last - 3, "ldr x29, [sp, #0]") {
-        lf_epi_line = last - 3;
+    if lf_naked == 1 {
+        // a naked function (ARM32): no prologue, no epilogue, no frame; the statements are lifted as they are, `ret` returns x0
+        lf_body_start = 1;
+        lf_frame = 16;                // the place of the saved registers: the ARM32 back end keeps the return address there
+        lf_total = pt_n;
+    } else {
+        // the prologue: name: / sub sp, sp, #N / str x29, [sp, #0] / str x30, [sp, #8] / add x29, sp, #0
+        if pt_n < 8 || !lf_starts(1, "sub sp, sp, #") || !lf_starts(2, "str x29, [sp, #0]") || !lf_starts(3, "str x30, [sp, #8]") || !lf_starts(4, "add x29, sp, #0") {
+            return lf_fail("the function does not start with the usual prologue");
+        }
+        lf_body_start = 5;
+        lf_frame = 0;
+        int pi = 13;
+        while pt_txt[64 + pi] >= '0' && pt_txt[64 + pi] <= '9' {
+            lf_frame = lf_frame * 10 + (pt_txt[64 + pi] - '0');
+            pi += 1;
+        }
+        // the end: the epilogue (ldr x29, ldr x30, add sp, ret) or, in main, the exit call
+        int last = pt_n - 1;
+        while last >= 0 && lf_marker(last) { last -= 1; }
+        if lf_starts(last, "ret") && last >= 8 && lf_starts(last - 1, "add sp, sp, #") && lf_starts(last - 2, "ldr x30, [sp, #8]") && lf_starts(last - 3, "ldr x29, [sp, #0]") {
+            lf_epi_line = last - 3;
+        }
+        if lf_epi_line >= 0 { lf_total = lf_epi_line; } else { lf_total = last + 1; }
     }
-    if lf_epi_line >= 0 { lf_total = lf_epi_line; } else { lf_total = last + 1; }
     if lf_find_blocks() == 0 { return 0; }
     int nblocks = lf_nblocks;
     if nblocks == 0 { return lf_fail("no code"); }
@@ -830,7 +851,7 @@ int lf_function(char^ name) {
         // the blocks that are the target of `bl L` or `adr xN, L` (the bodies of defer)
         int ei = lf_body_start;
         while ei < lf_total {
-            if !lf_starts(ei, ";H") && lf_label_line(ei) < 0 && pt_parse(0, ei) {
+            if !lf_marker(ei) && lf_label_line(ei) < 0 && pt_parse(0, ei) {
                 if (pt_mn(0, "bl") && pt_no[0] == 1) || (pt_mn(0, "adr") && pt_no[0] == 2) {
                     int ek2 = 1;
                     if pt_mn(0, "bl") { ek2 = 0; }
@@ -883,7 +904,7 @@ int lf_function(char^ name) {
     int i = lf_body_start;
     bool fell = true;                     // the flow can come from the line above
     while i < lf_total {
-        if lf_starts(i, ";H") {
+        if lf_marker(i) {
             i += 1;
             continue;
         }
@@ -976,6 +997,30 @@ int lf_function(char^ name) {
             lf_depth_at[lcb] = 64;
             int lce = ir_add(IR_LCALL, 0, 0, 0, 0, 0);
             ir_t1[lce] = lcb;
+            lf_cmp_kind = 0;
+            i += 1;
+            continue;
+        }
+        if pt_mn(0, "ret") && lf_naked == 1 {
+            ir_add(IR_RET, 0, lf_x(0), 0, 0, 0);
+            fell = false;
+            lf_cmp_kind = 0;
+            i += 1;
+            continue;
+        }
+        if pt_mn(0, "b") && pt_no[0] == 1 && lf_naked == 1 && lf_label_of(0, 0) < 0 {
+            // `tail name`: the call, then the return of its result
+            char tfn[64];
+            int tc = 0;
+            while pt_o[tc] != 0 && tc < 62 {
+                tfn[tc] = pt_o[tc];
+                tc += 1;
+            }
+            tfn[tc] = 0;
+            int tce = ir_add(IR_CALL, lf_x(0), 0, 0, 0, ir_name_index(@tfn));
+            lf_set_call_args(tce);
+            ir_add(IR_RET, 0, lf_x(0), 0, 0, 0);
+            fell = false;
             lf_cmp_kind = 0;
             i += 1;
             continue;
@@ -2078,6 +2123,27 @@ void ir_run() {
     int i = 0;
     while i < out_len {
         int en = rg_end(i);
+        if x_target == 32 && !rg_is_func(i) && rg_is_naked(i) {
+            // a naked function (the low level of the language): lifted with no frame
+            int pn = en + 1;
+            while pn < out_len {
+                if rg_has(pn, ".align") || rg_is_func(pn) || rg_is_naked(pn) { break; }
+                pn = rg_end(pn) + 1;
+            }
+            int nn2 = 0;
+            while i + nn2 < en - 1 && nn2 < 120 {
+                ir_stat_fn[nn2] = out_buf[i + nn2];
+                nn2 += 1;
+            }
+            ir_stat_fn[nn2] = 0;
+            if lf_load(i, pn) && lf_function(@ir_stat_fn) == 1 {
+                a32_function();
+            } else {
+                a32_unlifted(@ir_stat_fn, @lf_why);
+            }
+            i = pn;
+            continue;
+        }
         if rg_is_func(i) {
             // the end of the function: the epilogue (ret) or, in main, the exit call
             int p = i;
@@ -2118,7 +2184,20 @@ void ir_run() {
                 }
             }
             if ok && x_target == 32 {
-                if ir_opt > 0 { ir_pipeline(@ir_stat_fn); }
+                lf_lifted += 1;
+                // the passes do not know the atomic operations and the local calls of the ARM32 target: such a function is left as it is
+                bool a32_plain = true;
+                int a32i = 0;
+                while a32i < ir_n {
+                    int a32o = ir_op[a32i];
+                    if a32o == IR_RAW || a32o == IR_ATOMIC || a32o == IR_LCALL || a32o == IR_LRET || a32o == IR_LENTRY || a32o == IR_ADDR_BLOCK { a32_plain = false; }
+                    if a32o == IR_CALL && str_eq(@ir_name + ir_k[a32i] * 64, "__Mt__run") { a32_plain = false; }          // the frame is shared with the threads of the loop
+                    a32i += 1;
+                }
+                if ir_opt > 0 && a32_plain && lf_lifted > ir_min && lf_lifted <= ir_max {
+                    ir_pipeline(@ir_stat_fn);
+                    if ir_max < 1000000 && ir_max == lf_lifted { ir_say("passes on ", @ir_stat_fn, ""); }
+                }
                 if (ir_opt & 2097152) != 0 {
                     ir_print();
                     syscall(64, 2, @ir_pbuf, ir_plen);

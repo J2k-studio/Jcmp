@@ -97,6 +97,15 @@ int rg_num(int i) {
 // is the line st..en a label of a function ("name:" followed by "sub sp, sp, #")?
 int rg_nofma_fn;                 // the function being finished has the line ;NOFMA (a vector loop): no fused multiply-add
 
+// a naked function: the label of the function, then a line ";N" (the low level of the language; ARM32 lifts it)
+bool rg_is_naked(int st) {
+    int en = rg_end(st);
+    if en <= st + 1 || out_buf[en - 1] != ':' { return false; }
+    if out_buf[st] == 'L' && out_buf[st + 1] >= '0' && out_buf[st + 1] <= '9' { return false; }
+    if out_buf[st] == ';' || out_buf[st] == '.' { return false; }
+    return rg_has(en + 1, ";N");
+}
+
 bool rg_is_func(int st) {
     int en = rg_end(st);
     if en <= st + 1 || out_buf[en - 1] != ':' { return false; }

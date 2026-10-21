@@ -1945,6 +1945,7 @@ void compute_reach() {
             if fnm[0] == '_' && fnm[1] == '_' { freach[k] = 1; }          // the runtime (__Arr__, __Str__, __a32_ ...): the back end calls it by name
             if fnm[0] == 'M' && fnm[1] == 'e' && fnm[2] == 'm' && fnm[3] == '_' && fnm[4] == '_' { freach[k] = 1; }
             if fnm[0] == 'S' && fnm[1] == 'y' && fnm[2] == 's' && fnm[3] == '_' && fnm[4] == '_' { freach[k] = 1; }
+            if as1_prefix(fnm, "Atomic__") || as1_prefix(fnm, "Cpu__") || str_eq(fnm, "Cache__clean_code") || str_eq(fnm, "Cache__invalidate_code") { freach[k] = 1; }          // the program calls them (the parser has no edge for the inline text of ARM64)
             k += 1;
         }
         changed = true;

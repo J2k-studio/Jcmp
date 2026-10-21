@@ -1091,6 +1091,21 @@ int ast_fop_of(int at) {
     if str_eq(nm, "__fetch_xor") { return 26; }
     if str_eq(nm, "__atomic_load") { return 27; }
     if str_eq(nm, "__atomic_store") { return 28; }
+    if str_eq(nm, "__mem_barrier") { return 31; }     // the instructions of the CPU for the ARM32 target (std/rt_hw.j): 31 .. 45, IR_ATOMIC with that code
+    if str_eq(nm, "__mem_barrier_read") { return 32; }
+    if str_eq(nm, "__mem_barrier_write") { return 33; }
+    if str_eq(nm, "__mem_barrier_full") { return 34; }
+    if str_eq(nm, "__cpu_wait") { return 35; }
+    if str_eq(nm, "__cpu_event") { return 36; }
+    if str_eq(nm, "__cpu_send_event") { return 37; }
+    if str_eq(nm, "__cpu_pause") { return 38; }
+    if str_eq(nm, "__cpu_nop") { return 39; }
+    if str_eq(nm, "__cpu_isb") { return 40; }
+    if str_eq(nm, "__cpu_counter") { return 41; }
+    if str_eq(nm, "__cpu_frequency") { return 42; }
+    if str_eq(nm, "__cpu_id") { return 43; }
+    if str_eq(nm, "__cache_clean_code") { return 44; }
+    if str_eq(nm, "__cache_invalidate_code") { return 45; }
     if str_eq(nm, "__syscall_raw") { return 30; }     // __syscall_raw(number, 6 arguments): a system call with no adaptation of the structures (std/rt_a32.j; the ARM32 target only)
     if str_eq(nm, "__thread_start") { return 29; }    // __thread_start(function, argument, top of the stack, id word, thread block): the ARM32 target only
     return 0;

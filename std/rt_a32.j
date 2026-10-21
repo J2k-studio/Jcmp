@@ -3,9 +3,15 @@
 // a 32 bit machine has no instruction for (division, the high half of a product) and for the printing of cout.
 // Nothing here is used by the ARM64 target: a function that nobody calls is not made.
 
-// unsigned 64-bit a / b, a % b (0 when b is 0); shift and subtract
+// unsigned 64-bit a / b, a % b (0 when b is 0); the numbers below 2^52 are divided as doubles (exact: a / b is never rounded up to the next
+// whole number when a < 2^52), the others by shift and subtract
 int __a32_udiv(int a, int b) {
     if b == 0 { return 0; }
+    if a >= 0 && a < 4503599627370496 && b > 0 && b < 4503599627370496 {
+        double da = (double)a;
+        double db = (double)b;
+        return (int)(da / db);
+    }
     int top = 1 << 63;
     int bt = b xor top;
     int q = 0;
@@ -25,6 +31,12 @@ int __a32_udiv(int a, int b) {
 
 int __a32_umod(int a, int b) {
     if b == 0 { return 0; }
+    if a >= 0 && a < 4503599627370496 && b > 0 && b < 4503599627370496 {
+        double da = (double)a;
+        double db = (double)b;
+        int q = (int)(da / db);
+        return a - q * b;
+    }
     int top = 1 << 63;
     int bt = b xor top;
     int r = 0;
@@ -61,23 +73,7 @@ int __a32_smod(int a, int b) {
     return r;
 }
 
-// the high 64 bits of the signed 128-bit product a * b
-int __a32_mulhs(int a, int b) {
-    int m = 4294967295;
-    int a0 = a & m;
-    int a1 = (a >> 32) & m;
-    int b0 = b & m;
-    int b1 = (b >> 32) & m;
-    int p00 = a0 * b0;
-    int p01 = a0 * b1;
-    int p10 = a1 * b0;
-    int p11 = a1 * b1;
-    int mid = ((p00 >> 32) & m) + (p01 & m) + (p10 & m);
-    int hi = p11 + ((p01 >> 32) & m) + ((p10 >> 32) & m) + ((mid >> 32) & m);
-    if a < 0 { hi = hi - b; }
-    if b < 0 { hi = hi - a; }
-    return hi;
-}
+// __a32_mulhs (the high 64 bits of the signed 128-bit product a * b) is a routine by hand in the back end (jc_a32.j, a32_emit_exc)
 
 // the start: the stack has 4-byte words (argc, the pointers of argv, 0, the pointers of the environment, 0); the programs (argc(), arg(i), Env)
 // read 8-byte words: a copy in that form is made and the entry gives its address to the global area

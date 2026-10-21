@@ -325,7 +325,9 @@ int as1_intrin(char^ nm) {
 
 bool as1_special(char^ nm) {
     if as1_intrin(nm) != 0 { return false; }
-    if as1_prefix(nm, "Bit__") || as1_prefix(nm, "Cpu__") || as1_prefix(nm, "Cache__") || as1_prefix(nm, "Atomic__") { return true; }
+    if as1_prefix(nm, "Bit__") { return true; }
+    if x_target == 32 { return nm[0] == '_' && nm[1] == '_' && !str_eq(nm, "__panic"); }          // on ARM32 Atomic / Cpu / Cache / Mem::barrier are calls of the library functions
+    if as1_prefix(nm, "Cpu__") || as1_prefix(nm, "Cache__") || as1_prefix(nm, "Atomic__") { return true; }
     if as1_prefix(nm, "Mem__bar") { return true; }
     if str_eq(nm, "__panic") { return false; }          // a function of the prelude: a call
     return nm[0] == '_' && nm[1] == '_';
@@ -828,6 +830,20 @@ bool as1_expr(int n) {
             }
             if bo == 30 { return tcnt == 7; }
             return tcnt == 5;
+        }
+        if bo >= 31 && bo <= 45 {
+            // the instructions of the CPU (ARM32 only: the text path has them for ARM64): no argument, the cache ones take an address
+            if x_target != 32 || opt_debug == 1 { return false; }
+            int want2 = 0;
+            if bo >= 44 { want2 = 1; }
+            int cnt2 = 0;
+            int ea2 = a1;
+            while ea2 != 0 {
+                if !as1_expr(ea2) || as1_dbl(ast_ty[ea2]) || !(as1_scalar(ast_ty[ea2]) || as1_pt(ast_ty[ea2])) { return false; }
+                cnt2 += 1;
+                ea2 = ast_nx[ea2];
+            }
+            return cnt2 == want2;
         }
         if bo >= 20 && bo <= 28 {
             // the atomic built-ins: whole numbers and pointers; only for a target that has no inline sequence for them in the text path
@@ -3219,7 +3235,7 @@ void gl_expr(int n) {
         ir_set_args(tev, tn, @gl_args);
         return;
     }
-    if k == AK_BUILTIN && at_val[n] >= 20 && at_val[n] <= 28 {
+    if k == AK_BUILTIN && ((at_val[n] >= 20 && at_val[n] <= 28) || (at_val[n] >= 31 && at_val[n] <= 45)) {
         int abase = gl_depth;
         int an = 0;
         int ae = at_a[n];

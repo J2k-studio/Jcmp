@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.196
+* **The CPU level on ARM32.** `Atomic::*`, `Mem::barrier*`, `Cpu::wait / event / send_event / pause / nop / isb / counter / frequency / id` and `Cache::clean_code / invalidate_code` work with `-target arm32`; so do `register { in / out / clobber }` blocks, `naked` functions, `abi` blocks, named blocks and `raw<u32>[...]` (the machine words of ARM32, put in the code as written). The register names stay `x0 .. x30` (the same source builds for both targets). Not on ARM32 (the compiler says why): `Cpu::inst` of an instruction that ARM32 does not have, `Sys::` registers, `Cache::clean / invalidate / zero`. See docs/syntax-design.md section 84.
+* **Fixed:** `Atomic::cas` on ARM32 looped for ever when the word was not the expected value.
+* **ARM32 is faster:** variables of the frame live in registers (three pairs), results nobody reads are not stored, numbers and values just stored are not loaded again, the division of numbers below 2^52 is done as doubles (a `gcd` loop: 62 s to 4 s), the high half of a 64-bit product is a routine by hand (a loop with `% 7`: 16 s to 5.5 s). Against ARM64 the benchmarks are 2x to 17x slower (arrays 31x: ARM64 vectorizes them), see tools/bench/baseline32.txt.
+* ARM32 passes 221 of the 233 tests that have an expected output (tools/a32sweep.sh); the compiler built for ARM32 still makes the same compilers byte for byte.
+* The programs for ARM64 are the same as in 0.9.195.
+
 ## 0.9.195
 * **Faster loops of `float`.** A float literal in an expression of floats (`fa[i] * k + 2.0`) is a whole number constant for the optimizer now, so these loops are vectorized: the benchmark `widths` went from 6x to 1x of clang `-O2`. All the benchmarks are within 1.5x of clang `-O2` except `loop` (3.6x: clang proves that the counter fits in 32 bits and vectorizes `i % 7`).
 * **The examples of the documents compile.** The README example lacked a `;` after `using stdlib`, the thread example of LANGUAGE.md lacked `#import <stdlib>`; `tools/doccheck.py` compiles every program of README.md, LANGUAGE.md and TUTORIAL.md and is part of the test suite. `Sys::name` without the library now says how to get it.

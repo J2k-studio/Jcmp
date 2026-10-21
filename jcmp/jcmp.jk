@@ -3,7 +3,7 @@
 // Use:    jcmp1 input.jk -o program
 // the version of the compiler (also in the file VERSION; release.sh checks that they agree)
 #allow syscall                         // the compiler is the layer under Sys: it calls the system by number on purpose
-#define JCMP_VERSION "0.9.195"
+#define JCMP_VERSION "0.9.196"
 
 #import "jc_base"
 #import "jc_asm"
@@ -228,7 +228,7 @@ void main() {
             if str_eq(arg(ai), "arm32") {
                 x_target = 32;
                 ir_mode = 2;
-                ir_opt = 0;                   // the passes on the IR are not used yet (they break threads and defer; a register allocator for ARM32 comes first)
+                ir_opt = 1 | 4 | 8 | 32 | 64 | 128 | 4096 | 32768 | 67108864 | 8388608;          // the passes on the IR that do not need the ARM64 registers (not the register allocator, the inlining, the vectors, the hoisting of loads)
                 ir_pre = 0;
                 inl_off = 1;
                 x_nocache = 1;
@@ -236,6 +236,8 @@ void main() {
                 write_err("jcmp: -target takes arm64 (the default) or arm32\n");
                 syscall(93, 1);
             }
+        } else if str_eq(a, "-xnoelide") {
+            a32_elide_off = 1;            // hidden: ARM32 keeps every store
         } else if str_eq(a, "-noir") {
             ir_mode = 0;
         } else if str_eq(a, "-irtrip") {

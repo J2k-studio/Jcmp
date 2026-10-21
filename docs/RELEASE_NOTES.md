@@ -1,6 +1,8 @@
-# J2K / Jcmp 0.9.195
+# J2K / Jcmp 0.9.196
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
+
+**0.9.196:** the CPU level on ARM32 (atomics, barriers, `Cpu::`, register blocks, naked functions, raw words) and a faster ARM32.
 
 **0.9.195:** loops of `float` with literals are vectorized (`widths` 6x -> 1x of clang); the examples of the documents are compiled by the tests.
 
