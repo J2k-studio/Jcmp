@@ -5,7 +5,7 @@ What jcmp does not do, or does less well, today. A limit that has a workaround s
 ## Targets
 * **Linux ARM64** is the main target: the whole language, the whole library, the checks of `-d`.
 * **Linux ARM32** (`-target arm32`, ELF32, EABI 5): runs on a 64-bit ARM Linux machine that runs 32-bit programs (an Android phone does). The same source builds for both. It needs a CPU with the integer divide instructions and VFP/NEON (ARMv7-A and newer, every ARMv8 phone).
-  * Not on ARM32: the checks of `-d` (the compiler says so), `Cpu::inst` of an instruction that ARM32 does not have, the system registers `Sys::name`, `Cache::clean / invalidate / zero` (privileged), `#pragma read` (read-only data), instructions of ARM64 written as text. `raw<u32>[...]` takes the machine words of the target you build for.
+  * Not on ARM32: the checks of `-d` (the compiler says so), `Cpu::inst` of an instruction that is not in the list of docs/syntax-design.md section 84 (`ubfx`, `udiv`, `umull`, `ldrex` ... are), the system registers `Sys::name`, `Cache::clean / invalidate / zero` (privileged), `#pragma read` (read-only data), instructions of ARM64 written as text. `raw<u32>[...]` takes the machine words of the target you build for.
   * A multiply and an add are not fused into one instruction on ARM32 (`fma`), so the last bit of a floating-point result can differ from ARM64.
   * Speed: the programs are 2 to 19 times slower than the same program on ARM64 (see `tools/bench/baseline32.txt` in the repository), because there is little register allocation yet.
 * No x86_64, Windows or macOS target yet.
@@ -21,7 +21,7 @@ What jcmp does not do, or does less well, today. A limit that has a workaround s
 
 ## Library
 * Network: IPv4 only. `https` is TLS 1.3 with the check of the certificate chain; there is no server side of TLS.
-* The libraries `simd`, `quat`, `complex`, `stats`, `canvas` and `screen` are downloaded with `jget -li install NAME`; the index of libraries is not published yet.
+* The libraries `simd`, `quat`, `complex`, `stats`, `canvas` and `screen` are downloaded with `jget -li install NAME` (the index is the repository `Jcmp-libs` on GitHub; the checksum is checked before a file is installed). Libraries of other authors are not listed yet.
 * [API.md](API.md) lists every function of every library; some are helpers of the library (the steps of a hash, for example) that the compiler does not hide yet.
 
 ## Tools

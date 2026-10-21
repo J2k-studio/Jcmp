@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.198
+* **`Cpu::inst` on ARM32:** `ubfx sbfx udiv sdiv umull smull mla mul uxtb uxth sxtb sxth ldrex strex` and the data processing forms are assembled into machine words (docs/syntax-design.md section 84). **Fixed:** after raw machine words the compiler still believed it knew the value of a register (a wrong result).
+* **ARM32 is faster again (10 to 25%):** the high word of a result that nobody reads (an address, a counter) is not worked out or stored, and a result that only the next instruction reads stays in the registers.
+* Tools: `tools/campaign.sh` (the test campaign before 1.0: complete runs in a row with no change of the code), `tools/stdcheck.py`.
+* The programs for ARM64 are the same as in 0.9.197.
+
 ## 0.9.197
 * **`jcmp -show NAME`** writes the code of one function as it is in the program (ARM64) and how many instructions it has: you see what the compiler made of your code. (A first step of "the CPU is not hidden from the writer"; the next ones wait for the owner's choices.)
 * **ARM32: the vectorizer (NEON) is on.** The loops over arrays are vectorized as on ARM64: the benchmark `arrays` went from 31 times to 7 times slower than ARM64.

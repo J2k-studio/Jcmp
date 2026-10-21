@@ -320,6 +320,162 @@ int lf_emit(int op, int d, int a, int b, int bi, int k) {
     return ir_add(op, d, a, b, bi, k);
 }
 
+// ---- ARM32: an instruction written with Cpu::inst("name", ...) that the lifter has no meaning for becomes a machine word (IR_RAW), assembled here.
+// The registers are x0 .. x9 (r0 .. r9 around a run of raw words, see docs/syntax-design.md 84); only the forms that are listed.
+
+// the modified immediate of an ARM instruction (an 8 bit number rotated right by an even amount), or -1
+int lf_arm_imm(int v) {
+    int u = v & 4294967295;
+    int r = 0;
+    while r < 32 {
+        // rotate u left by r: the result must fit in 8 bits
+        int rot = ((u << r) | (u >> (32 - r))) & 4294967295;
+        if r == 0 { rot = u; }
+        if rot < 256 {
+            return (((32 - r) / 2) % 16) << 8 | rot;
+        }
+        r += 2;
+    }
+    return 0 - 1;
+}
+
+int lf_inst32() {
+    int n = pt_no[0];
+    int rd = 0 - 1;
+    // data processing: and eor sub rsb add adc sbc rsc tst teq cmp cmn orr mov bic mvn (a trailing s sets the flags)
+    int dop = 0 - 1;
+    bool sflag = false;
+    char mn[16];
+    int mi = 0;
+    while pt_m[mi] != 0 && mi < 14 {
+        mn[mi] = pt_m[mi];
+        mi += 1;
+    }
+    mn[mi] = 0;
+    if mi > 3 && mn[mi - 1] == 's' && !str_eq(@mn, "bics") {
+        sflag = true;
+    }
+    char base[16];
+    int bi = 0;
+    int blen = mi;
+    if sflag { blen = mi - 1; }
+    while bi < blen {
+        base[bi] = mn[bi];
+        bi += 1;
+    }
+    base[bi] = 0;
+    if str_eq(@base, "and") { dop = 0; } else if str_eq(@base, "eor") { dop = 1; } else if str_eq(@base, "sub") { dop = 2; }
+    else if str_eq(@base, "rsb") { dop = 3; } else if str_eq(@base, "add") { dop = 4; } else if str_eq(@base, "adc") { dop = 5; }
+    else if str_eq(@base, "sbc") { dop = 6; } else if str_eq(@base, "rsc") { dop = 7; } else if str_eq(@base, "orr") { dop = 12; }
+    else if str_eq(@base, "bic") { dop = 14; }
+    if dop >= 0 && n == 3 && pt_regno(0, 0, 'x') >= 0 && pt_regno(0, 1, 'x') >= 0 {
+        int w = 0xE0000000 | (dop << 21) | (pt_regno(0, 0, 'x') << 12) | (pt_regno(0, 1, 'x') << 16);
+        if sflag { w = w | 0x00100000; }
+        if pt_regno(0, 2, 'x') >= 0 {
+            w = w | pt_regno(0, 2, 'x');
+        } else if lf_imm(0, 2) && lf_arm_imm(lf_val) >= 0 {
+            w = w | 0x02000000 | lf_arm_imm(lf_val);
+        } else {
+            return 0;
+        }
+        ir_add(IR_RAW, 0, 0, 0, 0, w);
+        return 1;
+    }
+    if (str_eq(@base, "mov") || str_eq(@base, "mvn")) && n == 2 && pt_regno(0, 0, 'x') >= 0 {
+        int dm = 13;
+        if str_eq(@base, "mvn") { dm = 15; }
+        int w2 = 0xE0000000 | (dm << 21) | (pt_regno(0, 0, 'x') << 12);
+        if sflag { w2 = w2 | 0x00100000; }
+        if pt_regno(0, 1, 'x') >= 0 {
+            w2 = w2 | pt_regno(0, 1, 'x');
+        } else if lf_imm(0, 1) && lf_arm_imm(lf_val) >= 0 {
+            w2 = w2 | 0x02000000 | lf_arm_imm(lf_val);
+        } else {
+            return 0;
+        }
+        ir_add(IR_RAW, 0, 0, 0, 0, w2);
+        return 1;
+    }
+    if (str_eq(@mn, "tst") || str_eq(@mn, "teq") || str_eq(@mn, "cmn")) && n == 2 && pt_regno(0, 0, 'x') >= 0 {
+        int cop = 8;
+        if str_eq(@mn, "teq") { cop = 9; }
+        if str_eq(@mn, "cmn") { cop = 11; }
+        int w3 = 0xE0100000 | (cop << 21) | (pt_regno(0, 0, 'x') << 16);
+        if pt_regno(0, 1, 'x') >= 0 {
+            w3 = w3 | pt_regno(0, 1, 'x');
+        } else if lf_imm(0, 1) && lf_arm_imm(lf_val) >= 0 {
+            w3 = w3 | 0x02000000 | lf_arm_imm(lf_val);
+        } else {
+            return 0;
+        }
+        ir_add(IR_RAW, 0, 0, 0, 0, w3);
+        return 1;
+    }
+    // multiply and divide: mul rd, rm, rs   mla rd, rm, rs, ra   umull rdlo, rdhi, rm, rs   smull ...   udiv / sdiv rd, rn, rm
+    if str_eq(@mn, "mul") && n == 3 && pt_regno(0, 0, 'x') >= 0 && pt_regno(0, 1, 'x') >= 0 && pt_regno(0, 2, 'x') >= 0 {
+        ir_add(IR_RAW, 0, 0, 0, 0, 0xE0000090 | (pt_regno(0, 0, 'x') << 16) | (pt_regno(0, 2, 'x') << 8) | pt_regno(0, 1, 'x'));
+        return 1;
+    }
+    if str_eq(@mn, "mla") && n == 4 && pt_regno(0, 0, 'x') >= 0 && pt_regno(0, 1, 'x') >= 0 && pt_regno(0, 2, 'x') >= 0 && pt_regno(0, 3, 'x') >= 0 {
+        ir_add(IR_RAW, 0, 0, 0, 0, 0xE0200090 | (pt_regno(0, 0, 'x') << 16) | (pt_regno(0, 3, 'x') << 12) | (pt_regno(0, 2, 'x') << 8) | pt_regno(0, 1, 'x'));
+        return 1;
+    }
+    if (str_eq(@mn, "umull") || str_eq(@mn, "smull")) && n == 4 && pt_regno(0, 0, 'x') >= 0 && pt_regno(0, 1, 'x') >= 0 && pt_regno(0, 2, 'x') >= 0 && pt_regno(0, 3, 'x') >= 0 {
+        int mw = 0xE0800090;
+        if str_eq(@mn, "smull") { mw = 0xE0C00090; }
+        ir_add(IR_RAW, 0, 0, 0, 0, mw | (pt_regno(0, 1, 'x') << 16) | (pt_regno(0, 0, 'x') << 12) | (pt_regno(0, 3, 'x') << 8) | pt_regno(0, 2, 'x'));
+        return 1;
+    }
+    if (str_eq(@mn, "udiv") || str_eq(@mn, "sdiv")) && n == 3 && pt_regno(0, 0, 'x') >= 0 && pt_regno(0, 1, 'x') >= 0 && pt_regno(0, 2, 'x') >= 0 {
+        int dw = 0xE730F010;
+        if str_eq(@mn, "sdiv") { dw = 0xE710F010; }
+        ir_add(IR_RAW, 0, 0, 0, 0, dw | (pt_regno(0, 0, 'x') << 16) | (pt_regno(0, 2, 'x') << 8) | pt_regno(0, 1, 'x'));
+        return 1;
+    }
+    // one register to one register: clz rbit rev uxtb uxth sxtb sxth
+    if n == 2 && pt_regno(0, 0, 'x') >= 0 && pt_regno(0, 1, 'x') >= 0 {
+        int base2 = 0;
+        if str_eq(@mn, "uxtb") { base2 = 0xE6EF0070; }
+        else if str_eq(@mn, "uxth") { base2 = 0xE6FF0070; }
+        else if str_eq(@mn, "sxtb") { base2 = 0xE6AF0070; }
+        else if str_eq(@mn, "sxth") { base2 = 0xE6BF0070; }
+        if base2 != 0 {
+            ir_add(IR_RAW, 0, 0, 0, 0, base2 | (pt_regno(0, 0, 'x') << 12) | pt_regno(0, 1, 'x'));
+            return 1;
+        }
+    }
+    // bit fields: ubfx / sbfx rd, rn, lsb, width
+    if (str_eq(@mn, "ubfx") || str_eq(@mn, "sbfx")) && n == 4 && pt_regno(0, 0, 'x') >= 0 && pt_regno(0, 1, 'x') >= 0 && lf_imm(0, 2) {
+        int lsb = lf_val;
+        if lf_imm(0, 3) && lsb >= 0 && lsb < 32 && lf_val >= 1 && lsb + lf_val <= 32 {
+            int bw = 0xE7E00050;
+            if str_eq(@mn, "sbfx") { bw = 0xE7A00050; }
+            ir_add(IR_RAW, 0, 0, 0, 0, bw | ((lf_val - 1) << 16) | (pt_regno(0, 0, 'x') << 12) | (lsb << 7) | pt_regno(0, 1, 'x'));
+            return 1;
+        }
+    }
+    // memory: ldr str ldrb strb ldrex rt, [rn, #off]   strex rd, rt, [rn]
+    if (str_eq(@mn, "ldr") || str_eq(@mn, "str") || str_eq(@mn, "ldrb") || str_eq(@mn, "strb")) && n == 2 && pt_regno(0, 0, 'x') >= 0 && lf_mem(0, 1) && lf_moff > 0 - 4096 && lf_moff < 4096 {
+        int mem = 0xE5000000;
+        if str_eq(@mn, "ldr") || str_eq(@mn, "ldrb") { mem = mem | 0x00100000; }
+        if str_eq(@mn, "strb") || str_eq(@mn, "ldrb") { mem = mem | 0x00400000; }
+        int off = lf_moff;
+        if off >= 0 { mem = mem | 0x00800000; } else { off = 0 - off; }
+        ir_add(IR_RAW, 0, 0, 0, 0, mem | (lf_mbase << 16) | (pt_regno(0, 0, 'x') << 12) | off);
+        return 1;
+    }
+    if str_eq(@mn, "ldrex") && n == 2 && pt_regno(0, 0, 'x') >= 0 && lf_mem(0, 1) && lf_moff == 0 {
+        ir_add(IR_RAW, 0, 0, 0, 0, 0xE1900F9F | (lf_mbase << 16) | (pt_regno(0, 0, 'x') << 12));
+        return 1;
+    }
+    if str_eq(@mn, "strex") && n == 3 && pt_regno(0, 0, 'x') >= 0 && pt_regno(0, 1, 'x') >= 0 && lf_mem(0, 2) && lf_moff == 0 {
+        ir_add(IR_RAW, 0, 0, 0, 0, 0xE1800F90 | (lf_mbase << 16) | (pt_regno(0, 0, 'x') << 12) | pt_regno(0, 1, 'x'));
+        return 1;
+    }
+    rd = 0;
+    return 0;
+}
+
 // one line of the body; returns 0 if it could not be understood (lf_why says what)
 int lf_line(int idx) {
     if !pt_parse(0, idx) { return 1; }
@@ -722,6 +878,7 @@ int lf_line(int idx) {
         lf_emit(IR_ADDR_FUNC, lf_x(pt_regno(0, 0, 'x')), 0, 0, 0, ir_name_index(@nm));
         return 1;
     }
+    if x_target == 32 && lf_inst32() == 1 { return 1; }
     return lf_fail_line("not understood", idx);
 }
 

@@ -1,6 +1,8 @@
-# J2K / Jcmp 0.9.197
+# J2K / Jcmp 0.9.198
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
+
+**0.9.198:** `Cpu::inst` instructions on ARM32, a faster ARM32 (10 to 25%).
 
 **0.9.197:** `jcmp -show NAME` (the code of a function), NEON loops on ARM32, `docs/LIMITS.md` and `docs/API.md`.
 
