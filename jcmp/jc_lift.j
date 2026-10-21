@@ -2118,6 +2118,11 @@ void ir_run() {
                 }
             }
             if ok && x_target == 32 {
+                if ir_opt > 0 { ir_pipeline(@ir_stat_fn); }
+                if (ir_opt & 2097152) != 0 {
+                    ir_print();
+                    syscall(64, 2, @ir_pbuf, ir_plen);
+                }
                 a32_function();
                 i = p;
                 continue;

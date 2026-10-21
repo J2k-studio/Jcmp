@@ -7,8 +7,8 @@
 // How the values are kept (as the text path does): a whole number in v1 (x0), a double in f32 (d0); a second operand in v2 / f33; in
 // the frame and in the arguments a double is its 64 bits (a whole number register, f2bits / bits2f at the edge).
 
-#define AT_MAX 131072
-#define AT_FUNCS 4096
+#define AT_MAX 1048576
+#define AT_FUNCS 16384
 int at_kind[AT_MAX];
 int at_a[AT_MAX];
 int at_b[AT_MAX];

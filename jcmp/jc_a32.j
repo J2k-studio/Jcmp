@@ -5,19 +5,19 @@
 // Our own calling rules: every argument takes 8 bytes at [sp + 8 * k] of the caller, the result is in r0 (low) and r1 (high).
 // What it cannot do yet stops the build with the name of the function and of the instruction (a function that nobody calls is not looked at).
 
-char a32_code[2097152];
+char a32_code[33554432];
 int a32_pos;                      // bytes of code so far
-#define A32_MAXF 2048
-char a32_fname[131072];           // 64 characters each
+#define A32_MAXF 8192
+char a32_fname[524288];           // 64 characters each
 int a32_foff[A32_MAXF];           // the offset of the code of the function
 int a32_fok[A32_MAXF];            // 1: made, 0: not (a32_fwhy says why)
-char a32_fwhy[262144];            // 128 characters each
+char a32_fwhy[1048576];            // 128 characters each
 int a32_nf;
-#define A32_MAXC 16384
+#define A32_MAXC 131072
 int a32_cat[A32_MAXC];            // the calls: the place of the `bl`, the function that makes it, the name of what it calls
 int a32_cfn[A32_MAXC];
 int a32_ckind[A32_MAXC];          // 0 a `bl`, 1 the address of the function (movw + movt)
-char a32_cname[1048576];          // 64 characters each
+char a32_cname[8388608];          // 64 characters each
 int a32_nc;
 // the jumps inside one function
 int a32_jat[8192];
@@ -30,6 +30,11 @@ int a32_nvc;
 int a32_total;                    // the frame of the function
 int a32_outb;                     // the bytes of the arguments of the calls that the function makes (at the bottom of the frame)
 int a32_cellbase;                 // the offset of the cells (the negative offsets of the frame pointer) from sp
+int a32_kver[IR_MAXV];            // the vregs that hold a known number in the block being made (a32_kver[v] == a32_blkver), and the number
+int a32_kval[IR_MAXV];
+int a32_blkver;
+int a32_cv;                       // the vreg that r0:r1 hold right after a store (valid while a32_pos == a32_cpos)
+int a32_cpos;
 int a32_lcat[1024];               // the local calls (bl to a block of the same function): place, block
 int a32_lcblk[1024];
 int a32_nlc;
@@ -310,6 +315,11 @@ void a32_load(int rlo, int rhi, int v) {
         a32_const(rhi, 0);
         return;
     }
+    if v < IR_MAXV && a32_kver[v] == a32_blkver {
+        a32_const64(rlo, rhi, a32_kval[v]);        // a number that was made in this block
+        return;
+    }
+    if rlo == 0 && rhi == 1 && v == a32_cv && a32_pos == a32_cpos { return; }        // r0:r1 hold it already (the store before)
     int c = a32_cell(v);
     a32_ldr(rlo, 13, c);
     a32_ldr(rhi, 13, c + 4);
@@ -319,6 +329,10 @@ void a32_store(int rlo, int rhi, int v) {
     int c = a32_cell(v);
     a32_str(rlo, 13, c);
     a32_str(rhi, 13, c + 4);
+    if rlo == 0 && rhi == 1 {
+        a32_cv = v;
+        a32_cpos = a32_pos;
+    }
 }
 
 // the second operand of an instruction: a vreg or a number, in (r2, r3)
@@ -1155,9 +1169,20 @@ void a32_function() {
     b = 0;
     while b < ir_nb && a32_bad == 0 {
         a32_boff[b] = a32_pos;
+        a32_blkver += 1;
+        a32_cv = 0 - 1;
         int k2 = ir_bs[b];
         while k2 < ir_be[b] && a32_bad == 0 {
             if !a32_instr(k2, b) { a32_fail("an instruction"); }
+            int kop = ir_op[k2];
+            if kop == IR_LCALL { a32_blkver += 1; a32_cv = 0 - 1; }
+            if ir_d[k2] > 0 && ir_d[k2] < IR_MAXV {
+                a32_kver[ir_d[k2]] = 0 - 1;
+                if kop == IR_CONST && ir_vcls[ir_d[k2]] == 0 {
+                    a32_kver[ir_d[k2]] = a32_blkver;
+                    a32_kval[ir_d[k2]] = ir_k[k2];
+                }
+            }
             k2 += 1;
         }
         b += 1;
@@ -1227,8 +1252,7 @@ void a32_scan(int i) {
 
 // the 32 bit ELF file
 char a32_hdr[116];
-char a32_data[1048576];
-char a32_mapbuf[524288];
+char a32_mapbuf[2097152];
 
 void a32_hput(int at, int bytes, int v) {
     int i = 0;
@@ -1530,6 +1554,15 @@ void a32_finish(char^ path) {
         a32_w(0xE1200070);
     }
     int entry = a32_pos;
+    // the global area: mmap2(0x10000000, size, RW, PRIVATE | FIXED | ANONYMOUS, -1, 0); it is zero, the start values are copied below
+    a32_const(0, 268435456);
+    a32_const(1, (a32_systab() + 1024 + 4095) / 4096 * 4096);
+    a32_const(2, 3);
+    a32_const(3, 50);
+    a32_const(4, 4294967295);
+    a32_const(5, 0);
+    a32_const(7, 192);
+    a32_w(0xEF000000);
     if sg >= 0 && a32_fok[sg] == 1 {
         a32_dpi(A32_AL, 2, 0, 13, 13, 32);              // sub sp, sp, #32: struct sigaction {handler, mask, flags, restorer}
         a32_const(0, 65536 + 116 + tramp);
@@ -1548,6 +1581,25 @@ void a32_finish(char^ path) {
         a32_dpi(A32_AL, 4, 0, 13, 13, 32);              // add sp, sp, #32
     }
     a32_const(10, 268435456 + 72);                  // r10: the block of the thread
+    // the start values of the global area: records {offset, length, words ...} ending with a length of 0 are copied from the code segment
+    int blobat = a32_pos;                           // movw / movt r4 = the address of the records (filled in below)
+    a32_w(0xE3004000);
+    a32_w(0xE3404000);
+    a32_const(7, 268435456);
+    int lp0 = a32_pos;
+    a32_w(0xE4945004);                              // ldr r5, [r4], #4: the offset
+    a32_w(0xE4946004);                              // ldr r6, [r4], #4: the length
+    a32_dpi(A32_AL, 10, 1, 0, 6, 0);                // cmp r6, #0
+    int lpdone = a32_pos;
+    a32_w(0);                                       // beq done
+    a32_dp(A32_AL, 4, 0, 5, 5, 7);                  // add r5, r5, r7
+    int lp1 = a32_pos;
+    a32_w(0xE4940004);                              // ldr r0, [r4], #4
+    a32_w(0xE4850004);                              // str r0, [r5], #4
+    a32_dpi(A32_AL, 2, 1, 6, 6, 4);                 // subs r6, r6, #4
+    a32_w(0x1A000000 | (((lp1 - (a32_pos + 8)) / 4) & 16777215));        // bne copy
+    a32_w(0xEA000000 | (((lp0 - (a32_pos + 8)) / 4) & 16777215));        // b loop
+    a32_set(lpdone, 0x0A000000 | (((a32_pos - (lpdone + 8)) / 4) & 16777215));
     int fx = a32_find("__a32_fixargs");
     if fx < 0 || a32_fok[fx] == 0 { die("the ARM32 back end: __a32_fixargs (std/rt_a32.j) is not made"); }
     a32_mov(3, 13);                                 // r3 = the stack pointer of the start
@@ -1564,32 +1616,41 @@ void a32_finish(char^ path) {
     int relm = (a32_foff[main_fn] - (a32_pos + 8)) / 4;
     a32_w(0xEB000000 | (relm & 16777215));         // bl main
     a32_w(0xE1200070);                              // bkpt
-    // the global area: the texts and the values that the ARM64 target stores at the start are in the file
+    // the global area: the texts and the values that the ARM64 target stores at the start are kept as records after the code (copied at the start)
     int dsize = (a32_systab() + 1024 + 4095) / 4096 * 4096;
     if dsize < 4096 { dsize = 4096; }
-    int dused = 0;
-    // the table of system call numbers
+    int blobpos = a32_pos;
+    int rec0 = 0;                                   // the record being made: where its offset is in a32_code, and its length
+    int reclen = 0;
+    int recoff = 0 - 100;
     int sn = 0;
+    // the table of system call numbers
+    a32_w(a32_systab());
+    a32_w(1024);
     while sn < 512 {
         int sv = a32_sysno(sn);
-        a32_data[a32_systab() + sn * 2] = sv & 255;
-        a32_data[a32_systab() + sn * 2 + 1] = (sv >> 8) & 255;
-        sn += 1;
+        a32_w((sv & 65535) | ((a32_sysno(sn + 1) & 65535) << 16));
+        sn += 2;
     }
-    dused = a32_systab() + 1024;
     int gi = 0;
     while gi < ginit_count {
         int off = ginit_off[gi];
         int val = ginit_val[gi];
-        if off + 8 > 1048576 { die("the ARM32 back end: the global area is too big"); }
-        int bi = 0;
-        while bi < 8 {
-            a32_data[off + bi] = (val >> (8 * bi)) & 255;
-            bi += 1;
+        if off == recoff + reclen && reclen > 0 {
+            reclen += 8;
+        } else {
+            if reclen > 0 { a32_set(rec0 + 4, reclen); }
+            a32_w(off);
+            rec0 = a32_pos - 4;
+            a32_w(0);
+            recoff = off;
+            reclen = 8;
         }
-        if off + 8 > dused { dused = off + 8; }
+        a32_w(val & 4294967295);
+        a32_w((val >> 32) & 4294967295);
         gi += 1;
     }
+    if reclen > 0 { a32_set(rec0 + 4, reclen); }
     if x_map != null {
         // -xmap FILE: "address name" for every function
         char^ mb = @a32_mapbuf;
@@ -1628,17 +1689,18 @@ void a32_finish(char^ path) {
             i32^ ffb = (i32^)@fff[0];
             fbits = ffb[0] & 4294967295;
         }
-        int foff = gfi_off[gi];
-        int fbi = 0;
-        while fbi < 8 {
-            a32_data[foff + fbi] = (fbits >> (8 * fbi)) & 255;
-            fbi += 1;
-        }
-        if foff + 8 > dused { dused = foff + 8; }
+        a32_w(gfi_off[gi]);
+        a32_w(8);
+        a32_w(fbits & 4294967295);
+        a32_w((fbits >> 32) & 4294967295);
         gi += 1;
     }
+    a32_w(0);                                       // the end of the records
+    a32_w(0);
+    int blobaddr = 65536 + 116 + blobpos;
+    a32_set(blobat, 0xE3000000 | (((blobaddr & 65535) >> 12) << 16) | (4 << 12) | (blobaddr & 4095));
+    a32_set(blobat + 4, 0xE3400000 | ((((blobaddr >> 16) & 65535) >> 12) << 16) | (4 << 12) | ((blobaddr >> 16) & 4095));
     // the header: ELF32, ARM, EABI 5, two segments: code (R + X) and the global area (R + W)
-    int dataoff = (116 + a32_pos + 4095) / 4096 * 4096;
     int i = 0;
     while i < 116 { a32_hdr[i] = 0; i += 1; }
     a32_hdr[0] = 0x7f; a32_hdr[1] = 0x45; a32_hdr[2] = 0x4c; a32_hdr[3] = 0x46;
@@ -1651,7 +1713,7 @@ void a32_finish(char^ path) {
     a32_hput(36, 4, 0x05000000);           // e_flags: EABI version 5
     a32_hput(40, 2, 52);
     a32_hput(42, 2, 32);
-    a32_hput(44, 2, 2);                    // two program headers
+    a32_hput(44, 2, 1);                    // one program header: the code (the global area is mapped by the start code)
     a32_hput(52, 4, 1);                    // segment 1: PT_LOAD, the headers and the code
     a32_hput(56, 4, 0);
     a32_hput(60, 4, 0x10000);
@@ -1660,14 +1722,6 @@ void a32_finish(char^ path) {
     a32_hput(72, 4, 116 + a32_pos);
     a32_hput(76, 4, 5);
     a32_hput(80, 4, 4096);
-    a32_hput(84, 4, 1);                    // segment 2: PT_LOAD, the global area at 0x10000000
-    a32_hput(88, 4, dataoff);
-    a32_hput(92, 4, 268435456);
-    a32_hput(96, 4, 268435456);
-    a32_hput(100, 4, dused);
-    a32_hput(104, 4, dsize);
-    a32_hput(108, 4, 6);
-    a32_hput(112, 4, 4096);
     int out = syscall(56, -100, path, 577, 493);
     if out < 0 {
         write_err("jcmp: cannot write the program file\n");
@@ -1675,17 +1729,6 @@ void a32_finish(char^ path) {
     }
     syscall(64, out, @a32_hdr, 116);
     syscall(64, out, @a32_code, a32_pos);
-    char zeros[4096];
-    int zi = 0;
-    while zi < 4096 { zeros[zi] = 0; zi += 1; }
-    int pad = dataoff - (116 + a32_pos);
-    while pad > 0 {
-        int chunk = pad;
-        if chunk > 4096 { chunk = 4096; }
-        syscall(64, out, @zeros, chunk);
-        pad -= chunk;
-    }
-    if dused > 0 { syscall(64, out, @a32_data, dused); }
     syscall(57, out);
     syscall(93, 0);
 }

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.194
+* **The compiler runs as an ARM32 program.** `jcmp jcmp/jcmp.jk -target arm32` builds the whole compiler for ARM32 (5.7 MB); it compiles programs and **itself**, and the ARM64 compiler and the ARM32 compiler that it makes are the same, byte for byte, as the ones made by the ARM64 compiler (`tools/selfhost32.sh`, part of the test suite). To get there the ARM32 back end got bigger tables, the start values of the global area are kept as records that the start code copies (the file stays small however big the global area is), and the global area is mapped by the start code. The syntax tree keeps more functions at once (a bigger store).
+* ARM32 programs are about 10% faster (a number made in a block and the value just stored are not loaded again).
+* The programs for ARM64 are the same as in 0.9.193.
+
 ## 0.9.193
 * **ARM32: SIMD** (`f64x2`, `f32x4`, `i32x4`, `i64x2`, byte vectors: NEON for the whole numbers and the float lanes, VFP for the two doubles), **`#multithread` loops** (the worker is a function of its own), arrays of structs that free themselves (`S__free_arr`), and a `double` after the eighth argument of a call from the syntax tree.
 * `-d` with `-target arm32` stops with a clear message (it is for ARM64 builds).

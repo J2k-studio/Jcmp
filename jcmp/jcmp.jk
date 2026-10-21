@@ -3,7 +3,7 @@
 // Use:    jcmp1 input.jk -o program
 // the version of the compiler (also in the file VERSION; release.sh checks that they agree)
 #allow syscall                         // the compiler is the layer under Sys: it calls the system by number on purpose
-#define JCMP_VERSION "0.9.193"
+#define JCMP_VERSION "0.9.194"
 
 #import "jc_base"
 #import "jc_asm"
@@ -228,7 +228,7 @@ void main() {
             if str_eq(arg(ai), "arm32") {
                 x_target = 32;
                 ir_mode = 2;
-                ir_opt = 0;
+                ir_opt = 0;                   // the passes on the IR are not used yet (they break threads and defer; a register allocator for ARM32 comes first)
                 ir_pre = 0;
                 inl_off = 1;
                 x_nocache = 1;
