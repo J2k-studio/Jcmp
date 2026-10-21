@@ -1351,6 +1351,50 @@ void as_h_acq(int base) {
     as_put32(base | (rn << 5) | rt);
 }
 
+// crc32b / crc32h / crc32w / crc32x and crc32cb ... wd, wn, xm|wm  (the CRC32 extension of ARMv8.1; the last operand is x for crc32x only)
+void as_h_crc() {
+    int k = 5;                                  // after "crc32"
+    int c = 0;
+    if as_mn[k] == 'c' { c = 1; k += 1; }
+    int sz = 0;
+    if as_mn[k] == 'h' { sz = 1; }
+    else if as_mn[k] == 'w' { sz = 2; }
+    else if as_mn[k] == 'x' { sz = 3; }
+    else if as_mn[k] != 'b' { as_fail(); }
+    int base = 0x1AC04000 + sz * 1024 + c * 4096;
+    if sz == 3 { base += 0x80000000; }
+    as_skip_spaces();
+    int rd = as_parse_wreg();
+    as_expect_comma();
+    int rn = as_parse_wreg();
+    as_expect_comma();
+    int rm = 0;
+    if sz == 3 { rm = as_parse_reg(); } else { rm = as_parse_wreg(); }
+    as_put32(base | (rm << 16) | (rn << 5) | rd);
+}
+
+// prfm pldl1keep, [xn]   (also pldl1strm, pldl2keep, pldl3keep, pstl1keep): a hint that the line at the address is wanted soon
+void as_h_prfm() {
+    as_skip_spaces();
+    as_read_label_name();
+    int op = 0;
+    if as_seq(@as_nbuf, "pldl1keep") { op = 0; }
+    else if as_seq(@as_nbuf, "pldl1strm") { op = 1; }
+    else if as_seq(@as_nbuf, "pldl2keep") { op = 2; }
+    else if as_seq(@as_nbuf, "pldl3keep") { op = 4; }
+    else if as_seq(@as_nbuf, "pstl1keep") { op = 16; }
+    else { as_fail(); }
+    as_expect_comma();
+    if as_cur() != '[' { as_fail(); }
+    as_ci += 1;
+    as_skip_spaces();
+    int rn = as_parse_reg_or_sp();
+    as_skip_spaces();
+    if as_cur() != ']' { as_fail(); }
+    as_ci += 1;
+    as_put32(0xF9800000 | (rn << 5) | op);
+}
+
 // swp / ldadd / ldclr / ldset / ldeor and the a / l / al forms:  xs, xt, [xn]
 void as_h_lse(int base) {
     as_skip_spaces();
@@ -1519,6 +1563,8 @@ bool as_more() {
     if as_mn_is("sevl") { as_put32(0xD50320BF); return true; }
     if as_mn_is("yield") { as_put32(0xD503203F); return true; }
     if as_mn_is("eret") { as_put32(0xD69F03E0); return true; }
+    if as_mn[0] == 'c' && as_mn[1] == 'r' && as_mn[2] == 'c' { as_h_crc(); return true; }
+    if as_mn_is("prfm") { as_h_prfm(); return true; }
     if as_mn_is("isb") { int o = as_barrier_option(15); as_put32(0xD50330DF | (o << 8)); return true; }
     if as_mn_is("dsb") { int o2 = as_barrier_option(15); as_put32(0xD503309F | (o2 << 8)); return true; }
     if as_mn_is("br") { as_h_br(); return true; }

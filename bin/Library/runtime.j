@@ -69,6 +69,13 @@ struct Cpu {
     static void send_event() { __cpu_send_event(); }      // sev
     static void pause() { __cpu_pause(); }                // yield: "I am spinning" (pause on x86)
     static void nop() { __cpu_nop(); }
+    // crc32 (the polynomial of zip / png / ethernet) and crc32c (Castagnoli: iSCSI, ext4): the crc so far and the next 8 bytes (or 1 byte);
+    // they need  #require cpu "crc32"  (ARM64). Start with crc = 0xFFFFFFFF and flip the bits of the end result (~crc & 0xFFFFFFFF).
+    static int crc32(int crc, int data) { return __cpu_crc32(crc, data); }
+    static int crc32c(int crc, int data) { return __cpu_crc32c(crc, data); }
+    static int crc32_u8(int crc, int data) { return __cpu_crc32_u8(crc, data); }
+    static int crc32c_u8(int crc, int data) { return __cpu_crc32c_u8(crc, data); }
+    static void speculation_barrier() { __cpu_speculation_barrier(); }   // nothing after it runs ahead of the branches before it (dsb nsh + isb; Spectre)
     static void isb() { __cpu_isb(); }                    // the instructions after it see what happened before
     static int counter() { return __cpu_counter(); }      // the system counter (cntvct_el0): ticks since boot, no system call
     static int frequency() { return __cpu_frequency(); }  // its ticks per second
@@ -93,6 +100,7 @@ struct Cache {
     static void clean(int^ p) { __cache_clean(p); }                       // write the line back (dc cvac)
     static void invalidate(int^ p) { __cache_invalidate(p); }             // throw the line away (dc ivac)
     static void clean_invalidate(int^ p) { __cache_clean_invalidate(p); }
+    static void prefetch(int^ p) { __cache_prefetch(p); }                 // the line at the address is wanted soon (prfm pldl1keep; pld on ARM32); never an error
     static void zero(int^ p) { __cache_zero(p); }                         // fill the block with zeros (dc zva)
     static void clean_code(int^ p) { __cache_clean_code(p); }
     static void invalidate_code(int^ p) { __cache_invalidate_code(p); }

@@ -124,8 +124,16 @@ int count_values_from(int o) {
     return -1;
 }
 
+// the first character after the current token (spaces skipped): reg<int x19> c needs it to tell `reg<` from a name
+int lc_after_space() {
+    int o = 0;
+    while is_space(lc(o)) { o += 1; }
+    return lc(o);
+}
+
 // is the current token a type word?
 bool at_type() {
+    if tok_kind == T_IDENT && tok_is("reg") && find_struct("reg") < 0 && lc_after_space() == '<' { return true; }
     if tok_kind == T_IDENT && tok_is("vec") && find_struct("vec") < 0 && find_struct("vec3") >= 0 { return true; }
     if tok_kind == T_IDENT && find_enum(@tok_text) >= 0 { return true; }
     if tok_kind == T_IDENT && find_struct(@tok_text) >= 0 { return true; }
@@ -2150,7 +2158,20 @@ void parse_local_decl() {
 void parse_local_decl_core() {
     char first_word[256];
     str_copy(@first_word, @tok_text, 256);
-    parse_type();
+    int reg_pr = 0;
+    if tok_is("reg") && find_struct("reg") < 0 && lc_after_space() == '<' {
+        // reg<int x19> c = 0;  the variable lives in that register (x18, x19 .. x25) for its whole life
+        next();
+        expect("<");
+        parse_type();
+        if tok_kind != T_IDENT { die("a register (x18, x19 .. x25) was expected after the type in reg< >"); }
+        reg_pr = nk_xnum(@tok_text);
+        if reg_pr != 18 && !(reg_pr >= 19 && reg_pr <= 25) { die_name("a variable can be pinned to x18 or x19 .. x25 only (the other registers are used by the code of every expression)", @tok_text); }
+        next();
+        expect(">");
+    } else {
+        parse_type();
+    }
     if tok_is("::") && ty_ptr == 0 {         // Struct::function(...);
         str_copy(@id_name, @first_word, 256);
         gen_scope();
@@ -2173,6 +2194,12 @@ void parse_local_decl_core() {
     check_local_name(@d_name);
     next();
     int d_pin = 0;
+    if reg_pr > 0 {
+        if tok_is("[") || d_dyn != 0 || (d_width >= 16 && d_ptr == 0) || d_tid == 91 { die("only a whole number, a pointer, a bool, a char or an enum can be pinned to a register"); }
+        d_pin = reg_pr;
+        pin_used = 1;
+        next_pin = 0;
+    }
     if tok_is("@") {
         // int n @ x19 = 0;  the variable lives in that register (x18, x19 .. x25) for its whole life
         next();

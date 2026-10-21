@@ -112,7 +112,7 @@ int us_l[256];                // ... inside the current function
 // ---------------------------------------------------------------- modules of the library: Namespace::module.function
 // The names of the library have three layers (docs/syntax-design.md 77): `Fs::fs.read(p)`. `using Fs;` takes the namespace away
 // (`fs.read(p)`), `using Fs::fs.read;` makes only that function available. A row: the namespace, the module, the struct that holds it.
-int mod_count() { return 25; }
+int mod_count() { return 26; }
 char^ mod_row(int i, int col) {
     char^ ns = "";
     char^ md = "";
@@ -143,6 +143,7 @@ char^ mod_row(int i, int col) {
     else if i == 22 { ns = "Base64"; md = "base64"; st = "__Text"; pre = "base64_"; }
     else if i == 23 { ns = "Net"; md = "dns"; st = "Net"; pre = "dns_"; }
     else if i == 24 { ns = "Net"; md = "http"; st = "Net"; pre = "http_"; }
+    else if i == 25 { ns = "Input"; md = "read"; st = "__System"; pre = "read_"; }
     if col == 0 { return ns; }
     if col == 1 { return md; }
     if col == 3 { return pre; }
@@ -1951,7 +1952,7 @@ void compute_reach() {
             if fnm[0] == '_' && fnm[1] == '_' { freach[k] = 1; }          // the runtime (__Arr__, __Str__, __a32_ ...): the back end calls it by name
             if fnm[0] == 'M' && fnm[1] == 'e' && fnm[2] == 'm' && fnm[3] == '_' && fnm[4] == '_' { freach[k] = 1; }
             if fnm[0] == 'S' && fnm[1] == 'y' && fnm[2] == 's' && fnm[3] == '_' && fnm[4] == '_' { freach[k] = 1; }
-            if as1_prefix(fnm, "Atomic__") || as1_prefix(fnm, "Cpu__") || str_eq(fnm, "Cache__clean_code") || str_eq(fnm, "Cache__invalidate_code") { freach[k] = 1; }          // the program calls them (the parser has no edge for the inline text of ARM64)
+            if as1_prefix(fnm, "Atomic__") || (as1_prefix(fnm, "Cpu__") && !as1_prefix(fnm, "Cpu__crc")) || str_eq(fnm, "Cache__prefetch") || str_eq(fnm, "Cache__clean_code") || str_eq(fnm, "Cache__invalidate_code") { freach[k] = 1; }          // the program calls them (the parser has no edge for the inline text of ARM64)
             k += 1;
         }
         changed = true;
@@ -2129,6 +2130,13 @@ void gen_call() {
     } else if str_eq(@callee, "__atomic_store") {
         if n != 2 { die("Atomic::store takes two arguments (the address and the value)"); }
         emit_line("stlr x1, [x0]");
+    } else if str_eq(@callee, "__cpu_crc32") || str_eq(@callee, "__cpu_crc32c") || str_eq(@callee, "__cpu_crc32_u8") || str_eq(@callee, "__cpu_crc32c_u8") {
+        // x0 = the crc so far, x1 = 8 bytes (or 1 byte); the crc is the 32 low bits of the result
+        if n != 2 { die("a crc function takes two arguments (the crc so far and the data)"); }
+        if str_eq(@callee, "__cpu_crc32") { emit_line("crc32x w0, w0, x1"); }
+        else if str_eq(@callee, "__cpu_crc32c") { emit_line("crc32cx w0, w0, x1"); }
+        else if str_eq(@callee, "__cpu_crc32_u8") { emit_line("crc32b w0, w0, w1"); }
+        else { emit_line("crc32cb w0, w0, w1"); }
     } else if callee[0] == '_' && callee[1] == '_' && callee[2] == 'c' && callee[3] == 'p' && callee[4] == 'u' && callee[5] == '_' {
         if str_eq(@callee, "__cpu_wait") { emit_line("wfi"); }
         else if str_eq(@callee, "__cpu_pause") { emit_line("yield"); }
@@ -2136,6 +2144,7 @@ void gen_call() {
         else if str_eq(@callee, "__cpu_send_event") { emit_line("sev"); }
         else if str_eq(@callee, "__cpu_nop") { emit_line("nop"); }
         else if str_eq(@callee, "__cpu_isb") { emit_line("isb"); }
+        else if str_eq(@callee, "__cpu_speculation_barrier") { emit_line("dsb nsh"); emit_line("isb"); }
         else if str_eq(@callee, "__cpu_counter") { emit_line("mrs x0, cntvct_el0"); }
         else if str_eq(@callee, "__cpu_frequency") { emit_line("mrs x0, cntfrq_el0"); }
         else if str_eq(@callee, "__cpu_id") {
@@ -2143,7 +2152,7 @@ void gen_call() {
             emit_line("mov x1, 255");
             emit_line("and x0, x0, x1");
         }
-        else { die_name("this is not a Cpu:: function (wait pause event send_event nop isb counter frequency id)", @callee + 6); }
+        else { die_name("this is not a Cpu:: function (wait pause event send_event nop isb speculation_barrier counter frequency id)", @callee + 6); }
         if n != 0 { die("this Cpu:: function takes no argument"); }
     } else if callee[0] == '_' && callee[1] == '_' && callee[2] == 'm' && callee[3] == 'e' && callee[4] == 'm' && callee[5] == '_' {
         if str_eq(@callee, "__mem_barrier") { emit_line("dmb ish"); }
@@ -2158,9 +2167,10 @@ void gen_call() {
         else if str_eq(@callee, "__cache_invalidate") { emit_line("dc ivac, x0"); }
         else if str_eq(@callee, "__cache_clean_invalidate") { emit_line("dc civac, x0"); }
         else if str_eq(@callee, "__cache_zero") { emit_line("dc zva, x0"); }
+        else if str_eq(@callee, "__cache_prefetch") { emit_line("prfm pldl1keep, [x0]"); }
         else if str_eq(@callee, "__cache_clean_code") { emit_line("dc cvau, x0"); }
         else if str_eq(@callee, "__cache_invalidate_code") { emit_line("ic ivau, x0"); }
-        else { die_name("this is not a Cache:: function (clean invalidate clean_invalidate zero clean_code invalidate_code)", @callee + 8); }
+        else { die_name("this is not a Cache:: function (clean invalidate clean_invalidate zero prefetch clean_code invalidate_code)", @callee + 8); }
     } else if str_eq(@callee, "__rotl") || str_eq(@callee, "__rotr") {
         // x0 = the number, x1 = how many places (taken modulo 64)
         if n != 2 { die("this function takes two arguments (the number and the places)"); }
@@ -2701,6 +2711,13 @@ bool sys_function_follows() {
 }
 
 // Struct::function(args) or Enum::Member: the name is in id_name, the token is "::"
+// Cpu::crc32 and its relatives work only in a program that says  #require cpu "crc32"  (the extension is not in every ARMv8 CPU)
+void check_cpu_ext(char^ full) {
+    if full[0] == 'C' && full[1] == 'p' && full[2] == 'u' && full[3] == '_' && full[4] == '_' && full[5] == 'c' && full[6] == 'r' && full[7] == 'c' && req_cpu % 2 == 0 {
+        die_help("this function needs the CPU extension crc32", "write  #require cpu \"crc32\"  at the top of the file (ARM64 only)");
+    }
+}
+
 void gen_scope() {
     if str_eq(@id_name, "Reg") {
         gen_reg_read();
@@ -2752,6 +2769,7 @@ void gen_scope() {
     str_copy(@sc_full, @id_name, 64);
     str_copy(@sc_full + str_len(@sc_full), "__", 4);
     str_copy(@sc_full + str_len(@sc_full), @tok_text, 100);
+    check_cpu_ext(@sc_full);
     if find_func(@sc_full) < 0 && pass_no >= 2 { die_name("the struct has no such function", @tok_text); }
     if pass_no >= 2 && fself[find_func(@sc_full)] == 1 { die_name("this method needs an object: call it as object.name(...)", @tok_text); }
     next();

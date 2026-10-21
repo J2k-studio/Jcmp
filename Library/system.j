@@ -153,7 +153,98 @@ struct Term {
     }
 }
 
-// env, proc, term: the short names (Env::env.get(name), with  using Env;  env.get(name))
+// the keyboard: a line, one key, Enter, a yes / no, a number (designed by AI at user request, adjustable: docs/syntax-design.md 90)
+//   String name = Input::line();   int k = Input::key();   (one key, no Enter, nothing shown on the screen)
+// It reads the file 0 byte by byte (it does not share the buffer of `cin`; use one of the two in a program).
+struct Input {
+    // a line without its new line; "" at the end of the input
+    static String line() {
+        String r = "";
+        char c[2];
+        int n = Sys::read(0, @c, 1);
+        while n > 0 {
+            if c[0] == 10 { return r; }
+            c[1] = 0;
+            r.append((char^)@c);
+            n = Sys::read(0, @c, 1);
+        }
+        return r;
+    }
+    // the line as a whole number (an error when it is not one)
+    static Result<int, Error> number() {
+        String t = Input::line();
+        int i = 0;
+        bool neg = false;
+        if t.len > 0 && t[0] == 45 { neg = true; i = 1; }
+        if i >= t.len { return Result<int, Error>::Err(Error::make(ErrorKind::Parse, "not a whole number: " + t)); }
+        int v = 0;
+        while i < t.len {
+            int d = t[i] - 48;
+            if d < 0 || d > 9 { return Result<int, Error>::Err(Error::make(ErrorKind::Parse, "not a whole number: " + t)); }
+            v = v * 10 + d;
+            i += 1;
+        }
+        if neg { v = 0 - v; }
+        return Result<int, Error>::Ok(v);
+    }
+    // waits for Enter (the rest of the line is thrown away)
+    static void enter() {
+        Input::line();
+    }
+    // asks and waits for y or n (Enter alone is no); true for y / Y
+    static bool yes(String question) {
+        cout << question << " [y/n] ";
+        String a = Input::line();
+        if a.len > 0 && (a[0] == 121 || a[0] == 89) { return true; }
+        return false;
+    }
+    // one key without Enter and without an echo. A letter is its code; the arrows are 257 up, 258 down, 259 right, 260 left;
+    // Escape is 27; -1 at the end of the input. When the input is not a terminal it is the next byte.
+    static int key() {
+        char t[64];
+        bool tty = Sys::isatty(0) == 0;
+        if tty {
+            syscall(29, 0, 21505, @t);                  // TCGETS
+            char raw[64];
+            for i in 0..64 { raw[i] = t[i]; }
+            raw[12] = raw[12] & 245;                    // lflag low byte: no ICANON (2), no ECHO (8)
+            raw[23] = 1;                                // VMIN: wait for 1 byte
+            raw[22] = 0;                                // VTIME: no time limit
+            syscall(29, 0, 21506, @raw);                // TCSETS
+        }
+        char b[4];
+        int n = Sys::read(0, @b, 1);
+        int k = 0 - 1;
+        if n > 0 {
+            k = b[0] & 255;
+            if k == 27 && tty {
+                char ts[16];
+                char pfd[8];
+                for i in 0..16 { ts[i] = 0; }
+                for i in 0..8 { pfd[i] = 0; }
+                ts[9] = 144;                            // tv_nsec = 64000000 (64 milliseconds) = 0x03D09000
+                ts[10] = 208;
+                ts[11] = 3;
+                pfd[4] = 1;
+                if Sys::ppoll(@pfd, 1, @ts) > 0 {
+                    char e[2];
+                    Sys::read(0, @e, 1);
+                    if e[0] == 91 {
+                        Sys::read(0, @e, 1);
+                        if e[0] == 65 { k = 257; }
+                        else if e[0] == 66 { k = 258; }
+                        else if e[0] == 67 { k = 259; }
+                        else if e[0] == 68 { k = 260; }
+                    }
+                }
+            }
+        }
+        if tty { syscall(29, 0, 21506, @t); }
+        return k;
+    }
+}
+
+// env, proc, term, read: the short names (Env::env.get(name), with  using Env;  env.get(name))
 
 // the short names of the system unit (env, proc, term): <module>_<name>, the compiler adds the prefix
 struct __System {
@@ -174,6 +265,12 @@ struct __System {
     static int term_cols() { return Term::cols(); }
     static int term_rows() { return Term::rows(); }
     static bool term_key_pressed() { return Term::key_pressed(); }
+    static String read_line() { return Input::line(); }
+    static int read_number() { return Input::number().take(); }
+    static Result<int, Error> read_try_number() { return Input::number(); }
+    static void read_enter() { Input::enter(); }
+    static bool read_yes(String question) { return Input::yes(question); }
+    static int read_key() { return Input::key(); }
 }
 
 // Log: messages for the person who runs the program, on the error output (standard error), with a level.

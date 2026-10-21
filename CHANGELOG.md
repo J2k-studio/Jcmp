@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.202
+* **A variable in a register: `reg<int x19> c = 0;`** (the owner's choice 13; the form `int c @ x19 = 0;` stays). docs/syntax-design.md section 91.
+* **`Cache::prefetch(p)`** (a hint that a line is wanted soon) and **`Cpu::speculation_barrier()`** (the owner's choice 15), on ARM64 and ARM32.
+* **`#require cpu "crc32"`** and **`Cpu::crc32`, `crc32c`, `crc32_u8`, `crc32c_u8`** (the owner's choice 16): the CRC instructions of the CPU (ARM64); without the directive a call is a compile error.
+* **`Input::read`** (`read.line()`, `read.number()`, `read.yes()`, `read.enter()`, `read.key()`), the tutorial has a lesson for it and a new Part 3 ("to the bone", six lessons).
+* docs/syntax-design.md sections 90 to 92.
+
 ## 0.9.201
 * **`cout` prints a `bool` as `true` / `false` and a pointer as `0x...`** (the owner's choice A of the printing design). `(int)p` still prints a number. docs/syntax-design.md section 89.
 

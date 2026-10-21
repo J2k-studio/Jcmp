@@ -831,11 +831,11 @@ bool as1_expr(int n) {
             if bo == 30 { return tcnt == 7; }
             return tcnt == 5;
         }
-        if bo >= 31 && bo <= 45 {
+        if bo >= 31 && bo <= 47 {
             // the instructions of the CPU (ARM32 only: the text path has them for ARM64): no argument, the cache ones take an address
             if x_target != 32 || opt_debug == 1 { return false; }
             int want2 = 0;
-            if bo >= 44 { want2 = 1; }
+            if bo >= 44 && bo != 47 { want2 = 1; }
             int cnt2 = 0;
             int ea2 = a1;
             while ea2 != 0 {
@@ -3235,7 +3235,7 @@ void gl_expr(int n) {
         ir_set_args(tev, tn, @gl_args);
         return;
     }
-    if k == AK_BUILTIN && ((at_val[n] >= 20 && at_val[n] <= 28) || (at_val[n] >= 31 && at_val[n] <= 45)) {
+    if k == AK_BUILTIN && ((at_val[n] >= 20 && at_val[n] <= 28) || (at_val[n] >= 31 && at_val[n] <= 47)) {
         int abase = gl_depth;
         int an = 0;
         int ae = at_a[n];

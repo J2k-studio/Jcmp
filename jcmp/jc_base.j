@@ -254,6 +254,7 @@ int x_cutmax = 1000000;          // -xcachecut N: only the first N functions tha
 int x_cutmin;                   // -xcachecut MIN MAX: the first hit that is cut
 int x_repeat;                   // -xrepeat
 int x_lex;                      // -xlex
+int req_cpu;                     // #require cpu "name": bit 0 = crc32 (the functions of that extension need it)
 int expect_pending;              // #expect instructions <= N: the limit for the next function (0: none)
 int expect_line;                 // the line of that directive
 char expect_file[128];           // and its file

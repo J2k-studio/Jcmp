@@ -933,6 +933,7 @@ int ast_static_call(bool as_value) {
         j += 1;
     }
     full[k + 2 + j] = 0;
+    check_cpu_ext(@full);
     int fi = find_func(@full);
     if fi < 0 {
         // a member of an enum (or a name of the library that is not a function: `Math::pi`)
@@ -1106,6 +1107,8 @@ int ast_fop_of(int at) {
     if str_eq(nm, "__cpu_id") { return 43; }
     if str_eq(nm, "__cache_clean_code") { return 44; }
     if str_eq(nm, "__cache_invalidate_code") { return 45; }
+    if str_eq(nm, "__cache_prefetch") { return 46; }
+    if str_eq(nm, "__cpu_speculation_barrier") { return 47; }
     if str_eq(nm, "__syscall_raw") { return 30; }     // __syscall_raw(number, 6 arguments): a system call with no adaptation of the structures (std/rt_a32.j; the ARM32 target only)
     if str_eq(nm, "__thread_start") { return 29; }    // __thread_start(function, argument, top of the stack, id word, thread block): the ARM32 target only
     return 0;

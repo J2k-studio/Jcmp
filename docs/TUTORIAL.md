@@ -20,28 +20,35 @@ For the complete list of features see [LANGUAGE.md](LANGUAGE.md); for the comman
 5. Functions
 6. Arrays and text
 7. Reading input
-8. Structs and methods
-9. Enums and switch
-10. Pointers
-11. Growing arrays and memory
-12. Strings
-13. Generics
-14. Lists, maps and sets
-15. Lambdas
-16. Errors with try and catch
-17. Decimals and the Math library
-18. Files
-19. A program in several files
-20. A small project: counting words
-21. Bits and bytes
-22. Numbers wider than 64 bits
-23. Looking at the code the compiler made
-24. Keeping the code short: #expect
-25. Threads and atomic operations
-26. Registers: the register block
-27. A function with nothing around it: naked and svc
-28. The flags of the CPU
-29. Machine words you write yourself
+8. Lines, numbers and keys: read
+9. Structs and methods
+10. Enums and switch
+11. Pointers
+12. Growing arrays and memory
+13. Strings
+14. Generics
+15. Lists, maps and sets
+16. Lambdas
+17. Errors with try and catch
+18. Decimals and the Math library
+19. Files
+20. A program in several files
+21. A small project: counting words
+22. Bits and bytes
+23. Numbers wider than 64 bits
+24. Looking at the code the compiler made
+25. Keeping the code short: #expect
+26. Threads and atomic operations
+27. Registers: the register block
+28. A function with nothing around it: naked and svc
+29. The flags of the CPU
+30. Machine words you write yourself
+31. Addresses and bytes
+32. Talking to the kernel
+33. Your own allocator
+34. A spinlock
+35. Counting the clock of the CPU
+36. Vectors in the hardware
 
 ## Lesson 1. Hello, world
 
@@ -275,9 +282,41 @@ Output:
 Ann will be 31 next year
 ```
 
-Run it and type `Ann 30` (or pipe it in: `echo "Ann 30" | ./input`). Bad input throws an error you can catch (lesson 12).
+Run it and type `Ann 30` (or pipe it in: `echo "Ann 30" | ./input`). Bad input throws an error you can catch (the lesson on try and catch).
 
-## Lesson 8. Structs and methods
+## Lesson 8. Lines, numbers and keys: read
+
+`cin` reads words. When you want a whole line, a number from a line, or an answer to a question, the module `read` (`using Input;`) does it: `read.line()`, `read.number()`, `read.yes("question")`. `read.enter()` waits for Enter and `read.key()` waits for one key without Enter (see below).
+
+```jk
+#import <stdlib>
+using stdlib;
+using Input;
+
+void main() {
+    cout << "name? ";
+    String name = read.line();
+    cout << "age? ";
+    int age = read.number();
+    cout << name << " will be " << age + 1 << " next year\n";
+    if read.yes("again?") { cout << "ok\n"; } else { cout << "bye\n"; }
+}
+```
+
+Input: `Ann
+30
+y`
+
+Output:
+
+```
+name? age? Ann will be 31 next year
+again? [y/n] ok
+```
+
+`read.number()` throws an error when the line is not a whole number (`read.try_number()` gives a `Result` instead). `read.key()` gives the code of the key, with no echo and no Enter: letters are their codes, Escape is 27, and the arrows are 257 (up), 258 (down), 259 (right), 260 (left); at the end of the input it is -1. That is how a game or a menu reads the keyboard. Use `read` or `cin` in one program, not both.
+
+## Lesson 9. Structs and methods
 
 A `struct` groups values. Functions inside it are methods; they receive the object as `self`. `Rect r = {3, 4};` fills the fields in order.
 
@@ -317,7 +356,7 @@ Output:
 A method called `init(self)` runs automatically when a variable is created without `{ ... }`. `static` functions have no `self` and are
 called as `Rect::name(...)`.
 
-## Lesson 9. Enums and switch
+## Lesson 10. Enums and switch
 
 An `enum class` is a list of named values. `switch` picks the case that matches, with no fall-through; `_` is "anything else".
 An enum is not a number, so you cannot mix them up by accident.
@@ -359,7 +398,7 @@ three
 
 If a `switch` on an enum forgets a member, the compiler warns you (use `-st` to make warnings errors).
 
-## Lesson 10. Pointers
+## Lesson 11. Pointers
 
 `@x` is the address of `x`. `int^ p` is a pointer to an int; `p^` is the value it points to. A pointer lets a function change its caller's variable.
 `p[i]` reaches the i-th element (there is no `p + 1`).
@@ -392,7 +431,7 @@ Output:
 20
 ```
 
-## Lesson 11. Growing arrays and memory
+## Lesson 12. Growing arrays and memory
 
 `int[] list = arr(4)` is a dynamic array: it starts empty and grows with `push`. `alloc(n)` gives raw memory. The compiler frees what a
 local variable made with `arr` or `alloc` at the end of the block, so you rarely call `free` yourself.
@@ -429,7 +468,7 @@ Output:
 
 Handing memory to someone else: `return p;`, storing it in a field, or `move(p)`. A `-d` build tells you at the end how many blocks were never freed.
 
-## Lesson 12. Strings
+## Lesson 13. Strings
 
 `String` holds text that can grow. `String s = "hello";` makes a copy of the text; `a + b` joins; `==` compares; `s.len` is the length and `s[i]` one character.
 Methods: `push`, `append`, `pop`, `clear`, `find`, `slice(from, to)`, `c()` (the characters as a plain text). `cin >> s` reads one word.
@@ -469,7 +508,7 @@ same
 A new `String` made by an expression (`a + b`, a call, `slice`) is freed for you at the end of the statement. `s.c()` points into the String: it is valid until you change it.
 A String parameter only borrows the caller's String, so inside the function you cannot assign to it.
 
-## Lesson 13. Generics
+## Lesson 14. Generics
 
 A function or struct can take a type as a parameter: write it in `<>` after the name. The compiler makes one copy for every type you use.
 A function finds the type from its arguments: `largest(3, 9)`; you can also write it, `largest<int>(3, 9)`. A struct always has it written: `Box<double>`.
@@ -508,7 +547,7 @@ Output:
 
 A generic must be written before the first place that uses it. `largest(1, 2.5)` is an error (a whole number and a decimal number do not mix): write `largest(1.0, 2.5)`. When the type cannot be worked out, the compiler says so and you write it.
 
-## Lesson 14. Lists, maps and sets
+## Lesson 15. Lists, maps and sets
 
 A list is a dynamic array with more tools: `sort`, `insert`, `remove`, `contains`, `index_of`. `for x in list` visits every element.
 `Map<K,V>` stores values by key and `Set<T>` stores each value once. They free themselves at the end of the block.
@@ -551,7 +590,7 @@ bob is 25
 
 `ages.get("zed")` would throw `key not found`; ask with `ages.has("zed")` first. `keys_list()` makes a new list that the `for` loop frees for you.
 
-## Lesson 15. Lambdas
+## Lesson 16. Lambdas
 
 A lambda is a small function written right where you need it: `int(int a, int b) { return a + b; }`. It can be passed to a function that takes a function
 pointer, or kept in a variable of type `int(int, int)^`. It cannot use the variables around it.
@@ -580,7 +619,7 @@ Output:
 
 The types are written out, so a lambda reads like a function. If the body needs a value from outside, pass it as a parameter.
 
-## Lesson 16. Errors with try and catch
+## Lesson 17. Errors with try and catch
 
 `throw "text"` stops what you are doing and jumps to the nearest `catch`. Without a `catch` the program stops and prints `uncaught exception: text`.
 
@@ -610,7 +649,7 @@ Output:
 error: cannot divide by zero
 ```
 
-## Lesson 17. Decimals and the Math library
+## Lesson 18. Decimals and the Math library
 
 `#import <stdlib>` brings the standard library and `using stdlib` lets you write `sqrt(x)` instead of `Math::sqrt(x)` (every program that prints needs both lines; the tutorial adds them at the top). If two modules have the same function name (`write` is in `Sys` and `File`), write the module: `File::write(...)`. Casts are explicit: `(int)x`, `(double)n`.
 
@@ -641,7 +680,7 @@ hypotenuse = 5.000000
 
 The library has `Sys` (system calls), `Mem` (memory), `Str` (text), `Math` and `File`.
 
-## Lesson 18. Files
+## Lesson 19. Files
 
 `File::open(path, mode)` gives a number (negative if it failed). `read`, `write`, `read_line` and `close` use it.
 
@@ -669,7 +708,7 @@ Output:
 J2K can write files
 ```
 
-## Lesson 19. A program in several files
+## Lesson 20. A program in several files
 
 A file that ends in `.jk` is a program (it has `main`). A file that ends in `.j` is a component that other files `import`; it must not have `main`.
 `#import "mathx"` finds `mathx.j` next to the file; `#import "tools.mathx"` finds `tools/mathx.j`.
@@ -704,7 +743,7 @@ Output:
 
 Compile only the main file: `jcmp multi.jk -o multi`; the imported file is read automatically (once).
 
-## Lesson 20. A small project: counting words
+## Lesson 21. A small project: counting words
 
 Putting it together: read words until the input ends (reading past the end throws `end of input`) and report how many there were and the longest.
 
@@ -749,7 +788,7 @@ Run: `echo "the quick brown fox jumps over the lazy dog" | ./wordcount`.
 
 # Part 2: toward the machine
 
-## Lesson 21. Bits and bytes
+## Lesson 22. Bits and bytes
 
 A whole number is 64 bits. `>>` and `<<` shift them, `&` keeps bits, `xor` flips them. `Bit::` has the work that the CPU does in one instruction:
 `popcount` (how many bits are 1), `clz` / `ctz` (zero bits in front / after), `rotl` / `rotr` (turn the bits round), `bswap` (reverse the 8 bytes).
@@ -778,7 +817,7 @@ Output:
 
 `0xB0` is `1011 0000` in binary: 3 bits are 1, 56 zero bits stand in front, 4 after. The last line turns the 8 bytes `01 02 ... 08` round to `08 07 ... 01`.
 
-## Lesson 22. Numbers wider than 64 bits
+## Lesson 23. Numbers wider than 64 bits
 
 When 64 bits are not enough you keep a number in several words and add word by word. `Bit::add_carry(a, b, carry_in)` gives a struct with the sum and the carry out.
 `Bit::mul_wide` gives the whole 128-bit product, `Bit::div_rem` the quotient and the remainder together, `Bit::add_sat` an addition that stops at the largest number instead of wrapping.
@@ -811,7 +850,7 @@ Output:
 
 The low words `-1 + 1` give 0 with a carry of 1; the carry goes into the high words: `5 + 0 + 1 = 6`. The product `(2^64 - 1) * 3` does not fit in 64 bits: `hi` is 2 and `lo` is -3.
 
-## Lesson 23. Looking at the code the compiler made
+## Lesson 24. Looking at the code the compiler made
 
 The compiler does not hide what it makes: `jcmp program.jk -show NAME` writes the machine code of the function `NAME` and how many instructions it has.
 Small functions are often put inside their callers, so a function that is called once can have no code of its own. Here `scale` is kept because `main` calls it in a loop.
@@ -843,14 +882,14 @@ The code of `scale` that the compiler made:
 scale:
 mul x0, x0, x1
 asr x0, x0, #2
-L8014:
+L8118:
 ret
 // 3 instructions
 ```
 
 Run `jcmp showcode.jk -show scale` to see the lines above (they are the code of the ARM64 target). On another target the instructions are other ones.
 
-## Lesson 24. Keeping the code short: #expect
+## Lesson 25. Keeping the code short: #expect
 
 A hot function should stay small. `#expect instructions <= N` in front of a function makes the compiler stop, with the real count, when the function grows past N: after a change of your program, or a new compiler.
 
@@ -878,7 +917,7 @@ Output:
 
 Try `#expect instructions <= 2` and compile again: the compiler says how many instructions the function really has.
 
-## Lesson 25. Threads and atomic operations
+## Lesson 26. Threads and atomic operations
 
 `Thread` runs a function at the same time as the others. Two threads that do `counter += 1` can lose counts, because the CPU reads, adds and writes in three steps. `Atomic::add` does the three steps as one that nobody can break.
 
@@ -914,7 +953,7 @@ Output:
 
 `Atomic::` also has `cas` (change a value only if it is what you expect), `swap`, `load`, `store`, `bit_or` and others, and `Mem::barrier()` orders the memory accesses of one thread against the others.
 
-## Lesson 26. Registers: the register block
+## Lesson 27. Registers: the register block
 
 The CPU keeps the numbers it works on in registers, named `x0` ... `x30`. A `register { }` block lets you write instructions with those registers. `in x1 = a;` puts a value in a register before the block, `out x0 = r;` takes one out after it, and `clobber x4;` says that you use `x4` for your own work.
 Inside the block every statement is one instruction.
@@ -950,7 +989,7 @@ Output:
 
 `(2 + 3) * 4 = 20`. The same source builds for the ARM64 and the ARM32 target (the names `x0 ...` are the same on both).
 
-## Lesson 27. A function with nothing around it: naked and svc
+## Lesson 28. A function with nothing around it: naked and svc
 
 A `naked` function has no prologue and no epilogue: the body is all there is, and the arguments are in `x0`, `x1`, ... The statement `svc(0);` asks the kernel for a service; the number of the service is in `x8`.
 Here is `write` (number 64) written by hand, with no library at all.
@@ -981,7 +1020,7 @@ hello
 
 `write(1, buffer, 6)` sends 6 bytes to the standard output and returns how many it wrote. `ret;` goes back to the caller with the result in `x0`.
 
-## Lesson 28. The flags of the CPU
+## Lesson 29. The flags of the CPU
 
 After an addition or a comparison the CPU keeps four flags: `n` (negative), `z` (zero), `c` (carry) and `v` (overflow). C hides them; here you can read them. `Cpu::inst("adds", ...)` is the instruction `adds`, which sets the flags, and `Flags::c` reads one of them as 0 or 1.
 
@@ -1014,7 +1053,7 @@ Output:
 
 `-1` is all bits 1, so `-1 + 1` carries out of the top: the flag is 1. `1 + 2` does not: 0. (This lesson is for the ARM64 target.)
 
-## Lesson 29. Machine words you write yourself
+## Lesson 30. Machine words you write yourself
 
 At the bottom there is nothing but numbers. `raw<u32>[...]` puts a 32-bit machine word in the code, exactly as you wrote it. The instruction `add x1, x1, #2` of the ARM64 CPU is the number `0x91000821`; `nop` is `0xd503201f`.
 
@@ -1041,6 +1080,199 @@ Output:
 ```
 
 `5 + 1 = 6`, then the word adds 2: 8. These numbers are for ARM64; on the ARM32 target the same instruction is another word (`0xE2811002`), so a program that writes raw words is for one CPU.
+
+# Part 3: to the bone
+
+## Lesson 31. Addresses and bytes
+
+A variable lives at an address. `@x` is that address and a pointer holds it. A `char^` looks at memory one byte at a time, so you can see how an `int` is stored: the CPU is little-endian, the lowest byte comes first. Pointers into one array are as far apart as the size of the elements. `(int)q - (int)p` is the distance in bytes.
+
+```jk
+#import <stdlib>
+using stdlib;
+
+void main() {
+    int x = 0x0102030405060708;
+    char^ b = (char^)@x;
+    for i in 0..8 { cout << (b[i] & 255) << " "; }
+    cout << "\n";
+    int a[4];
+    for i in 0..4 { a[i] = i * 10; }
+    int^ p = @a[0];
+    int^ q = @a[3];
+    cout << ((int)q - (int)p) << " " << (p == @a[0]) << " " << (q^) << "\n";
+    cout << sizeof(int) << " " << sizeof(char) << "\n";
+}
+```
+
+Output:
+
+```
+8 7 6 5 4 3 2 1 
+24 true 30
+8 1
+```
+
+`0x0102030405060708` is stored as `08 07 ... 01`. Four `int`s are 32 bytes, so `a[3]` is 24 bytes after `a[0]`. When you print the address of a variable (`cout << p;`) you get `0x...`; here we print distances because an address changes from run to run.
+
+## Lesson 32. Talking to the kernel
+
+A program does nothing alone: writing, memory and the process id all come from the kernel through system calls. `Sys::` is a thin layer over them: `Sys::write(file, buffer, bytes)`, `Sys::getpid()`, `Sys::mmap(bytes)` (a fresh block of memory from the system, the base of every allocator) and `Sys::munmap`. No library code sits in between, one call is one `svc` instruction.
+
+```jk
+#import <stdlib>
+using stdlib;
+
+void main() {
+    char msg[8];
+    msg[0] = 'h'; msg[1] = 'i'; msg[2] = '\n';
+    Sys::write(1, @msg, 3);
+    int pid = Sys::getpid();
+    cout << (pid > 0) << "\n";
+    void^ page = Sys::mmap(4096);
+    int^ words = (int^)page;
+    for i in 0..512 { words[i] = i * i; }
+    cout << words[511] << "\n";
+    Sys::munmap(page, 4096);
+}
+```
+
+Output:
+
+```
+hi
+true
+261121
+```
+
+`mmap` gives whole pages (4096 bytes) that are zero at the start. `cout` itself ends in `Sys::write`. For any call the library does not name there is `Sys::call(number, a0 ... a5)` and the `svc` of lesson 28.
+
+## Lesson 33. Your own allocator
+
+The fastest allocator is a pointer that only moves forward (a bump allocator): ask for a block, add its size to `top`, done. There is no `free` for one object; you give the whole block back at once. This is what an arena does, and it is why compilers and games use it. The block comes from `mmap`.
+
+```jk
+#import <stdlib>
+using stdlib;
+
+int^ heap;
+int top;
+
+int^ bump(int n) {
+    int^ p = @heap[top];
+    top += n;
+    return p;
+}
+
+void main() {
+    heap = (int^)Sys::mmap(65536);
+    int^ a = bump(4);
+    int^ b = bump(4);
+    for i in 0..4 { a[i] = i; b[i] = i * 100; }
+    cout << a[3] + b[3] << " " << top << " " << ((int)b - (int)a) << "\n";
+    Sys::munmap(heap, 65536);
+}
+```
+
+Output:
+
+```
+303 8 32
+```
+
+Both blocks sit side by side: `b` is 32 bytes after `a`, and `top` counts 8 `int`s. The standard library has this ready as `Arena`; writing it once shows there is no magic in an allocator.
+
+## Lesson 34. A spinlock
+
+Lesson 26 used `Atomic::add`. For a bigger piece of work (several statements that must not be mixed) you need a lock. A spinlock is one `int`: 0 is free, 1 is taken. `Atomic::cas(@lock, 0, 1)` changes it to 1 only if it was 0 and gives the old value, so exactly one thread wins. The others spin; `Cpu::pause()` tells the CPU it is a spin loop (it saves power and helps the other hyper-thread).
+
+```jk
+#import <stdlib>
+using stdlib;
+
+#import <cpu>
+using cpu::thread;
+
+int lock;
+int counter;
+
+void work(void^ arg) {
+    for i in 0..10000 {
+        while Atomic::cas(@lock, 0, 1) != 0 { Cpu::pause(); }
+        counter += 1;
+        Atomic::store(@lock, 0);
+    }
+}
+
+void main() {
+    Thread a = create(work, null);
+    Thread b = create(work, null);
+    a.join();
+    b.join();
+    cout << counter << "\n";
+}
+```
+
+Output:
+
+```
+20000
+```
+
+`counter += 1` is now safe although it is three steps, because only the thread that holds the lock runs it. `Atomic::store` releases the lock with the right memory order, so the new `counter` is seen by the next thread. A spinlock is right for very short work; for long waits use a lock that sleeps.
+
+## Lesson 35. Counting the clock of the CPU
+
+`Cpu::counter()` reads the system counter of the CPU (no system call, a few cycles) and `Cpu::frequency()` says how many ticks make a second. It is the most exact stopwatch you have. To time code: read, run, read, subtract. `Bit::popcount` is one instruction on the CPU, so a million of them are quick.
+
+```jk
+#import <stdlib>
+using stdlib;
+
+void main() {
+    int start = Cpu::counter();
+    int sum = 0;
+    for i in 0..1000000 { sum += Bit::popcount(i); }
+    int ticks = Cpu::counter() - start;
+    cout << sum << " " << (ticks > 0) << " " << (Cpu::frequency() > 0) << "\n";
+}
+```
+
+Output:
+
+```
+9884992 true true
+```
+
+The sum is fixed, the time is not, so the program prints only whether the time was measured. Measure more than once: the first run warms the cache. With `#expect instructions <= N` (lesson 25) you guard the size, with the counter you guard the time.
+
+## Lesson 36. Vectors in the hardware
+
+Graphics and physics work on groups of numbers. `vec3` is three `double`s with the operators `+ - *`, and its parts are picked by letter (`c.zyx` is the same three numbers in the reverse order). For many numbers at once the CPU has SIMD registers (NEON on ARM): the compiler turns loops over arrays into vector instructions by itself, and `#import <simd>` gives the lanes by name.
+
+```jk
+#import <stdlib>
+using stdlib;
+#import <math>
+using math::vector;
+
+void main() {
+    vec3 a = {1.0, 2.0, 3.0};
+    vec3 b = {4.0, 5.0, 6.0};
+    vec3 c = a + b * 2.0;
+    cout << c.x << " " << c.y << " " << c.z << "\n";
+    cout << c.zyx.x << "\n";
+}
+```
+
+Output:
+
+```
+9.000000 12.000000 15.000000
+15.000000
+```
+
+`a + b * 2.0` is `(1,2,3) + (8,10,12)`. Use `jcmp file.jk -show NAME` (lesson 24) on a loop over a `double` array to see the vector instructions.
 
 ## Where next
 

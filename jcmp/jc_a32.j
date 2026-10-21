@@ -950,6 +950,12 @@ bool a32_instr(int i, int b) {
             a32_ldr(0, 13, 0);
             a32_const(1, 0);
             if d != 0 { a32_store(0, 1, d); }
+        } else if cc == 46 {
+            a32_load(0, 14, ir_args[ir_as[i]]);
+            a32_w(0xF5D0F000);                                   // pld [r0]: the line is wanted soon
+        } else if cc == 47 {
+            a32_w(0xF57FF04F);                                   // dsb sy
+            a32_w(0xF57FF06F);                                   // isb sy: nothing after it runs before the branches before it are settled
         } else {
             // the code cache of the line at the address: cacheflush(address, address + 64, 0)
             a32_load(0, 14, ir_args[ir_as[i]]);

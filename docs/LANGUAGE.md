@@ -1139,3 +1139,60 @@ int main() {
 ```
 
 Output: `true 0x0`.
+
+## Reading the keyboard: `read`
+
+`cin` reads words. For a whole line, one key, or a yes / no question the library has the module `read` (`using Input;`):
+
+```jk
+#import <stdlib>
+using Input;
+
+void main() {
+    cout << "name? ";
+    String name = read.line();
+    int age = read.number();
+    cout << name << " is " << age << nl;
+    if read.yes("again?") { cout << "ok" << nl; }
+}
+```
+
+`read.key()` waits for one key without Enter and without showing it; it gives the code of the key (arrows 257 up, 258 down, 259 right, 260 left, Escape 27, -1 at the end of the input). `read.enter()` waits for Enter, `read.try_number()` gives a `Result` instead of throwing. Use `read` or `cin` in one program, not both.
+
+## A variable in a register: `reg<int x19> c`
+
+`reg<int x20> total = 0;` keeps the variable `total` in the register `x20` for the whole function (x18 and x19 .. x25 are allowed; the compiler does not use `x18` itself). It is the same as the older form `int total @ x20 = 0;`. Only whole numbers, pointers, `bool`, `char` and enums can live in a register.
+
+```jk
+int sq(int v) { return v * v; }
+
+int main() {
+    reg<int x20> acc = 0;
+    for i in 0..5 { acc += sq(i); }
+    cout << acc << "\n";
+    return 0;
+}
+```
+
+The program prints `30`.
+
+## Prefetch, the speculation barrier and the CRC instructions
+
+`Cache::prefetch(@a[i + 8]);` tells the CPU that the line at that address is wanted soon (a hint: it never fails, and `null` is allowed). `Cpu::speculation_barrier();` stops the CPU from running instructions ahead of the branches before it (the defence against Spectre-type attacks).
+
+The CRC32 instructions are an extension that not every ARMv8 CPU has, so a program says that it needs them: `#require cpu "crc32"` at the top of the file. Then `Cpu::crc32(crc, data)` (8 bytes at once), `Cpu::crc32_u8(crc, byte)` and the `crc32c` forms (the Castagnoli polynomial) work. Start with `crc = 0xFFFFFFFF` and flip the bits at the end. Without the directive a call is a compile error; on `-target arm32` the directive is an error (ARMv7 has no such instruction).
+
+```jk
+#require cpu "crc32"
+#import <stdlib>
+using stdlib;
+
+void main() {
+    char^ text = "123456789";
+    int crc = 0xFFFFFFFF;
+    for i in 0..9 { crc = Cpu::crc32_u8(crc, text[i] & 255); }
+    cout << ((crc xor 0xFFFFFFFF) & 0xFFFFFFFF) << "\n";
+}
+```
+
+The program prints `3421780262` (the same number as zlib's `crc32`).

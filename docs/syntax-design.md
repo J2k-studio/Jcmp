@@ -2167,3 +2167,19 @@ Answers given by the owner (the words are the owner's; what is marked "AI" is th
 * A pointer variable, and the address `@x`, print as `0x` and the address in hex; `null` prints as `0x0`. `(int)p` still prints a number and `p^` the value.
 * The same in the tree path and the text path (`__print_bool`, `__print_ptr` in the runtime). Struct / enum printing, `hex()`, `ptr()`, `bytes()`, `show` and `dbg()` (options B-E) are not decided.
 * Tests: t486 and the changed expected outputs of the tests that printed a `bool`.
+
+## 90. `Input::read`: the keyboard as a library (owner's decision 4, 2026-10-22; names designed by AI at user request, adjustable)
+* Namespace `Input`, module `read` (short names with `using Input;`): `read.line()` (a line without the new line, `""` at the end), `read.number()` / `read.try_number()` (a line as a whole number; the first throws), `read.enter()` (wait for Enter), `read.yes("question")` (asks `[y/n]`), `read.key()` (one key, no Enter, no echo).
+* `read.key()` returns the code of the key; Escape 27; arrows 257 up, 258 down, 259 right, 260 left; -1 at the end of the input. On a terminal it switches the terminal to raw mode for one key and puts it back; when the input is not a terminal it is the next byte.
+* It reads the file 0 byte by byte, so it does not share the buffer of `cin`: use one of the two in a program.
+* Open: more keys (function keys, Home / End), `read.key_timeout(ms)`, `read.password()` (no echo), reading a `double`.
+* The struct is `Input` (`Input::line()`), the short names live in `__System` like `term`.
+
+## 91. `reg<int x19> c = 0;` (owner's choice 13, 2026-10-22)
+* A variable pinned to a register is declared `reg<TYPE xN> name = value;` (N = 18 or 19 .. 25). It is the same thing as the older `int n @ x19 = 0;` (both stay; same rules and messages): the variable lives in that register for the whole function, also across calls.
+* `reg` is a word only before `<`; a variable may still be named `reg`. Test t488 (the same program as t297), t489 (a wrong register).
+
+## 92. `Cache::prefetch`, `Cpu::speculation_barrier` (owner's choice 15) and `#require cpu "crc32"` (choice 16) (2026-10-22; the names of the functions are the assistant's, adjustable)
+* `Cache::prefetch(p)`: a hint that the line at the address is wanted soon (`prfm pldl1keep` on ARM64, `pld` on ARM32); it never faults, `null` is allowed. `Cpu::speculation_barrier()`: nothing after it runs ahead of the branches before it (`dsb nsh; isb` on ARM64, `dsb; isb` on ARM32). Test t490.
+* `#require cpu "crc32"` at the top of a file says that the program needs that extension of the CPU. Then `Cpu::crc32(crc, 8 bytes)`, `Cpu::crc32c(crc, 8 bytes)`, `Cpu::crc32_u8(crc, byte)`, `Cpu::crc32c_u8(crc, byte)` work (the instructions `crc32x`, `crc32cx`, `crc32b`, `crc32cb`). Without the directive a call is a compile error ("this function needs the CPU extension crc32"); an unknown name is an error; on `-target arm32` the directive is an error (ARMv7 has no crc32). Tests t491 (checked against zlib: the crc32 of "123456789" is 3421780262, the crc32c 3808858755), t492.
+* Open: the program does not check at start that the CPU has the extension (a CPU without it stops with an illegal instruction); a check through AT_HWCAP is planned. More extension names (aes, sha2, lse) and the same on ARM32 later.

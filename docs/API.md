@@ -492,7 +492,24 @@ struct Term {
     static bool key_pressed();
 }
 
-// env, proc, term: the short names (Env::env.get(name), with  using Env;  env.get(name))
+// the keyboard: a line, one key, Enter, a yes / no, a number (designed by AI at user request, adjustable: docs/syntax-design.md 90)
+//   String name = Input::line();   int k = Input::key();   (one key, no Enter, nothing shown on the screen)
+// It reads the file 0 byte by byte (it does not share the buffer of `cin`; use one of the two in a program).
+struct Input {
+    // a line without its new line; "" at the end of the input
+    static String line();
+    // the line as a whole number (an error when it is not one)
+    static Result<int, Error> number();
+    // waits for Enter (the rest of the line is thrown away)
+    static void enter();
+    // asks and waits for y or n (Enter alone is no); true for y / Y
+    static bool yes(String question);
+    // one key without Enter and without an echo. A letter is its code; the arrows are 257 up, 258 down, 259 right, 260 left;
+    // Escape is 27; -1 at the end of the input. When the input is not a terminal it is the next byte.
+    static int key();
+}
+
+// env, proc, term, read: the short names (Env::env.get(name), with  using Env;  env.get(name))
 
 // the short names of the system unit (env, proc, term): <module>_<name>, the compiler adds the prefix
 struct __System {
@@ -506,6 +523,12 @@ struct __System {
     static int term_cols();
     static int term_rows();
     static bool term_key_pressed();
+    static String read_line();
+    static int read_number();
+    static Result<int, Error> read_try_number();
+    static void read_enter();
+    static bool read_yes(String question);
+    static int read_key();
 }
 
 // Log: messages for the person who runs the program, on the error output (standard error), with a level.

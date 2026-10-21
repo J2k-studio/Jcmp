@@ -1557,6 +1557,30 @@ void next() {
             next();
             return;
         }
+        if str_eq(@dw, "require") {
+            // #require cpu "crc32" : the program needs this extension of the CPU (Cpu::crc32 ... work only then)
+            while lc(0) == 32 || lc(0) == 9 { adv(); }
+            char rw[32];
+            int rk = 0;
+            while is_letter(lc(0)) && rk < 30 { rw[rk] = lc(0); rk += 1; adv(); }
+            rw[rk] = 0;
+            if !str_eq(@rw, "cpu") { die("after #require can follow:  cpu \"name\"  (the known name is crc32)"); }
+            while lc(0) == 32 || lc(0) == 9 { adv(); }
+            if lc(0) != '"' { die("write  #require cpu \"crc32\"  (the name of the extension in quotes)"); }
+            adv();
+            char rn[32];
+            int rl = 0;
+            while lc(0) != '"' && lc(0) != 10 && lc(0) != 0 && rl < 30 { rn[rl] = lc(0); rl += 1; adv(); }
+            rn[rl] = 0;
+            if lc(0) != '"' { die("the name of the extension needs a closing quote"); }
+            adv();
+            if !str_eq(@rn, "crc32") { die_name("this CPU extension is not known (the known name is crc32)", @rn); }
+            if x_target == 32 { die("the ARM32 target does not have the extension crc32 (it is in ARMv8; this target is ARMv7)"); }
+            if req_cpu % 2 == 0 { req_cpu += 1; }
+            while lc(0) != 10 && lc(0) != 0 { adv(); }
+            next();
+            return;
+        }
         if str_eq(@dw, "expect") {
             // #expect instructions <= N : the next function must be made of N instructions or fewer (the compiler stops when it is not)
             while lc(0) == 32 || lc(0) == 9 { adv(); }
