@@ -1089,3 +1089,25 @@ void main() {
 ```
 
 The count is for ARM64 (the function is counted after the optimizer, and a function that is inlined everywhere has no code of its own); `-target arm32` does not check the limits.
+
+
+## Wide numbers and the flags of the CPU
+
+`Bit` has the steps of arithmetic on numbers that are wider than 64 bits. A function gives one struct (there is no tuple):
+
+```jk
+void main() {
+    // 128-bit addition of (a_hi, a_lo) + (b_hi, b_lo), word by word
+    int a_lo = -1;
+    int a_hi = 5;
+    BitCarry lo = Bit::add_carry(a_lo, 1, 0);
+    BitCarry hi = Bit::add_carry(a_hi, 0, lo.c);
+    cout << hi.sum << " " << lo.sum << " " << hi.c << "\n";
+    BitWide w = Bit::mul_wide(-1, 3);
+    cout << w.hi << " " << w.lo << "\n";
+    BitDivRem d = Bit::div_rem(-17, 5);
+    cout << d.q << " " << d.r << " " << Bit::add_sat(9223372036854775807, 5) << "\n";
+}
+```
+
+On ARM64 a `register { }` block can read the flags that an instruction left: `x4 = Flags::c;` (also `z`, `n`, `v`; 0 or 1).

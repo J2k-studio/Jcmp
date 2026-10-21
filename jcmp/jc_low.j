@@ -9,7 +9,7 @@
 // Statements (inside a naked function, and later inside register { } blocks; design: docs/syntax-design.md 63, docs/design/08):
 //   R = number;   R = R2;   R = R2 op R3;   R = R2 op number;   R op= R2;   R op= number;   R = ~R2;   R = -R2;     op: + - * / & | xor << >> >>>
 //   R = [B + off];  R = u8[B + off];  u16 u32 i8 i16 i32    [B + off] = R;  u8[B + off] = R;  u16 u32     (off: a number, or + R2)
-//   R = Sys::name;   Sys::name = R;     (mrs / msr)      ret;   goto label;   label:   call name;   tail name;   svc(n);
+//   R = Sys::name;   Sys::name = R;     (mrs / msr)      R = Flags::c;  (also z n v: the flag as 0 or 1)      ret;   goto label;   label:   call name;   tail name;   svc(n);
 //   if R == R2 goto label;   if R < number goto label;  (== != < <= > >=)   if R.bit(n) goto label;   if !R.bit(n) goto label;
 //   Cpu::wait();  Cpu::event();  Cpu::send_event();  Cpu::yield();  Cpu::nop();  Cpu::isb();  Cpu::dsb();  Cpu::dmb();  Cpu::eret();  Cpu::brk(n);
 //   Cpu::inst("name", a, b ...) : any instruction of the assembler, with registers and numbers as operands
@@ -457,6 +457,27 @@ void nk_assign(int rd, char^ op_eq) {
         }
         if nk_at_mem() {
             nk_load(rd);
+            nk_end();
+            return;
+        }
+        if tok_is("Flags") {
+            // R = Flags::c;  (also z n v): the flag of the CPU as 0 or 1, as the last instruction that set the flags left it (adds subs cmp ...)
+            next();
+            expect("::");
+            if tok_kind != T_IDENT || tok_text[1] != 0 { die("after Flags:: write one of the flags: n z c v"); }
+            int fbit = 0 - 1;
+            if tok_text[0] == 'n' { fbit = 31; }
+            if tok_text[0] == 'z' { fbit = 30; }
+            if tok_text[0] == 'c' { fbit = 29; }
+            if tok_text[0] == 'v' { fbit = 28; }
+            if fbit < 0 { die("after Flags:: write one of the flags: n z c v"); }
+            next();
+            str_copy(@nk_line, "mrs ", 256);
+            nk_add_reg(@nk_line, rd);
+            append_text(@nk_line, ", nzcv");
+            nk_emit(@nk_line);
+            nk_rrn("lsr", rd, rd, fbit);
+            nk_rrn("and", rd, rd, 1);
             nk_end();
             return;
         }

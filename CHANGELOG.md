@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.200
+* **Wide arithmetic in `Bit`** (the owner's choice, items 11 and 12 of the decisions for 1.0): `Bit::add_carry(a, b, cin)` and `Bit::sub_borrow(a, b, bin)` give the result and the carry (borrow) out as a struct `BitCarry`; `Bit::mul_hi`, `Bit::mul_wide` (the 128-bit product, `BitWide`), `Bit::div_rem` (`BitDivRem`) and `Bit::add_sat` (the sum that stops at the largest or smallest number). The same result on ARM64 and ARM32.
+* **The flags of the CPU:** `x1 = Flags::c;` (also `z`, `n`, `v`) inside `register { }` reads the flag that the last instruction left (ARM64).
+* docs/syntax-design.md section 87, docs/LANGUAGE.md ("Wide numbers and the flags of the CPU").
+* The programs are the same as in 0.9.199.
+
 ## 0.9.199
 * **`#expect instructions <= N`** (the owner's idea, item 14 of the decisions for 1.0): a directive in front of a function; when the function is made of more than N instructions the compiler stops and says how many it has (`jcmp FILE -show NAME` shows the code). It guards the size of the code of a hot function against a change of the program or of the compiler. The count is for ARM64; `-target arm32` does not check it. See docs/LANGUAGE.md and docs/syntax-design.md section 86.
 * The programs are the same as in 0.9.198.
