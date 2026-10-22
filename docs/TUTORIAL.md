@@ -59,6 +59,8 @@ For the complete list of features see [LANGUAGE.md](LANGUAGE.md); for the comman
 44. Vectors in the hardware
 45. Two tasks, two stacks: a context switch
 46. A queue without a lock
+47. A whole function in raw instructions
+48. Any instruction of the CPU by name
 
 ## Lesson 1. Hello, world
 
@@ -1669,6 +1671,84 @@ Output:
 ```
 
 The sum of 1 to 1000 is 500500 every time; it was run 60 times in a row to be sure. When the ring is full the writer waits, when it is empty the reader waits, and `Cpu::pause()` makes the waiting kind to the CPU. It works for exactly one writer and one reader: with two writers they would both write the same `head`, and then you need `Atomic::cas` (the spinlock lesson).
+
+## Lesson 47. A whole function in raw instructions
+
+In a `naked` function nothing is added by the compiler: you write the machine instructions, one statement for one instruction, with the registers `x0` to `x30` by name. `x2 = x2 + x3;` is `add x2, x2, x3`, `x3 = [x0 + 0];` is a load, `if x1 == 0 goto done;` compares and branches, `name:` is a label, `goto`, `ret`. The arguments come in `x0`, `x1`, ... and the result goes back in `x0`. This is the loop of `sum_words`, the same loop that a compiler makes for you, written by hand.
+
+```jk
+#import <stdlib>
+using stdlib;
+
+naked int sum_words(int^ p, int n) {
+    x2 = 0;
+loop:
+    if x1 == 0 goto done;
+    x3 = [x0 + 0];
+    x2 = x2 + x3;
+    x0 = x0 + 8;
+    x1 = x1 - 1;
+    goto loop;
+done:
+    x0 = x2;
+    ret;
+}
+
+void main() {
+    int a[5] = {10, 20, 30, 40, 5};
+    cout << sum_words(@a, 5) << "\n";
+    cout << sum_words(@a, 0) << "\n";
+}
+```
+
+Output:
+
+```
+105
+0
+```
+
+`x0` walks along the array by 8 bytes (one `int`), `x1` counts down, `x2` is the sum. When `x1` is 0 the jump goes to `done`. Because there is no frame, no register is saved for you: a naked function may use `x0` to `x17` freely; if you need `x19` and above, save them yourself.
+
+## Lesson 48. Any instruction of the CPU by name
+
+`Cpu::inst("name", operands ...)` puts any instruction that the assembler knows, with registers as operands, so the CPU can do in one instruction what the language has no operator for: `umulh` is the high 64 bits of a 128-bit product, `rbit` reverses all 64 bits, `rev` reverses the 8 bytes.
+
+```jk
+#import <stdlib>
+using stdlib;
+
+naked int mulhi(int a, int b) {
+    Cpu::inst("umulh", x0, x0, x1);
+    ret;
+}
+
+naked int reverse_bits(int a) {
+    Cpu::inst("rbit", x0, x0);
+    ret;
+}
+
+naked int swap_bytes(int a) {
+    Cpu::inst("rev", x0, x0);
+    ret;
+}
+
+void main() {
+    cout << mulhi(0x8000000000000000, 6) << " " << mulhi(100, 100) << "\n";
+    cout << reverse_bits(1) << " " << reverse_bits(6) << "\n";
+    cout << swap_bytes(1) << " " << swap_bytes(0x0102030405060708) << "\n";
+}
+```
+
+Output:
+
+```
+3 0
+-9223372036854775808 6917529027641081856
+72057594037927936 578437695752307201
+```
+
+`0x8000000000000000 * 6` is 3 times 2^64, so the high half is 3. `rbit(1)` puts the lowest bit at the top (the number shown is negative because bit 63 is the sign). `rev(1)` is 1 followed by 56 zero bits. The names come from the ARM64 manual; `jcmp file.jk -show NAME` shows what was made. A name the assembler does not know stops the compiler with a message, and `raw<u32>[...]` (lesson 38) writes the machine word itself.
 
 ## Where next
 

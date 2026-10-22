@@ -1,5 +1,5 @@
 J2K / Jcmp Proprietary Source-Available License
-Version 1.1 (2026-10-08)
+Version 1.2 (2026-10-22)
 
 Copyright (c) 2026 Jao (J2k-studio). All Rights Reserved.
 
@@ -12,13 +12,20 @@ SUMMARY (ภาษาไทย) — สรุปเท่านั้น ข้�
   - คอมไพล์และรันบนเครื่องของตนเอง เพื่อการเรียนรู้ ใช้ส่วนตัว หรือวิจัย
     โดยไม่แสวงกำไร
   - เขียนโปรแกรมด้วยภาษา J2K ของตนเอง โปรแกรมที่คุณเขียนเป็นของคุณ
+    และโปรแกรมที่คอมไพล์ออกมา แจกจ่าย ขาย หรือใช้เชิงพาณิชย์ได้เลย
+    โดยไม่ต้องขออนุญาตและไม่ต้องจ่ายเงิน ไม่ต้องใส่เครดิต
+  - แก้สำเนาส่วนตัวเพื่อใช้เองได้ ถ้าไม่แจกจ่ายให้ใคร
   - ดู/ fork ผ่านฟังก์ชันของ GitHub ตามข้อกำหนดของ GitHub
 
 ไม่อนุญาต:
   - คัดลอก ดัดแปลง หรือนำโค้ด/เอกสารไปทำเป็นผลงานของตนเอง
-  - เผยแพร่ซ้ำ แจกจ่าย อัปโหลดซอร์สหรือไบนารีไปที่อื่น (นอกจากที่ระบุข้างต้น)
+  - ดัดแปลงตัวคอมไพเลอร์ ไลบรารี runtime หรือเครื่องมือ แล้วแจกจ่ายฉบับที่ดัดแปลง
+    หรือแจกโปรแกรมที่สร้างด้วยฉบับที่ดัดแปลง
+  - เผยแพร่ซ้ำ แจกจ่าย อัปโหลดซอร์สหรือไบนารีของตัวคอมไพเลอร์/ไลบรารีไปที่อื่น
+    (นอกจากที่ระบุข้างต้น)
   - อ้างความเป็นเจ้าของ หรือใช้ชื่อ J2K, Jcmp, J2k-studio ให้เข้าใจผิด
-  - ใช้เชิงพาณิชย์โดยไม่ได้รับอนุญาตเป็นลายลักษณ์อักษร
+  - ขาย ให้เช่า หรือให้บริการที่ตัวคอมไพเลอร์เป็นคุณค่าหลัก (เช่น คอมไพเลอร์ออนไลน์)
+    โดยไม่ได้รับอนุญาตเป็นลายลักษณ์อักษร
   ขออนุญาตกรณีพิเศษได้ที่ GitHub: J2k-studio
 
 ================================================================================
@@ -46,10 +53,14 @@ FULL TERMS (English)
    (a) view and study the Software for personal learning and research;
 
    (b) compile and run the Software on machines under Your control, for
-       personal, educational or research use that is not commercial;
+       any purpose, commercial use included, in order to build Your Programs
+       and to run what it builds (a company may use the compiler to build its
+       products); any other use of the Software itself is limited to personal,
+       educational or research use that is not commercial;
 
    (c) write Your Programs and compile them with the Software on machines
-       under Your control;
+       under Your control, and distribute and sell what is built, as stated in
+       section 2;
 
    (d) view the repository and use the "fork" feature of the hosting service
        (GitHub) to the extent that the hosting service's own terms of service
@@ -64,10 +75,18 @@ FULL TERMS (English)
    (b) A program built by the compiler from Your Programs contains parts of
        the Software (the runtime code that the compiler emits, and the
        standard library functions that Your Programs use). Those parts remain
-       under this license. Running such programs for Your own personal or
-       educational use is permitted by 1(b). Any other use of them,
-       including distribution to others or commercial use, requires prior
-       written permission from the Licensor.
+       the property of the Licensor. The Licensor gives You a worldwide,
+       perpetual, royalty-free, non-exclusive license to copy, distribute,
+       sell and use such a program for any purpose, commercial use included,
+       without asking and without payment, as long as the program is built by
+       the compiler from Your Programs and the parts of the Software in it
+       are as the compiler emitted them. No credit line is required.
+
+   (c) Paragraph (b) does not allow You to distribute the compiler, the
+       source of the standard library or of the runtime, or the library files
+       as such, nor a program whose purpose is to be a compiler, an
+       interpreter or a build tool for the J2K language and that contains
+       parts of the Software.
 
 3. Restrictions
 
@@ -80,7 +99,8 @@ FULL TERMS (English)
    (b) redistribute, publish, upload, sublicense, sell, rent or otherwise make
        available the Software, in whole or in part, in source or binary form,
        to any third party or public platform (including other repositories,
-       mirrors, archives and package registries), except as permitted by 1(d);
+       mirrors, archives and package registries), except as permitted by 1(d)
+       and by 2(b);
 
    (c) claim ownership or authorship of the Software, the J2K language or the
        Jcmp compiler, or of any substantial part of them;
@@ -89,17 +109,28 @@ FULL TERMS (English)
        name, in a way that suggests that Your work is the Software, is
        endorsed by the Licensor, or comes from the Licensor;
 
-   (e) use the Software, or any part of it, for commercial purposes without
-       prior written permission from the Licensor. "Commercial purposes"
-       means any use intended for, or directed toward, commercial advantage
-       or monetary compensation, including use inside a paid product or
-       service;
+   (e) use the Software, or any part of it, for commercial purposes other than
+       building and distributing Your Programs as permitted by 1(b), 1(c) and
+       2, without prior written permission from the Licensor. "Commercial
+       purposes" means any use intended for, or directed toward, commercial
+       advantage or monetary compensation; it includes selling, renting or
+       offering the Software, and offering a service whose main value is the
+       Software itself (for example a hosted J2K compiler, or a paid course
+       that ships the compiler);
 
    (f) remove or change the copyright notice or this license;
 
    (g) use the Software to build a competing language implementation by
        copying its design documents or source code (studying them to
-       learn is allowed by 1(a)).
+       learn is allowed by 1(a));
+
+   (h) modify, adapt, translate or create derivative works of the Software
+       (the compiler, the standard library, the runtime, the tools), and
+       distribute a modified Software or a program that was built with a
+       modified Software. Building Your Programs with the Software as it is
+       distributed is not a modification. Exception: You may change a private
+       copy for Your own use if You never share it, never distribute it and
+       never use it to build programs that You distribute.
 
 4. Feedback
 

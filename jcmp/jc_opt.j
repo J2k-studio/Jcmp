@@ -1201,7 +1201,7 @@ void op_dce() {
                 bool dead = false;
                 if (op_pure(op) || (op == IR_LOAD && ir_a[i] == 30)) && d != 0 && op != IR_NOP {
                     if d >= 64 { dead = op_tl_stamp[d] != op_tl_cur || op_tl[d] == 0; }
-                    else if (d >= 1 && d <= 15) || (d >= 32 && d <= 61) { dead = (live & (1 << d)) == 0; }
+                    else if (d >= 1 && d <= 15) || (d >= 32 && d <= 39) || (d >= 48 && d <= 61) { dead = (live & (1 << d)) == 0; }       // d8 .. d15 (40 .. 47) are callee-saved: a catch puts them back for the caller
                 }
                 if dead {
                     ir_op[i] = IR_NOP;

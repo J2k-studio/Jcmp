@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.206
+* **A bug fixed on ARM64:** a `double` that lived in a register (d8 to d15) across a call of a function that catches a throw (`try / catch`) could have a wrong value after the throw, when the functions were not inlined. The dead code pass removed the code that gives the registers back. Test t495.
+* **LICENSE 1.2:** programs built with jcmp may be distributed, sold and used commercially without asking and without payment (no credit line needed); the compiler, library and runtime may not be modified and redistributed (a private copy may be changed for own use); selling or offering the compiler itself needs permission.
+* The tutorial has 48 lessons (two new ones write whole functions in raw CPU instructions).
+
 ## 0.9.205
 * ARM32: more direct work on the registers where the values live: numbers that fit an instruction (`+ 4`, `& 255`, `< 100`, ...) are immediates, shifts by a number and multiplications by a power of two go from register to register, `& 0xFFFFFFFF` is a move. Small gains on top of 0.9.204 (qsort 982 ms to 892 ms, sha256 884 ms to about 830 ms). The same results: the whole test suite, the compiler building itself on ARM32 byte for byte, 600 random programs.
 
