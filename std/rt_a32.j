@@ -146,6 +146,7 @@ void __a32_segv(int sig, int info, int uc) {
 }
 
 void __a32_errtext(char^ s) {
+    __flush();
     int n = 0;
     while s[n] != 0 { n += 1; }
     syscall(64, 2, s, n);
@@ -154,13 +155,13 @@ void __a32_errtext(char^ s) {
 void __a32_print_str(char^ s) {
     int n = 0;
     while s[n] != 0 { n += 1; }
-    syscall(64, __out_fd(), s, n);
+    __wr(__out_fd(), s, n);
 }
 
 void __a32_print_char(int c) {
     char b[8];
     b[0] = c;
-    syscall(64, __out_fd(), @b, 1);
+    __wr(__out_fd(), @b, 1);
 }
 
 void __a32_print_int(int v) {
@@ -186,7 +187,7 @@ void __a32_print_int(int v) {
         buf[at] = '-';
         at -= 1;
     }
-    syscall(64, __out_fd(), @buf[at + 1], 31 - at);
+    __wr(__out_fd(), @buf[at + 1], 31 - at);
 }
 
 // the end of a function that has to give a value and did not (the ARM64 target jumps to j2k_noret)
@@ -255,7 +256,7 @@ void __a32_print_uint(int v) {
         at -= 1;
         v = q;
     }
-    syscall(64, __out_fd(), @buf[at + 1], 31 - at);
+    __wr(__out_fd(), @buf[at + 1], 31 - at);
 }
 
 // cout of a double: the same text as j2k_print_f64 of the ARM64 target (6 decimals; infinity, nan; 2^64 and more as d.dddddde+NN)

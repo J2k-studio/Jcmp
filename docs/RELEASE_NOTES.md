@@ -1,6 +1,8 @@
-# J2K / Jcmp 0.9.206
+# J2K / Jcmp 1.0.0.0
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
+
+**1.0.0.0:** the first stable release (see CHANGELOG.md). Programs built with jcmp may be sold and distributed freely, every update of jcmp 1.x is free, and a 1.x.x.x release keeps your programs working.
 
 **0.9.206:** a bug fixed (a `double` in a register after a caught throw), LICENSE 1.2 (programs built with jcmp may be sold freely), the tutorial has 48 lessons.
 

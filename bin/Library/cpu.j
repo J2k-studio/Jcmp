@@ -47,11 +47,13 @@ struct Thread {
         int base = (int)stack;
         int^ cb = (int^)Mem::alloc(32);
         if (int)cb == 0 { throw "cannot create the thread: out of memory"; }
+        cb[0] = 0;                                             // the kernel writes the thread id into the low 4 bytes and clears them at the end: the rest must be 0
         cb[1] = base;
         cb[2] = size;
         cb[3] = 0;
         int block = base + size - 1024;                        // the thread's own block (try/catch state) at the top
         std_mt = 1;                                            // from now on the heap is locked
+        __out_unbuffer();
         int tid = __thread_start(f, arg, block, (int)cb, block);
         if tid < 0 {
             Sys::munmap((void^)base, size);

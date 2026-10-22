@@ -1,9 +1,20 @@
 # Changelog
 
+## 1.0.0.0
+The first stable release. The number has four parts: A.B.C.D, A a big step, B new features, C small updates, D fixes only; a 1.x.x.x release keeps working programs working.
+* **The language and the compiler**: whole numbers of 64 bits, `double` / `float`, strings and arrays that free themselves, structs, enums, `try / catch`, threads, generics, lambdas, `Result` / `Option` and `?`, `defer`; the CPU level (`register { }`, `naked`, atomics, raw machine words, `Cpu::inst`, `reg<int x19>`, `#require cpu "crc32"`, `Cache::prefetch`); the compiler is written in J2K and builds itself, byte for byte, on ARM64 and on ARM32.
+* **Speed**: ARM64 within 1.5 times of `clang -O2` on the benchmarks (except one loop that clang turns into SIMD); ARM32 at 1.7 to 5.6 times of the ARM64 time (11 times for 64-bit integer work such as SHA-256).
+* **Tools**: `jcmp -show NAME` shows the code of a function, `#expect instructions <= N` guards its size, `-d` checks memory (ARM64).
+* **Library**: files, text, JSON, CSV, TOML, regular expressions, collections, SHA-256, TCP and https (TLS 1.3), the keyboard (`read`), more downloaded with `jget`.
+* **Documentation**: a tutorial of 58 lessons (basics, the library, the machine, raw CPU instructions, more of the language), the language reference with only programs that compile, the API of the library, the known limits.
+* **License 1.2**: programs built with jcmp may be distributed and sold freely; every update of jcmp 1.x is free; the compiler may not be modified and redistributed.
+* **Fixed before 1.0:** `unwrap()`, `take()` and `or()` of a `Result` / `Option` now move the value out (the temporary or the variable used to free it again: a use after free, seen as a changed array or a crash much later); a thread made after the heap was used could not be joined (the word of its id was not cleared); the standard output is buffered when it is not a terminal (a program that prints a lot is up to 3 times faster).
+* Tested by a campaign of three clean runs in a row on this commit: the whole test suite (ARM64 and ARM32), the suite with `-noast`, the comparison of option sets, fuzzers for numbers and texts on both targets, damaged programs, the compiler building itself on ARM32, the documents, and a fresh install of the previous public release.
+
 ## 0.9.206
 * **A bug fixed on ARM64:** a `double` that lived in a register (d8 to d15) across a call of a function that catches a throw (`try / catch`) could have a wrong value after the throw, when the functions were not inlined. The dead code pass removed the code that gives the registers back. Test t495.
 * **LICENSE 1.2:** programs built with jcmp may be distributed, sold and used commercially without asking and without payment (no credit line needed); the compiler, library and runtime may not be modified and redistributed (a private copy may be changed for own use); selling or offering the compiler itself needs permission.
-* The tutorial has 48 lessons (two new ones write whole functions in raw CPU instructions).
+* The tutorial has 58 lessons (two new ones write whole functions in raw CPU instructions).
 
 ## 0.9.205
 * ARM32: more direct work on the registers where the values live: numbers that fit an instruction (`+ 4`, `& 255`, `< 100`, ...) are immediates, shifts by a number and multiplications by a power of two go from register to register, `& 0xFFFFFFFF` is a move. Small gains on top of 0.9.204 (qsort 982 ms to 892 ms, sha256 884 ms to about 830 ms). The same results: the whole test suite, the compiler building itself on ARM32 byte for byte, 600 random programs.

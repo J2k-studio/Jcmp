@@ -2963,7 +2963,7 @@ void parse_function() {
         while true {
             parse_type();
             if ty_void == 1 && ty_ptr == 0 { die("a parameter cannot be void"); }
-            if tok_kind != T_IDENT { die_help("a parameter name was expected", "write the type and then the name: int count"); }
+            if tok_kind != T_IDENT { die_help("a parameter name was expected", "write the type and then the name: int count (the words in and out are reserved for register blocks: do not use them as names)"); }
             if nparams >= 16 { die_help("too many parameters (16 at most)", "pass a struct or a pointer to a struct instead of many values"); }
             char p_name[256];
             str_copy(@p_name, @tok_text, 256);
@@ -3120,6 +3120,10 @@ void parse_function() {
             emit_line("ldr x0, [sp, #0]");
             emit_line("add sp, sp, #16");
         }
+        push_x0();                       // the exit code: the buffered output goes out first
+        rt_call("__flush");
+        emit_line("ldr x0, [sp, #0]");
+        emit_line("add sp, sp, #16");
         emit_line("mov x8, 94");
         emit_line("svc 0");
     } else {
@@ -3657,6 +3661,7 @@ void emit_segv_handler() {
         emit_line("mov x20, x1");              // the siginfo and the saved state (a -d build asks for them: SA_SIGINFO)
         emit_line("mov x21, x2");
     }
+    rt_call("__flush");
     emit_text_chunks(@segv_text, n);
     emit_line("mov x0, 2");
     emit_line("add x1, sp, #0");
@@ -3820,6 +3825,7 @@ void emit_start_stub() {
 void emit_print_helpers() {
     emit_line("j2k_print_int:");
     emit_line("sub sp, sp, #48");
+    emit_line("str x30, [sp, #40]");
     emit_line("mov x1, 0");
     emit_line("cmp x0, 0");
     emit_line("b.ge j2k_pi1");
@@ -3855,8 +3861,8 @@ void emit_print_helpers() {
     emit_line("add x1, x1, x3");
     emit_line("ldr x0, [x28, #864]");
     emit_line("add x0, x0, #1");
-    emit_line("mov x8, 64");
-    emit_line("svc 0");
+    rt_call("__wr");
+    emit_line("ldr x30, [sp, #40]");
     emit_line("add sp, sp, #48");
     emit_line("ret");
     emit_line("j2k_print_str:");
@@ -3872,18 +3878,17 @@ void emit_print_helpers() {
     emit_line("j2k_ps2:");
     emit_line("ldr x0, [x28, #864]");
     emit_line("add x0, x0, #1");
-    emit_line("mov x8, 64");
-    emit_line("svc 0");
-    emit_line("ret");
+    emit_line("b __wr");
     emit_line("j2k_print_char:");
     emit_line("sub sp, sp, #16");
+    emit_line("str x30, [sp, #8]");
     emit_line("strb x0, [sp, #0]");
     emit_line("add x1, sp, #0");
     emit_line("ldr x0, [x28, #864]");
     emit_line("add x0, x0, #1");
     emit_line("mov x2, 1");
-    emit_line("mov x8, 64");
-    emit_line("svc 0");
+    rt_call("__wr");
+    emit_line("ldr x30, [sp, #8]");
     emit_line("add sp, sp, #16");
     emit_line("ret");
 }
@@ -4041,6 +4046,11 @@ void emit_oob_helper() {
     str_copy(@oob_text, "runtime error: index out of bounds, array size is ", 64);
     oob_len = str_len(@oob_text);
     emit_line("j2k_oob:");
+    emit_line("sub sp, sp, #16");
+    emit_line("stp x0, x1, [sp, #0]");
+    rt_call("__flush");
+    emit_line("ldp x0, x1, [sp, #0]");
+    emit_line("add sp, sp, #16");
     emit_line("sub sp, sp, #160");
     emit_line("mov x6, x1");
     // the message text, 8 bytes at a time
@@ -4167,6 +4177,11 @@ void emit_exc_helper() {
     emit_line("mov x0, 1");
     emit_line("ret");
     emit_line("j2k_uncaught:");
+    emit_line("sub sp, sp, #16");
+    emit_line("stp x0, x1, [sp, #0]");
+    rt_call("__flush");
+    emit_line("ldp x0, x1, [sp, #0]");
+    emit_line("add sp, sp, #16");
     emit_line("mov x6, x0");
     emit_line("sub sp, sp, #64");
     emit_text_chunks(@exc_text, exc_len);
@@ -4206,6 +4221,7 @@ void emit_exc_helper() {
 void emit_uprint_helper() {
     emit_line("j2k_print_uint:");
     emit_line("sub sp, sp, #48");
+    emit_line("str x30, [sp, #40]");
     emit_line("mov x3, 40");
     emit_line("mov x4, 10");
     emit_line("j2k_pu1:");
@@ -4226,8 +4242,8 @@ void emit_uprint_helper() {
     emit_line("add x1, x1, x3");
     emit_line("ldr x0, [x28, #864]");
     emit_line("add x0, x0, #1");
-    emit_line("mov x8, 64");
-    emit_line("svc 0");
+    rt_call("__wr");
+    emit_line("ldr x30, [sp, #40]");
     emit_line("add sp, sp, #48");
     emit_line("ret");
 }

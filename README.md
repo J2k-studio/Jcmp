@@ -55,17 +55,24 @@ You need a Linux **ARM64** machine (a phone with Termux works) and `curl` or `wg
 
 It downloads the latest release, checks its SHA-256 and puts `jcmp` and the library (`Library`, next to the program folder) in place.
 
-```bash
+```
 curl -fsSL https://raw.githubusercontent.com/J2k-studio/Jcmp/main/install.sh | sh
-# or, with wget:
+```
+
+Or, with wget:
+
+```
 wget -qO- https://raw.githubusercontent.com/J2k-studio/Jcmp/main/install.sh | sh
 ```
 
 The default folder is `$PREFIX/bin` on Termux and `~/.local/bin` elsewhere. To choose the folder, for example a
 `bin` folder next to your project (`../bin`):
 
-```bash
+```
 curl -fsSL https://raw.githubusercontent.com/J2k-studio/Jcmp/main/install.sh | sh -s -- --dir ../bin
+```
+
+```
 wget -qO- https://raw.githubusercontent.com/J2k-studio/Jcmp/main/install.sh | sh -s -- --dir ../bin
 ```
 
@@ -82,11 +89,21 @@ Run it again to update (or run `jcmp -update`). To uninstall, delete the files.
 A plain file downloaded from a release is **not executable** (GitHub does not keep the permission bit; that is why a
 plain download needs `chmod +x`). The file `jcmp.tar.gz` of every release holds the program `jcmp`, already executable, and the folder `Library` that belongs to it (keep them side by side):
 
-```bash
+```
 mkdir -p ../bin
+```
+
+```
 curl -fL https://github.com/J2k-studio/Jcmp/releases/latest/download/jcmp.tar.gz | tar xz -C ../bin
-# or with wget
+```
+
+Or with wget:
+
+```
 wget -qO- https://github.com/J2k-studio/Jcmp/releases/latest/download/jcmp.tar.gz | tar xz -C ../bin
+```
+
+```
 ../bin/jcmp -version
 ```
 
@@ -94,16 +111,35 @@ wget -qO- https://github.com/J2k-studio/Jcmp/releases/latest/download/jcmp.tar.g
 
 The same thing step by step with the plain file (the folder `../bin` is only an example; use any folder):
 
-```bash
+```
 mkdir -p ../bin && cd ../bin
-# with curl
-curl -fLO https://github.com/J2k-studio/Jcmp/releases/latest/download/jcmp
-curl -fLO https://github.com/J2k-studio/Jcmp/releases/latest/download/SHA256SUMS
-# or with wget
-wget https://github.com/J2k-studio/Jcmp/releases/latest/download/jcmp
-wget https://github.com/J2k-studio/Jcmp/releases/latest/download/SHA256SUMS
+```
 
+With curl:
+
+```
+curl -fLO https://github.com/J2k-studio/Jcmp/releases/latest/download/jcmp
+```
+
+```
+curl -fLO https://github.com/J2k-studio/Jcmp/releases/latest/download/SHA256SUMS
+```
+
+Or with wget:
+
+```
+wget https://github.com/J2k-studio/Jcmp/releases/latest/download/jcmp
+```
+
+```
+wget https://github.com/J2k-studio/Jcmp/releases/latest/download/SHA256SUMS
+```
+
+```
 sha256sum -c --ignore-missing SHA256SUMS      # must print:  jcmp: OK
+```
+
+```
 chmod +x jcmp && rm SHA256SUMS
 ```
 
@@ -140,7 +176,7 @@ If the repository or its releases are private, `curl`/`wget` need a token
 
 New to J2K? Start with the tutorial: [docs/TUTORIAL.md](docs/TUTORIAL.md).
 More: [docs/USAGE.md](docs/USAGE.md) (command line, building, testing) and
-[docs/LANGUAGE.md](docs/LANGUAGE.md) (a tour of the language), [docs/LIMITS.md](docs/LIMITS.md) (what it does not do yet) and [docs/API.md](docs/API.md) (every library function).
+[docs/LANGUAGE.md](docs/LANGUAGE.md) (a tour of the language), [docs/LIBRARIES.md](docs/LIBRARIES.md) (how to use each part of the library, by category), [docs/LIMITS.md](docs/LIMITS.md) (what it does not do yet) and [docs/API.md](docs/API.md) (every library function).
 
 ---
 
@@ -227,8 +263,12 @@ repository.
 
 ## License
 
-This project is **proprietary, source-available**: you may read it and run it for personal study
-and non-commercial use; you may not copy it, redistribute it, or claim it as your own.
+This project is **source-available** under its own license (version 1.2):
+
+* **Programs you write in J2K and build with jcmp are yours.** You may distribute them, sell them and use them commercially, without asking and without paying; no credit line is needed.
+* **Every update of jcmp 1.x is free of charge.** A new release never needs a new payment.
+* You may read the compiler, run it, and study it. You may **not** modify it and redistribute it, redistribute the compiler or the library as such, or sell or offer the compiler itself as a product or a service. (A private copy may be changed for your own use if you never share it.)
+
 See [LICENSE](LICENSE) for the full terms (English + Thai summary).
 
 ## Author

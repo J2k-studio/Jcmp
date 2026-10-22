@@ -61,6 +61,16 @@ For the complete list of features see [LANGUAGE.md](LANGUAGE.md); for the comman
 46. A queue without a lock
 47. A whole function in raw instructions
 48. Any instruction of the CPU by name
+49. Names in layers: modules and using
+50. Enums that carry values
+51. Structs: methods, nesting and arrays
+52. Values that free themselves
+53. Function pointers and lambdas
+54. Numbers of every size
+55. Raw memory: alloc, pools and grow
+56. Raw bytes and data that cannot change
+57. Building a project with makej
+58. Several cores, and the build file as a program
 
 ## Lesson 1. Hello, world
 
@@ -1171,7 +1181,7 @@ The code of `scale` that the compiler made:
 scale:
 mul x0, x0, x1
 asr x0, x0, #2
-L8182:
+L8491:
 ret
 // 3 instructions
 ```
@@ -1750,8 +1760,421 @@ Output:
 
 `0x8000000000000000 * 6` is 3 times 2^64, so the high half is 3. `rbit(1)` puts the lowest bit at the top (the number shown is negative because bit 63 is the sign). `rev(1)` is 1 followed by 56 zero bits. The names come from the ARM64 manual; `jcmp file.jk -show NAME` shows what was made. A name the assembler does not know stops the compiler with a message, and `raw<u32>[...]` (lesson 38) writes the machine word itself.
 
+# Part 4: more of the language
+
+## Lesson 49. Names in layers: modules and using
+
+A library function has a name in three layers: `Fs::fs.write(...)` is the namespace `Fs`, the module `fs`, the function `write`. `using Fs;` takes the namespace away, so `fs.write(...)` is enough, and `using Str::str.len;` makes one function available by its short name. The long form always works, so a program can use both. Your own files are brought in with `#import "name"` (lesson 20) and the libraries with `#import <name>`.
+
+```jk
+#import <stdlib>
+using stdlib;
+using Fs;
+using Str::str.len;
+
+void main() {
+    fs.write("tl_demo.txt", "hello modules\n");
+    String text = fs.read("tl_demo.txt");
+    cout << text;
+    cout << Fs::fs.size("tl_demo.txt") << " " << Str::str.len("abc") << "\n";
+    Fs::fs.remove("tl_demo.txt");
+}
+```
+
+Output:
+
+```
+hello modules
+14 3
+```
+
+Short names make a program read like a script; the long names say where a function comes from. If two modules in use have the same short name, the compiler asks you to write the long form, so nothing is picked by chance.
+
+## Lesson 50. Enums that carry values
+
+A member of an `enum class` can hold values: `Circle(double r)`, `Rect(double w, double h)`, `Empty`. A value of the enum is one thing that is a different member at different times. `switch` takes it apart and gives names to the values (`_` ignores one). Methods go after the members, after a `;`, and `switch self^` looks at the object itself.
+
+```jk
+#import <stdlib>
+
+using stdlib;
+enum class Color { Red, Green, Blue };
+
+enum class Shape { Circle(double r), Rect(double w, double h), Empty;
+    double area(self) {
+        switch self^ {
+            Shape::Circle(r): return 3.0 * r * r;
+            Shape::Rect(w, h): return w * h;
+            Shape::Empty: return 0.0;
+        }
+        return 0.0;
+    }
+};
+
+void main() {
+    Color c = Color::Green;
+    switch c {
+        Color::Red: cout << "red\n";
+        Color::Green: cout << "green\n";
+        Color::Blue: cout << "blue\n";
+    }
+    Shape a = Shape::Circle(2.0);
+    Shape b = Shape::Rect(3.0, 4.5);
+    Shape e = Shape::Empty;
+    cout << a.area() << " " << b.area() << " " << e.area() << "\n";
+    switch b {
+        Shape::Rect(w, _): cout << "width " << w << "\n";
+        _: cout << "something else\n";
+    }
+}
+```
+
+Output:
+
+```
+green
+12.000000 13.500000 0.000000
+width 3.000000
+```
+
+`switch` checks that every member is handled unless there is a `_` case, so adding a new member shows every place that has to change. This is the tool for things that come in several shapes: tokens, messages, results.
+
+## Lesson 51. Structs: methods, nesting and arrays
+
+A `struct` groups values and can have methods; `self` is the object. Structs nest (`Line` holds two `Point`s, written `{{...}, {...}}`), they are copied when assigned, an array of them is indexed like any array, and `@p` is a pointer to one (`q^.x` reaches a member through it).
+
+```jk
+#import <stdlib>
+
+using stdlib;
+struct Point {
+    double x;
+    double y;
+    double dist2(self) { return self.x * self.x + self.y * self.y; }
+    void move(self, double dx, double dy) { self.x += dx; self.y += dy; }
+}
+
+struct Line {
+    Point a;
+    Point b;
+}
+
+void main() {
+    Point p = {3.0, 4.0};
+    p.move(1.0, 0.0);
+    cout << p.x << " " << p.dist2() << "\n";
+    Line l = {{0.0, 0.0}, {6.0, 8.0}};
+    cout << l.b.dist2() << "\n";
+    Point pts[3];
+    for i in 0..3 { pts[i].x = (double)(i + 1); pts[i].y = (double)(i + 1); }
+    double total = 0.0;
+    for i in 0..3 { total += pts[i].dist2(); }
+    cout << total << "\n";
+    Point^ q = @p;
+    q^.x = 10.0;
+    cout << p.x << "\n";
+}
+```
+
+Output:
+
+```
+4.000000 32.000000
+100.000000
+28.000000
+10.000000
+```
+
+`p.move(1.0, 0.0)` changes `p` because `self` is the object itself, not a copy. An array of structs is filled one member at a time here; the writing `pts[3] = {{...}}` is not supported yet.
+
+## Lesson 52. Values that free themselves
+
+A struct with a method `free(self)` frees what it holds at the end of the block of the variable. Because of that it is **moved**, not copied: `Buffer b = a;` empties `a` and `b` owns the memory. Passing it to a function by value moves it into the function, which frees it at its end. You write the `free` once and never call it.
+
+```jk
+#import <stdlib>
+
+using stdlib;
+struct Buffer {
+    int^ data;
+    int n;
+    void free(self) {
+        if self.data != null { cout << "freeing " << self.n << "\n"; free[self.data]; }
+    }
+}
+
+Buffer make(int n) {
+    alloc[int^ p = n];
+    Buffer b = {p, n};
+    return b;
+}
+
+void use(Buffer b) {
+    cout << "using " << b.n << "\n";
+}
+
+void main() {
+    Buffer a = make(4);
+    Buffer b = a;
+    use(b);
+    cout << "end of main\n";
+}
+```
+
+Output:
+
+```
+using 4
+freeing 4
+end of main
+```
+
+"freeing 4" is printed once, by `use`, when its parameter ends, before "end of main": the buffer was moved from `a` to `b` to the parameter. There is no double free and no leak, and no garbage collector. Strings, arrays and lists are built the same way.
+
+## Lesson 53. Function pointers and lambdas
+
+A function can be a value: `int(int)^ op = twice;` is a pointer to a function that takes an `int` and gives an `int`. It can be passed to another function (`apply`) and called like a function. A lambda is a function without a name, written where it is used: the result type, the parameters, the body.
+
+```jk
+#import <stdlib>
+
+using stdlib;
+int twice(int x) { return x * 2; }
+int square(int x) { return x * x; }
+
+int apply(int(int)^ f, int v) { return f(v); }
+
+void main() {
+    int(int)^ op = twice;
+    cout << op(5) << " " << apply(square, 7) << "\n";
+    int k = 3;
+    int(int)^ addk = int(int x) { return x + 100; };
+    cout << apply(addk, k) << "\n";
+}
+```
+
+Output:
+
+```
+10 49
+103
+```
+
+This is how a sort takes the comparison, a thread takes its work, and a table of commands is made. The type is written like the function: the result, then the parameters in `( )`, then `^`.
+
+## Lesson 54. Numbers of every size
+
+`int` is 64 bits, but a program for a file format or a machine needs other sizes: `u8`, `u16`, `u32`, `u64` (unsigned) and `i8`, `i16`, `i32`. They wrap round when they overflow, the way the hardware does. `sizeof(type)` gives the size in bytes and `(type)value` converts.
+
+```jk
+#import <stdlib>
+
+using stdlib;
+void main() {
+    u8 b = 250;
+    b += 10;
+    u32 big = 4000000000;
+    big += 500000000;
+    i32 small = 2000000000;
+    small += 2000000000;
+    cout << b << " " << big << " " << small << "\n";
+    int wide = 4000000000;
+    cout << wide + 500000000 << "\n";
+    cout << sizeof(int) << " " << sizeof(u8) << " " << sizeof(double) << " " << sizeof(char) << "\n";
+    double d = 3.99;
+    int t = (int)d;
+    char c = (char)65;
+    cout << t << " " << c << " " << (int)'z' << "\n";
+}
+```
+
+Output:
+
+```
+4 205032704 -294967296
+4500000000
+8 1 8 1
+3 A 122
+```
+
+250 + 10 in a `u8` is 4, 4,000,000,000 + 500,000,000 in a `u32` is 205,032,704, and two billion plus two billion in an `i32` is negative; the same sums in `int` do not wrap. A cast from `double` to `int` cuts the decimals (3.99 becomes 3).
+
+## Lesson 55. Raw memory: alloc, pools and grow
+
+`alloc[int^ p = n];` takes `n` ints from the heap; `p` owns them and they are freed at the end of the block (or at once with `free[p];`). `grow[p = m];` makes the block bigger and keeps the content. A **pool** is one big block cut into pieces: `alloc[pool[12] >> int^ a];` takes 12 ints of the pool for `a` (null when the pool has no room), `free[b];` gives one piece back, `free[pool];` frees everything.
+
+```jk
+#import <stdlib>
+using stdlib;
+void main() {
+    alloc[int^ pool = 32];
+    alloc[pool[12] >> int^ a];
+    alloc[pool[12] >> int^ b];
+    for i in 0..3 { a[i] = i + 1; b[i] = (i + 1) * 10; }
+    cout << a[2] + b[2] << "\n";
+    free[b];
+    alloc[pool[12] >> int^ c];
+    c[0] = 99;
+    cout << a[0] << " " << c[0] << "\n";
+    free[pool];
+
+    alloc[int^ p = 2];
+    p[0] = 5;
+    p[1] = 6;
+    grow[p = 8];
+    p[7] = 70;
+    cout << p[1] << " " << p[7] << "\n";
+    free[p];
+}
+```
+
+Output:
+
+```
+33
+1 99
+6 70
+```
+
+A pool is the allocator of lesson 41 (a pointer that moves forward) with the freeing of single pieces added; `c` gets the room that `b` gave back. Use a pool for many small things that live and die together, and check for null when the pool may be too small. The debug build (`jcmp -d`) checks these blocks for writes past the end and for use after free.
+
+## Lesson 56. Raw bytes and data that cannot change
+
+`raw<u32>[0x91008800];` puts a machine word in the code exactly as written (here `add x0, x0, #34`), next to ordinary statements of a naked function. `#pragma read` makes a global variable read-only: a write is an error at compile time, and through a pointer it stops the program, because the page is protected.
+
+```jk
+#import <stdlib>
+
+using stdlib;
+#pragma read
+int limit = 100;
+
+#pragma read begin
+int table[4] = {10, 20, 30, 40};
+#pragma read end
+
+naked int answer() {
+    x0 = 0;
+    raw<u32>[0x91008800];
+    ret;
+}
+
+int main() {
+    int sum = 0;
+    for i in 0..4 { sum += table[i]; }
+    cout << sum << " " << limit << " " << answer() << "\n";
+    return 0;
+}
+```
+
+Output:
+
+```
+100 100 34
+```
+
+`answer()` is 0 plus 34. Tables that must never change (lookup tables, constants of a format) belong under `#pragma read`: a bug that overwrites one is found at once instead of much later. The raw word is for ARM64; on the ARM32 target the same instruction is another word.
+
+## Lesson 57. Building a project with makej
+
+A project with several files and programs is built by **makej** (install it with `curl -fsSL https://raw.githubusercontent.com/J2k-studio/Jcmp-Tools/main/install.sh | sh -s -- makej`). The build file is a plain file called `makej` that you write by hand (`nano makej`, or `makej init` writes a start). Each `[program.NAME]` is a program to build from its `main` file (with the `flags` you give), each `[library.NAME]` a library (`-l`), and each `[step.NAME]` any shell command; `needs` lists what must be made first. This is the first program of the project, `src/hello.jk`:
+
+```jk
+#import <stdlib>
+using stdlib;
+
+void main() {
+    cout << "hello\n";
+}
+```
+
+Output:
+
+```
+hello
+```
+
+The whole `makej` file of the project:
+
+```
+[makej]
+out = "_out"
+
+[program.hello]
+main = "src/hello.jk"
+
+[program.tool]
+main = "src/tool.jk"
+flags = "-d"
+
+[step.run]
+run = "_out/hello && _out/tool"
+needs = "hello tool"
+```
+
+Then, in the folder of the project:
+
+```
+$ makej
+makej: building hello
+makej: building tool
+makej: done
+$ makej
+makej: done
+$ makej -v run
+makej: hello is up to date
+makej: tool is up to date
+makej: run
+  $ _out/hello && _out/tool
+hello
+tool
+makej: done
+```
+
+The first `makej` builds everything; the second finds nothing to do, because a program is built again only when a `.jk` or `.j` file in the folder of its main file (and below) is newer than the result. `makej NAME` makes one target and what it needs; `-v` shows the commands. Targets whose main files are in the same folder are built together when a file there changes. A wrong name gives `makej: there is no target 'nosuch'` and exit code 2.
+
+## Lesson 58. Several cores, and the build file as a program
+
+`makej -j 4` builds 4 things at the same time (the default is the number of cores that are on, 8 on a phone like this one): a target starts as soon as what it needs is done, and if one fails the others that run finish, nothing new starts, and the exit code is 1. When a build needs a loop or a condition, write the build file as a J2K program instead, `makej.jk` (it wins over the plain file when both exist):
+
+```jk
+#import <stdlib>
+using stdlib;
+
+void main() {
+    cout << "a build file is a program\n";
+}
+```
+
+Output:
+
+```
+a build file is a program
+```
+
+This is the `makej.jk` of a project that builds a program for each source file in a folder, with a loop:
+
+```jk-no
+#import <stdlib>
+#import <makej>
+
+int main() {
+    Build b = Build::make();
+    String[] files = Dir::list("tools").unwrap();
+    for i in 0..files.len {
+        if files[i].ends_with(".jk") {
+            b.program(Path::stem(files[i]), "tools/" + files[i], "");
+        }
+    }
+    return b.run();
+}
+```
+
+`Build::make()` reads the command line (`-j`, `-v`, the target), `b.program`, `b.library` and `b.step` add targets, `b.needs(a, b)` orders them, and `b.run()` builds and gives the exit code. It is an ordinary program, so everything in this tutorial works in it. For the plain file and for the program the engine is the same.
+
 ## Where next
 
+* [LIBRARIES.md](LIBRARIES.md) — how to use each part of the standard library, by category.
 * [LANGUAGE.md](LANGUAGE.md) — every feature with examples (function pointers, unsigned types, `sizeof`, ...).
 * [USAGE.md](USAGE.md) — the compiler's options (`-d`, `-st`, `-I`, `--emit-asm`).
 * `examples/` in the repository — more small programs.

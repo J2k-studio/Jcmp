@@ -44,3 +44,5 @@
 | 25 | เลขรุ่นสุดท้าย | **1.0.0.0** ตามที่ตกลง ตัดเมื่อแคมเปญ 3 รอบติดผ่านบน release candidate | พาร์ท J |
 
 กฎที่คุณสั่ง: **หลัง 1.0 ทำโปรเจกต์ทดสอบ (`jgrep`) ก่อนงานใหญ่อื่น** — อยู่ในแผนแล้ว (`docs/plan-parts.md` หัว "สรุปสถานะและขั้นตอนพัฒนา")
+
+* **Decision 18 answered (2026-10-22, "yep"): the export marker is `export`** (`export int add(int a, int b)`); `jni` is not used. To be built in 1.1.0.0 (`jcmp core.jk -o core -l`, the library of the Jaric Android app). Recorded in docs/syntax-design.md when it is implemented.

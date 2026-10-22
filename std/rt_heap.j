@@ -23,6 +23,7 @@ int std_guard_n;                   // how many blocks of a -d build live in page
 
 // a bug in the program (a null array, a position out of range, ...): say so and stop; try/catch cannot catch it
 void __panic(char^ msg) {
+    __flush();
     int n = 0;
     while msg[n] != 0 { n += 1; }
     syscall(64, 2, "panic: ", 7);

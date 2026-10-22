@@ -23,6 +23,7 @@ int std_guard_n;                   // how many blocks of a -d build live in page
 
 // a bug in the program (a null array, a position out of range, ...): say so and stop; try/catch cannot catch it
 void __panic(char^ msg) {
+    __flush();
     int n = 0;
     while msg[n] != 0 { n += 1; }
     syscall(64, 2, "panic: ", 7);
@@ -2024,12 +2025,73 @@ struct __In {
 
 // Printing a double that is 2^64 or more (coutf calls this from j2k_print_f64): d.dddddde+NN, the sign is written by the caller.
 
+// ---- the standard output is buffered (64 KB in the global area: the word 110 = bytes used, 111 = the mode: 0 not looked at,
+// 1 buffered, 2 not buffered). A terminal is not buffered (a program that talks to a person); a thread makes it unbuffered.
+// It is written out at the end of the program, before the standard error text of a panic / uncaught exception / crash, before a new process
+// (fork / execve) and before Sys::write.
+void __flush() {
+    int^ g = (int^)268435456;
+    int n = g[110];
+    g[110] = 0;
+    int off = 0;
+    while off < n {
+        int r = syscall(64, 1, (char^)(268435456 + 896 + off), n - off);
+        if r <= 0 { break; }
+        off += r;
+    }
+}
+
+// the same as write(fd, p, n) for the program's output
+void __wr(int fd, char^ p, int n) {
+    if fd != 1 {
+        syscall(64, fd, p, n);
+        return;
+    }
+    int^ g = (int^)268435456;
+    int mode = g[111];
+    if mode == 0 {
+        char t[64];
+        mode = 1;
+        if syscall(29, 1, 21505, @t) == 0 { mode = 2; }
+        g[111] = mode;
+    }
+    if mode == 2 {
+        int off = 0;
+        while off < n {
+            int r = syscall(64, 1, p + off, n - off);
+            if r <= 0 { break; }
+            off += r;
+        }
+        return;
+    }
+    if g[110] + n > 65536 { __flush(); }
+    if n >= 65536 {
+        int off2 = 0;
+        while off2 < n {
+            int r2 = syscall(64, 1, p + off2, n - off2);
+            if r2 <= 0 { break; }
+            off2 += r2;
+        }
+        return;
+    }
+    char^ dst = (char^)(268435456 + 896 + g[110]);
+    for i in 0..n { dst[i] = p[i]; }
+    g[110] += n;
+}
+
+// a thread is made: from now on every write goes straight out (no lock around the buffer)
+void __out_unbuffer() {
+    __flush();
+    int^ g = (int^)268435456;
+    g[111] = 2;
+}
+
 // cout << a bool: true or false
 void __print_bool(int v) {
     if v != 0 {
-        syscall(64, __out_fd(), "true", 4);
+        __wr(__out_fd(), "true", 4);
     } else {
-        syscall(64, __out_fd(), "false", 5);
+        __wr(__out_fd(), "false", 5);
     }
 }
 
@@ -2054,7 +2116,7 @@ void __print_ptr(int v) {
     at -= 1;
     buf[at] = '0';
     at -= 1;
-    syscall(64, __out_fd(), @buf[at + 1], 22 - at);
+    __wr(__out_fd(), @buf[at + 1], 22 - at);
 }
 
 // the file that cout writes to: 1, or 2 inside a statement with cerr (the word at 864 of the global area, 0 or 1, plus 1)
@@ -2107,7 +2169,7 @@ struct __Fp {
         n += 1;
         buf[n] = (char)(48 + e10 % 10);
         n += 1;
-        syscall(64, __out_fd(), @buf, n);
+        __wr(__out_fd(), @buf, n);
     }
 }
 
@@ -2150,6 +2212,7 @@ struct __Mt {
             blk[p * 8 + 4] = base;
             int top = base + size - 1024;
             std_mt = 1;
+            __out_unbuffer();
             int tid = __thread_start(worker, (int)blk + p * 64, top, (int)blk + p * 64 + 24, top);
             if tid < 0 { throw "cannot start the threads of the #multithread loop"; }
         }
@@ -2310,6 +2373,7 @@ void __a32_segv(int sig, int info, int uc) {
 }
 
 void __a32_errtext(char^ s) {
+    __flush();
     int n = 0;
     while s[n] != 0 { n += 1; }
     syscall(64, 2, s, n);
@@ -2318,13 +2382,13 @@ void __a32_errtext(char^ s) {
 void __a32_print_str(char^ s) {
     int n = 0;
     while s[n] != 0 { n += 1; }
-    syscall(64, __out_fd(), s, n);
+    __wr(__out_fd(), s, n);
 }
 
 void __a32_print_char(int c) {
     char b[8];
     b[0] = c;
-    syscall(64, __out_fd(), @b, 1);
+    __wr(__out_fd(), @b, 1);
 }
 
 void __a32_print_int(int v) {
@@ -2350,7 +2414,7 @@ void __a32_print_int(int v) {
         buf[at] = '-';
         at -= 1;
     }
-    syscall(64, __out_fd(), @buf[at + 1], 31 - at);
+    __wr(__out_fd(), @buf[at + 1], 31 - at);
 }
 
 // the end of a function that has to give a value and did not (the ARM64 target jumps to j2k_noret)
@@ -2419,7 +2483,7 @@ void __a32_print_uint(int v) {
         at -= 1;
         v = q;
     }
-    syscall(64, __out_fd(), @buf[at + 1], 31 - at);
+    __wr(__out_fd(), @buf[at + 1], 31 - at);
 }
 
 // cout of a double: the same text as j2k_print_f64 of the ARM64 target (6 decimals; infinity, nan; 2^64 and more as d.dddddde+NN)

@@ -37,6 +37,7 @@ struct __Mt {
             blk[p * 8 + 4] = base;
             int top = base + size - 1024;
             std_mt = 1;
+            __out_unbuffer();
             int tid = __thread_start(worker, (int)blk + p * 64, top, (int)blk + p * 64 + 24, top);
             if tid < 0 { throw "cannot start the threads of the #multithread loop"; }
         }

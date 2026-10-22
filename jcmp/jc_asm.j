@@ -1717,6 +1717,9 @@ void as_instruction() {
     if as_mn_is("clz") { as_h_sxt(0xDAC0, 0x1000); return; }
     if as_mn_is("rbit") { as_h_sxt(0xDAC0, 0x0000); return; }
     if as_mn_is("rev") { as_h_sxt(0xDAC0, 0x0C00); return; }
+    if as_mn_is("cls") { as_h_sxt(0xDAC0, 0x1400); return; }
+    if as_mn_is("rev16") { as_h_sxt(0xDAC0, 0x0400); return; }
+    if as_mn_is("rev32") { as_h_sxt(0xDAC0, 0x0800); return; }
     if as_mn_is("popcnt") { as_h_popcnt(); return; }
     if as_mn_is("fmovi") {
         as_skip_spaces();

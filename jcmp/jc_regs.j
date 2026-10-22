@@ -1354,8 +1354,7 @@ bool pt_dead(int idx, int r, int budget) {
         }
         if reads { return false; }
         if first_only && pt_no[3] > 0 && (pt_isreg(3, 0) || pt_regno(3, 0, 'd') >= 0) && pt_rd(3, 0, r) {
-            if pt_mn(3, "msub") || pt_mn(3, "madd") { return false; }
-            return true;
+            return true;                                      // msub / madd read their other operands too: that was looked at above
         }
         idx += 1;
     }
@@ -1887,6 +1886,32 @@ bool pt_rules(int i) {
             pt_parse(1, j);
         }
     }
+    // OP xA, ... / mov xK, xA   where xA is not needed afterwards   ->   OP xK, ...   (the operation writes the register it was meant for)
+    if pt_no[0] >= 2 && pt_isreg(0, 0) && pt_mn(1, "mov") && pt_no[1] == 2 && pt_isreg(1, 0) && pt_isreg(1, 1) && (pt_mn(0, "add") || pt_mn(0, "sub") || pt_mn(0, "mul") || pt_mn(0, "and") || pt_mn(0, "orr") || pt_mn(0, "eor") || pt_mn(0, "lsl") || pt_mn(0, "lsr") || pt_mn(0, "asr") || pt_mn(0, "smulh") || pt_mn(0, "umulh") || pt_mn(0, "msub") || pt_mn(0, "madd") || pt_mn(0, "sdiv") || pt_mn(0, "udiv")) {
+        int fa0 = pt_regno(0, 0, 'x');
+        int fk = pt_regno(1, 0, 'x');
+        int fs = pt_regno(1, 1, 'x');
+        if fa0 == fs && fk != fa0 && fa0 >= 0 && fa0 <= 17 && fk >= 0 && fk <= 25 && fk != 18 {
+            if pt_dead(pt_next(j), fa0, 40) {
+                char fkn[8];
+                int fq = 0;
+                fkn[fq] = 'x'; fq += 1;
+                if fk >= 10 { fkn[fq] = '0' + fk / 10; fq += 1; }
+                fkn[fq] = '0' + fk % 10; fq += 1;
+                fkn[fq] = 0;
+                pt_build(0, 0, @fkn);
+                char fnl[64];
+                int fc2 = 0;
+                while pt_line[fc2] != 0 { fnl[fc2] = pt_line[fc2]; fc2 += 1; }
+                fnl[fc2] = 0;
+                pt_set(i, @fnl);
+                pt_set(j, "");
+                return true;
+            }
+            pt_parse(0, i);
+            pt_parse(1, j);
+        }
+    }
     // lsl xD, xA, #n / add xD, xB, xD   ->   add xD, xB, xA, lsl #n      (also with the operands of the add the other way round):
     // the register xD gets the same value, the shifted number was only on its way
     if pt_mn(0, "lsl") && pt_no[0] == 3 && pt_isreg(0, 0) && pt_isreg(0, 1) && pt_isnum(0, 2) && pt_mn(1, "add") && pt_no[1] == 3 && pt_isreg(1, 0) && pt_isreg(1, 1) && pt_isreg(1, 2) {
@@ -2183,7 +2208,7 @@ bool pt_rules(int i) {
         }
     }
     // add xD, xS, #N / ldr or str with the address [xD, #0] (several of them)  ->  the address [xS, #N] in each, and no add
-    if pt_mn(0, "add") && pt_no[0] == 3 && pt_isreg(0, 0) && pt_isreg(0, 1) && pt_isnum(0, 2) && pt_regno(0, 0, 'x') != pt_regno(0, 1, 'x') && (pt_regno(0, 0, 'x') <= 7 || (pt_regno(0, 0, 'x') >= 10 && pt_regno(0, 0, 'x') <= 16)) && pt_regno(0, 1, 'x') >= 0 && pt_regno(0, 1, 'x') <= 30 {
+    if pt_mn(0, "add") && pt_no[0] == 3 && pt_isreg(0, 0) && pt_isreg(0, 1) && pt_isnum(0, 2) && pt_regno(0, 0, 'x') != pt_regno(0, 1, 'x') && (pt_regno(0, 0, 'x') <= 7 || (pt_regno(0, 0, 'x') >= 8 && pt_regno(0, 0, 'x') <= 16)) && pt_regno(0, 1, 'x') >= 0 && pt_regno(0, 1, 'x') <= 30 {
         int xd = pt_regno(0, 0, 'x');
         int xs = pt_regno(0, 1, 'x');
         int o2n = (0 * 4 + 2) * 40;
@@ -2307,7 +2332,7 @@ bool pt_rules(int i) {
     }
     // mov x0, S / (a line that does not touch x0 and S) / I  ->  I with S in place of x0   (and the same for x1): when I writes
     // x0 itself, or x0 is not needed afterwards
-    if pt_mn(0, "mov") && pt_no[0] == 2 && pt_isreg(0, 0) && pt_isreg(0, 1) && (pt_regno(0, 0, 'x') <= 7 || (pt_regno(0, 0, 'x') >= 10 && pt_regno(0, 0, 'x') <= 16)) {
+    if pt_mn(0, "mov") && pt_no[0] == 2 && pt_isreg(0, 0) && pt_isreg(0, 1) && (pt_regno(0, 0, 'x') <= 7 || (pt_regno(0, 0, 'x') >= 8 && pt_regno(0, 0, 'x') <= 16)) {
         int rr = pt_regno(0, 0, 'x');
         int sreg = pt_regno(0, 1, 'x');
         if sreg != rr {
@@ -2355,7 +2380,7 @@ bool pt_rules(int i) {
     }
     // mov xA, xB / <up to 9 lines that read xA (and not write xB)>  ->  the same lines with xB in place of xA, and no mov: when xA is
     // written by the last of them or is not needed afterwards
-    if pt_mn(0, "mov") && pt_no[0] == 2 && pt_isreg(0, 0) && pt_isreg(0, 1) && (pt_regno(0, 0, 'x') <= 7 || (pt_regno(0, 0, 'x') >= 10 && pt_regno(0, 0, 'x') <= 16)) && pt_regno(0, 1, 'x') >= 0 {
+    if pt_mn(0, "mov") && pt_no[0] == 2 && pt_isreg(0, 0) && pt_isreg(0, 1) && (pt_regno(0, 0, 'x') <= 7 || (pt_regno(0, 0, 'x') >= 8 && pt_regno(0, 0, 'x') <= 16)) && pt_regno(0, 1, 'x') >= 0 {
         int ra = pt_regno(0, 0, 'x');
         int rb = pt_regno(0, 1, 'x');
         if ra != rb && rb != 31 {

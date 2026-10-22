@@ -21,7 +21,7 @@ The `LICENSE` today (version 1.1) allows reading, building and running for learn
 
 ## 4. The steps of the release (the assistant does them; none is done yet)
 1. The owner answers `docs/decisions-for-1.0.md` (the questions that touch the language), and checks the LICENSE words (section 2).
-2. The code is frozen. `tools/campaign.sh 3` gives three clean runs on the release candidate (the same commit that will be tagged).
+2. The code is frozen. `tools/campaign.sh 2` gives two clean runs on the release candidate (the same commit that will be tagged).
 3. The version becomes four numbers: `VERSION` and `JCMP_VERSION` in `jcmp/jcmp.jk` = `1.0.0.0`; the places that `ship.sh` changes (README, README.th.md, docs/RELEASE_NOTES.md, install lines) already take any text after `--version`. The tag is `v1.0.0.0`. `install.sh --version 1.0.0.0` and `jcmp -update` take the text as it is (checked for 0.9.x; tested again with the candidate).
 4. `CHANGELOG.md` and `docs/RELEASE_NOTES.md` get the 1.0.0.0 entry (the announcement above, shortened).
 5. `./ship.sh 1.0.0.0 "jcmp 1.0.0.0"`; then a fresh install from the public release, and the campaign step `fresh_install` again.

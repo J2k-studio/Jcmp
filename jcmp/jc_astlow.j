@@ -3274,6 +3274,11 @@ void gl_expr(int n) {
     }
     if k == AK_BUILTIN && at_val[n] == 8 {
         // syscall: the arguments wait in cells, then x8 = the number, x0 .. = the arguments
+        if at_a[n] != 0 && at_kind[at_a[n]] == AK_NUM && (at_val[at_a[n]] == 93 || at_val[at_a[n]] == 94) {
+            gl_ensure();
+            int sfc = ir_add(IR_CALL, 1, 0, 0, 0, ir_name_index("__flush"));      // exit / exit_group by number: the output goes out first
+            ir_set_args(sfc, 0, @gl_args);
+        }
         int sbase = gl_depth;
         int sn = 0;
         int sa = at_a[n];
@@ -5320,6 +5325,11 @@ int ast_lower_body(int ti, char^ name) {
             ir_add(IR_CONST, 1, 0, 0, 0, 0);
         }
         gl_place(gl_ret);
+        // the buffered output goes out first (the exit code waits in a temporary)
+        gl_store(30, gl_cell(gl_depth), 1);
+        int fl_c = ir_add(IR_CALL, 1, 0, 0, 0, ir_name_index("__flush"));
+        ir_set_args(fl_c, 0, @gl_args);
+        gl_load(1, 30, gl_cell(gl_depth));
         ir_add(IR_CONST, 9, 0, 0, 0, 94);
         int xe = ir_add(IR_SYSCALL, 1, 9, 0, 0, 0);
         int xk = 0;

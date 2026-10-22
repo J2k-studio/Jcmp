@@ -2092,6 +2092,22 @@ void gen_call() {
     if str_eq(@callee, "syscall") {
         if n < 1 || n > 7 { die("syscall takes 1 to 7 arguments"); }
         if allow_syscall == 0 { warn("syscall(number, ...) calls the system by a number that belongs to one machine; use Sys::open, Sys::read ... (Sys::call(number, ...) when Sys has no function for it), or write #allow syscall at the top of the program", "syscall"); }
+        // exit / exit_group (93, 94): the buffered output goes out first (the number and the exit code wait on the stack)
+        int lsf = new_label();
+        int lsg = new_label();
+        emit_line("cmp x0, 93");
+        emit_str("b.eq L"); emit_int(lsf); emit_nl();
+        emit_line("cmp x0, 94");
+        emit_str("b.ne L"); emit_int(lsg); emit_nl();
+        place_label(lsf);
+        emit_line("sub sp, sp, #16");
+        emit_line("str x0, [sp, #0]");
+        emit_line("str x1, [sp, #8]");
+        rt_call("__flush");
+        emit_line("ldr x0, [sp, #0]");
+        emit_line("ldr x1, [sp, #8]");
+        emit_line("add sp, sp, #16");
+        place_label(lsg);
         emit_line("mov x8, x0");
         int i = 1;
         while i < n {

@@ -51,6 +51,7 @@ struct Sys {
     static int write(int fd, void^ buf, int n) {
         if n < 0 { return -22; }
         if n > 0 && buf == null { return -14; }
+        __flush();
         return syscall(64, fd, buf, n);
     }
     // whence: 0 from the start, 1 from here, 2 from the end
@@ -141,6 +142,7 @@ struct Sys {
     }
     // ---- the program and its processes
     static void exit(int code) {
+        __flush();
         syscall(94, code & 255);           // exit_group: the whole program, all threads
     }
     static int getpid() { return syscall(172); }
@@ -151,9 +153,13 @@ struct Sys {
         return syscall(129, pid, sig);
     }
     // a new process like this one (fork): 0 in the child, the id of the child in the parent
-    static int fork() { return syscall(220, 17, 0, 0, 0, 0); }
+    static int fork() {
+        __flush();
+        return syscall(220, 17, 0, 0, 0, 0);
+    }
     static int execve(char^ path, void^ argv, void^ envp) {
         if path == null || argv == null { return -14; }
+        __flush();
         return syscall(221, path, argv, envp);
     }
     // wait for the child pid; its state goes to *status
@@ -313,7 +319,12 @@ enum class Option<T> { Some(T value), None;
     // the value (throws if there is none)
     T unwrap(self) {
         switch self^ {
-            Option::Some(v): return v;
+            Option::Some(_): {
+                T out;                                             // the bytes of the value move out; the Option frees nothing of it later
+                Mem::copy(@out, @self.Some_value, sizeof(T));
+                Mem::set(@self.Some_value, 0, sizeof(T));
+                return out;
+            }
             Option::None: __panic("unwrap of a None");
         }
         __panic("unwrap of a None");
@@ -321,7 +332,12 @@ enum class Option<T> { Some(T value), None;
     // the value, or fallback
     T or(self, T fallback) {
         switch self^ {
-            Option::Some(v): return v;
+            Option::Some(_): {
+                T out;
+                Mem::copy(@out, @self.Some_value, sizeof(T));
+                Mem::set(@self.Some_value, 0, sizeof(T));
+                return out;
+            }
             Option::None: return fallback;
         }
         return fallback;
@@ -332,7 +348,12 @@ enum class Result<T, E> { Ok(T value), Err(E error);
     // the value, or the error is thrown as a text (the short forms of the library: fs.read(path), json.parse(text) ...)
     T take(self) {
         switch self^ {
-            Result::Ok(v): return v;
+            Result::Ok(_): {
+                T out;                                         // the bytes of the value move out; the Result frees nothing of it later
+                Mem::copy(@out, @self.Ok_value, sizeof(T));
+                Mem::set(@self.Ok_value, 0, sizeof(T));
+                return out;
+            }
             Result::Err(e): Error::raise(e.message.c());
         }
         Error::raise("take of an Err");
@@ -342,7 +363,12 @@ enum class Result<T, E> { Ok(T value), Err(E error);
     // the value (throws if it is an error)
     T unwrap(self) {
         switch self^ {
-            Result::Ok(v): return v;
+            Result::Ok(_): {
+                T out;
+                Mem::copy(@out, @self.Ok_value, sizeof(T));
+                Mem::set(@self.Ok_value, 0, sizeof(T));
+                return out;
+            }
             Result::Err(e): __panic("unwrap of an Err");
         }
         __panic("unwrap of an Err");
@@ -350,7 +376,12 @@ enum class Result<T, E> { Ok(T value), Err(E error);
     // the value, or fallback
     T or(self, T fallback) {
         switch self^ {
-            Result::Ok(v): return v;
+            Result::Ok(_): {
+                T out;
+                Mem::copy(@out, @self.Ok_value, sizeof(T));
+                Mem::set(@self.Ok_value, 0, sizeof(T));
+                return out;
+            }
             Result::Err(e): return fallback;
         }
         return fallback;

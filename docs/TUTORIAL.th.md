@@ -61,6 +61,16 @@ jcmp hello.jk -o hello      # คอมไพล์
 46. คิวที่ไม่มี lock
 47. ฟังก์ชันทั้งตัวเป็นคำสั่งดิบ
 48. คำสั่งใดๆ ของ CPU ตามชื่อ
+49. ชื่อเป็นชั้น: โมดูลและ using
+50. enum ที่เก็บค่า
+51. struct: เมธอด ซ้อน และอาร์เรย์
+52. ค่าที่คืนหน่วยความจำเอง
+53. พอยน์เตอร์ฟังก์ชันและ lambda
+54. ตัวเลขทุกขนาด
+55. หน่วยความจำดิบ: alloc, pool และ grow
+56. ไบต์ดิบและข้อมูลที่เปลี่ยนไม่ได้
+57. สร้างโปรเจกต์ด้วย makej
+58. หลายคอร์ และไฟล์ build ที่เป็นโปรแกรม
 
 ## บทที่ 1. สวัสดีชาวโลก
 
@@ -1168,7 +1178,7 @@ void main() {
 scale:
 mul x0, x0, x1
 asr x0, x0, #2
-L8182:
+L8491:
 ret
 // 3 instructions
 ```
@@ -1746,6 +1756,418 @@ void main() {
 ```
 
 `0x8000000000000000 * 6` คือ 3 คูณ 2^64 ครึ่งบนจึงเป็น 3 `rbit(1)` ย้ายบิตล่างสุดไปบนสุด (ตัวเลขที่เห็นติดลบเพราะบิต 63 คือเครื่องหมาย) `rev(1)` คือ 1 ตามด้วยบิต 0 อีก 56 ตัว ชื่อคำสั่งมาจากคู่มือ ARM64; `jcmp file.jk -show ชื่อ` แสดงสิ่งที่สร้าง ชื่อที่ assembler ไม่รู้จักทำให้คอมไพเลอร์หยุดพร้อมข้อความ และ `raw<u32>[...]` (บทที่ 38) เขียนคำสั่งเครื่องเองได้
+
+# ภาคที่ 4: ภาษาเพิ่มเติม
+
+## บทที่ 49. ชื่อเป็นชั้น: โมดูลและ using
+
+ฟังก์ชันของไลบรารีมีชื่อสามชั้น: `Fs::fs.write(...)` คือ namespace `Fs` โมดูล `fs` และฟังก์ชัน `write` `using Fs;` ตัด namespace ออก เขียน `fs.write(...)` ได้เลย และ `using Str::str.len;` ทำให้ฟังก์ชันเดียวใช้ชื่อสั้นได้ รูปยาวใช้ได้เสมอ จึงใช้ปนกันได้ ไฟล์ของคุณเองนำเข้าด้วย `#import "ชื่อ"` (บทที่ 20) และไลบรารีด้วย `#import <ชื่อ>`
+
+```jk
+#import <stdlib>
+using stdlib;
+using Fs;
+using Str::str.len;
+
+void main() {
+    fs.write("tl_demo.txt", "hello modules\n");
+    String text = fs.read("tl_demo.txt");
+    cout << text;
+    cout << Fs::fs.size("tl_demo.txt") << " " << Str::str.len("abc") << "\n";
+    Fs::fs.remove("tl_demo.txt");
+}
+```
+
+ผลลัพธ์:
+
+```
+hello modules
+14 3
+```
+
+ชื่อสั้นทำให้โปรแกรมอ่านเหมือนสคริปต์ ชื่อยาวบอกว่าฟังก์ชันมาจากไหน ถ้ามีสองโมดูลที่ใช้อยู่ชื่อสั้นซ้ำกัน คอมไพเลอร์จะให้เขียนรูปยาว จึงไม่มีการเลือกโดยบังเอิญ
+
+## บทที่ 50. enum ที่เก็บค่า
+
+สมาชิกของ `enum class` เก็บค่าได้: `Circle(double r)`, `Rect(double w, double h)`, `Empty` ค่าของ enum คือสิ่งเดียวที่เป็นสมาชิกต่างกันในเวลาต่างกัน `switch` แกะมันออกและตั้งชื่อให้ค่า (`_` ข้ามค่าหนึ่ง) เมธอดเขียนหลังสมาชิกต่อจาก `;` และ `switch self^` ดูตัววัตถุเอง
+
+```jk
+#import <stdlib>
+
+using stdlib;
+enum class Color { Red, Green, Blue };
+
+enum class Shape { Circle(double r), Rect(double w, double h), Empty;
+    double area(self) {
+        switch self^ {
+            Shape::Circle(r): return 3.0 * r * r;
+            Shape::Rect(w, h): return w * h;
+            Shape::Empty: return 0.0;
+        }
+        return 0.0;
+    }
+};
+
+void main() {
+    Color c = Color::Green;
+    switch c {
+        Color::Red: cout << "red\n";
+        Color::Green: cout << "green\n";
+        Color::Blue: cout << "blue\n";
+    }
+    Shape a = Shape::Circle(2.0);
+    Shape b = Shape::Rect(3.0, 4.5);
+    Shape e = Shape::Empty;
+    cout << a.area() << " " << b.area() << " " << e.area() << "\n";
+    switch b {
+        Shape::Rect(w, _): cout << "width " << w << "\n";
+        _: cout << "something else\n";
+    }
+}
+```
+
+ผลลัพธ์:
+
+```
+green
+12.000000 13.500000 0.000000
+width 3.000000
+```
+
+`switch` ตรวจว่าจัดการทุกสมาชิกแล้ว เว้นแต่มี `_` เมื่อเพิ่มสมาชิกใหม่ จึงเห็นทุกจุดที่ต้องแก้ นี่คือเครื่องมือของสิ่งที่มีหลายรูป: token ข้อความ ผลลัพธ์
+
+## บทที่ 51. struct: เมธอด ซ้อน และอาร์เรย์
+
+`struct` รวมค่าและมีเมธอดได้ `self` คือตัววัตถุ struct ซ้อนกันได้ (`Line` เก็บ `Point` สองตัว เขียน `{{...}, {...}}`) ถูกคัดลอกเมื่อกำหนดค่า อาร์เรย์ของมันอ้างด้วยดัชนีเหมือนอาร์เรย์ทั่วไป และ `@p` คือพอยน์เตอร์ไปที่มัน (`q^.x` เข้าถึงสมาชิกผ่านพอยน์เตอร์)
+
+```jk
+#import <stdlib>
+
+using stdlib;
+struct Point {
+    double x;
+    double y;
+    double dist2(self) { return self.x * self.x + self.y * self.y; }
+    void move(self, double dx, double dy) { self.x += dx; self.y += dy; }
+}
+
+struct Line {
+    Point a;
+    Point b;
+}
+
+void main() {
+    Point p = {3.0, 4.0};
+    p.move(1.0, 0.0);
+    cout << p.x << " " << p.dist2() << "\n";
+    Line l = {{0.0, 0.0}, {6.0, 8.0}};
+    cout << l.b.dist2() << "\n";
+    Point pts[3];
+    for i in 0..3 { pts[i].x = (double)(i + 1); pts[i].y = (double)(i + 1); }
+    double total = 0.0;
+    for i in 0..3 { total += pts[i].dist2(); }
+    cout << total << "\n";
+    Point^ q = @p;
+    q^.x = 10.0;
+    cout << p.x << "\n";
+}
+```
+
+ผลลัพธ์:
+
+```
+4.000000 32.000000
+100.000000
+28.000000
+10.000000
+```
+
+`p.move(1.0, 0.0)` เปลี่ยน `p` เพราะ `self` คือตัววัตถุจริง ไม่ใช่สำเนา อาร์เรย์ของ struct ตรงนี้กรอกทีละสมาชิก การเขียน `pts[3] = {{...}}` ยังไม่รองรับ
+
+## บทที่ 52. ค่าที่คืนหน่วยความจำเอง
+
+struct ที่มีเมธอด `free(self)` จะคืนสิ่งที่ถืออยู่เมื่อจบบล็อกของตัวแปร เพราะอย่างนั้นมันจึง **ย้าย** ไม่ได้คัดลอก: `Buffer b = a;` ทำให้ `a` ว่างและ `b` เป็นเจ้าของหน่วยความจำ ส่งเข้าฟังก์ชันแบบค่าก็ย้ายเข้าไป และฟังก์ชันคืนเมื่อจบ คุณเขียน `free` ครั้งเดียวและไม่ต้องเรียกเอง
+
+```jk
+#import <stdlib>
+
+using stdlib;
+struct Buffer {
+    int^ data;
+    int n;
+    void free(self) {
+        if self.data != null { cout << "freeing " << self.n << "\n"; free[self.data]; }
+    }
+}
+
+Buffer make(int n) {
+    alloc[int^ p = n];
+    Buffer b = {p, n};
+    return b;
+}
+
+void use(Buffer b) {
+    cout << "using " << b.n << "\n";
+}
+
+void main() {
+    Buffer a = make(4);
+    Buffer b = a;
+    use(b);
+    cout << "end of main\n";
+}
+```
+
+ผลลัพธ์:
+
+```
+using 4
+freeing 4
+end of main
+```
+
+"freeing 4" พิมพ์ครั้งเดียว โดย `use` เมื่อพารามิเตอร์จบ ก่อน "end of main": buffer ถูกย้ายจาก `a` ไป `b` ไปยังพารามิเตอร์ ไม่มี free ซ้ำ ไม่รั่ว และไม่มี garbage collector String อาร์เรย์ และลิสต์สร้างด้วยวิธีเดียวกัน
+
+## บทที่ 53. พอยน์เตอร์ฟังก์ชันและ lambda
+
+ฟังก์ชันเป็นค่าได้: `int(int)^ op = twice;` คือพอยน์เตอร์ไปยังฟังก์ชันที่รับ `int` และให้ `int` ส่งให้ฟังก์ชันอื่นได้ (`apply`) และเรียกเหมือนฟังก์ชัน lambda คือฟังก์ชันไม่มีชื่อ เขียนตรงที่ใช้: ชนิดผลลัพธ์ พารามิเตอร์ และตัวฟังก์ชัน
+
+```jk
+#import <stdlib>
+
+using stdlib;
+int twice(int x) { return x * 2; }
+int square(int x) { return x * x; }
+
+int apply(int(int)^ f, int v) { return f(v); }
+
+void main() {
+    int(int)^ op = twice;
+    cout << op(5) << " " << apply(square, 7) << "\n";
+    int k = 3;
+    int(int)^ addk = int(int x) { return x + 100; };
+    cout << apply(addk, k) << "\n";
+}
+```
+
+ผลลัพธ์:
+
+```
+10 49
+103
+```
+
+วิธีนี้ทำให้การเรียงลำดับรับตัวเปรียบเทียบ thread รับงานของมัน และสร้างตารางคำสั่งได้ ชนิดเขียนเหมือนฟังก์ชัน: ผลลัพธ์ แล้วพารามิเตอร์ใน `( )` แล้ว `^`
+
+## บทที่ 54. ตัวเลขทุกขนาด
+
+`int` คือ 64 บิต แต่โปรแกรมสำหรับรูปแบบไฟล์หรือเครื่องจักรต้องการขนาดอื่น: `u8`, `u16`, `u32`, `u64` (ไม่มีเครื่องหมาย) และ `i8`, `i16`, `i32` เมื่อล้นมันวนกลับเหมือนฮาร์ดแวร์ `sizeof(ชนิด)` ให้ขนาดเป็นไบต์ และ `(ชนิด)ค่า` แปลงชนิด
+
+```jk
+#import <stdlib>
+
+using stdlib;
+void main() {
+    u8 b = 250;
+    b += 10;
+    u32 big = 4000000000;
+    big += 500000000;
+    i32 small = 2000000000;
+    small += 2000000000;
+    cout << b << " " << big << " " << small << "\n";
+    int wide = 4000000000;
+    cout << wide + 500000000 << "\n";
+    cout << sizeof(int) << " " << sizeof(u8) << " " << sizeof(double) << " " << sizeof(char) << "\n";
+    double d = 3.99;
+    int t = (int)d;
+    char c = (char)65;
+    cout << t << " " << c << " " << (int)'z' << "\n";
+}
+```
+
+ผลลัพธ์:
+
+```
+4 205032704 -294967296
+4500000000
+8 1 8 1
+3 A 122
+```
+
+250 + 10 ใน `u8` ได้ 4, 4,000,000,000 + 500,000,000 ใน `u32` ได้ 205,032,704 และสองพันล้านบวกสองพันล้านใน `i32` เป็นลบ ผลบวกเดียวกันใน `int` ไม่วน การแปลง `double` เป็น `int` ตัดทศนิยม (3.99 เป็น 3)
+
+## บทที่ 55. หน่วยความจำดิบ: alloc, pool และ grow
+
+`alloc[int^ p = n];` ขอ `int` จำนวน `n` จาก heap `p` เป็นเจ้าของ และคืนเมื่อจบบล็อก (หรือทันทีด้วย `free[p];`) `grow[p = m];` ขยายก้อนและเก็บเนื้อหาเดิม **pool** คือก้อนใหญ่ที่ตัดเป็นชิ้น: `alloc[pool[12] >> int^ a];` เอา 12 `int` จาก pool ให้ `a` (เป็น null ถ้า pool ไม่พอ) `free[b];` คืนหนึ่งชิ้น `free[pool];` คืนทั้งหมด
+
+```jk
+#import <stdlib>
+using stdlib;
+void main() {
+    alloc[int^ pool = 32];
+    alloc[pool[12] >> int^ a];
+    alloc[pool[12] >> int^ b];
+    for i in 0..3 { a[i] = i + 1; b[i] = (i + 1) * 10; }
+    cout << a[2] + b[2] << "\n";
+    free[b];
+    alloc[pool[12] >> int^ c];
+    c[0] = 99;
+    cout << a[0] << " " << c[0] << "\n";
+    free[pool];
+
+    alloc[int^ p = 2];
+    p[0] = 5;
+    p[1] = 6;
+    grow[p = 8];
+    p[7] = 70;
+    cout << p[1] << " " << p[7] << "\n";
+    free[p];
+}
+```
+
+ผลลัพธ์:
+
+```
+33
+1 99
+6 70
+```
+
+pool คือ allocator ในบทที่ 41 (พอยน์เตอร์ที่เดินหน้า) ที่เพิ่มการคืนทีละชิ้น `c` ได้พื้นที่ที่ `b` คืนมา ใช้ pool กับของเล็กๆ จำนวนมากที่เกิดและตายพร้อมกัน และตรวจ null เมื่อ pool อาจไม่พอ build แบบ debug (`jcmp -d`) ตรวจก้อนเหล่านี้ว่าเขียนเกินท้ายหรือใช้หลัง free ไหม
+
+## บทที่ 56. ไบต์ดิบและข้อมูลที่เปลี่ยนไม่ได้
+
+`raw<u32>[0x91008800];` ใส่คำสั่งเครื่องลงในโค้ดตามที่เขียนทุกประการ (ตรงนี้คือ `add x0, x0, #34`) ข้างประโยคปกติของฟังก์ชัน naked `#pragma read` ทำให้ตัวแปร global อ่านอย่างเดียว: การเขียนเป็น error ตอนคอมไพล์ และเขียนผ่านพอยน์เตอร์จะหยุดโปรแกรม เพราะหน้าหน่วยความจำถูกป้องกัน
+
+```jk
+#import <stdlib>
+
+using stdlib;
+#pragma read
+int limit = 100;
+
+#pragma read begin
+int table[4] = {10, 20, 30, 40};
+#pragma read end
+
+naked int answer() {
+    x0 = 0;
+    raw<u32>[0x91008800];
+    ret;
+}
+
+int main() {
+    int sum = 0;
+    for i in 0..4 { sum += table[i]; }
+    cout << sum << " " << limit << " " << answer() << "\n";
+    return 0;
+}
+```
+
+ผลลัพธ์:
+
+```
+100 100 34
+```
+
+`answer()` คือ 0 บวก 34 ตารางที่ห้ามเปลี่ยน (ตาราง lookup ค่าคงที่ของรูปแบบไฟล์) ควรอยู่ใต้ `#pragma read`: บั๊กที่เขียนทับจะถูกพบทันทีแทนที่จะพบทีหลัง คำสั่งดิบนี้ใช้กับ ARM64 บน ARM32 คำสั่งเดียวกันเป็นอีกคำสั่งหนึ่ง
+
+## บทที่ 57. สร้างโปรเจกต์ด้วย makej
+
+โปรเจกต์ที่มีหลายไฟล์และหลายโปรแกรมสร้างด้วย **makej** (ติดตั้งด้วย `curl -fsSL https://raw.githubusercontent.com/J2k-studio/Jcmp-Tools/main/install.sh | sh -s -- makej`) ไฟล์ build คือไฟล์ธรรมดาชื่อ `makej` ที่คุณเขียนเอง (`nano makej` หรือ `makej init` เขียนตัวเริ่มต้นให้) แต่ละ `[program.ชื่อ]` คือโปรแกรมที่สร้างจากไฟล์ `main` (พร้อม `flags` ที่ให้) แต่ละ `[library.ชื่อ]` คือไลบรารี (`-l`) และแต่ละ `[step.ชื่อ]` คือคำสั่งเชลล์ใดๆ ส่วน `needs` บอกสิ่งที่ต้องทำก่อน นี่คือโปรแกรมแรกของโปรเจกต์ `src/hello.jk`:
+
+```jk
+#import <stdlib>
+using stdlib;
+
+void main() {
+    cout << "hello\n";
+}
+```
+
+ผลลัพธ์:
+
+```
+hello
+```
+
+ไฟล์ `makej` ทั้งหมดของโปรเจกต์:
+
+```
+[makej]
+out = "_out"
+
+[program.hello]
+main = "src/hello.jk"
+
+[program.tool]
+main = "src/tool.jk"
+flags = "-d"
+
+[step.run]
+run = "_out/hello && _out/tool"
+needs = "hello tool"
+```
+
+แล้วในโฟลเดอร์ของโปรเจกต์:
+
+```
+$ makej
+makej: building hello
+makej: building tool
+makej: done
+$ makej
+makej: done
+$ makej -v run
+makej: hello is up to date
+makej: tool is up to date
+makej: run
+  $ _out/hello && _out/tool
+hello
+tool
+makej: done
+```
+
+`makej` ครั้งแรกสร้างทุกอย่าง ครั้งที่สองไม่มีอะไรต้องทำ เพราะโปรแกรมจะสร้างใหม่ก็ต่อเมื่อไฟล์ `.jk` หรือ `.j` ในโฟลเดอร์ของไฟล์ main (และโฟลเดอร์ย่อย) ใหม่กว่าผลลัพธ์ `makej ชื่อ` สร้างเป้าหมายเดียวกับสิ่งที่มันต้องใช้ `-v` แสดงคำสั่ง เป้าหมายที่ไฟล์ main อยู่โฟลเดอร์เดียวกันจะถูกสร้างพร้อมกันเมื่อไฟล์ในนั้นเปลี่ยน ชื่อผิดให้ `makej: there is no target 'nosuch'` และรหัสออก 2
+
+## บทที่ 58. หลายคอร์ และไฟล์ build ที่เป็นโปรแกรม
+
+`makej -j 4` สร้าง 4 อย่างพร้อมกัน (ค่าเริ่มต้นคือจำนวนคอร์ที่เปิดอยู่ เครื่องแบบนี้มี 8) เป้าหมายเริ่มทันทีที่สิ่งที่มันต้องใช้เสร็จ ถ้าตัวหนึ่งล้ม ตัวที่กำลังรันอยู่จะทำจนจบ ไม่เริ่มอะไรใหม่ และรหัสออกเป็น 1 เมื่อการสร้างต้องการ loop หรือเงื่อนไข ให้เขียนไฟล์ build เป็นโปรแกรม J2K ชื่อ `makej.jk` แทน (ชนะไฟล์ธรรมดาถ้ามีทั้งสอง):
+
+```jk
+#import <stdlib>
+using stdlib;
+
+void main() {
+    cout << "a build file is a program\n";
+}
+```
+
+ผลลัพธ์:
+
+```
+a build file is a program
+```
+
+นี่คือ `makej.jk` ของโปรเจกต์ที่สร้างโปรแกรมจากทุกไฟล์ในโฟลเดอร์ด้วย loop:
+
+```jk-no
+#import <stdlib>
+#import <makej>
+
+int main() {
+    Build b = Build::make();
+    String[] files = Dir::list("tools").unwrap();
+    for i in 0..files.len {
+        if files[i].ends_with(".jk") {
+            b.program(Path::stem(files[i]), "tools/" + files[i], "");
+        }
+    }
+    return b.run();
+}
+```
+
+`Build::make()` อ่านบรรทัดคำสั่ง (`-j`, `-v`, ชื่อเป้าหมาย) `b.program`, `b.library` และ `b.step` เพิ่มเป้าหมาย `b.needs(a, b)` จัดลำดับ และ `b.run()` สร้างแล้วให้รหัสออก มันเป็นโปรแกรมธรรมดา ทุกอย่างในบทสอนนี้จึงใช้ได้ในนั้น ทั้งไฟล์ธรรมดาและโปรแกรมใช้เครื่องยนต์เดียวกัน
 
 ## ต่อไป
 

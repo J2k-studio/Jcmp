@@ -1385,12 +1385,32 @@ int read_escape() {
     if c == 92 { return 92; }
     if c == 39 { return 39; }
     if c == '"' { return 34; }
+    if c == 'e' { return 27; }                       // the ESC character of the terminal: "\e[0m"
+    if c == 'a' { return 7; }
+    if c == 'b' { return 8; }
+    if c == 'x' {
+        // \xHH: a byte by two hexadecimal digits
+        int hv = 0;
+        int hn = 0;
+        while hn < 2 {
+            int hc = lc(0);
+            int hd = 0 - 1;
+            if hc >= '0' && hc <= '9' { hd = hc - '0'; }
+            else if hc >= 'a' && hc <= 'f' { hd = hc - 'a' + 10; }
+            else if hc >= 'A' && hc <= 'F' { hd = hc - 'A' + 10; }
+            if hd < 0 { die("\\x needs two hexadecimal digits (for example \\x1b)"); return 0; }
+            hv = hv * 16 + hd;
+            adv();
+            hn += 1;
+        }
+        return hv;
+    }
     char em[80];
     str_copy(@em, "unknown escape sequence: a backslash followed by '", 80);
     int el = str_len(@em);
     em[el] = c;
     em[el + 1] = 0;
-    append_text(@em, "' (the known ones are \\n \\t \\r \\0 \\\\ \\' \\\")");
+    append_text(@em, "' (the known ones are \\n \\t \\r \\0 \\e \\a \\b \\xHH \\\\ \\' \\\")");
     die(@em);
     return 0;
 }

@@ -12,12 +12,21 @@
 
 **วิธีที่ 1 — `install.sh` (แนะนำ)** โหลดรุ่นล่าสุด ตรวจ SHA-256 แล้ววาง `jcmp` ในโฟลเดอร์:
 
-```bash
+```
 curl -fsSL https://raw.githubusercontent.com/J2k-studio/Jcmp/main/install.sh | sh
-wget -qO- https://raw.githubusercontent.com/J2k-studio/Jcmp/main/install.sh | sh
+```
 
-# เลือกโฟลเดอร์เอง เช่น bin ที่อยู่ข้างโปรเจกต์ (../bin)
+```
+wget -qO- https://raw.githubusercontent.com/J2k-studio/Jcmp/main/install.sh | sh
+```
+
+เลือกโฟลเดอร์เอง เช่น bin ที่อยู่ข้างโปรเจกต์ (../bin):
+
+```
 curl -fsSL https://raw.githubusercontent.com/J2k-studio/Jcmp/main/install.sh | sh -s -- --dir ../bin
+```
+
+```
 wget -qO- https://raw.githubusercontent.com/J2k-studio/Jcmp/main/install.sh | sh -s -- --dir ../bin
 ```
 ตัวเลือก: `--dir โฟลเดอร์`, `--version 0.9.158` (เลือกรุ่น), `--with-assembler` (ติดตั้ง `j2k_asm` ด้วย)
@@ -26,20 +35,41 @@ wget -qO- https://raw.githubusercontent.com/J2k-studio/Jcmp/main/install.sh | sh
 **วิธีที่ 2 — คำสั่งเดียวด้วย `tar` (ไฟล์ที่ได้รันได้ทันที):** ไฟล์ธรรมดาที่โหลดจาก release จะ **ไม่มีสิทธิ์รัน** (GitHub ไม่เก็บสิทธิ์ของไฟล์)
 แต่ `jcmp.tar.gz` เก็บสิทธิ์ไว้ ข้างในมีแค่โปรแกรม `jcmp`:
 
-```bash
+```
 mkdir -p ../bin
+```
+
+```
 curl -fL https://github.com/J2k-studio/Jcmp/releases/latest/download/jcmp.tar.gz | tar xz -C ../bin
+```
+
+```
 wget -qO- https://github.com/J2k-studio/Jcmp/releases/latest/download/jcmp.tar.gz | tar xz -C ../bin
+```
+
+```
 ../bin/jcmp -version
 ```
 
 **วิธีที่ 3 — ทำเองทีละขั้นด้วยไฟล์ธรรมดาลง `../bin` (ต้อง `chmod +x`):**
 
-```bash
+```
 mkdir -p ../bin && cd ../bin
+```
+
+```
 curl -fLO https://github.com/J2k-studio/Jcmp/releases/latest/download/jcmp     # หรือ wget URL เดียวกัน
+```
+
+```
 curl -fLO https://github.com/J2k-studio/Jcmp/releases/latest/download/SHA256SUMS
+```
+
+```
 sha256sum -c --ignore-missing SHA256SUMS      # ต้องขึ้น: jcmp: OK
+```
+
+```
 chmod +x jcmp && rm SHA256SUMS
 ```
 

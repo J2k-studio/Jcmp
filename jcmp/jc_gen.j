@@ -826,7 +826,7 @@ int lam_params() {
             int pt = ty_tid;
             if ty_ptr != 0 { pt = 0; }
             if ty_void == 1 && ty_ptr == 0 { die_help("a parameter type cannot be void", "void is only for functions that give no value; use int, double, ... for a parameter"); }
-            if tok_kind != T_IDENT { die_help("a parameter name was expected", "write the type and then the name: int count"); }
+            if tok_kind != T_IDENT { die_help("a parameter name was expected", "write the type and then the name: int count (the words in and out are reserved for register blocks: do not use them as names)"); }
             if pn >= 8 { die("a lambda has at most 8 parameters"); }
             lam_ptmp[pn] = pt;
             pn += 1;

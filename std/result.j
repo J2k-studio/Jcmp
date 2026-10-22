@@ -79,7 +79,12 @@ enum class Option<T> { Some(T value), None;
     // the value (throws if there is none)
     T unwrap(self) {
         switch self^ {
-            Option::Some(v): return v;
+            Option::Some(_): {
+                T out;                                             // the bytes of the value move out; the Option frees nothing of it later
+                Mem::copy(@out, @self.Some_value, sizeof(T));
+                Mem::set(@self.Some_value, 0, sizeof(T));
+                return out;
+            }
             Option::None: __panic("unwrap of a None");
         }
         __panic("unwrap of a None");
@@ -87,7 +92,12 @@ enum class Option<T> { Some(T value), None;
     // the value, or fallback
     T or(self, T fallback) {
         switch self^ {
-            Option::Some(v): return v;
+            Option::Some(_): {
+                T out;
+                Mem::copy(@out, @self.Some_value, sizeof(T));
+                Mem::set(@self.Some_value, 0, sizeof(T));
+                return out;
+            }
             Option::None: return fallback;
         }
         return fallback;
@@ -98,7 +108,12 @@ enum class Result<T, E> { Ok(T value), Err(E error);
     // the value, or the error is thrown as a text (the short forms of the library: fs.read(path), json.parse(text) ...)
     T take(self) {
         switch self^ {
-            Result::Ok(v): return v;
+            Result::Ok(_): {
+                T out;                                         // the bytes of the value move out; the Result frees nothing of it later
+                Mem::copy(@out, @self.Ok_value, sizeof(T));
+                Mem::set(@self.Ok_value, 0, sizeof(T));
+                return out;
+            }
             Result::Err(e): Error::raise(e.message.c());
         }
         Error::raise("take of an Err");
@@ -108,7 +123,12 @@ enum class Result<T, E> { Ok(T value), Err(E error);
     // the value (throws if it is an error)
     T unwrap(self) {
         switch self^ {
-            Result::Ok(v): return v;
+            Result::Ok(_): {
+                T out;
+                Mem::copy(@out, @self.Ok_value, sizeof(T));
+                Mem::set(@self.Ok_value, 0, sizeof(T));
+                return out;
+            }
             Result::Err(e): __panic("unwrap of an Err");
         }
         __panic("unwrap of an Err");
@@ -116,7 +136,12 @@ enum class Result<T, E> { Ok(T value), Err(E error);
     // the value, or fallback
     T or(self, T fallback) {
         switch self^ {
-            Result::Ok(v): return v;
+            Result::Ok(_): {
+                T out;
+                Mem::copy(@out, @self.Ok_value, sizeof(T));
+                Mem::set(@self.Ok_value, 0, sizeof(T));
+                return out;
+            }
             Result::Err(e): return fallback;
         }
         return fallback;

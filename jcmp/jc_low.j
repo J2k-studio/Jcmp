@@ -866,7 +866,7 @@ void parse_naked_function(int f_idx) {
         while true {
             parse_type();
             if ty_void == 1 && ty_ptr == 0 { die("a parameter cannot be void"); }
-            if tok_kind != T_IDENT { die_help("a parameter name was expected", "write the type and then the name: int count"); }
+            if tok_kind != T_IDENT { die_help("a parameter name was expected", "write the type and then the name: int count (the words in and out are reserved for register blocks: do not use them as names)"); }
             if ty_dyn != 0 || (ty_tid >= 100 && ty_ptr == 0) { die("a naked function takes whole numbers and pointers only (the other values are read with Reg::)"); }
             if np >= 8 { die("a naked function has at most 8 parameters (x0 .. x7)"); }
             fptid[f_idx * 8 + np] = 0;
