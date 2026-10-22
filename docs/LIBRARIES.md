@@ -112,6 +112,8 @@ true 42
 4869 TWFu
 ```
 
+**Regex** (a backtracking matcher for the common cases): a character, `.`, `\d \w \s` (and `\D \W \S`), `[abc] [a-z] [^0-9]`, `^ $`, `x* x+ x? x{n} x{n,} x{n,m}` (a `?` after them makes them lazy), groups `( ... )` and `(?: ... )` with `|` inside and a quantifier after, and `|` between alternatives. `Regex::matches` (the whole text), `find` (where), `find_text`, `find_all` (every match), `count`, `replace(p, text, with)` and `split(p, text)`. There are no captures yet. A pattern that could repeat for ever is stopped.
+
 **Tip.** `Regex` is a backtracking matcher meant for common cases; for a plain word, `String.find` is much faster.
 
 <a id="files"></a>

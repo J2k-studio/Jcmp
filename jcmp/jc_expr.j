@@ -1899,6 +1899,8 @@ int edge_from[262144];
 char edge_to[16777216];       // 65536 x 64
 int edge_count;
 int freach[16384];
+int fexport[16384];             // 1: the function is marked `export` (a library entry point with the C calling rules)
+int fn_export;                  // 1 while the function being parsed is marked `export`
 
 void note_call(char^ name) {
     if pass_no != 2 { return; }
@@ -1923,6 +1925,21 @@ void compute_reach() {
     if pbl >= 0 && m >= 0 { freach[pbl] = 1; }
     int ppt = find_func("__print_ptr");
     if ppt >= 0 && m >= 0 { freach[ppt] = 1; }
+    if x_lib == 1 {
+        // a library: the entry points are the roots (there may be no main)
+        k = 0;
+        while k < fcount {
+            if fexport[k] == 1 { freach[k] = 1; }
+            k += 1;
+        }
+        // the routines of the runtime that the helpers of the text call by name (what every program has)
+        k = 0;
+        while k < fcount {
+            char^ lnm = @fname + k * 64;
+            if fbuiltin[k] == 1 && (str_eq(lnm, "__panic") || str_eq(lnm, "__flush") || str_eq(lnm, "__wr") || str_eq(lnm, "__print_bool") || str_eq(lnm, "__print_ptr") || str_eq(lnm, "__out_fd")) { freach[k] = 1; }
+            k += 1;
+        }
+    }
     if bare_mode == 1 {
         // a raw file is the program: every function of it is written (there may be no main)
         k = 0;
@@ -2226,6 +2243,8 @@ void gen_call() {
         if n != 5 { die("__thread_start takes five arguments"); }
         used_thread = 1;
         emit_line("bl j2k_thread_start");
+    } else if str_eq(@callee, "__gl") {
+        emit_line("mov x0, x28");                 // the global area (the runtime of a library finds its words with it)
     } else if str_eq(@callee, "__fp") {
         emit_line("mov x0, x29");                 // this function's frame: [x0] = the caller's frame, [x0 + 8] = the return address
     } else if str_eq(@callee, "__fntab") {

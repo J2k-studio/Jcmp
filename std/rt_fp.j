@@ -5,12 +5,12 @@
 // It is written out at the end of the program, before the standard error text of a panic / uncaught exception / crash, before a new process
 // (fork / execve) and before Sys::write.
 void __flush() {
-    int^ g = (int^)268435456;
+    int^ g = (int^)__gl();
     int n = g[110];
     g[110] = 0;
     int off = 0;
     while off < n {
-        int r = syscall(64, 1, (char^)(268435456 + 896 + off), n - off);
+        int r = syscall(64, 1, (char^)(__gl() + 896 + off), n - off);
         if r <= 0 { break; }
         off += r;
     }
@@ -22,7 +22,7 @@ void __wr(int fd, char^ p, int n) {
         syscall(64, fd, p, n);
         return;
     }
-    int^ g = (int^)268435456;
+    int^ g = (int^)__gl();
     int mode = g[111];
     if mode == 0 {
         char t[64];
@@ -49,7 +49,7 @@ void __wr(int fd, char^ p, int n) {
         }
         return;
     }
-    char^ dst = (char^)(268435456 + 896 + g[110]);
+    char^ dst = (char^)(__gl() + 896 + g[110]);
     for i in 0..n { dst[i] = p[i]; }
     g[110] += n;
 }
@@ -57,7 +57,7 @@ void __wr(int fd, char^ p, int n) {
 // a thread is made: from now on every write goes straight out (no lock around the buffer)
 void __out_unbuffer() {
     __flush();
-    int^ g = (int^)268435456;
+    int^ g = (int^)__gl();
     g[111] = 2;
 }
 
@@ -96,7 +96,7 @@ void __print_ptr(int v) {
 
 // the file that cout writes to: 1, or 2 inside a statement with cerr (the word at 864 of the global area, 0 or 1, plus 1)
 int __out_fd() {
-    int^ gout = (int^)268435456;
+    int^ gout = (int^)__gl();
     return gout[108] + 1;
 }
 

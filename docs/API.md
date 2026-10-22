@@ -316,17 +316,39 @@ struct Fmt {
 //   Regex::matches("[a-z]+@[a-z]+\\.com", "ann@mail.com") -> true     (the whole text)
 //   Regex::find("[0-9]+", "room 42, floor 7") -> 5                    (where the first match starts, or -1)
 //   Regex::find_text("[0-9]+", "room 42, floor 7") -> "42"
-// Pattern: a character, . (any), \d \w \s (and \D \W \S), [abc] [a-z] [^0-9], x* x+ x? on one thing, ^ $, \. (a character
-// that has a meaning), and | between the whole alternatives.
+//   Regex::find_all("[0-9]+", "room 42, floor 7") -> ["42", "7"]      Regex::replace(p, t, "#"), Regex::split(p, t), Regex::count(p, t)
+// Pattern: a character, . (any), \d \w \s (and \D \W \S), [abc] [a-z] [^0-9], \. (a character that has a meaning), ^ $,
+// x* x+ x? and x{n} x{n,} x{n,m} on one thing (greedy; a ? after them makes them lazy: x*?), ( ... ) a group (also with | inside, and
+// with a quantifier after it; (?: ... ) is the same), and | between whole alternatives. There are no captures yet.
+int rx_depth;
+                       // how deep the matcher is (a group repeated many times is a deep recursion)
+int rx_steps;
+                       // the work of one search: a pattern that cannot end (a group that matches nothing, repeated) is stopped
+int rx_qmin;
+                        // the last quantifier read by quant(): its least and its most (-1: no limit), its length, and lazy
+int rx_qmax;
+int rx_qlen;
+int rx_lazy;
+
 struct Regex {
     // does the character c belong to the class at p[i] (a \d, \w, \s, a [..] set, a . or a literal)? the length of the item in rl
     static int item_len(String p, int i);
     static bool class_has(char e, char c);
     // does the single item p[i .. i + n) match the character c?
     static bool item_matches(String p, int i, int n, char c);
+    // the quantifier at p[i] (i < pe): rx_qmin, rx_qmax (-1: no limit), rx_qlen (0: none) and rx_lazy
+    static void quant(String p, int i, int pe);
+    // the ")" that closes the "(" at p[i] (-1: none); p[i .. pe)
+    static int group_end(String p, int i, int pe);
     // the end of a match of p[pi .. pe) at t[ti ..], or -1 (backtracking)
     static int m(String p, int pi, int pe, String t, int ti);
-    // the end of the match of the alternative that starts at `from`, trying each `|` branch; the pattern is p[a .. e)
+    static int m2(String p, int pi, int pe, String t, int ti);
+    // a group "(inner)" repeated qmin .. qmax times, then the rest of the pattern: each branch of the group, followed by the group
+    // again (with the counts one less) and the rest, is a pattern of its own
+    static int group(String inner, int qmin, int qmax, int lazy, String rest, String t, int ti);
+    // the parts of a pattern between the top-level | (not inside [ ], \ or ( ))
+    static String[] alternatives(String p);
+    // the end of the match that starts exactly at ti (every top-level branch is tried), or -1
     static int match_here(String p, String t, int ti);
     // the position where the first match starts (-1: none)
     static int find(String p, String t);
@@ -334,6 +356,13 @@ struct Regex {
     static String find_text(String p, String t);
     // does the pattern match the whole text?
     static bool matches(String p, String t);
+    // every match, from left to right, none overlapping (an empty match is skipped)
+    static String[] find_all(String p, String t);
+    static int count(String p, String t);
+    // the text with every match replaced by `with`
+    static String replace(String p, String t, String with);
+    // the pieces of the text between the matches
+    static String[] split(String p, String t);
 }
 
 // regex: the short names (Regex::regex.matches(p, t), with  using Regex;  regex.matches(p, t))

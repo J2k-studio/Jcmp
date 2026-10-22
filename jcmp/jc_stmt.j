@@ -2776,6 +2776,8 @@ void parse_function() {
     fn_interrupt = 0;
     int f_align = fn_align;
     fn_align = 0;
+    int f_export = fn_export;
+    fn_export = 0;
     if f_interrupt == 1 && f_naked == 1 { die("a function is naked or interrupt, not both (an interrupt function has a prologue that saves the registers)"); }
     if f_idx < 0 {
         if fcount >= 16384 { die("too many functions"); }
@@ -2798,6 +2800,7 @@ void parse_function() {
         ft_add(fcount);
         fcount += 1;
     }
+    if f_export == 1 && f_idx >= 0 && f_idx < 16384 { fexport[f_idx] = 1; }
     if expect_pending > 0 && f_idx >= 0 && f_idx < 16384 {
         fexp_n[f_idx] = expect_pending;
         fexp_line[f_idx] = expect_line;
@@ -3466,8 +3469,10 @@ void parse_top_item() {
     fn_noreturn = 0;
     fn_interrupt = 0;
     fn_align = 0;
-    while tok_is("naked") || tok_is("noreturn") || tok_is("interrupt") || tok_is("align") {
-        if tok_is("naked") { fn_naked = 1; }
+    fn_export = 0;
+    while tok_is("naked") || tok_is("noreturn") || tok_is("interrupt") || tok_is("align") || tok_is("export") {
+        if tok_is("export") { fn_export = 1; }
+        else if tok_is("naked") { fn_naked = 1; }
         else if tok_is("noreturn") { fn_noreturn = 1; }
         else if tok_is("interrupt") { fn_interrupt = 1; }
         else {
@@ -3495,7 +3500,7 @@ void parse_top_item() {
         parse_function();
         return;
     }
-    if fn_naked == 1 || fn_noreturn == 1 || fn_interrupt == 1 || fn_align != 0 { die("naked, noreturn, interrupt and align(N) are for functions"); }
+    if fn_naked == 1 || fn_noreturn == 1 || fn_interrupt == 1 || fn_align != 0 || fn_export == 1 { die("naked, noreturn, interrupt, export and align(N) are for functions"); }
     if ty_void == 1 && ty_ptr == 0 { die_help("a variable cannot be void", "void is only for functions that give no value; use int, double, ... for a variable"); }
     parse_global(@d_fname);
 }
@@ -3681,41 +3686,9 @@ void emit_segv_handler() {
     emit_line("svc 0");
 }
 
-void emit_start_stub() {
-    int alt = (gl_bytes + 15) / 16 * 16;       // the stack of the SIGSEGV handler
-    gl_bytes = alt + 32768;
-    emit_line("j2k_start:");
-    emit_line("mov x28, 268435456");
-    emit_line("add x27, x28, #72");            // x27: this thread's block (thrown text, try handlers)
-    emit_line("add x9, sp, #0");
-    emit_line("str x9, [x28, #0]");
-    // SIGSEGV handler: rt_sigaction(11, {j2k_segv, SA_ONSTACK}) and sigaltstack
-    emit_line("sub sp, sp, #64");
-    emit_line("adr x0, j2k_segv");
-    emit_line("str x0, [sp, #0]");
-    if opt_debug == 1 { emit_line("mov x0, 134217732"); } else { emit_line("mov x0, 134217728"); }     // SA_ONSTACK (and SA_SIGINFO in a -d build)
-    emit_line("str x0, [sp, #8]");
-    emit_line("mov x0, 0");
-    emit_line("str x0, [sp, #16]");
-    emit_line("str x0, [sp, #24]");
-    emit_line("mov x0, 11");
-    emit_line("add x1, sp, #0");
-    emit_line("mov x2, 0");
-    emit_line("mov x3, 8");
-    emit_line("mov x8, 134");
-    emit_line("svc 0");
-    ins_n("mov x9, ", alt);
-    emit_line("add x0, x28, x9");
-    emit_line("str x0, [sp, #32]");
-    emit_line("mov x0, 0");
-    emit_line("str x0, [sp, #40]");
-    emit_line("mov x0, 32768");
-    emit_line("str x0, [sp, #48]");
-    emit_line("add x0, sp, #32");
-    emit_line("mov x1, 0");
-    emit_line("mov x8, 132");
-    emit_line("svc 0");
-    emit_line("add sp, sp, #64");
+// the values the global variables start with (and the constants of the floats and the structs), the pages that are made read-only:
+// the same for a program (at its start) and for a library (when it is loaded)
+void emit_global_init() {
     int i = 0;
     while i < ginit_count {
         ins_n("mov x9, ", ginit_val[i]);
@@ -3790,7 +3763,142 @@ void emit_start_stub() {
         }
         ro_i += 1;
     }
+}
+
+// -l: no start. Every function marked `export` gets an entry that follows the C rules of the platform: it keeps x27 and x28
+// (the registers the generated code keeps for itself), points x28 at the global area of the library (the .bss, label j2k_gl) and
+// calls the function. The arguments (x0 .. x7, d0 .. d7) and the result stay where they are.
+void emit_lib_stub() {
+    // the function the loader runs first: it gives the variables of the library their first values (the same code as the start of a program)
+    emit_line(".init j2k_lib_init");
+    emit_line("j2k_lib_init:");
+    emit_line("sub sp, sp, #32");
+    emit_line("str x30, [sp, #0]");
+    emit_line("str x28, [sp, #8]");
+    emit_line("str x27, [sp, #16]");
+    emit_line("adr x28, j2k_gl");
+    emit_line("add x27, x28, #72");
+    emit_global_init();
+    emit_line("mov x9, 2");                       // the output of a library is not buffered (nobody would flush it at the end)
+    emit_line("str x9, [x28, #888]");
+    emit_line("ldr x27, [sp, #16]");
+    emit_line("ldr x28, [sp, #8]");
+    emit_line("ldr x30, [sp, #0]");
+    emit_line("add sp, sp, #32");
+    emit_line("ret");
+    int k = 0;
+    while k < fcount {
+        if fexport[k] == 1 && freach[k] == 1 {
+            char^ en = @fname + k * 64;
+            if fnpar[k] > 8 { die_name("an export function takes 8 parameters at most", en); }
+            int ci = 0;
+            int cf = 0;
+            int src[8];
+            int isd[8];
+            int pi = 0;
+            while pi < fnpar[k] {
+                int pt = fptid[k * 8 + pi];
+                if fpstr[k * 8 + pi] == 1 || ((farr[k] >> pi) & 1) == 1 || pt >= 92 { die_name("an export function takes int, bool, char, pointers, float and double parameters (String, arrays and structs come later)", en); }
+                if pt == 91 { isd[pi] = 1; src[pi] = cf; cf += 1; }
+                else if pt == 90 { isd[pi] = 2; src[pi] = cf; cf += 1; }
+                else { isd[pi] = 0; src[pi] = ci; ci += 1; }
+                pi += 1;
+            }
+            if fvoid[k] == 0 && (fretstr[k] == 1 || fretdyn[k] != 0 || fret[k] >= 92) { die_name("an export function gives int, bool, char, a pointer, float or double (the other types come later)", en); }
+            emit_str(".export ");
+            emit_str(en);
+            emit_str(" j2k_x_");
+            emit_line(en);
+            emit_str("j2k_x_");
+            emit_str(en);
+            emit_line(":");
+            emit_line("sub sp, sp, #32");
+            emit_line("str x30, [sp, #0]");
+            emit_line("str x28, [sp, #8]");
+            emit_line("str x27, [sp, #16]");
+            emit_line("adr x28, j2k_gl");
+            emit_line("add x27, x28, #72");
+            // J2K gives parameter i in x_i (a double as its bits); C gives the integers in x0 .. and the doubles in d0 ..
+            pi = fnpar[k] - 1;
+            while pi >= 0 {
+                if isd[pi] == 1 {
+                    emit_str("fmov x");
+                    emit_int(pi);
+                    emit_str(", d");
+                    emit_int(src[pi]);
+                    emit_nl();
+                } else if isd[pi] == 2 {                                  // a float: J2K keeps its 32 bits in w_i
+                    emit_str("fmov w");
+                    emit_int(pi);
+                    emit_str(", s");
+                    emit_int(src[pi]);
+                    emit_nl();
+                } else if src[pi] != pi {
+                    emit_str("mov x");
+                    emit_int(pi);
+                    emit_str(", x");
+                    emit_int(src[pi]);
+                    emit_nl();
+                }
+                pi -= 1;
+            }
+            emit_str("bl ");
+            emit_line(en);
+            if fvoid[k] == 0 && fret[k] == 91 { emit_line("fmov d0, x0"); }
+            if fvoid[k] == 0 && fret[k] == 90 { emit_line("fmov s0, w0"); }
+            emit_line("ldr x27, [sp, #16]");
+            emit_line("ldr x28, [sp, #8]");
+            emit_line("ldr x30, [sp, #0]");
+            emit_line("add sp, sp, #32");
+            emit_line("ret");
+        }
+        k += 1;
+    }
+    emit_stub_tail();
+}
+
+void emit_start_stub() {
+    int alt = (gl_bytes + 15) / 16 * 16;       // the stack of the SIGSEGV handler
+    gl_bytes = alt + 32768;
+    emit_line("j2k_start:");
+    emit_line("mov x28, 268435456");
+    emit_line("add x27, x28, #72");            // x27: this thread's block (thrown text, try handlers)
+    emit_line("add x9, sp, #0");
+    emit_line("str x9, [x28, #0]");
+    // SIGSEGV handler: rt_sigaction(11, {j2k_segv, SA_ONSTACK}) and sigaltstack
+    emit_line("sub sp, sp, #64");
+    emit_line("adr x0, j2k_segv");
+    emit_line("str x0, [sp, #0]");
+    if opt_debug == 1 { emit_line("mov x0, 134217732"); } else { emit_line("mov x0, 134217728"); }     // SA_ONSTACK (and SA_SIGINFO in a -d build)
+    emit_line("str x0, [sp, #8]");
+    emit_line("mov x0, 0");
+    emit_line("str x0, [sp, #16]");
+    emit_line("str x0, [sp, #24]");
+    emit_line("mov x0, 11");
+    emit_line("add x1, sp, #0");
+    emit_line("mov x2, 0");
+    emit_line("mov x3, 8");
+    emit_line("mov x8, 134");
+    emit_line("svc 0");
+    ins_n("mov x9, ", alt);
+    emit_line("add x0, x28, x9");
+    emit_line("str x0, [sp, #32]");
+    emit_line("mov x0, 0");
+    emit_line("str x0, [sp, #40]");
+    emit_line("mov x0, 32768");
+    emit_line("str x0, [sp, #48]");
+    emit_line("add x0, sp, #32");
+    emit_line("mov x1, 0");
+    emit_line("mov x8, 132");
+    emit_line("svc 0");
+    emit_line("add sp, sp, #64");
+    emit_global_init();
     emit_line("b main");
+    emit_stub_tail();
+}
+
+// the names of the functions (for the trace of a panic) and the size of the global area; the end of the text
+void emit_stub_tail() {
     if used_fntab == 1 {
         // the names of the functions, for the trace that a panic prints
         emit_line("j2k_fntab:");

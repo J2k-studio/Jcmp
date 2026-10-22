@@ -801,6 +801,7 @@ bool as1_expr(int n) {
             return a1 != 0 && ast_nx[a1] == 0 && ast_kind[a1] == AK_VAR && as1_pt(ast_ty[a1]) && as1_expr(a1) && opt_debug == 0;
         }
         if bo == 11 { return a1 == 0 && opt_debug == 0; }
+        if bo == 40 { return a1 == 0; }
         if bo == 12 { return a1 != 0 && ast_nx[a1] == 0 && as1_scalar(ast_ty[a1]) && !as1_dbl(ast_ty[a1]) && as1_expr(a1) && opt_debug == 0; }
         if bo == 9 {
             // __hash(x): a String or a whole number / pointer
@@ -3163,6 +3164,11 @@ void gl_expr(int n) {
         if !go_null(gl_off[at_val[at_a[n]]], 0) { gl_failx(31); }
         return;
     }
+    if k == AK_BUILTIN && at_val[n] == 40 {
+        gl_ensure();
+        ir_add(IR_ADD, 1, 29, 0, 1, 0);                  // the base of the global area
+        return;
+    }
     if k == AK_BUILTIN && at_val[n] == 11 {
         gl_ensure();
         gl_load(1, 29, 0);                      // the saved stack pointer: argc is the first word
@@ -4856,8 +4862,10 @@ void gl_stmt(int n) {
             gl_ensure();
             if at_kind[rs] == AK_STR {
                 gl_rt2("__Str__from", 1);
-            } else if at_kind[rs] == AK_VAR && !(go_peek() == 4 && ow_b[go_pos] == 1 && ow_a[go_pos] == gl_off[at_val[rs]]) {
-                gl_rt2("__Str__clone", 1);
+            } else if at_kind[rs] == AK_VAR {
+                if !(go_peek() == 4 && ow_b[go_pos] == 1 && ow_a[go_pos] == gl_off[at_val[rs]]) { gl_rt2("__Str__clone", 1); }
+            } else if !(at_kind[rs] == AK_BIN || at_kind[rs] == AK_CALL || (at_kind[rs] == AK_METHOD && at_val[rs] >= 2005) || (at_kind[rs] == AK_METHOD && at_val[rs] >= 0 && at_val[rs] < 1000) || (at_kind[rs] == AK_BUILTIN && at_val[rs] == 13)) {
+                gl_rt2("__Str__clone", 1);                  // an element of an array, a field, ...: not ours to give away, the caller gets a copy
             }
         } else if at_a[n] != 0 {
             if gl_retf == 1 {

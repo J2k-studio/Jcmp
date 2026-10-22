@@ -13,7 +13,7 @@ and the ELF writer are inside the compiler.
 ### Command line
 
 ```
-jcmp input.jk [-o output] [-d] [-st] [-I dir] [--emit-asm file.jasm]
+jcmp input.jk [-o output] [-l] [-d] [-st] [-I dir] [--emit-asm file.jasm]
 jcmp input.jk output                    (the second name is the program; if it ends in .jasm only the assembler text is written)
 ```
 
@@ -26,6 +26,7 @@ jcmp input.jk output                    (the second name is the program; if it e
 | `-I dir`           | where `#import "name"` also looks (after the folder of the importing file) |
 | `-version`, `-help` | print the version / a short list of the options (one or two dashes: `--version`; also `-v`, `-h`) |
 | `-show NAME`       | write the code of the function NAME as it is in the program (ARM64) and the number of its instructions, then stop (nothing else is written) |
+| `-l`               | make a shared library (`.so`) instead of a program: the functions written with `export` in front are its entry points. See "Shared libraries" in LANGUAGE.md |
 | `-target arm32`    | write a 32-bit ARM program (ELF32) instead of an ARM64 one; `-target arm64` is the default. See "32-bit ARM" below |
 | `-d`               | debug build: array index checks. A bad index prints `runtime error: index out of bounds, array size is N` and the program exits with code 134 |
 

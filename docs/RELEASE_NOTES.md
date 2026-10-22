@@ -1,6 +1,8 @@
-# J2K / Jcmp 1.0.0.0
+# J2K / Jcmp 1.1.0.0
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
+
+**1.1.0.0:** shared libraries (`jcmp file.jk -l -o lib.so` and `export` functions that C, Java (JNI) and Python can call), a bigger Regex (groups, `|`, `{n,m}`, lazy quantifiers, `find_all` / `replace` / `split`), and a fix for `return` of a String taken from an array.
 
 **1.0.0.0:** the first stable release (see CHANGELOG.md). Programs built with jcmp may be sold and distributed freely, every update of jcmp 1.x is free, and a 1.x.x.x release keeps your programs working.
 

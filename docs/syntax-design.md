@@ -2184,3 +2184,33 @@ Answers given by the owner (the words are the owner's; what is marked "AI" is th
 * `#require cpu "crc32"` at the top of a file says that the program needs that extension of the CPU. Then `Cpu::crc32(crc, 8 bytes)`, `Cpu::crc32c(crc, 8 bytes)`, `Cpu::crc32_u8(crc, byte)`, `Cpu::crc32c_u8(crc, byte)` work (the instructions `crc32x`, `crc32cx`, `crc32b`, `crc32cb`). Without the directive a call is a compile error ("this function needs the CPU extension crc32"); an unknown name is an error; on `-target arm32` the directive is an error (ARMv7 has no crc32). Tests t491 (checked against zlib: the crc32 of "123456789" is 3421780262, the crc32c 3808858755), t492.
 * A program with `#require cpu "crc32"` checks at the start of `main` (`Cpu::require_check`, the bits of AT_HWCAP from the auxiliary vector) and stops with the message "this program needs the CPU extension crc32 ..." (exit code 1) on a CPU that lacks it, instead of an illegal instruction. Checked by hand with a library whose bit was changed (the CPU here has the extension).
 * Open: more extension names (aes, sha2, lse) and the same on ARM32 later.
+
+## 93. AI: models and training (owner's choices 2026-10-22; the exact spelling is OPEN)
+* **Decided by the owner:** matrix product is `@` (`y = x @ w + b;`, `*` stays element by element); training has **both** forms: a one-line command and a hand-written loop (the command is sugar for the loop).
+* **Owner's idea (to confirm):** the model is declared in a block written like `train.ai { ... }` (the owner asked "something like `train.ai{}`?").
+* **Sketch for discussion (nothing is implemented, names may change):**
+  ```
+  model Chat {                       // or: train.ai Chat { ... }
+      embed(256, 64);
+      dense(64, 128);
+      relu;
+      dense(128, 256);
+  }
+  train Chat on data epochs 10 rate 0.01;          // one line
+  for e in 0..10 { float loss = Chat.step(data.next()); }   // the same by hand
+  Chat.save("chat.jw");  String out = Chat.ask("hi");
+  ```
+* Open: the keyword (`model`, `train.ai`, `ai`), whether layer names are functions or words, `@` needs a `Tensor` type first (library `#import <neuron>`), the file format of weights.
+
+### 93.1 Decided 2026-10-22: the keyword is `model` (owner); the rest below is designed by AI at user request, adjustable
+* `model Name { ... }` declares the model (the name, e.g. `Chat`, is the name of the AI); inside it, one line per layer. A layer of neurons is `dense(in, out)` (every input to every neuron); others: `embed(vocab, size)`, `attention(heads)`, `norm`, `relu`, `gelu`, `softmax`, `dropout(p)`, `repeat(n) { ... }` (for a transformer with n blocks). A small language model (SLM) and a large one (LLM) are the same declaration with other sizes.
+* **What a model compiles to:** two things. (1) The code of the model is ordinary J2K compiled by `jcmp` into a program or a library (`-l`, so the app can call `Chat.ask`). (2) The knowledge is a **weights file `NAME.jw`** (architecture, vocabulary, numbers in float32; the library loads it at run time; it is not inside the program, so it can be trained again without compiling).
+* **Data:** training data is plain text or **JSON** (`data.json`: a list of `{"in": "...", "out": "..."}` or of lines). `makej model` is the planned mode: it reads `makej.toml`/the `.jk` files, checks the JSON, and packs the program, `NAME.jw` and the data into one bundle `NAME.jm` (a tar the app and `jget` can install: `jget model NAME`).
+* Open: the JSON field names, the layer list, quantised weights (int8) for the phone, and whether `.jm` is signed.
+
+### 93.2 Decided 2026-10-22 (owner): the library is `#import <neuron>` (not `<ai>`)
+* Weights file: `.jw` was the assistant's own name ("J2K weights"), not a standard. Standards: **GGUF** (llama.cpp; the common format of small and large language models, one file with the weights, the vocabulary and the settings), safetensors (PyTorch), ONNX. Proposal (adjustable): `neuron` **reads GGUF** (so existing open SLMs run in the app) and **saves its own trained model as GGUF too**; `.jw` is dropped. Owner to confirm.
+
+### 93.3 Decided 2026-10-22 (owner): the weights file stays `.jw`; the runner of models is the library `neuron`
+* `.jw` is the format of J2K (own, simple: header, layer list, vocabulary, float32). A reader for GGUF may come later as an importer (not decided).
+* Note for the implementation: `@` is already the prefix "address of" (`@x`). A binary `a @ b` can be told apart by position (after an operand), but the lexer/parser must be checked and a test added (cost: low, risk: the error message for `a @b`).

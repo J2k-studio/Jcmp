@@ -20,6 +20,24 @@ int as_label_count;
 char as_nbuf[64];               // the label name just read (zero padded)
 
 int as_bss_size;
+int as_lib;                     // 1: the output is a shared library (.so), not a program
+int as_xn_n;                    // the symbols a library gives to others (.export NAME LABEL)
+int as_has_init;                // 1: .init LABEL, the function the loader runs when the library is loaded (DT_INIT)
+int as_init_slot;
+char as_xn_name[4096];          // 64 names x 64 bytes
+int as_xn_slot[64];             // the label that holds the address
+char as_so_hdr[288];            // the ELF header and the 4 program headers of a library
+char as_so_meta[65536];         // after the code: the symbols, their names, the hash table and the dynamic section
+int as_so_m0;                   // the file place of as_so_meta
+int as_so_metalen;
+int as_so_v;                    // where the global area (.bss) starts in the library, a page boundary
+char as_so_zero[4096];
+
+// the address (in the file and in memory) of the first instruction: 176 in a program, 288 in a library
+int as_base() {
+    if as_lib == 1 { return 288; }
+    return 176;
+}
 int as_last_is_sp;              // parse_reg_or_sp: was it "sp"?
 char as_hdr[176];               // the ELF header
 
@@ -1659,7 +1677,7 @@ void as_instruction() {
             as_skip_spaces();
             int an = as_parse_number();
             if an < 4 || an > 4096 { as_fail(); }
-            while (as_pos + 176) % an != 0 { as_put32(0xD503201F); }
+            while (as_pos + as_base()) % an != 0 { as_put32(0xD503201F); }
             return;
         }
         if as_mn_is("asciz") {
@@ -1681,6 +1699,29 @@ void as_instruction() {
             }
             as_ci += 1;
             as_put32(w);                    // the rest of the text and the 0 byte (a new word if the text filled the last one)
+            return;
+        }
+        if as_mn_is("init") {
+            as_skip_spaces();
+            as_read_label_name();
+            as_init_slot = as_label_slot();
+            as_has_init = 1;
+            return;
+        }
+        if as_mn_is("export") {
+            // .export NAME LABEL : the library gives the address of LABEL to others under the name NAME
+            as_skip_spaces();
+            as_read_label_name();
+            if as_xn_n >= 64 { as_fail(); }
+            int xi = 0;
+            while xi < 64 {
+                as_xn_name[as_xn_n * 64 + xi] = as_nbuf[xi];
+                xi += 1;
+            }
+            as_skip_spaces();
+            as_read_label_name();
+            as_xn_slot[as_xn_n] = as_label_slot();
+            as_xn_n += 1;
             return;
         }
         if !as_mn_is("bss") { as_fail(); }
@@ -1851,6 +1892,164 @@ void as_build_header() {
 }
 
 
+// ------------------------------------------------- a shared library (-l)
+
+void as_so_put(char^ buf, int at, int bytes, int v) {
+    int i = 0;
+    while i < bytes {
+        buf[at + i] = (v >> (8 * i)) & 255;
+        i += 1;
+    }
+}
+
+// the layout after the code: .dynsym, .dynstr, .hash, .dynamic (one read-only part with the code), then the page of the global area
+void as_lib_layout() {
+    int n = as_xn_n;
+    as_so_m0 = (288 + as_pos + 7) & ~7;
+    int i = 0;
+    while i < 65536 { as_so_meta[i] = 0; i += 1; }
+    int symoff = 0;
+    int stroff = 24 * (n + 1);
+    int sp = stroff + 1;                    // the first byte of the string table is 0
+    int k = 0;
+    while k < n {
+        int sl = as_xn_slot[k];
+        if as_laddr[sl] < 0 { as_fail(); }
+        int so = symoff + 24 * (k + 1);
+        as_so_put(@as_so_meta, so, 4, sp - stroff);                  // st_name
+        as_so_meta[so + 4] = 0x12;                                    // GLOBAL, FUNC
+        as_so_put(@as_so_meta, so + 6, 2, 1);                         // st_shndx: not undefined
+        as_so_put(@as_so_meta, so + 8, 8, 288 + as_laddr[sl]);        // st_value
+        int j = 0;
+        while as_xn_name[k * 64 + j] != 0 && j < 63 {
+            as_so_meta[sp] = as_xn_name[k * 64 + j];
+            sp += 1;
+            j += 1;
+        }
+        as_so_meta[sp] = 0;
+        sp += 1;
+        k += 1;
+    }
+    int strsize = sp - stroff;
+    int hashoff = (sp + 3) & ~3;
+    as_so_put(@as_so_meta, hashoff, 4, 1);                            // nbucket
+    as_so_put(@as_so_meta, hashoff + 4, 4, n + 1);                    // nchain
+    int first = 0;
+    if n > 0 { first = 1; }
+    as_so_put(@as_so_meta, hashoff + 8, 4, first);                    // bucket[0]
+    k = 1;
+    while k < n {
+        as_so_put(@as_so_meta, hashoff + 12 + 4 * k, 4, k + 1);       // chain[k] = the next symbol, the last one 0
+        k += 1;
+    }
+    int dynoff = (hashoff + 12 + 4 * (n + 1) + 7) & ~7;
+    int mbase = as_so_m0;
+    int dynlen = 96;
+    if as_has_init == 1 {
+        if as_laddr[as_init_slot] < 0 { as_fail(); }
+        as_so_put(@as_so_meta, dynoff + 80, 8, 12);                     // DT_INIT: the loader calls it (the address is moved by the load address)
+        as_so_put(@as_so_meta, dynoff + 88, 8, 288 + as_laddr[as_init_slot]);
+        dynlen = 112;
+    }
+    as_so_put(@as_so_meta, dynoff, 8, 4);                  as_so_put(@as_so_meta, dynoff + 8, 8, mbase + hashoff);       // DT_HASH
+    as_so_put(@as_so_meta, dynoff + 16, 8, 5);             as_so_put(@as_so_meta, dynoff + 24, 8, mbase + stroff);       // DT_STRTAB
+    as_so_put(@as_so_meta, dynoff + 32, 8, 6);             as_so_put(@as_so_meta, dynoff + 40, 8, mbase + symoff);       // DT_SYMTAB
+    as_so_put(@as_so_meta, dynoff + 48, 8, 10);            as_so_put(@as_so_meta, dynoff + 56, 8, strsize);              // DT_STRSZ
+    as_so_put(@as_so_meta, dynoff + 64, 8, 11);            as_so_put(@as_so_meta, dynoff + 72, 8, 24);                   // DT_SYMENT
+    // two sections only, because the loader of Android wants a section table with a name table: the empty one, and the names (.dynstr)
+    int shoff = dynoff + dynlen;
+    as_so_put(@as_so_meta, shoff + 64 + 4, 4, 3);                      // sh_type = SHT_STRTAB
+    as_so_put(@as_so_meta, shoff + 64 + 24, 8, as_so_m0 + stroff);     // sh_offset
+    as_so_put(@as_so_meta, shoff + 64 + 32, 8, strsize);               // sh_size
+    as_so_put(@as_so_meta, shoff + 64 + 48, 8, 1);                     // sh_addralign
+    as_so_put(@as_so_meta, shoff + 128 + 4, 4, 6);                    // section 2: the dynamic section (SHT_DYNAMIC); the loader looks for it
+    as_so_put(@as_so_meta, shoff + 128 + 8, 8, 2);                     // sh_flags = ALLOC
+    as_so_put(@as_so_meta, shoff + 128 + 16, 8, as_so_m0 + dynoff);    // sh_addr
+    as_so_put(@as_so_meta, shoff + 128 + 24, 8, as_so_m0 + dynoff);    // sh_offset
+    as_so_put(@as_so_meta, shoff + 128 + 32, 8, dynlen);               // sh_size
+    as_so_put(@as_so_meta, shoff + 128 + 40, 4, 1);                    // sh_link = the string table
+    as_so_put(@as_so_meta, shoff + 128 + 48, 8, 8);                    // sh_addralign
+    as_so_put(@as_so_meta, shoff + 128 + 56, 8, 16);                   // sh_entsize
+    as_so_metalen = shoff + 192;
+    int metaend = as_so_m0 + as_so_metalen;
+    as_so_v = (metaend + 4095) & ~4095;
+    // the program headers
+    i = 0;
+    while i < 288 { as_so_hdr[i] = 0; i += 1; }
+    as_so_hdr[0] = 0x7f; as_so_hdr[1] = 0x45; as_so_hdr[2] = 0x4c; as_so_hdr[3] = 0x46;
+    as_so_hdr[4] = 2; as_so_hdr[5] = 1; as_so_hdr[6] = 1;
+    as_so_put(@as_so_hdr, 16, 2, 3);                  // ET_DYN
+    as_so_put(@as_so_hdr, 18, 2, 0xb7);               // AArch64
+    as_so_put(@as_so_hdr, 20, 4, 1);
+    as_so_put(@as_so_hdr, 32, 8, 64);                 // e_phoff
+    as_so_put(@as_so_hdr, 52, 2, 64);
+    as_so_put(@as_so_hdr, 54, 2, 56);
+    as_so_put(@as_so_hdr, 56, 2, 4);                  // four program headers
+    as_so_put(@as_so_hdr, 40, 8, as_so_m0 + shoff);  // e_shoff
+    as_so_put(@as_so_hdr, 58, 2, 64);                 // e_shentsize
+    as_so_put(@as_so_hdr, 60, 2, 3);                  // e_shnum
+    as_so_put(@as_so_hdr, 62, 2, 1);                  // e_shstrndx
+    as_so_put(@as_so_hdr, 64, 4, 1);                  // 1: PT_LOAD, R+X: the headers, the code, the tables
+    as_so_put(@as_so_hdr, 68, 4, 5);
+    as_so_put(@as_so_hdr, 96, 8, metaend);
+    as_so_put(@as_so_hdr, 104, 8, metaend);
+    as_so_put(@as_so_hdr, 112, 8, 4096);
+    as_so_put(@as_so_hdr, 120, 4, 1);                 // 2: PT_LOAD, R+W: the global area (.bss), nothing in the file
+    as_so_put(@as_so_hdr, 124, 4, 6);
+    as_so_put(@as_so_hdr, 128, 8, as_so_v);
+    as_so_put(@as_so_hdr, 136, 8, as_so_v);
+    as_so_put(@as_so_hdr, 144, 8, as_so_v);
+    int mem = (as_bss_size + 4095) & ~4095;
+    if mem < 4096 { mem = 4096; }
+    as_so_put(@as_so_hdr, 160, 8, mem);
+    as_so_put(@as_so_hdr, 168, 8, 4096);
+    as_so_put(@as_so_hdr, 176, 4, 2);                 // 3: PT_DYNAMIC
+    as_so_put(@as_so_hdr, 180, 4, 4);
+    as_so_put(@as_so_hdr, 184, 8, as_so_m0 + dynoff);
+    as_so_put(@as_so_hdr, 192, 8, as_so_m0 + dynoff);
+    as_so_put(@as_so_hdr, 200, 8, as_so_m0 + dynoff);
+    as_so_put(@as_so_hdr, 208, 8, dynlen);
+    as_so_put(@as_so_hdr, 216, 8, dynlen);
+    as_so_put(@as_so_hdr, 224, 8, 8);
+    as_so_put(@as_so_hdr, 232, 4, 0x6474e551);        // 4: PT_GNU_STACK, not executable
+    as_so_put(@as_so_hdr, 236, 4, 6);
+    as_so_put(@as_so_hdr, 280, 8, 16);
+    // the label of the global area: the code reaches it with adr (the distance must be less than 1 MB)
+    as_nbuf[0] = 'j'; as_nbuf[1] = '2'; as_nbuf[2] = 'k'; as_nbuf[3] = '_'; as_nbuf[4] = 'g'; as_nbuf[5] = 'l'; as_nbuf[6] = 0;
+    i = 7;
+    while i < 64 { as_nbuf[i] = 0; i += 1; }
+    int gl = as_label_slot();
+    as_laddr[gl] = as_so_v - 288;
+    if as_so_v - 288 - as_pos > 900000 || as_pos > 900000 { as_fail(); }
+}
+
+// write the library: the headers, the code, the tables, and zeros up to the page of the global area
+void as_write_so(char^ path) {
+    int out = syscall(56, -100, path, 577, 493);
+    if out < 0 {
+        char e1[48] = "cannot write the library file '";
+        syscall(64, 2, @e1, 31);
+        int pn = 0;
+        while path[pn] != 0 { pn += 1; }
+        syscall(64, 2, path, pn);
+        char e2[96] = "' (a folder with that name, or no permission?)\n";
+        syscall(64, 2, @e2, 48);
+        syscall(93, 1);
+    }
+    syscall(64, out, @as_so_hdr, 288);
+    syscall(64, out, @as_code, as_pos);
+    syscall(64, out, @as_so_zero, as_so_m0 - (288 + as_pos));
+    syscall(64, out, @as_so_meta, as_so_metalen);
+    int rest = as_so_v - (as_so_m0 + as_so_metalen);
+    while rest > 0 {
+        int chunk = rest;
+        if chunk > 4096 { chunk = 4096; }
+        syscall(64, out, @as_so_zero, chunk);
+        rest -= chunk;
+    }
+    syscall(57, out);
+}
+
 // ------------------------------------------------- the library entry points
 
 // as_src[0 .. len) holds the .jasm text: assemble it (exits with a message on error)
@@ -1864,9 +2063,12 @@ void as_assemble(int len) {
         as_lhash[z] = 0;
         z += 1;
     }
+    as_xn_n = 0;
+    as_has_init = 0;
     as_run_pass();
+    if as_lib == 1 { as_lib_layout(); }
     as_resolve();
-    as_build_header();
+    if as_lib == 0 { as_build_header(); }
 }
 
 // write the ELF file of the last as_assemble

@@ -71,6 +71,8 @@ jcmp hello.jk -o hello      # คอมไพล์
 56. ไบต์ดิบและข้อมูลที่เปลี่ยนไม่ได้
 57. สร้างโปรเจกต์ด้วย makej
 58. หลายคอร์ และไฟล์ build ที่เป็นโปรแกรม
+59. ไลบรารีที่ใช้ร่วมกัน: export และ -l
+60. สคริปต์ด้วย jsh และการเขียนโค้ดบนมือถือ
 
 ## บทที่ 1. สวัสดีชาวโลก
 
@@ -2168,6 +2170,77 @@ int main() {
 ```
 
 `Build::make()` อ่านบรรทัดคำสั่ง (`-j`, `-v`, ชื่อเป้าหมาย) `b.program`, `b.library` และ `b.step` เพิ่มเป้าหมาย `b.needs(a, b)` จัดลำดับ และ `b.run()` สร้างแล้วให้รหัสออก มันเป็นโปรแกรมธรรมดา ทุกอย่างในบทสอนนี้จึงใช้ได้ในนั้น ทั้งไฟล์ธรรมดาและโปรแกรมใช้เครื่องยนต์เดียวกัน
+
+## บทที่ 59. ไลบรารีที่ใช้ร่วมกัน: export และ -l
+
+คอมไพเลอร์ไม่ได้สร้างได้แค่โปรแกรม ด้วย `-l` มันสร้าง **ไลบรารีที่ใช้ร่วมกัน** (`.so`) ที่จุดเข้าคือฟังก์ชันที่ใส่ `export` ไว้ข้างหน้า นี่คือวิธีที่โค้ด J2K กลายเป็น "สมอง" ของแอพ Android หรือตัวช่วยของโปรแกรมอื่น ไฟล์ด้านล่างเป็นโปรแกรมปกติเพื่อให้บทนี้รันได้ โค้ดไลบรารีอยู่ถัดไป
+
+```jk
+#import <stdlib>
+using stdlib;
+
+void main() {
+    cout << "a library has no main; this lesson is a program so that it runs\n";
+}
+```
+
+ผลลัพธ์:
+
+```
+a library has no main; this lesson is a program so that it runs
+```
+
+```jk-no
+export int add(int a, int b) { return a + b; }
+export double half(double x) { return x / 2.0; }
+
+int counter = 10;
+export int next() { counter = counter + 1; return counter; }
+```
+
+สร้างด้วย  `jcmp mylib.jk -l -o libmy.so`  แล้วโปรแกรมอะไรก็โหลดได้: โปรแกรม C แอพ Android (JNI, `System.loadLibrary`) หรือ python:
+
+```
+$ python3 -c "import ctypes; L = ctypes.CDLL('./libmy.so'); print(L.add(2, 3), L.next(), L.next())"
+5 11 12
+```
+
+ฟังก์ชัน `export` ใช้กฎการเรียกของแพลตฟอร์ม: จำนวนเต็มใน `x0 ..` และ `double` ใน `d0 ..` พารามิเตอร์และผลลัพธ์เป็น `int`, `bool`, `char` และ `double` ได้ (ไม่เกิน 8 พารามิเตอร์) String อาร์เรย์ และ struct ยังข้ามขอบเขตไม่ได้ ไลบรารีมีตัวแปรของตัวเอง (`counter` เริ่มที่ 10 ตอนโหลด) และฮีปของตัวเอง ยังไม่ได้: `cout` ในไลบรารี
+
+## บทที่ 60. สคริปต์ด้วย jsh และการเขียนโค้ดบนมือถือ
+
+คำสั่งของ shell ก็เป็นโปรแกรมเช่นกัน ในบทนี้โปรแกรมเป็นตัวแทนของโปรแกรมที่คุณจะเขียนบนมือถือ ด้านล่างเป็นสคริปต์
+
+```jk
+#import <stdlib>
+using stdlib;
+
+void main() {
+    cout << "write it with coderin, build it with jcmp, run it\n";
+}
+```
+
+ผลลัพธ์:
+
+```
+write it with coderin, build it with jcmp, run it
+```
+
+`jsh` ซึ่งเป็น shell ของ Jaric รันสคริปต์ได้ สคริปต์คือไฟล์ข้อความ `jsh script.sh a b` รันมัน (`$1` คือ `a`, `$2` คือ `b`) ส่วนประกอบมีดังนี้:
+
+```jk-no
+name=world
+echo hello $name                        # ตัวแปร และคอมเมนต์
+if [ -f notes.txt ]; then echo found; else echo missing; fi
+for f in *.jk; do echo file $f; done    # glob
+n=0
+while [ $n -lt 3 ]; do n=$((n + 1)); done     # คำนวณ
+count=$(dir *.jk | wc -l)               # ผลลัพธ์ของคำสั่ง
+hello() { echo hi $1; }                 # ฟังก์ชัน
+hello jao
+```
+
+เขียนและสร้างบนมือถือ: `coderin hello.jk` (Ctrl-S บันทึก Ctrl-Q ออก) แล้ว `jcmp hello.jk -o hello && ./hello` ใน `makej` การสร้างก็เป็นไฟล์เช่นกัน
 
 ## ต่อไป
 

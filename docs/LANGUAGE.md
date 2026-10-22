@@ -1196,3 +1196,27 @@ void main() {
 ```
 
 The program prints `3421780262` (the same number as zlib's `crc32`).
+
+## Shared libraries: `export` and `-l`
+
+A file that has no `main` and whose functions are marked `export` can be built as a **shared library** that a C program, an Android app (through JNI, `System.loadLibrary`) or python (`ctypes`) loads:
+
+```jk-no
+export int add(int a, int b) { return a + b; }
+export double half(double x) { return x / 2.0; }
+
+int counter = 10;                       // a variable of the library: it gets its first value when the library is loaded
+export int next() { counter = counter + 1; return counter; }
+```
+
+```
+jcmp mylib.jk -l -o libmy.so
+```
+
+* An `export` function follows the calling rules of the platform (AAPCS64 on ARM64): integers in `x0 ..`, a `double` in `d0 ..`, the result in `x0` or `d0`. The name of the entry is the name of the function.
+* Parameters and result: `int`, `bool`, `char`, `float`, `double` and pointers (`int^`, `char^`, `double^`: a buffer that the caller owns), at most 8 parameters. (String, arrays and structs come later; the compiler says so when you use them.)
+* For Java (JNI) write the name that Java looks for: `export int Java_com_example_Core_add(int env, int cls, int a, int b)` is `static native int add(int a, int b)` of the class `com.example.Core`.
+* The library has its own global variables, its own heap and its own `String`s and arrays inside; they never cross its border yet.
+* The functions that are not marked `export` stay inside (and are not in the file if no exported function reaches them).
+* Try it from python: `ctypes.CDLL('./libmy.so').add(2, 3)` is 5.
+* Not yet: `cout` inside a library, ARM32, and a library that calls another library. The test `t502` in the repository loads a library the way a C program does.

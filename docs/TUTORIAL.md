@@ -71,6 +71,8 @@ For the complete list of features see [LANGUAGE.md](LANGUAGE.md); for the comman
 56. Raw bytes and data that cannot change
 57. Building a project with makej
 58. Several cores, and the build file as a program
+59. Shared libraries: export and -l
+60. Scripts with jsh, and writing on the phone
 
 ## Lesson 1. Hello, world
 
@@ -2171,6 +2173,77 @@ int main() {
 ```
 
 `Build::make()` reads the command line (`-j`, `-v`, the target), `b.program`, `b.library` and `b.step` add targets, `b.needs(a, b)` orders them, and `b.run()` builds and gives the exit code. It is an ordinary program, so everything in this tutorial works in it. For the plain file and for the program the engine is the same.
+
+## Lesson 59. Shared libraries: export and -l
+
+A program is not the only thing the compiler can make. With `-l` it makes a **shared library** (`.so`) whose entry points are the functions marked `export`. This is how J2K code becomes the "brain" of an Android app or a helper of any other program. The file below is a normal program here, so that this lesson can run; the library code comes after it.
+
+```jk
+#import <stdlib>
+using stdlib;
+
+void main() {
+    cout << "a library has no main; this lesson is a program so that it runs\n";
+}
+```
+
+Output:
+
+```
+a library has no main; this lesson is a program so that it runs
+```
+
+```jk-no
+export int add(int a, int b) { return a + b; }
+export double half(double x) { return x / 2.0; }
+
+int counter = 10;
+export int next() { counter = counter + 1; return counter; }
+```
+
+Build it with  `jcmp mylib.jk -l -o libmy.so`  and any program can load it: a C program, an Android app (JNI, `System.loadLibrary`), or python:
+
+```
+$ python3 -c "import ctypes; L = ctypes.CDLL('./libmy.so'); print(L.add(2, 3), L.next(), L.next())"
+5 11 12
+```
+
+An `export` function follows the calling rules of the platform: integers in `x0 ..`, a `double` in `d0 ..`. Parameters and results may be `int`, `bool`, `char` and `double` (up to 8 parameters); String, arrays and structs do not cross the border yet. The library keeps its own variables (`counter` starts at 10 when the library is loaded) and its own heap. Not yet: `cout` inside a library.
+
+## Lesson 60. Scripts with jsh, and writing on the phone
+
+The commands of the shell are programs too. Here the lesson program stands for the program you will write on the phone; below it, a script.
+
+```jk
+#import <stdlib>
+using stdlib;
+
+void main() {
+    cout << "write it with coderin, build it with jcmp, run it\n";
+}
+```
+
+Output:
+
+```
+write it with coderin, build it with jcmp, run it
+```
+
+`jsh`, the shell of Jaric, runs scripts. A script is a text file; `jsh script.sh a b` runs it (`$1` is `a`, `$2` is `b`). These are the pieces:
+
+```jk-no
+name=world
+echo hello $name                        # variables, and comments
+if [ -f notes.txt ]; then echo found; else echo missing; fi
+for f in *.jk; do echo file $f; done    # globs
+n=0
+while [ $n -lt 3 ]; do n=$((n + 1)); done     # arithmetic
+count=$(dir *.jk | wc -l)               # the output of a command
+hello() { echo hi $1; }                 # a function
+hello jao
+```
+
+To write and build on the phone: `coderin hello.jk` (Ctrl-S saves, Ctrl-Q quits), then `jcmp hello.jk -o hello && ./hello`. In `makej` a build is a file too.
 
 ## Where next
 

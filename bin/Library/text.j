@@ -331,8 +331,17 @@ struct Fmt {
 //   Regex::matches("[a-z]+@[a-z]+\\.com", "ann@mail.com") -> true     (the whole text)
 //   Regex::find("[0-9]+", "room 42, floor 7") -> 5                    (where the first match starts, or -1)
 //   Regex::find_text("[0-9]+", "room 42, floor 7") -> "42"
-// Pattern: a character, . (any), \d \w \s (and \D \W \S), [abc] [a-z] [^0-9], x* x+ x? on one thing, ^ $, \. (a character
-// that has a meaning), and | between the whole alternatives.
+//   Regex::find_all("[0-9]+", "room 42, floor 7") -> ["42", "7"]      Regex::replace(p, t, "#"), Regex::split(p, t), Regex::count(p, t)
+// Pattern: a character, . (any), \d \w \s (and \D \W \S), [abc] [a-z] [^0-9], \. (a character that has a meaning), ^ $,
+// x* x+ x? and x{n} x{n,} x{n,m} on one thing (greedy; a ? after them makes them lazy: x*?), ( ... ) a group (also with | inside, and
+// with a quantifier after it; (?: ... ) is the same), and | between whole alternatives. There are no captures yet.
+int rx_depth;                       // how deep the matcher is (a group repeated many times is a deep recursion)
+int rx_steps;                       // the work of one search: a pattern that cannot end (a group that matches nothing, repeated) is stopped
+int rx_qmin;                        // the last quantifier read by quant(): its least and its most (-1: no limit), its length, and lazy
+int rx_qmax;
+int rx_qlen;
+int rx_lazy;
+
 struct Regex {
     // does the character c belong to the class at p[i] (a \d, \w, \s, a [..] set, a . or a literal)? the length of the item in rl
     static int item_len(String p, int i) {
@@ -398,31 +407,112 @@ struct Regex {
         }
         return c == e;
     }
+    // the quantifier at p[i] (i < pe): rx_qmin, rx_qmax (-1: no limit), rx_qlen (0: none) and rx_lazy
+    static void quant(String p, int i, int pe) {
+        rx_qmin = 1;
+        rx_qmax = 1;
+        rx_qlen = 0;
+        rx_lazy = 0;
+        if i >= pe { return; }
+        char q = p[i];
+        if q == '*' { rx_qmin = 0; rx_qmax = -1; rx_qlen = 1; }
+        else if q == '+' { rx_qmin = 1; rx_qmax = -1; rx_qlen = 1; }
+        else if q == '?' { rx_qmin = 0; rx_qmax = 1; rx_qlen = 1; }
+        else if q == '{' {
+            int j = i + 1;
+            int lo = 0;
+            int hi = 0;
+            bool digits = false;
+            while j < pe && p[j] >= '0' && p[j] <= '9' { lo = lo * 10 + (p[j] - '0'); j += 1; digits = true; }
+            if !digits { return; }
+            hi = lo;
+            if j < pe && p[j] == ',' {
+                j += 1;
+                if j < pe && p[j] == '}' { hi = -1; }
+                else {
+                    hi = 0;
+                    while j < pe && p[j] >= '0' && p[j] <= '9' { hi = hi * 10 + (p[j] - '0'); j += 1; }
+                }
+            }
+            if j >= pe || p[j] != '}' { return; }
+            rx_qmin = lo;
+            rx_qmax = hi;
+            rx_qlen = j + 1 - i;
+        } else { return; }
+        if i + rx_qlen < pe && p[i + rx_qlen] == '?' { rx_lazy = 1; rx_qlen += 1; }
+    }
+    // the ")" that closes the "(" at p[i] (-1: none); p[i .. pe)
+    static int group_end(String p, int i, int pe) {
+        int depth = 0;
+        int j = i;
+        while j < pe {
+            char c = p[j];
+            if c == '\\' { j += 2; continue; }
+            if c == '[' { j += Regex::item_len(p, j); continue; }
+            if c == '(' { depth += 1; }
+            if c == ')' {
+                depth -= 1;
+                if depth == 0 { return j; }
+            }
+            j += 1;
+        }
+        return -1;
+    }
     // the end of a match of p[pi .. pe) at t[ti ..], or -1 (backtracking)
     static int m(String p, int pi, int pe, String t, int ti) {
+        rx_depth += 1;
+        rx_steps += 1;
+        int r = -1;
+        if rx_depth <= 4000 && rx_steps <= 2000000 { r = Regex::m2(p, pi, pe, t, ti); }
+        rx_depth -= 1;
+        return r;
+    }
+    static int m2(String p, int pi, int pe, String t, int ti) {
         if pi >= pe { return ti; }
         if p[pi] == '$' && pi + 1 == pe {
             if ti == t.len { return ti; }
             return -1;
         }
+        if p[pi] == '(' {
+            int g = Regex::group_end(p, pi, pe);
+            if g < 0 { return -1; }
+            String inner = p.slice(pi + 1, g);
+            if inner.starts_with("?:") { inner = inner.slice(2, inner.len); }
+            Regex::quant(p, g + 1, pe);
+            int qmin = rx_qmin;
+            int qmax = rx_qmax;
+            int lazy = rx_lazy;
+            String rest = p.slice(g + 1 + rx_qlen, pe);
+            return Regex::group(inner, qmin, qmax, lazy, rest, t, ti);
+        }
         int n = Regex::item_len(p, pi);
         int after = pi + n;
-        char q = 0;
-        if after < pe { q = p[after]; }
-        if q == '*' || q == '+' || q == '?' {
-            int rest = after + 1;
+        Regex::quant(p, after, pe);
+        if rx_qlen > 0 {
+            int qmin = rx_qmin;
+            int qmax = rx_qmax;
+            int lazy = rx_lazy;
+            int rest = after + rx_qlen;
             int count = 0;
             int pos = ti;
-            int maxn = 1000000;
-            if q == '?' { maxn = 1; }
+            if lazy == 1 {
+                // as few as possible first, then more
+                while count < qmin && pos < t.len && Regex::item_matches(p, pi, n, t[pos]) { pos += 1; count += 1; }
+                if count < qmin { return -1; }
+                while true {
+                    int r = Regex::m(p, rest, pe, t, ti + count);
+                    if r >= 0 { return r; }
+                    if (qmax >= 0 && count >= qmax) || pos >= t.len || !Regex::item_matches(p, pi, n, t[pos]) { return -1; }
+                    pos += 1;
+                    count += 1;
+                }
+            }
             // as many as possible first, then fewer
-            while count < maxn && pos < t.len && Regex::item_matches(p, pi, n, t[pos]) {
+            while (qmax < 0 || count < qmax) && pos < t.len && Regex::item_matches(p, pi, n, t[pos]) {
                 pos += 1;
                 count += 1;
             }
-            int least = 0;
-            if q == '+' { least = 1; }
-            while count >= least {
+            while count >= qmin {
                 int r = Regex::m(p, rest, pe, t, ti + count);
                 if r >= 0 { return r; }
                 count -= 1;
@@ -434,33 +524,67 @@ struct Regex {
         }
         return -1;
     }
-    // the end of the match of the alternative that starts at `from`, trying each `|` branch; the pattern is p[a .. e)
-    static int match_here(String p, String t, int ti) {
+    // a group "(inner)" repeated qmin .. qmax times, then the rest of the pattern: each branch of the group, followed by the group
+    // again (with the counts one less) and the rest, is a pattern of its own
+    static int group(String inner, int qmin, int qmax, int lazy, String rest, String t, int ti) {
+        if qmax == 0 { return Regex::m(rest, 0, rest.len, t, ti); }
+        String again = "(" + inner + ")";
+        int nmin = qmin;
+        if nmin > 0 { nmin -= 1; }
+        int nmax = qmax;
+        if nmax > 0 { nmax -= 1; }
+        if nmax == 0 { again = ""; }
+        else if nmax < 0 && nmin == 0 { again = again + "*"; }
+        else if nmax < 0 { again = again + "{" + str(nmin) + ",}"; }
+        else { again = again + "{" + str(nmin) + "," + str(nmax) + "}"; }
+        if lazy == 1 { if again.len > 0 { again = again + "?"; } }
+        if lazy == 1 && qmin == 0 {
+            int r0 = Regex::m(rest, 0, rest.len, t, ti);
+            if r0 >= 0 { return r0; }
+        }
+        String[] br = Regex::alternatives(inner);
+        for k in 0..br.len {
+            String pat = br[k] + again + rest;
+            int r = Regex::m(pat, 0, pat.len, t, ti);
+            if r >= 0 { return r; }
+        }
+        if qmin == 0 && lazy == 0 { return Regex::m(rest, 0, rest.len, t, ti); }
+        return -1;
+    }
+    // the parts of a pattern between the top-level | (not inside [ ], \ or ( ))
+    static String[] alternatives(String p) {
+        String[] r = arr(4);
         int start = 0;
+        int depth = 0;
         int i = 0;
-        // top level `|` (not inside [ ])
-        while i <= p.len {
-            bool at_end = i == p.len;
-            if !at_end && p[i] == '[' {
-                i += Regex::item_len(p, i);
-                continue;
-            }
-            if !at_end && p[i] == '\\' {
-                i += 2;
-                continue;
-            }
-            if at_end || p[i] == '|' {
-                int ps = start;
-                int r = -1;
-                if ps < i && p[ps] == '^' {
-                    if ti == 0 { r = Regex::m(p, ps + 1, i, t, ti); }
-                } else {
-                    r = Regex::m(p, ps, i, t, ti);
-                }
-                if r >= 0 { return r; }
+        while i < p.len {
+            char c = p[i];
+            if c == '\\' { i += 2; continue; }
+            if c == '[' { i += Regex::item_len(p, i); continue; }
+            if c == '(' { depth += 1; }
+            if c == ')' { depth -= 1; }
+            if c == '|' && depth == 0 {
+                r.push(p.slice(start, i));
                 start = i + 1;
             }
             i += 1;
+        }
+        r.push(p.slice(start, p.len));
+        return r;
+    }
+    // the end of the match that starts exactly at ti (every top-level branch is tried), or -1
+    static int match_here(String p, String t, int ti) {
+        String[] br = Regex::alternatives(p);
+        for k in 0..br.len {
+            String b = br[k];
+            int r = -1;
+            rx_steps = 0;
+            if b.len > 0 && b[0] == '^' {
+                if ti == 0 { r = Regex::m(b, 1, b.len, t, ti); }
+            } else {
+                r = Regex::m(b, 0, b.len, t, ti);
+            }
+            if r >= 0 { return r; }
         }
         return -1;
     }
@@ -482,36 +606,61 @@ struct Regex {
     }
     // does the pattern match the whole text?
     static bool matches(String p, String t) {
-        // each alternative must end at the end of the text: add the end anchor to every branch by trying the ends
-        int start = 0;
-        int i = 0;
-        while i <= p.len {
-            bool at_end = i == p.len;
-            if !at_end && p[i] == '[' {
-                i += Regex::item_len(p, i);
-                continue;
+        String whole = "^(?:" + p + ")$";
+        return Regex::match_here(whole, t, 0) >= 0;
+    }
+    // every match, from left to right, none overlapping (an empty match is skipped)
+    static String[] find_all(String p, String t) {
+        String[] r = arr(4);
+        int s = 0;
+        while s <= t.len {
+            int e = Regex::match_here(p, t, s);
+            if e > s {
+                r.push(t.slice(s, e));
+                s = e;
+            } else {
+                s += 1;
             }
-            if !at_end && p[i] == '\\' {
-                i += 2;
-                continue;
-            }
-            if at_end || p[i] == '|' {
-                int ps = start;
-                int pe = i;
-                if ps < pe && p[ps] == '^' { ps += 1; }
-                int r = Regex::m(p, ps, pe, t, 0);
-                if r == t.len { return true; }
-                // a shorter match was found first: the whole text may still match another way
-                if r >= 0 && r != t.len {
-                    // try every end: the matcher returns the first; check by anchoring with $
-                    String anchored = p.slice(ps, pe) + "$";
-                    if Regex::m(anchored, 0, anchored.len, t, 0) == t.len { return true; }
-                }
-                start = i + 1;
-            }
-            i += 1;
         }
-        return false;
+        return r;
+    }
+    static int count(String p, String t) {
+        String[] all = Regex::find_all(p, t);
+        return all.len;
+    }
+    // the text with every match replaced by `with`
+    static String replace(String p, String t, String with) {
+        String out = "";
+        int s = 0;
+        while s <= t.len {
+            int e = Regex::match_here(p, t, s);
+            if e > s {
+                out = out + with;
+                s = e;
+            } else {
+                if s < t.len { out.push(t[s]); }
+                s += 1;
+            }
+        }
+        return out;
+    }
+    // the pieces of the text between the matches
+    static String[] split(String p, String t) {
+        String[] r = arr(4);
+        int s = 0;
+        int piece = 0;
+        while s <= t.len {
+            int e = Regex::match_here(p, t, s);
+            if e > s {
+                r.push(t.slice(piece, s));
+                s = e;
+                piece = e;
+            } else {
+                s += 1;
+            }
+        }
+        r.push(t.slice(piece, t.len));
+        return r;
     }
 }
 

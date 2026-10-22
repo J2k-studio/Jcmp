@@ -1079,6 +1079,7 @@ int ast_fop_of(int at) {
     if str_eq(nm, "arr") { return 7; }              // arr(n): a new dynamic array (only as the value of a declaration)
     if str_eq(nm, "move") { return 14; }               // move(p): the value of the owner p, which becomes null
     if str_eq(nm, "str") { return 13; }                // str(x): a new String with the number, the character or the String x
+    if str_eq(nm, "__gl") { return 40; }               // __gl(): the address of the global area (x28 on ARM64): a library finds its variables with it
     if str_eq(nm, "argc") { return 11; }              // argc(): the number of arguments of the command line
     if str_eq(nm, "arg") { return 12; }               // arg(i): the i-th argument, a text
     if str_eq(nm, "__hash") { return 9; }             // __hash(x): a number for a key of a Map / Set (a whole number is hashed, a String too)

@@ -24,3 +24,6 @@ Worked first time after fixing five small things; pipes, redirection, background
 8. **`out` (and `in`) are read as modifiers**, so `String^ out` as a parameter name is refused with a message that does not say why. **The help text now says that the words are reserved.**
 9. **A statement cannot start with `(`** (`((int^)p)[3] = 1;`): use a variable. (A crash that was first blamed on assigning a switch binding to an outer variable could not be reproduced in a small program; it came together with the `unwrap()` use after free that is fixed.)
 10. `String::push(char)` and `slice` made the line editor easy; a `String.insert(pos, text)` and `remove(pos, n)` would make it shorter.
+
+## Found while writing coderin (2026-10-22): a function that returns the String of an array element gave away the String of the array
+`String get(int i) { return g[i]; }` and then `String s = get(0);` (a local that is freed at the end of its block) freed the buffer that `g[i]` still points to: the second call returned garbage (the text path `-noast` was right, the tree path was not). Fixed in jc_astlow.j (AK_RET of a String: only a fresh String or a moved owner is not copied). Test t503. Workaround for 1.0.0.0: `return g[i] + "";`.
