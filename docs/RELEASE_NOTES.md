@@ -1,6 +1,8 @@
-# J2K / Jcmp 1.1.0.0
+# J2K / Jcmp 1.2.0.0
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
+
+**1.2.0.0:** inheritance (`struct Dog : Animal`, `virtual` / `override`), native GPU from J2K (`-dyn`, OpenGL ES 3.1, Vulkan), `jcmp -j N` (many cores) and `-progress`, `Fs::read.*`, a fix for `bool` fields of structs.
 
 **1.1.0.0:** shared libraries (`jcmp file.jk -l -o lib.so` and `export` functions that C, Java (JNI) and Python can call), a bigger Regex (groups, `|`, `{n,m}`, lazy quantifiers, `find_all` / `replace` / `split`), and a fix for `return` of a String taken from an array.
 

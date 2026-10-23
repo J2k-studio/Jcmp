@@ -187,6 +187,7 @@ void cc_keys() {
     cc_flags = cc_mix(cc_flags, opt_debug);
     cc_flags = cc_mix(cc_flags, opt_fma);
     cc_flags = cc_mix(cc_flags, opt_peep);
+    cc_flags = cc_mix(cc_flags, opt_rot);
     cc_flags = cc_mix(cc_flags, opt_regs);
     cc_flags = cc_mix(cc_flags, reserve_mask);       // #reserve x19: the registers the program keeps for itself
     cc_flags = cc_mix(cc_flags, bare_mode);

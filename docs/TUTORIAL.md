@@ -2245,6 +2245,170 @@ hello jao
 
 To write and build on the phone: `coderin hello.jk` (Ctrl-S saves, Ctrl-Q quits), then `jcmp hello.jk -o hello && ./hello`. In `makej` a build is a file too.
 
+## Lesson 61. The libraries of the phone: `-dyn` and `<native>`
+
+A normal J2K program is *static*: it is one file that talks to the kernel with system calls and needs nothing else. The graphics chip, however, is reached through the libraries of the phone (`libvulkan.so`, `libEGL.so`, `libGLESv3.so`, `libOpenCL.so`). To use them the program must be *dynamic*: the loader of Android starts it and gives it `libdl.so` and `libc.so`. You ask for that with one option:
+
+```
+jcmp -dyn gpu.jk -o gpu       # a dynamic executable; it runs in Termux and in the Jaric app, without any other app
+```
+
+The library `<native>` does the rest: `Native::open("libvulkan.so")` gives a *handle* (0 when the library is not there), `Native::sym(handle, "name")` gives the address of a function, and `Native::call1 .. call8` call it with whole numbers and pointers (the answer is the whole number the function returns). Memory that a C function fills is read with `Native::peek32`, `peek64`, `peek8`, and written with `poke32`, `poke64`; `Native::text(address)` makes a String from a C string.
+
+```jk
+#import <stdlib>
+#import <native>
+
+int main() {
+    int lib = Native::open("libvulkan.so");
+    if lib == 0 {
+        cout << "no libvulkan here, or the program was not built with jcmp -dyn\n";
+        return 1;
+    }
+    int fn = Native::sym(lib, "vkEnumerateInstanceVersion");   // the function: VkResult vkEnumerateInstanceVersion(uint32_t* version)
+    char out[16];                                              // room for the number the function writes
+    out[0] = 0; out[1] = 0; out[2] = 0; out[3] = 0;
+    int result = Native::call1(fn, (int)@out);                 // call it with the address of out
+    int v = Native::peek32((int)@out);                         // read the 32 bits it wrote
+    cout << "Vulkan " << (v >> 22) << "." << ((v >> 12) & 1023) << "\n";
+    return 0;
+}
+```
+
+On the phone of the author this prints `Vulkan 1.1`. Built the normal (static) way it prints the first message, because a static program has no `libdl.so`.
+
+How it works, in short: the library reads `/proc/self/maps`, finds where `libdl.so` is in memory, reads its symbol table and finds `dlopen` and `dlsym`; a function pointer made from that number is called like any function. Floating point arguments (OpenGL takes many) are passed with `Native::callf1 .. callf4` (floats only) and `Native::calli_f1 .. calli_f4` (a number first, then floats), because the C convention wants them in other registers than J2K uses.
+
+## Lesson 62. OpenGL ES: the first picture, drawn by the chip
+
+`<opengl3>` makes an *off-screen* OpenGL ES context (a surface the size you ask, not shown on the screen) on the real driver, then every call is the same as in the OpenGL ES documentation, spelled the J2K way (`glClearColor` is `gl.clear_color`).
+
+```jk
+#import <stdlib>
+#import <opengl3>
+
+int main() {
+    Gl gl = Gl::open(64, 64, 3, 1);                    // 64 x 64 pixels, OpenGL ES 3.1 (use 2, 0 for the old 2.0)
+    if !gl.ok {
+        cout << "no OpenGL here: " << gl.log << "\n";  // gl.log says why
+        return 1;
+    }
+    cout << "chip: " << gl.renderer << "\n";           // for example Mali-G76
+    gl.clear_color(1.0, 0.5, 0.0, 1.0);                // red, green, blue, alpha: orange
+    gl.clear_color_buffer();                           // the chip paints the whole picture
+    String pixels = gl.read_pixels(10, 10, 1, 1);      // read one pixel back: 4 bytes
+    cout << (pixels[0] & 255) << " " << (pixels[1] & 255) << " " << (pixels[2] & 255) << "\n";
+    gl.close();
+    return 0;
+}
+```
+
+It prints `255 128 0` (the numbers of the orange). `read_pixels` returns the bytes red, green, blue, alpha of each pixel, starting with the bottom row (OpenGL counts up from the bottom). To show a picture on the screen of the Jaric app, send its pixels with the `gfx` messages (the library `<gamej>` shows how), or use the library `<gpu>`, which sends *commands* to the app and lets the app draw on the screen.
+
+## Lesson 63. A triangle and a shader
+
+The chip runs small programs called *shaders*, written in GLSL (a language like C). A *vertex shader* places each corner of a triangle; a *fragment shader* gives each pixel its colour. `gl.program(vertex, fragment)` compiles both and links them; it gives 0 and fills `gl.log` when a shader has a mistake (the message of the driver tells the line).
+
+```jk
+#import <stdlib>
+#import <opengl3>
+
+int main() {
+    Gl gl = Gl::open(64, 64, 3, 1);
+    if !gl.ok { cout << gl.log << "\n"; return 1; }
+    String vertex = "#version 300 es\nlayout(location = 0) in vec2 pos;\nvoid main() { gl_Position = vec4(pos, 0.0, 1.0); }\n";
+    String fragment = "#version 300 es\nprecision mediump float;\nout vec4 color;\nvoid main() { color = vec4(1.0, 0.5, 0.0, 1.0); }\n";
+    int prog = gl.program(vertex, fragment);
+    if prog == 0 { cout << "shader: " << gl.log << "\n"; return 1; }
+    gl.clear_color(0.0, 0.0, 0.0, 1.0);
+    gl.clear_color_buffer();
+    gl.use(prog);
+    Floats corners = Floats::make(6);                  // three corners, x and y each, from -1 to 1
+    corners.set(0, -1.0); corners.set(1, -1.0);
+    corners.set(2, 1.0);  corners.set(3, -1.0);
+    corners.set(4, 0.0);  corners.set(5, 1.0);
+    gl.draw_triangles(corners, 3);
+    String inside = gl.read_pixels(32, 20, 1, 1);      // a pixel inside the triangle
+    String outside = gl.read_pixels(1, 62, 1, 1);      // a pixel in the top left corner
+    cout << (inside[0] & 255) << " " << (outside[0] & 255) << "\n";
+    gl.close();
+    return 0;
+}
+```
+
+It prints `255 0`: orange inside, black outside. `Floats` is a block of memory of 32-bit numbers (what the chip reads); `set(i, x)` and `get(i)` use it. The same steps draw thousands of triangles: put many corners in one `Floats`, send them once, draw once.
+
+## Lesson 64. The chip as a calculator: compute shaders
+
+OpenGL ES 3.1 can run a shader that draws nothing and only *computes*. You give it a block of numbers, tell how many groups of threads to start, and the chip runs the same small program on every number at once (hundreds at the same time). `gl.compute(source, data, groups_x, groups_y, groups_z)` does all the steps and gives the changed numbers back.
+
+```jk
+#import <stdlib>
+#import <opengl3>
+
+int main() {
+    Gl gl = Gl::open(8, 8, 3, 1);
+    if !gl.ok { cout << gl.log << "\n"; return 1; }
+    // each thread takes one number: v = v * 2 + 1.  local_size_x = 8: a group has 8 threads.
+    String shader = "#version 310 es\nlayout(local_size_x = 8) in;\nlayout(std430, binding = 0) buffer Data { float v[]; };\nvoid main() { uint i = gl_GlobalInvocationID.x; v[i] = v[i] * 2.0 + 1.0; }\n";
+    Floats data = Floats::make(16);
+    for i in 0..16 { data.set(i, (float)i); }
+    Floats result = gl.compute(shader, data, 2, 1, 1);   // 2 groups of 8 threads = 16 numbers
+    if gl.log.len > 0 { cout << "log: " << gl.log << "\n"; }
+    cout << result.get(0) << " " << result.get(5) << " " << result.get(15) << "\n";
+    gl.close();
+    return 0;
+}
+```
+
+It prints `1.000000 11.000000 31.000000`. The chip is not faster for a single number; it wins when there are very many numbers and the same work on each: pictures, physics of many bodies, matrices, the layers of a neural network (`<neuron>` can use it later).
+
+## Lesson 65. Vulkan: asking the chip
+
+Vulkan is the modern interface: more to write, more control, less work for the driver. `<vulkan>` is the first step: it makes an *instance*, finds the chip and tells what it can do. The other steps (device, queue, buffers, pipelines) are built in the same way: a structure in memory, a function found by name, `Native::call`.
+
+```jk
+#import <stdlib>
+#import <vulkan>
+
+int main() {
+    Vk vk = Vk::open();
+    if !vk.ok { cout << vk.log << "\n"; return 1; }
+    cout << vk.device_name << ", Vulkan " << vk.api_text() << "\n";
+    cout << "memory " << vk.memory_mb << " MB, queues " << vk.queue_families << ", compute " << vk.has_compute << "\n";
+    vk.close();
+    return 0;
+}
+```
+
+On the author's phone: `Mali-G76, Vulkan 1.1.97`, 7460 MB, one queue family that can compute. Build it with `jcmp -dyn`. A Vulkan structure is a block of bytes with the fields at fixed places (the specification gives the offsets): `Native::poke32(address + offset, value)` writes a field; look at the source of `<vulkan>` (`jcmp -showlib vulkan`) to see how `VkApplicationInfo` and `VkInstanceCreateInfo` are filled.
+
+## Lesson 66. Games: Jaric Engine
+
+`makej init -game` makes a project with a small game and five lessons (`makej play1` .. `play5`). The library `<gamej>` is the engine: the loop is yours (`while game.running()`), the engine gives the keys and touches, the time of a turn (`g.dt`), drawing (`clear rect circle line text art`), collision (`Game::overlap`) and sound. In a terminal it draws with half blocks; in the Jaric app it draws on a surface; `makej apk` makes it an Android app, `makej pack` a `.jec` package.
+
+```jk
+#import <stdlib>
+#import <gamej>
+
+int main() {
+    Game g = Game::open("Lesson");            // the whole screen
+    double x = 20.0;                          // where the square is
+    while g.running() {                       // false after Esc
+        g.begin();                            // read the keys, measure the time (g.dt in seconds)
+        if g.held(Key::left()) { x -= 40.0 * g.dt; }       // 40 pixels a second: the same speed on every phone
+        if g.held(Key::right()) { x += 40.0 * g.dt; }
+        g.clear(Game::rgb(10, 20, 40));       // the colour of the sky
+        g.rect((int)x, 30, 6, 6, Game::rgb(255, 200, 60));  // x y width height colour
+        g.end();                              // show the picture, wait for the next turn
+    }
+    g.close();
+    return 0;
+}
+```
+
+For the chip itself use `<gpu>` in the app (triangles, pictures, tints: one batch of commands per picture) or `<opengl3>` / `<vulkan>` in a dynamic program. The plan of the engine (layers, a scene system like Godot's, the API like MonoGame's) is in the documents of the Jaric project.
+
 ## Where next
 
 * [LIBRARIES.md](LIBRARIES.md) — how to use each part of the standard library, by category.

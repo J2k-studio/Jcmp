@@ -1,0 +1,23 @@
+#import <stdlib>
+#import <math>
+#import <gpu>
+int main() {
+    Gpu g = Gpu::open(320, 180);
+    if !g.ok() { cout << "no graphics chip here\n"; return 0; }
+    g.load(1, "ship.png");
+    int n = 0;
+    while g.running() && n < 30 {
+        g.begin();
+        g.clear(Gpu::rgb(10, 20, 40));
+        g.rect(10, 10, 50, 30, Gpu::rgb(255, 200, 60));
+        g.tri(100, 100, 140, 100, 120, 60, Gpu::rgb(255, 0, 0));
+        g.tri_colors(200, 100, Gpu::rgb(255, 0, 0), 240, 100, Gpu::rgb(0, 255, 0), 220, 60, Gpu::rgb(0, 0, 255));
+        g.circle(160, 90, 20, Gpu::rgba(255, 255, 255, 128));
+        g.line(0, 0, 320, 180, 2, Gpu::rgb(255, 255, 255));
+        g.image(1, 150, 90, 32, 32, Gpu::rgb(255, 255, 255));
+        g.end();
+        n += 1;
+    }
+    g.close();
+    return 0;
+}

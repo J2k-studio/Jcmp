@@ -1,0 +1,12 @@
+#import <stdlib>
+#import <gpu>
+void main() {
+    Gpu g = Gpu::open(320, 180);
+    int t0 = Time::now_ms();
+    for f in 0..300 {
+        g.cmd = arr(16384);
+        for i in 0..2000 { g.tri(i % 300, i % 170, i % 300 + 10, i % 170, i % 300 + 5, i % 170 + 9, 0xffff0000 + i); }
+    }
+    int t1 = Time::now_ms();
+    cout << "gpu commands: " << (t1 - t0) * 1000 / 300 << " us per frame for 2000 triangles (building the list)\n";
+}

@@ -1,0 +1,17 @@
+#import <stdlib>
+#import <native>
+
+int main() {
+    int lib = Native::open("libvulkan.so");
+    if lib == 0 {
+        cout << "no libvulkan here, or the program was not built with jcmp -dyn\n";
+        return 1;
+    }
+    int fn = Native::sym(lib, "vkEnumerateInstanceVersion");   // the function: VkResult vkEnumerateInstanceVersion(uint32_t* version)
+    char out[16];                                              // room for the number the function writes
+    out[0] = 0; out[1] = 0; out[2] = 0; out[3] = 0;
+    int result = Native::call1(fn, (int)@out);                 // call it with the address of out
+    int v = Native::peek32((int)@out);                         // read the 32 bits it wrote
+    cout << "Vulkan " << (v >> 22) << "." << ((v >> 12) & 1023) << "\n";
+    return 0;
+}

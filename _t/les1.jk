@@ -1,0 +1,17 @@
+#import <stdlib>
+#import <opengl3>
+
+int main() {
+    Gl gl = Gl::open(64, 64, 3, 1);                    // 64 x 64 pixels, OpenGL ES 3.1 (use 2, 0 for the old 2.0)
+    if !gl.ok {
+        cout << "no OpenGL here: " << gl.log << "\n";  // gl.log says why
+        return 1;
+    }
+    cout << "chip: " << gl.renderer << "\n";           // for example Mali-G76
+    gl.clear_color(1.0, 0.5, 0.0, 1.0);                // red, green, blue, alpha: orange
+    gl.clear_color_buffer();                           // the chip paints the whole picture
+    String pixels = gl.read_pixels(10, 10, 1, 1);      // read one pixel back: 4 bytes
+    cout << (pixels[0] & 255) << " " << (pixels[1] & 255) << " " << (pixels[2] & 255) << "\n";
+    gl.close();
+    return 0;
+}

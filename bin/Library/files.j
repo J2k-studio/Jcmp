@@ -67,6 +67,25 @@ struct Fs {
         if n < 0 { return Result<String, Error>::Err(Fs::error(n, "cannot read ", path)); }
         return Result<String, Error>::Ok(text);
     }
+    // the whole file as bytes in a String: any byte, also zero (read_text stops at a zero byte)
+    static Result<String, Error> read_bytes(String path) {
+        int fd = Sys::open_read(path.c());
+        if fd < 0 { return Result<String, Error>::Err(Fs::error(fd, "cannot open ", path)); }
+        String data = "";
+        char buf[4096];
+        int n = Sys::read(fd, @buf, 4096);
+        while n > 0 {
+            for i in 0..n { data.push(buf[i]); }
+            n = Sys::read(fd, @buf, 4096);
+        }
+        Sys::close(fd);
+        if n < 0 { return Result<String, Error>::Err(Fs::error(n, "cannot read ", path)); }
+        return Result<String, Error>::Ok(data);
+    }
+    // write the bytes of a String (any byte) to the file (made or emptied); Ok(the number of bytes)
+    static Result<int, Error> write_bytes(String path, String data) {
+        return Fs::write_text(path, data);
+    }
     // the lines of a file (without the line ends)
     static Result<String[], Error> read_lines(String path) {
         String text = Fs::read_text(path)?;
@@ -274,6 +293,12 @@ struct __Files {
     static Result<int, Error> fs_try_remove(String path) { return Fs::remove(path); }
     static int fs_rename(String from, String to) { return Fs::rename(from, to).take(); }
     static Result<int, Error> fs_try_rename(String from, String to) { return Fs::rename(from, to); }
+    static String read_text(String path) { return Fs::read_text(path).take(); }
+    static Result<String, Error> read_try_text(String path) { return Fs::read_text(path); }
+    static String read_bytes(String path) { return Fs::read_bytes(path).take(); }
+    static Result<String, Error> read_try_bytes(String path) { return Fs::read_bytes(path); }
+    static String[] read_lines(String path) { return Fs::read_lines(path).take(); }
+    static Result<String[], Error> read_try_lines(String path) { return Fs::read_lines(path); }
     static bool dir_exists(String path) { return Dir::exists(path); }
     static int dir_make(String path) { return Dir::make(path).take(); }
     static Result<int, Error> dir_try_make(String path) { return Dir::make(path); }

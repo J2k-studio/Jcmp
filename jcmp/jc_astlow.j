@@ -467,18 +467,8 @@ int as1_mfn(int n) {
     int rt = ast_ty[r];
     if !as1_sty(rt) { return 0 - 1; }
     char full[128];
-    str_copy(@full, @sname + (rt % 65536 - 16) * 64, 64);
-    int k = str_len(@full);
-    full[k] = '_';
-    full[k + 1] = '_';
-    int j = 0;
     char^ mn = @ast_pool + ast_val[n];
-    while mn[j] != 0 && k + 2 + j < 120 {
-        full[k + 2 + j] = mn[j];
-        j += 1;
-    }
-    full[k + 2 + j] = 0;
-    return find_func(@full);
+    return find_method_in(rt % 65536 - 16, mn, @full);              // also a method of a base struct
 }
 
 // ---- Strings: a String is the address of a header that is built like the header of a dynamic array of chars
@@ -2262,7 +2252,27 @@ void gl_call(int n) {
         }
         return;
     }
-    int e = ir_add(IR_CALL, 1, 0, 0, 0, ir_name_index(@fname + fi * 64));
+    int vslot = 0 - 1;
+    int vt = 0 - 1;
+    if at_kind[n] == AK_METHOD {
+        vt = at_ty[at_a[n]] % 65536 - 16;
+        if vt >= 0 && vt < scount && svcnt[vt] > 0 {
+            char^ fnn = @fname + fi * 64;                              // Owner__method: the name after the last two underscores
+            int ld = 0 - 1;
+            int ci = 0;
+            while fnn[ci] != 0 { if fnn[ci] == '_' && fnn[ci + 1] == '_' { ld = ci; } ci += 1; }
+            if ld >= 0 { vslot = virt_slot(vt, fnn + ld + 2); }
+        }
+    }
+    int e = 0;
+    if vslot >= 0 {
+        // a virtual method: the table of the object (v1), the address in it, an indirect call
+        gl_load(9, 1, svoff[vt] - 1);
+        gl_load(9, 9, vslot * 8);
+        e = ir_add(IR_CALLIND, 1, 9, 0, 0, 0);
+    } else {
+        e = ir_add(IR_CALL, 1, 0, 0, 0, ir_name_index(@fname + fi * 64));
+    }
     int r = 0;
     while r < argn {
         gl_args[r] = r + 1;

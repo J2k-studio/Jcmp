@@ -1,0 +1,9 @@
+struct S { char a; char b; int c; }
+int main() {
+    S s;
+    s.a = 1;
+    s.b = 1;
+    s.c = 7;
+    if s.a != 0 && s.b != 0 { return s.c; }
+    return 1;
+}

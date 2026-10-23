@@ -1,0 +1,33 @@
+#import <stdlib>
+#import <gamej>
+int main() {
+    Game g = Game::open("Pong");
+    double bx = 20.0;
+    double by = 10.0;
+    double vx = 30.0;
+    double vy = 17.0;
+    int py = 10;
+    int score = 0;
+    while g.running() {
+        g.begin();
+        if g.held(Key::up()) || g.hit('w') { py -= 2; }
+        if g.held(Key::down()) || g.hit('s') { py += 2; }
+        if py < 0 { py = 0; }
+        if py > g.h - 12 { py = g.h - 12; }
+        bx += vx * g.dt;
+        by += vy * g.dt;
+        if by < 1.0 || by > (double)(g.h - 2) { vy = 0.0 - vy; }
+        if bx > (double)(g.w - 2) { vx = 0.0 - vx; }
+        if Game::overlap(2, py, 2, 12, (int)bx, (int)by, 2, 2) { vx = 0.0 - vx; score += 1; bx = 5.0; }
+        if bx < 0.0 { bx = 20.0; score = 0; }
+        g.clear(Game::rgb(10, 20, 30));
+        g.rect(2, py, 2, 12, Game::rgb(255, 255, 255));
+        g.circle((int)bx, (int)by, 1, Game::rgb(255, 200, 60));
+        g.text(2, 1, "SCORE " + str(score), Game::rgb(120, 220, 255));
+        g.art(g.w - 8, 3, ".rr.\nrrrr\n.rr.", "r#ff4040");
+        g.line(0, g.h - 1, g.w - 1, g.h - 1, Game::rgb(80, 80, 80));
+        g.end();
+    }
+    g.close();
+    return 0;
+}

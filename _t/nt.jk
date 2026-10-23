@@ -1,0 +1,13 @@
+#import <stdlib>
+#import <native>
+int main() {
+    int lib = Native::open("libvulkan.so");
+    if lib == 0 { cout << "no libvulkan (build with jcmp -dyn)\n"; return 1; }
+    int fn = Native::sym(lib, "vkEnumerateInstanceVersion");
+    char out[16];
+    out[0] = 0; out[1] = 0; out[2] = 0; out[3] = 0;
+    int rc = Native::call1(fn, (int)@out);
+    int v = Native::peek32((int)@out);
+    cout << "rc " << rc << " Vulkan " << (v >> 22) << "." << ((v >> 12) & 1023) << "\n";
+    return 0;
+}

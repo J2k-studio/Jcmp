@@ -1,0 +1,23 @@
+#import <stdlib>
+#import <opengl3>
+int main() {
+    Gl gl = Gl::open(64, 64, 3, 1);
+    if !gl.ok { cout << "no GL: " << gl.log << "\n"; return 1; }
+    gl.clear_color(0.0, 1.0, 0.0, 1.0);
+    cout << "after clear_color err " << gl.error() << "\n";
+    gl.clear_color_buffer();
+    cout << "after clear err " << gl.error() << "\n";
+    int buf = (int)Mem::alloc(64);
+    for i in 0..16 { Native::poke32(buf + i * 4, 0x77777777); }
+    int rp = gl.fn("glReadPixels");
+    cout << "glReadPixels at " << rp << "\n";
+    Native::call7(rp, 5, 5, 1, 1, 6408, 5121, buf);
+    cout << "after read err " << gl.error() << "  bytes " << Native::peek8(buf) << " " << Native::peek8(buf + 1) << " " << Native::peek8(buf + 2) << " " << Native::peek8(buf + 3) << " " << Native::peek8(buf + 4) << "\n";
+    int gi = gl.fn("glGetIntegerv");
+    int vp = (int)Mem::alloc(64);
+    Native::call2(gi, 2978, vp);                  // GL_VIEWPORT
+    cout << "viewport " << Native::peek32(vp) << " " << Native::peek32(vp + 4) << " " << Native::peek32(vp + 8) << " " << Native::peek32(vp + 12) << "\n";
+    Native::call2(gi, 3106, vp);                  // GL_COLOR_CLEAR_VALUE needs floats: just print raw
+    cout << "clear value raw " << Native::peek32(vp) << " " << Native::peek32(vp + 4) << " " << Native::peek32(vp + 8) << "\n";
+    return 0;
+}

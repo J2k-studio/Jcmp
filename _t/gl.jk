@@ -1,0 +1,13 @@
+#import <stdlib>
+#import <opengl3>
+int main() {
+    Gl gl = Gl::open(64, 64, 3, 1);
+    if !gl.ok { cout << "no GL: " << gl.log << "\n"; return 1; }
+    cout << "renderer: " << gl.renderer << "\n";
+    gl.clear_color(1.0, 0.0, 0.0, 1.0);
+    gl.clear_color_buffer();
+    String px = gl.read_pixels(10, 10, 1, 1);
+    cout << "pixel " << (px[0] & 255) << " " << (px[1] & 255) << " " << (px[2] & 255) << " " << (px[3] & 255) << "\n";
+    gl.close();
+    return 0;
+}

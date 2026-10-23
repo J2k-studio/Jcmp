@@ -498,3 +498,141 @@ void peep_run() {
     }
     out_len = peep_len;
 }
+
+// ---------------------------------------------------------------------------------------------- loop rotation
+// A loop that the code generator wrote as   Lh: cmp A, B / b.cc Lx / body / b Lh / Lx:   runs a jump more in every turn than
+//   b Lh / Lb: body / Lh: cmp A, B / b.!cc Lb / Lx:     (the same flow: the test is at the bottom, one jump less per turn).
+// Only the plain form is changed: the header is exactly two lines (cmp, b.cc to the exit) and the loop ends with  b Lh  right in front
+// of the exit label. Other jumps to Lh (a `continue`) land on the test at the bottom, which does the same as the header did.
+int rot_lpos[262144];        // the start of the line "L<n>:" (-1: none)
+int rot_lsemi[262144];       // the number of ';' lines before it
+int rot_hdr[262144];          // candidate + 1 for a header label
+int rot_cb[32768];           // the start of the line  b Lh
+int rot_ch[32768];           // Lh
+int rot_cx[32768];           // Lx
+int rot_cs[32768];           // the ';' lines before the jump
+int rot_cn[32768];           // the label number made for the body
+int rot_c1[32768];           // the start of the cmp line of the header
+int rot_c2[32768];           // the start of the  b.cc  line of the header
+int rot_cnt;
+
+// the number in "L<digits>" at p (up to the end e, or a ':' ), -1 if the text is not that
+int rot_label_num(int p, int e) {
+    if out_buf[p] != 'L' { return 0 - 1; }
+    int n = 0;
+    int k = p + 1;
+    if k >= e { return 0 - 1; }
+    while k < e {
+        int c = out_buf[k];
+        if c < '0' || c > '9' { return 0 - 1; }
+        n = n * 10 + (c - '0');
+        k += 1;
+    }
+    return n;
+}
+
+void rot_run() {
+    if x_target == 32 { return; }
+    int total = 0;
+    int i = 0;
+    int maxl = 0;
+    rot_cnt = 0;
+    for k in 0..262144 { rot_lpos[k] = 0 - 1; rot_hdr[k] = 0; }
+    int semis = 0;
+    // pass 1: the labels and the candidates ("b Lh" followed by a label line)
+    while i < out_len {
+        int en = rg_end(i);
+        if out_buf[i] == ';' { semis += 1; }
+        if out_buf[i] == 'L' && en > i + 1 && out_buf[en - 1] == ':' {
+            int n = rot_label_num(i, en - 1);
+            if n >= 0 && n < 262144 { rot_lpos[n] = i; rot_lsemi[n] = semis; }
+            if n > maxl { maxl = n; }
+        } else if out_buf[i] == 'b' && out_buf[i + 1] == ' ' && out_buf[i + 2] == 'L' && rot_cnt < 32768 {
+            int h = rot_label_num(i + 2, en);
+            int nx = en + 1;
+            if h >= 0 && nx < out_len && out_buf[nx] == 'L' {
+                int nen = rg_end(nx);
+                if out_buf[nen - 1] == ':' {
+                    int x = rot_label_num(nx, nen - 1);
+                    if x >= 0 {
+                        rot_cb[rot_cnt] = i;
+                        rot_ch[rot_cnt] = h;
+                        rot_cx[rot_cnt] = x;
+                        rot_cs[rot_cnt] = semis;
+                        rot_cnt += 1;
+                    }
+                }
+            }
+        }
+        i = en + 1;
+    }
+    // pass 2: which candidates have the plain header
+    char cond[8];
+    char inv[8];
+    for c in 0..rot_cnt {
+        int h = rot_ch[c];
+        if h >= 262144 || rot_lpos[h] < 0 || rot_lpos[h] >= rot_cb[c] || rot_lsemi[h] != rot_cs[c] || rot_hdr[h] != 0 { rot_c1[c] = 0 - 1; continue; }
+        int p = rot_lpos[h];
+        int l1 = rg_end(p) + 1;
+        if !rg_has(l1, "cmp ") { rot_c1[c] = 0 - 1; continue; }
+        int l2 = rg_end(l1) + 1;
+        if !rg_has(l2, "b.") { rot_c1[c] = 0 - 1; continue; }
+        int e2 = rg_end(l2);
+        int k = l2 + 2;
+        int cn = 0;
+        while k < e2 && out_buf[k] != ' ' && cn < 6 { cond[cn] = out_buf[k]; cn += 1; k += 1; }
+        cond[cn] = 0;
+        if k >= e2 || out_buf[k] != ' ' || out_buf[k + 1] != 'L' { rot_c1[c] = 0 - 1; continue; }
+        int target = rot_label_num(k + 1, e2);
+        if target != rot_cx[c] || !peep_inverse(@cond, @inv) { rot_c1[c] = 0 - 1; continue; }
+        rot_c1[c] = l1;
+        rot_c2[c] = l2;
+        rot_cn[c] = maxl + 1 + total;
+        total += 1;
+        rot_hdr[h] = c + 1;
+    }
+    if total == 0 { return; }
+    // pass 3: write the text again
+    regs_len = 0;
+    i = 0;
+    while i < out_len {
+        int en = rg_end(i);
+        bool done = false;
+        if out_buf[i] == 'L' && en > i + 1 && out_buf[en - 1] == ':' {
+            int n = rot_label_num(i, en - 1);
+            if n >= 0 && n < 262144 && rot_hdr[n] != 0 && rot_lpos[n] == i {
+                int c = rot_hdr[n] - 1;
+                rg_text("b L"); rg_int(n); rg_put(10);
+                rg_text("L"); rg_int(rot_cn[c]); rg_text(":"); rg_put(10);
+                i = rg_end(rot_c2[c]) + 1;                           // the label, the cmp and the branch of the header are not copied here
+                done = true;
+            }
+        } else if out_buf[i] == 'b' && out_buf[i + 1] == ' ' && out_buf[i + 2] == 'L' {
+            int h = rot_label_num(i + 2, en);
+            if h >= 0 && h < 262144 && rot_hdr[h] != 0 && rot_cb[rot_hdr[h] - 1] == i {
+                int c = rot_hdr[h] - 1;
+                rg_text("L"); rg_int(h); rg_text(":"); rg_put(10);
+                rg_copy(rot_c1[c], rg_end(rot_c1[c]));               // the test again: cmp A, B
+                int e2 = rg_end(rot_c2[c]);
+                int k = rot_c2[c] + 2;
+                int cn = 0;
+                while k < e2 && out_buf[k] != ' ' && cn < 6 { cond[cn] = out_buf[k]; cn += 1; k += 1; }
+                cond[cn] = 0;
+                peep_inverse(@cond, @inv);
+                rg_text("b."); rg_text(@inv); rg_text(" L"); rg_int(rot_cn[c]); rg_put(10);
+                i = en + 1;
+                done = true;
+            }
+        }
+        if !done {
+            rg_copy(i, en);
+            i = en + 1;
+        }
+    }
+    int t = 0;
+    while t < regs_len {
+        out_buf[t] = regs_buf[t];
+        t += 1;
+    }
+    out_len = regs_len;
+}

@@ -1,0 +1,19 @@
+#import <stdlib>
+#import <opengl3>
+void show(Gl gl, double r, double g, double b, double a) {
+    gl.clear_color(r, g, b, a);
+    gl.clear_color_buffer();
+    String px = gl.read_pixels(5, 5, 1, 1);
+    cout << "clear " << r << " " << g << " " << b << " " << a << " -> " << (px[0] & 255) << " " << (px[1] & 255) << " " << (px[2] & 255) << " " << (px[3] & 255) << "\n";
+}
+int main() {
+    Gl gl = Gl::open(64, 64, 3, 1);
+    if !gl.ok { cout << "no GL: " << gl.log << "\n"; return 1; }
+    show(gl, 1.0, 0.0, 0.0, 1.0);
+    show(gl, 0.0, 1.0, 0.0, 1.0);
+    show(gl, 0.0, 0.0, 1.0, 1.0);
+    show(gl, 0.0, 0.0, 0.0, 1.0);
+    show(gl, 0.5, 0.25, 0.75, 1.0);
+    cout << "error " << gl.error() << "\n";
+    return 0;
+}

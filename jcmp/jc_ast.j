@@ -672,17 +672,7 @@ int ast_postfix(int base, int kind, int tb) {
                 int rty = ast_mkty(8, 0);
                 if st >= 0 && st < scount {
                     char full[128];
-                    str_copy(@full, @sname + st * 64, 64);
-                    int k = str_len(@full);
-                    full[k] = '_';
-                    full[k + 1] = '_';
-                    int j = 0;
-                    while mn[j] != 0 && k + 2 + j < 120 {
-                        full[k + 2 + j] = mn[j];
-                        j += 1;
-                    }
-                    full[k + 2 + j] = 0;
-                    int mf = find_func(@full);
+                    int mf = find_method_in(st, @mn, @full);                  // also a method of a base struct
                     if mf >= 0 { rty = ast_fn_ty(mf); }
                 }
                 if rty / 65536 == 8 && (ast_pkind == 4 || ast_pkind == 5) { rty = ast_member_ty(ast_pkind, ast_pbase, @mn); }

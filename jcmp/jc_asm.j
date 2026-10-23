@@ -20,13 +20,14 @@ int as_label_count;
 char as_nbuf[64];               // the label name just read (zero padded)
 
 int as_bss_size;
+int as_dyn;                     // 1: a dynamic executable (with -l's layout): PT_INTERP, DT_NEEDED libdl.so libc.so, the entry is the first instruction
 int as_lib;                     // 1: the output is a shared library (.so), not a program
 int as_xn_n;                    // the symbols a library gives to others (.export NAME LABEL)
 int as_has_init;                // 1: .init LABEL, the function the loader runs when the library is loaded (DT_INIT)
 int as_init_slot;
 char as_xn_name[4096];          // 64 names x 64 bytes
 int as_xn_slot[64];             // the label that holds the address
-char as_so_hdr[288];            // the ELF header and the 4 program headers of a library
+char as_so_hdr[344];            // the ELF header and the 4 program headers of a library
 char as_so_meta[65536];         // after the code: the symbols, their names, the hash table and the dynamic section
 int as_so_m0;                   // the file place of as_so_meta
 int as_so_metalen;
@@ -35,8 +36,13 @@ char as_so_zero[4096];
 
 // the address (in the file and in memory) of the first instruction: 176 in a program, 288 in a library
 int as_base() {
-    if as_lib == 1 { return 288; }
+    if as_lib == 1 { return as_h(); }
     return 176;
+}
+// the size of the ELF header and the program headers of a library (a dynamic executable has one more: PT_PHDR)
+int as_h() {
+    if as_dyn == 1 { return 344; }
+    return 288;
 }
 int as_last_is_sp;              // parse_reg_or_sp: was it "sp"?
 char as_hdr[176];               // the ELF header
@@ -1905,7 +1911,7 @@ void as_so_put(char^ buf, int at, int bytes, int v) {
 // the layout after the code: .dynsym, .dynstr, .hash, .dynamic (one read-only part with the code), then the page of the global area
 void as_lib_layout() {
     int n = as_xn_n;
-    as_so_m0 = (288 + as_pos + 7) & ~7;
+    as_so_m0 = (as_h() + as_pos + 7) & ~7;
     int i = 0;
     while i < 65536 { as_so_meta[i] = 0; i += 1; }
     int symoff = 0;
@@ -1919,7 +1925,7 @@ void as_lib_layout() {
         as_so_put(@as_so_meta, so, 4, sp - stroff);                  // st_name
         as_so_meta[so + 4] = 0x12;                                    // GLOBAL, FUNC
         as_so_put(@as_so_meta, so + 6, 2, 1);                         // st_shndx: not undefined
-        as_so_put(@as_so_meta, so + 8, 8, 288 + as_laddr[sl]);        // st_value
+        as_so_put(@as_so_meta, so + 8, 8, as_h() + as_laddr[sl]);        // st_value
         int j = 0;
         while as_xn_name[k * 64 + j] != 0 && j < 63 {
             as_so_meta[sp] = as_xn_name[k * 64 + j];
@@ -1929,6 +1935,26 @@ void as_lib_layout() {
         as_so_meta[sp] = 0;
         sp += 1;
         k += 1;
+    }
+    int needed1 = 0;
+    int needed2 = 0;
+    int interp_at = 0;
+    if as_dyn == 1 {                                                   // the names the loader needs: two libraries and the loader of the system
+        needed1 = sp - stroff;
+        char^ n1 = "libdl.so";
+        int q = 0;
+        while n1[q] != 0 { as_so_meta[sp] = n1[q]; sp += 1; q += 1; }
+        as_so_meta[sp] = 0; sp += 1;
+        needed2 = sp - stroff;
+        char^ n2 = "libc.so";
+        q = 0;
+        while n2[q] != 0 { as_so_meta[sp] = n2[q]; sp += 1; q += 1; }
+        as_so_meta[sp] = 0; sp += 1;
+        interp_at = sp;                                                // (not part of the string table, but kept in the same block)
+        char^ n3 = "/system/bin/linker64";
+        q = 0;
+        while n3[q] != 0 { as_so_meta[sp] = n3[q]; sp += 1; q += 1; }
+        as_so_meta[sp] = 0; sp += 1;
     }
     int strsize = sp - stroff;
     int hashoff = (sp + 3) & ~3;
@@ -1945,10 +1971,12 @@ void as_lib_layout() {
     int dynoff = (hashoff + 12 + 4 * (n + 1) + 7) & ~7;
     int mbase = as_so_m0;
     int dynlen = 96;
+    int dynextra = 0;
+    if as_dyn == 1 { dynextra = 48; }
     if as_has_init == 1 {
         if as_laddr[as_init_slot] < 0 { as_fail(); }
         as_so_put(@as_so_meta, dynoff + 80, 8, 12);                     // DT_INIT: the loader calls it (the address is moved by the load address)
-        as_so_put(@as_so_meta, dynoff + 88, 8, 288 + as_laddr[as_init_slot]);
+        as_so_put(@as_so_meta, dynoff + 88, 8, as_h() + as_laddr[as_init_slot]);
         dynlen = 112;
     }
     as_so_put(@as_so_meta, dynoff, 8, 4);                  as_so_put(@as_so_meta, dynoff + 8, 8, mbase + hashoff);       // DT_HASH
@@ -1956,6 +1984,13 @@ void as_lib_layout() {
     as_so_put(@as_so_meta, dynoff + 32, 8, 6);             as_so_put(@as_so_meta, dynoff + 40, 8, mbase + symoff);       // DT_SYMTAB
     as_so_put(@as_so_meta, dynoff + 48, 8, 10);            as_so_put(@as_so_meta, dynoff + 56, 8, strsize);              // DT_STRSZ
     as_so_put(@as_so_meta, dynoff + 64, 8, 11);            as_so_put(@as_so_meta, dynoff + 72, 8, 24);                   // DT_SYMENT
+    if as_dyn == 1 {                                                    // DT_NEEDED libdl.so, libc.so (after the optional DT_INIT entry), then the end
+        int ne = dynoff + 80;
+        if as_has_init == 1 { ne = dynoff + 96; }
+        as_so_put(@as_so_meta, ne, 8, 1);        as_so_put(@as_so_meta, ne + 8, 8, needed1);
+        as_so_put(@as_so_meta, ne + 16, 8, 1);   as_so_put(@as_so_meta, ne + 24, 8, needed2);
+        dynlen = dynlen + dynextra;
+    }
     // two sections only, because the loader of Android wants a section table with a name table: the empty one, and the names (.dynstr)
     int shoff = dynoff + dynlen;
     as_so_put(@as_so_meta, shoff + 64 + 4, 4, 3);                      // sh_type = SHT_STRTAB
@@ -1975,7 +2010,7 @@ void as_lib_layout() {
     as_so_v = (metaend + 4095) & ~4095;
     // the program headers
     i = 0;
-    while i < 288 { as_so_hdr[i] = 0; i += 1; }
+    while i < 344 { as_so_hdr[i] = 0; i += 1; }
     as_so_hdr[0] = 0x7f; as_so_hdr[1] = 0x45; as_so_hdr[2] = 0x4c; as_so_hdr[3] = 0x46;
     as_so_hdr[4] = 2; as_so_hdr[5] = 1; as_so_hdr[6] = 1;
     as_so_put(@as_so_hdr, 16, 2, 3);                  // ET_DYN
@@ -1984,7 +2019,7 @@ void as_lib_layout() {
     as_so_put(@as_so_hdr, 32, 8, 64);                 // e_phoff
     as_so_put(@as_so_hdr, 52, 2, 64);
     as_so_put(@as_so_hdr, 54, 2, 56);
-    as_so_put(@as_so_hdr, 56, 2, 4);                  // four program headers
+    if as_dyn == 1 { as_so_put(@as_so_hdr, 56, 2, 5); } else { as_so_put(@as_so_hdr, 56, 2, 4); }       // four program headers (a dynamic executable: five)
     as_so_put(@as_so_hdr, 40, 8, as_so_m0 + shoff);  // e_shoff
     as_so_put(@as_so_hdr, 58, 2, 64);                 // e_shentsize
     as_so_put(@as_so_hdr, 60, 2, 3);                  // e_shnum
@@ -2002,6 +2037,7 @@ void as_lib_layout() {
     int mem = (as_bss_size + 4095) & ~4095;
     if mem < 4096 { mem = 4096; }
     as_so_put(@as_so_hdr, 160, 8, mem);
+    if as_dyn == 1 { as_so_put(@as_so_hdr, 152, 8, 4088); }          // the kernel needs the file data of the writable part to end inside a page (not on a page boundary) when it starts the program itself
     as_so_put(@as_so_hdr, 168, 8, 4096);
     as_so_put(@as_so_hdr, 176, 4, 2);                 // 3: PT_DYNAMIC
     as_so_put(@as_so_hdr, 180, 4, 4);
@@ -2011,16 +2047,44 @@ void as_lib_layout() {
     as_so_put(@as_so_hdr, 208, 8, dynlen);
     as_so_put(@as_so_hdr, 216, 8, dynlen);
     as_so_put(@as_so_hdr, 224, 8, 8);
-    as_so_put(@as_so_hdr, 232, 4, 0x6474e551);        // 4: PT_GNU_STACK, not executable
-    as_so_put(@as_so_hdr, 236, 4, 6);
-    as_so_put(@as_so_hdr, 280, 8, 16);
+    if as_dyn == 1 {
+        as_so_put(@as_so_hdr, 232, 4, 3);              // 4: PT_INTERP, the loader of the system
+        as_so_put(@as_so_hdr, 236, 4, 4);
+        as_so_put(@as_so_hdr, 240, 8, as_so_m0 + stroff + interp_at - stroff);
+        as_so_put(@as_so_hdr, 248, 8, as_so_m0 + stroff + interp_at - stroff);
+        as_so_put(@as_so_hdr, 256, 8, as_so_m0 + stroff + interp_at - stroff);
+        as_so_put(@as_so_hdr, 264, 8, 21);
+        as_so_put(@as_so_hdr, 272, 8, 21);
+        as_so_put(@as_so_hdr, 280, 8, 1);
+        as_so_put(@as_so_hdr, 288, 4, 6);              // 5: PT_PHDR (the loader of Android looks for it)
+        as_so_put(@as_so_hdr, 292, 4, 4);
+        as_so_put(@as_so_hdr, 296, 8, 64);
+        as_so_put(@as_so_hdr, 304, 8, 64);
+        as_so_put(@as_so_hdr, 312, 8, 64);
+        as_so_put(@as_so_hdr, 320, 8, 280);
+        as_so_put(@as_so_hdr, 328, 8, 280);
+        as_so_put(@as_so_hdr, 336, 8, 8);
+        int mv = 343;                                  // PT_PHDR must come before the PT_LOADs: the first four headers move up by one entry, PT_PHDR goes first
+        char ph[56];
+        int pk = 0;
+        while pk < 56 { ph[pk] = as_so_hdr[288 + pk]; pk += 1; }
+        mv = 287;
+        while mv >= 64 { as_so_hdr[mv + 56] = as_so_hdr[mv]; mv -= 1; }
+        pk = 0;
+        while pk < 56 { as_so_hdr[64 + pk] = ph[pk]; pk += 1; }
+        as_so_put(@as_so_hdr, 24, 8, as_h());             // e_entry: the first instruction of the code (it jumps to the start of the program)
+    } else {
+        as_so_put(@as_so_hdr, 232, 4, 0x6474e551);        // 4: PT_GNU_STACK, not executable
+        as_so_put(@as_so_hdr, 236, 4, 6);
+        as_so_put(@as_so_hdr, 280, 8, 16);
+    }
     // the label of the global area: the code reaches it with adr (the distance must be less than 1 MB)
     as_nbuf[0] = 'j'; as_nbuf[1] = '2'; as_nbuf[2] = 'k'; as_nbuf[3] = '_'; as_nbuf[4] = 'g'; as_nbuf[5] = 'l'; as_nbuf[6] = 0;
     i = 7;
     while i < 64 { as_nbuf[i] = 0; i += 1; }
     int gl = as_label_slot();
-    as_laddr[gl] = as_so_v - 288;
-    if as_so_v - 288 - as_pos > 900000 || as_pos > 900000 { as_fail(); }
+    as_laddr[gl] = as_so_v - as_h();
+    if as_so_v - as_h() - as_pos > 900000 || as_pos > 900000 { as_fail(); }
 }
 
 // write the library: the headers, the code, the tables, and zeros up to the page of the global area
@@ -2036,9 +2100,9 @@ void as_write_so(char^ path) {
         syscall(64, 2, @e2, 48);
         syscall(93, 1);
     }
-    syscall(64, out, @as_so_hdr, 288);
+    syscall(64, out, @as_so_hdr, as_h());
     syscall(64, out, @as_code, as_pos);
-    syscall(64, out, @as_so_zero, as_so_m0 - (288 + as_pos));
+    syscall(64, out, @as_so_zero, as_so_m0 - (as_h() + as_pos));
     syscall(64, out, @as_so_meta, as_so_metalen);
     int rest = as_so_v - (as_so_m0 + as_so_metalen);
     while rest > 0 {
@@ -2047,6 +2111,7 @@ void as_write_so(char^ path) {
         syscall(64, out, @as_so_zero, chunk);
         rest -= chunk;
     }
+    if as_dyn == 1 { syscall(64, out, @as_so_zero, 4096); }
     syscall(57, out);
 }
 

@@ -1,0 +1,9 @@
+#import <stdlib>
+#import <vulkan>
+int main() {
+    Vk vk = Vk::open();
+    if !vk.ok { cout << vk.log << "\n"; return 1; }
+    cout << vk.device_name << " Vulkan " << vk.api_text() << " memory " << vk.memory_mb << " MB compute " << vk.has_compute << " queues " << vk.queue_families << "\n";
+    vk.close();
+    return 0;
+}

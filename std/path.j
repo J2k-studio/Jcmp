@@ -66,6 +66,12 @@ struct __Files {
     static Result<int, Error> fs_try_remove(String path) { return Fs::remove(path); }
     static int fs_rename(String from, String to) { return Fs::rename(from, to).take(); }
     static Result<int, Error> fs_try_rename(String from, String to) { return Fs::rename(from, to); }
+    static String read_text(String path) { return Fs::read_text(path).take(); }
+    static Result<String, Error> read_try_text(String path) { return Fs::read_text(path); }
+    static String read_bytes(String path) { return Fs::read_bytes(path).take(); }
+    static Result<String, Error> read_try_bytes(String path) { return Fs::read_bytes(path); }
+    static String[] read_lines(String path) { return Fs::read_lines(path).take(); }
+    static Result<String[], Error> read_try_lines(String path) { return Fs::read_lines(path); }
     static bool dir_exists(String path) { return Dir::exists(path); }
     static int dir_make(String path) { return Dir::make(path).take(); }
     static Result<int, Error> dir_try_make(String path) { return Dir::make(path); }

@@ -351,3 +351,13 @@ void main() {
 
 **Tip.** Put a time limit on anything that waits for the network, and do not read a whole answer of unknown size into memory without a limit.
 
+
+## The graphics chip and the libraries of the phone: `<native>`, `<opengl3>`, `<vulkan>`, `<gpu>`, `<gamej>`
+
+These libraries come with `jget -li install NAME`. The first three talk to the real driver and need a program built with `jcmp -dyn` (a dynamic executable; it works in Termux and in the Jaric app, with no other app). Tutorial: lessons 61 to 66.
+
+* **`<native>`** — `Native::open("libname.so")` (handle, 0 if none), `Native::sym(handle, "name")` (address of a function), `Native::call0 .. call8` (whole numbers and pointers), `Native::callf1 .. callf4` and `calli_f1 .. calli_f4` (float arguments), `Native::peek8 peek32 peek64`, `poke32 poke64`, `Native::text(address)`.
+* **`<opengl3>`** — OpenGL ES 3.1 (or 2.0) off screen: `Gl::open(w, h, 3, 1)`, `gl.clear_color`, `gl.program(vertex, fragment)`, `gl.use`, `gl.draw_triangles(Floats, n)`, `gl.read_pixels`, `gl.compute(source, Floats, gx, gy, gz)` (compute shaders), `gl.fn("glName")` for any other function; `Floats::make(n)`, `set`, `get`.
+* **`<vulkan>`** — `Vk::open()`: an instance and the first chip (`device_name`, `api_text()`, `memory_mb`, `has_compute`); the rest of Vulkan is built with `Native`.
+* **`<gpu>`** — the chip through the Jaric app: `Gpu::open(w, h)`, `clear rect tri tri_colors circle line image image_part load`, touches and keys; one batch of commands per picture.
+* **`<gamej>`** — Jaric Engine, a small game engine: `Game::open`, the loop `begin()` / `end()`, `clear rect circle line text art`, `held hit touching tapped`, `Game::overlap`, `sound`; `makej init -game` makes a project with five lessons.

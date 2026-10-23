@@ -1,0 +1,26 @@
+#import <stdlib>
+struct Animal {
+    String name;
+    int legs;
+    void rename(self, String n) { self.name = n; }
+    int count_legs(self) { return self.legs; }
+}
+struct Dog : Animal {
+    int tricks;
+    void learn(self) { self.tricks += 1; }
+    String describe(self) { return self.name + " has " + str(self.legs) + " legs and knows " + str(self.tricks) + " tricks"; }
+}
+int legs_of(Animal^ a) { return a^.count_legs(); }
+void main() {
+    Dog d;
+    d.name = "Rex";
+    d.legs = 4;
+    d.rename("Max");            // a method of the base
+    d.learn();
+    d.learn();
+    cout << d.describe() << "\n";
+    cout << d.count_legs() << " " << legs_of(@d) << "\n";   // a pointer to a Dog goes where an Animal^ is wanted
+    Animal a;
+    a.legs = 2;
+    cout << a.count_legs() << "\n";
+}

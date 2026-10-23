@@ -1,0 +1,91 @@
+#import <stdlib>
+// spike: from a J2K shared library inside a bionic process, find dlopen / dlsym by reading the memory of libdl.so, then call Vulkan.
+int rd8(int a) { char^ p = (char^)a; return p[0] & 255; }
+int rd16(int a) { return rd8(a) | (rd8(a + 1) << 8); }
+int rd32(int a) { return rd16(a) | (rd16(a + 2) << 16); }
+int rd64(int a) { return rd32(a) | (rd32(a + 4) << 32); }
+
+bool name_is(int a, String s) {
+    for i in 0..s.len { if rd8(a + i) != (s[i] & 255) { return false; } }
+    return rd8(a + s.len) == 0;
+}
+
+// the base address of a library in the maps of this process (the lowest start of a line that ends with the name)
+int base_of(String lib) {
+    int fd = Sys::open_read("/proc/self/maps".c());
+    if fd < 0 { return 0; }
+    String t = "";
+    char buf[4096];
+    int n = Sys::read(fd, @buf, 4096);
+    while n > 0 { for i in 0..n { t.push(buf[i]); } n = Sys::read(fd, @buf, 4096); }
+    Sys::close(fd);
+    String[] lines = t.split("\n");
+    for i in 0..lines.len {
+        String l = lines[i];
+        if l.ends_with(lib) {
+            int dash = l.find("-");
+            String hex = l.slice(0, dash);
+            int v = 0;
+            for k in 0..hex.len {
+                int c = hex[k] & 255;
+                int d = 0;
+                if c >= 48 && c <= 57 { d = c - 48; } else { d = c - 87; }
+                v = v * 16 + d;
+            }
+            return v;
+        }
+    }
+    return 0;
+}
+
+int sym_in(int base, String name) {
+    int phoff = rd64(base + 32);
+    int phnum = rd16(base + 56);
+    int phsz = rd16(base + 54);
+    int dyn = 0;
+    for i in 0..phnum {
+        int ph = base + phoff + i * phsz;
+        if rd32(ph) == 2 { dyn = base + rd64(ph + 16); }
+    }
+    if dyn == 0 { return 0; }
+    int strtab = 0;
+    int symtab = 0;
+    int k = 0;
+    while rd64(dyn + k * 16) != 0 {
+        int tag = rd64(dyn + k * 16);
+        int val = rd64(dyn + k * 16 + 8);
+        if val < base { val = val + base; }
+        if tag == 5 { strtab = val; }
+        if tag == 6 { symtab = val; }
+        k += 1;
+    }
+    if strtab == 0 || symtab == 0 { return 0; }
+    int nsyms = (strtab - symtab) / 24;
+    if nsyms <= 0 || nsyms > 100000 { nsyms = 4000; }
+    for i in 0..nsyms {
+        int s = symtab + i * 24;
+        int nm = rd32(s);
+        if rd64(s + 8) != 0 && name_is(strtab + nm, name) { return base + rd64(s + 8); }
+    }
+    return 0;
+}
+
+export int probe() {
+    int base = base_of("libdl.so");
+    if base == 0 { return 0 - 1; }
+    int dlopen_addr = sym_in(base, "dlopen");
+    int dlsym_addr = sym_in(base, "dlsym");
+    if dlopen_addr == 0 || dlsym_addr == 0 { return 0 - 2; }
+    int(int, int)^ dlopen = (int(int, int)^)dlopen_addr;
+    int(int, int)^ dlsym = (int(int, int)^)dlsym_addr;
+    int h = dlopen((int)"libvulkan.so".c(), 2);
+    if h == 0 { return 0 - 3; }
+    int f = dlsym(h, (int)"vkEnumerateInstanceVersion".c());
+    if f == 0 { return 0 - 4; }
+    int(int)^ ver = (int(int)^)f;
+    char out[16];
+    out[0] = 0; out[1] = 0; out[2] = 0; out[3] = 0;
+    int rc = ver((int)@out);
+    if rc != 0 { return 0 - 5; }
+    return rd32((int)@out);
+}

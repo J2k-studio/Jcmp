@@ -207,6 +207,14 @@ int tm_now() {
     return tm_ts[0] * 1000000 + tm_ts[1] / 1000;
 }
 int x_badasm;                // hidden flag -xbadasm: puts a line into the text that the assembler cannot read
+int par_jobs;                // -j N : the number of processes that work on the functions in the passes ir and regs (0: by the cores, 1: one)
+int par_n;                   // in a child process: how many children there are (0: not a child)
+int par_k;                   // ... and which one this is
+int par_fidx;                // the number of the function the pass is at
+int par_open;                // the function whose end in the output is not recorded yet (-1: none)
+int par_fs[65536];           // where the output of each function starts / ends in the new text
+int par_fe[65536];
+int opt_rot = 1;             // 1: loops get their test at the bottom (-norot switches it off)
 int opt_peep = 1;            // 1: the peephole pass makes the code shorter (-nopeep switches it off, to look for a fault)
 char inc_dir[256];           // -I dir : where `import "name"` looks if the file is not next to the importer
 int warn_count;
@@ -266,6 +274,7 @@ int x_allreach;                  // -xall
 
 int lam_seq;                     // the number of the next lambda (__lambda_<n>); the tree reads it to name the lambdas of a body
 int x_target;                    // 32: -target arm32 (the ARM32 back end, jc_a32.j)
+int x_dyn;                       // 1: -dyn, a program that is a dynamic executable (it loads libc.so and libdl.so and can call the libraries of the system)
 int x_lib;                       // 1: -l, the program is a shared library (.so) with the functions marked `export`
 char^ x_show;                    // -show NAME: the assembler text of the function NAME, as it is in the program, and the number of its instructions
 char^ x_map;                     // -xmap FILE: the addresses of the functions (and the labels) of the program

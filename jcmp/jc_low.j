@@ -372,6 +372,17 @@ void nk_sys_name(char^ dst) {
 }
 
 // the instruction names that Cpu::inst accepts are the ones of the assembler; the operands are registers, numbers or labels of the function
+// s0 .. s31, d0 .. d31, v0 .. v31, q0 .. q31, b0 .. b31, h0 .. h31, w0 .. w30: the names of the registers that are not x
+bool nk_is_fpname(char^ t) {
+    char c = t[0];
+    if !(c == 's' || c == 'd' || c == 'v' || c == 'q' || c == 'b' || c == 'h' || c == 'w') { return false; }
+    if t[1] < '0' || t[1] > '9' { return false; }
+    if t[2] == 0 { return true; }
+    if t[2] < '0' || t[2] > '9' || t[3] != 0 { return false; }
+    int n = (t[1] - '0') * 10 + (t[2] - '0');
+    return n <= 31;
+}
+
 void nk_inst() {
     expect("(");
     if tok_kind != T_STR { die("Cpu::inst needs the name of the instruction in quotes"); }
@@ -384,6 +395,9 @@ void nk_inst() {
             nk_add_reg(@nk_line, nk_reg());
         } else if nk_at_num() {
             nk_add_num(@nk_line, nk_num());
+        } else if tok_kind == T_IDENT && nk_is_fpname(@tok_text) {
+            append_text(@nk_line, @tok_text);             // s0 d1 w2 v3 q4 b5 h6: the registers of the floating point unit and the 32-bit names
+            next();
         } else if tok_kind == T_IDENT {
             append_text(@nk_line, "L");
             append_int(@nk_line, nk_label(@tok_text, false));

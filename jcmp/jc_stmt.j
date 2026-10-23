@@ -3079,6 +3079,18 @@ void parse_function() {
     fn_ls = err_ls;
     if cur_is_main == 1 && req_cpu != 0 { rt_call("Cpu__require_check"); }                // #require cpu "...": stop at once when the CPU lacks the extension
     if cur_is_main == 1 && opt_debug == 1 { rt_call("Mem__debug_on"); }       // the checks of the heap are on
+    if pass_no >= 2 && f_self >= 0 && f_self < scount && svcnt[f_self] > 0 && tok_is("{") {
+        int dl = str_len(@d_fname);
+        if dl > 6 && d_fname[dl - 1] == 't' && d_fname[dl - 2] == 'i' && d_fname[dl - 3] == 'n' && d_fname[dl - 4] == 'i' && d_fname[dl - 5] == '_' && d_fname[dl - 6] == '_' {
+            // init of a struct with virtual methods: its first statement sets the pointer to the table of the methods
+            char inj[300];
+            str_copy(@inj, "{ self.__vt = (int)@__vtab_", 40);
+            append_text(@inj, @sname + f_self * 64);
+            append_text(@inj, "; ");
+            push_macro(@inj);
+            next();
+        }
+    }
     if pass_no == 3 && f_skip == 0 && f_naked == 0 && f_interrupt == 0 && !(cur_is_main == 1 && req_cpu != 0) && (ast_report != 0 || ast_lower_on != 0) && (lvl_lib[lx_depth] == 0 || x_target == 32) { ast_probe(f_idx); }
     parse_block();
     ow_site = 5;
@@ -3376,12 +3388,68 @@ void parse_struct() {
     }
     if sd < 0 { die("internal: struct not registered"); }
     next();
-    expect("{");
     int off = 0;
+    if pass_no == 1 { sparent[sd] = 0; svoff[sd] = 0; svcnt[sd] = 0; }
+    if tok_is(":") {
+        // struct Dog : Animal { ... }: the fields of the base come first (the same places), then the fields of Dog; a Dog uses the methods of the base
+        next();
+        if tok_kind != T_IDENT { die_help("the name of the base struct was expected after the colon", "write struct Dog : Animal { ... }"); }
+        int bs = find_struct(@tok_text);
+        if bs < 0 { die_help("the base struct is not known here", "the base struct must be written before the struct that inherits from it"); }
+        if bs == sd { die("a struct cannot inherit from itself"); }
+        if pass_no == 1 {
+            sparent[sd] = bs + 1;
+            int bi = sfirst[bs];
+            int bend = sfirst[bs] + snf[bs];
+            while bi < bend {
+                if fldcount >= 8192 { die("too many struct fields"); }
+                int dx = fldcount;
+                str_copy(@fldname + dx * 64, @fldname + bi * 64, 64);
+                fldcode[dx] = fldcode[bi];
+                fldoff[dx] = fldoff[bi];
+                fldkind[dx] = fldkind[bi];
+                fldptr[dx] = fldptr[bi];
+                fldtid[dx] = fldtid[bi];
+                fldnd[dx] = fldnd[bi];
+                fldst1[dx] = fldst1[bi];
+                fldst2[dx] = fldst2[bi];
+                fldcnt[dx] = fldcnt[bi];
+                flddyn[dx] = flddyn[bi];
+                fldcount += 1;
+                snf[sd] += 1;
+                bi += 1;
+            }
+        }
+        off = ssize[bs];
+        if pass_no == 1 {
+            svoff[sd] = svoff[bs];                         // the pointer to the table is at the same place; the list of virtual methods is the base's
+            svcnt[sd] = svcnt[bs];
+            int vk = 0;
+            while vk < svcnt[bs] {
+                str_copy(@svname + (sd * 32 + vk) * 64, @svname + (bs * 32 + vk) * 64, 64);
+                vk += 1;
+            }
+        }
+        next();
+    }
+    expect("{");
+    if pass_no >= 2 && svcnt[sd] > 0 {
+        // the table of the virtual methods of this struct is a global array (filled when the program starts)
+        char vtn[80];
+        str_copy(@vtn, "__vtab_", 16);
+        append_text(@vtn, @sname + sd * 64);
+        ty_tid = 0;
+        ty_dyn = 0;
+        add_global(@vtn, 1, 8, svcnt[sd] * 8, 0);
+    }
     while !tok_is("}") {
         if tok_kind == T_EOF { die_help("} expected", "a '{' was opened and is not closed; check the braces above this place"); }
         int is_static = 0;
+        int is_virtual = 0;
+        int is_override = 0;
         op_pending = 0;
+        if tok_is("virtual") { is_virtual = 1; next(); }
+        else if tok_is("override") { is_override = 1; next(); }
         if tok_is("operator") {
             op_pending = 1;              // operator vec3 add(self, vec3 o) { ... }: usable as a + b
             next();
@@ -3400,6 +3468,41 @@ void parse_struct() {
         int f_tid = ty_tid;
         int f_dynf = ty_dyn;
         next();
+        if tok_is("(") && (is_virtual == 1 || is_override == 1) {
+            if is_static == 1 { die("a static function cannot be virtual"); }
+            int vs0 = virt_slot(sd, @m_name);
+            int nbase = 0;
+            if sparent[sd] > 0 { nbase = svcnt[sparent[sd] - 1]; }
+            if vs0 >= nbase { vs0 = 0 - 1; }                // declared by this struct itself (the same struct is read more than once)
+            if is_virtual == 1 && vs0 >= 0 { die_name("this method is virtual in a base struct already: write override", @m_name); }
+            if is_override == 1 && vs0 < 0 { die_name("override: no virtual method of this name in a base struct", @m_name); }
+            if is_virtual == 1 && virt_slot(sd, @m_name) < 0 {
+                if svcnt[sd] >= 32 { die("a struct can have 32 virtual methods at most"); }
+                if svoff[sd] == 0 {
+                    // the first virtual method of the family: the pointer to the table of the methods is a hidden field (8 bytes) here
+                    if fldcount >= 8192 { die("too many struct fields"); }
+                    off = (off + 7) / 8 * 8;
+                    int vx = fldcount;
+                    str_copy(@fldname + vx * 64, "__vt", 64);
+                    fldcode[vx] = 8;
+                    fldoff[vx] = off;
+                    fldkind[vx] = 0;
+                    fldptr[vx] = 0;
+                    fldtid[vx] = 0;
+                    fldnd[vx] = 1;
+                    fldst1[vx] = 0;
+                    fldst2[vx] = 0;
+                    fldcnt[vx] = 1;
+                    flddyn[vx] = 0;
+                    svoff[sd] = off + 1;
+                    off += 8;
+                    fldcount += 1;
+                    snf[sd] += 1;
+                }
+                str_copy(@svname + (sd * 32 + svcnt[sd]) * 64, @m_name, 64);
+                svcnt[sd] += 1;
+            }
+        }
         if tok_is("(") {
             str_copy(@d_fname, @sname + sd * 64, 64);
             str_copy(@d_fname + str_len(@d_fname), "__", 4);
@@ -3436,7 +3539,7 @@ void parse_struct() {
             int fx = fldcount;
             str_copy(@fldname + fx * 64, @m_name, 64);
             fldcode[fx] = f_store;
-            if f_kind == 0 && f_ptr == 0 && f_wid == 8 { fldcode[fx] = 8; }
+            if f_kind == 0 && f_ptr == 0 && f_wid == 8 && f_tid != 1 { fldcode[fx] = 8; }       // a bool field stays one byte (code 3): it was read and written with 8 bytes over its neighbours
             fldoff[fx] = off;
             fldkind[fx] = f_kind;
             fldptr[fx] = f_ptr;
@@ -3460,6 +3563,12 @@ void parse_struct() {
     }
     expect("}");
     accept(";");
+    if pass_no >= 2 && svcnt[sd] > 0 {
+        char vin[80];
+        str_copy(@vin, @sname + sd * 64, 64);
+        append_text(@vin, "__init");
+        if find_func(@vin) < 0 { die_name("a struct with virtual methods needs a method  void init(self) { }  (it sets the pointer to the table of the methods; a derived struct needs its own)", @sname + sd * 64); }
+    }
     if pass_no == 1 { ssize[sd] = (off + 7) / 8 * 8; }
     if pass_no == 1 && ssize[sd] == 0 { ssize[sd] = 8; }
 }
@@ -3689,6 +3798,28 @@ void emit_segv_handler() {
 // the values the global variables start with (and the constants of the floats and the structs), the pages that are made read-only:
 // the same for a program (at its start) and for a library (when it is loaded)
 void emit_global_init() {
+    // the tables of the virtual methods: the address of the method of every slot (of the struct itself, or of the base it takes it from)
+    int vts = 0;
+    while vts < scount {
+        if svcnt[vts] > 0 {
+            char vtn[80];
+            str_copy(@vtn, "__vtab_", 16);
+            append_text(@vtn, @sname + vts * 64);
+            int vg = find_global(@vtn);
+            int vk = 0;
+            while vg >= 0 && vk < svcnt[vts] {
+                char vfull[128];
+                int vf = find_method_in(vts, @svname + (vts * 32 + vk) * 64, @vfull);
+                if vf >= 0 {
+                    emit_str("adr x9, ");
+                    emit_line(@vfull);
+                    ins_mem("str", "x9", "x28", goff[vg] + vk * 8);
+                }
+                vk += 1;
+            }
+        }
+        vts += 1;
+    }
     int i = 0;
     while i < ginit_count {
         ins_n("mov x9, ", ginit_val[i]);
@@ -3861,7 +3992,7 @@ void emit_start_stub() {
     int alt = (gl_bytes + 15) / 16 * 16;       // the stack of the SIGSEGV handler
     gl_bytes = alt + 32768;
     emit_line("j2k_start:");
-    emit_line("mov x28, 268435456");
+    if x_dyn == 1 { emit_line("adr x28, j2k_gl"); } else { emit_line("mov x28, 268435456"); }
     emit_line("add x27, x28, #72");            // x27: this thread's block (thrown text, try handlers)
     emit_line("add x9, sp, #0");
     emit_line("str x9, [x28, #0]");

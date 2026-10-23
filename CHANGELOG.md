@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.0.0
+* **Inheritance:** `struct Dog : Animal` (the fields of the base come first, at the same places; the methods of the base are found through the chain). `virtual` / `override` methods are called through the real type: `Animal^ a` calls the method of a `Dog`. A struct with virtual methods needs `void init(self)` (it sets the hidden pointer to the table of methods). Tests t515, t516.
+* **Native GPU:** `jcmp -dyn` makes a dynamic executable that Android's loader starts; the libraries `native`, `opengl3` (OpenGL ES 3.1, compute shaders), `vulkan`, `gpu` and `gamej` use it. Tests t512 to t514, t510, t511.
+* **Faster compile on many cores:** `jcmp -j N` runs the passes ir and registers on many processes (same output as one core); `jcmp -progress FILE` writes the percent and the stage; `-norot` switches the new loop rotation pass off.
+* `Fs::read.text`, `Fs::read.bytes`, `Fs::read.lines`; `Cpu::inst` accepts `s0`, `d0`, `w0`, `v0` register names; library `deflate`, `neuron`.
+* **Fixed:** a `bool` field of a struct was read and written with 8 bytes (now 1 byte).
+
 ## 1.1.0.0
 * **Regex grows (decision 9):** groups `( )` and `(?: )` with `|` inside and a quantifier after them, counted repetition `x{n}` `x{n,}` `x{n,m}`, lazy quantifiers `x*?`, and `Regex::find_all`, `count`, `replace`, `split`. Test t504. No captures yet.
 * **`jcmp file.jk -l -o libname.so`: shared libraries (stage 1).** A function marked `export` (`export int add(int a, int b)`) is an entry point with the C calling rules of the platform; `-l` makes an ELF shared object (arm64) that the loader of Android or Linux loads (`dlopen`, `System.loadLibrary`, python `ctypes`). The parameters and the result may be `int`, `bool`, `char`, `float`, `double` and pointers (up to 8 parameters; JNI names such as `Java_com_example_Core_add` work); the global variables of the library get their first values when it is loaded. `cout`, the heap, Strings and arrays work inside a library. Not yet: String, arrays and structs across the border, ARM32. A function that returns the String of an array element no longer gives away the memory of the array (t503). Test t502; docs: LANGUAGE.md "Shared libraries", tutorial lesson 59.

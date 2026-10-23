@@ -45,6 +45,18 @@ Release history: [CHANGELOG.md](CHANGELOG.md).
 
 ---
 
+## Tools, games and the Jaric app
+
+Around the compiler there are tools written in J2K: [Jcmp-Tools](https://github.com/J2k-studio/Jcmp-Tools) (`jget`, `makej`, the shell `jsh`, `jbox`, the editor `coderin`, `zipj`, `tarj`, the player `mujic`) and the **Jaric app** for Android, a terminal that is the first mode of Jaric OS.
+
+```console
+$ makej init -pro mytool     # a project with the right structure: src/, tests/, docs/, manifest.toml ...
+$ makej init -game           # a game with Jaric Engine (jget -li install gamej) and five lessons
+$ makej apk                  # the game as an Android app;  makej pack = a .jec;  makej dist = every system
+```
+
+**Many cores:** `makej -j 8` builds several programs at once; `#multithread` before a `for` loop splits it over the cores; the compiler itself uses one core today (`-cache DIR` makes a second build fast). Loops get their test at the bottom (`-norot` switches it off while looking for a fault).
+
 ## Install
 
 You need a Linux **ARM64** machine (a phone with Termux works) and `curl` or `wget`

@@ -2214,3 +2214,26 @@ Answers given by the owner (the words are the owner's; what is marked "AI" is th
 ### 93.3 Decided 2026-10-22 (owner): the weights file stays `.jw`; the runner of models is the library `neuron`
 * `.jw` is the format of J2K (own, simple: header, layer list, vocabulary, float32). A reader for GGUF may come later as an importer (not decided).
 * Note for the implementation: `@` is already the prefix "address of" (`@x`). A binary `a @ b` can be told apart by position (after an operand), but the lexer/parser must be checked and a test added (cost: low, risk: the error message for `a @b`).
+
+## 94. `read_*` become the module `read`: `Fs::read.text(p)` (owner, 2026-10-23: "the `read_` names as `read.key`"; designed by AI at user request, adjustable)
+The same shape as `Input::read.key()` (90): the group of names that begin with `read_` is one module `read`. For files (namespace `Fs`, with `using Fs;` just `read.text(p)`): `read.text(path)`, `read.bytes(path)`, `read.lines(path)` throw on failure; `read.try_text`, `read.try_bytes`, `read.try_lines` return `Result`. The old names (`Fs::read_text` ...) stay until 1.0.0.0 (75). The other groups (`write_`, `tcp_`, ...) are not converted yet: the owner decides which next. Known limit: the result of a module call cannot be followed by `.len` directly (put it in a variable first). Test t508.
+
+## 95. Inheritance: `struct Dog : Animal` (owner, 2026-10-23: "inheritance can be done too"; designed by the assistant at the owner's request, ADJUSTABLE, not implemented yet)
+**Goal:** reuse fields and methods, and call the right method through a pointer to the base (a list of different animals), without a garbage collector and without hidden costs when it is not used.
+**Proposed spelling** (the owner may change any word):
+```
+struct Animal {
+    String name;
+    virtual void speak(self) { cout << "...\n"; }        // virtual: the call is decided when the program runs
+    void rename(self, String n) { self.name = n; }       // not virtual: decided when the program is compiled (as today)
+}
+struct Dog : Animal {                                     // a Dog has the fields and methods of an Animal, then its own
+    int tricks;
+    override void speak(self) { cout << self.name << ": woof\n"; }    // override: must match a virtual method of a base (an error otherwise)
+}
+Animal^ a = alloc Dog;                                    // a pointer to the base can hold a Dog
+a^.speak();                                               // woof (the Dog's)
+```
+**Rules:** (1) one base only (no multiple inheritance); (2) the fields of the base come first, in the same order, so a `Dog^` can be used as an `Animal^` (no copy); (3) a struct with a `virtual` method, or derived from one, starts with one hidden pointer to its table of methods; a struct without any is exactly as before (same size, same speed); (4) a call through a value (`Dog d; d.speak()`) or a `Dog^` is decided at compile time (no table); only a call through a pointer to a base whose method is `virtual` goes through the table; (5) `override` without a matching `virtual` in a base is an error, a missing `override` is a warning; (6) assigning a `Dog` value to an `Animal` variable cuts the extra fields (a warning: "slicing"); (7) `base::method(self)` calls the base version (the spelling `Animal::speak(self)`); (8) `is` / `as` (a test of the real type and a safe cast) are a later step; (9) owned memory: freeing an `Animal^` frees the whole `Dog` (the size is in the table); the destructor-like free of fields of the derived struct runs first.
+**Compared** — C++: `class Dog : public Animal`, `virtual`, `override` (the same words; no multiple inheritance, no private bases, no constructors that call each other: J2K has none); C#/Java: single inheritance, `override`; Go/Rust: no inheritance (composition + interfaces/traits): an alternative for the owner is interfaces without data inheritance (`interface Speaker { void speak(self); }` and `struct Dog impl Speaker`) which is simpler to implement and safer; both can exist. **Question for the owner:** data inheritance as above, interfaces only, or both?
+**Work:** parser (`: Base`, `virtual`, `override`), field layout with a base prefix, lookup of a method through the chain of bases, the table of methods in the global data and its pointer written when an object is made (`Dog d;`, `alloc Dog`, array of Dog), the call through the table, the checks of the rules, tests. About 600 lines in `jc_stmt.j` / `jc_expr.j` / `jc_ast.j` / `jc_astlow.j` (both the text path and the tree path).

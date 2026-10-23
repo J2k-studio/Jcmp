@@ -400,6 +400,10 @@ struct Fs {
     static Error error(int e, String what, String path);
     // the whole file as a String
     static Result<String, Error> read_text(String path);
+    // the whole file as bytes in a String: any byte, also zero (read_text stops at a zero byte)
+    static Result<String, Error> read_bytes(String path);
+    // write the bytes of a String (any byte) to the file (made or emptied); Ok(the number of bytes)
+    static Result<int, Error> write_bytes(String path, String data);
     // the lines of a file (without the line ends)
     static Result<String[], Error> read_lines(String path);
     // write the text to the file (made or emptied); Ok(the number of bytes)
@@ -465,6 +469,12 @@ struct __Files {
     static Result<int, Error> fs_try_remove(String path);
     static int fs_rename(String from, String to);
     static Result<int, Error> fs_try_rename(String from, String to);
+    static String read_text(String path);
+    static Result<String, Error> read_try_text(String path);
+    static String read_bytes(String path);
+    static Result<String, Error> read_try_bytes(String path);
+    static String[] read_lines(String path);
+    static Result<String[], Error> read_try_lines(String path);
     static bool dir_exists(String path);
     static int dir_make(String path);
     static Result<int, Error> dir_try_make(String path);

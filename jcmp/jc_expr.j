@@ -67,6 +67,12 @@ char sname[16384];           // 256 x 64
 int ssize[256];               // bytes, a multiple of 8
 int sfirst[256];              // its first field in the field tables
 int snf[256];                 // how many fields
+int sparent[256];               // the struct this one inherits from (struct Dog : Animal) plus 1; 0 for none
+int svoff[256];                 // the place of the pointer to the table of the methods in a struct, plus 1 (0: no virtual methods)
+int svcnt[256];                 // the number of virtual methods
+char svname[524288];            // their names by slot: (struct * 32 + slot) * 64
+int vcall_slot;                 // set before gen_call: the slot of a virtual method that is called (-1: a plain call)
+int vcall_off;                  // ... and where the pointer to the table is in the object
 int scount;
 char fldname[524288];         // 1024 x 64
 int fldcode[8192];           // width code of the field (8 int, 16+n a struct ...)
@@ -100,6 +106,53 @@ int find_field(int s, char^ name) {
     return -1;
 }
 
+// the function of a method: Struct__name, or the same name of a base struct (struct Dog : Animal: a Dog has the methods of an Animal); -1 if none
+// "full" gets the name of the function that was found (it has room for 128 characters)
+int find_method_in(int st, char^ name, char^ full) {
+    int s = st;
+    int guard = 0;
+    while s >= 0 && guard < 32 {
+        str_copy(full, @sname + s * 64, 64);
+        int k = str_len(full);
+        full[k] = '_';
+        full[k + 1] = '_';
+        int j = 0;
+        while name[j] != 0 && k + 2 + j < 120 {
+            full[k + 2 + j] = name[j];
+            j += 1;
+        }
+        full[k + 2 + j] = 0;
+        int f = find_func(full);
+        if f >= 0 { return f; }
+        s = sparent[s] - 1;
+        guard += 1;
+    }
+    return 0 - 1;
+}
+
+// the slot of a virtual method of a struct (its own or one of the bases: the list is inherited), -1 if it is not virtual
+int virt_slot(int s, char^ name) {
+    if s < 0 || s >= scount { return 0 - 1; }
+    int i = 0;
+    while i < svcnt[s] {
+        if str_eq(@svname + (s * 32 + i) * 64, name) { return i; }
+        i += 1;
+    }
+    return 0 - 1;
+}
+
+// is the struct d the struct b, or one that inherits from it
+bool struct_is_a(int d, int b) {
+    int s = d;
+    int guard = 0;
+    while s >= 0 && guard < 32 {
+        if s == b { return true; }
+        s = sparent[s] - 1;
+        guard += 1;
+    }
+    return false;
+}
+
 // ------------------------------------------------------------------ enums
 char ename[4096];            // 64 x 64
 int ecount;
@@ -112,7 +165,7 @@ int us_l[256];                // ... inside the current function
 // ---------------------------------------------------------------- modules of the library: Namespace::module.function
 // The names of the library have three layers (docs/syntax-design.md 77): `Fs::fs.read(p)`. `using Fs;` takes the namespace away
 // (`fs.read(p)`), `using Fs::fs.read;` makes only that function available. A row: the namespace, the module, the struct that holds it.
-int mod_count() { return 26; }
+int mod_count() { return 27; }
 char^ mod_row(int i, int col) {
     char^ ns = "";
     char^ md = "";
@@ -144,6 +197,7 @@ char^ mod_row(int i, int col) {
     else if i == 23 { ns = "Net"; md = "dns"; st = "Net"; pre = "dns_"; }
     else if i == 24 { ns = "Net"; md = "http"; st = "Net"; pre = "http_"; }
     else if i == 25 { ns = "Input"; md = "read"; st = "__System"; pre = "read_"; }
+    else if i == 26 { ns = "Fs"; md = "read"; st = "__Files"; pre = "read_"; }
     if col == 0 { return ns; }
     if col == 1 { return md; }
     if col == 3 { return pre; }
@@ -1920,6 +1974,18 @@ void compute_reach() {
     }
     int m = find_func("main");
     if m >= 0 { freach[m] = 1; }
+    // the methods that a table of virtual methods points to are reached without a call that can be seen
+    int vs = 0;
+    while vs < scount {
+        int vi = 0;
+        while vi < svcnt[vs] {
+            char vfull[128];
+            int vf = find_method_in(vs, @svname + (vs * 32 + vi) * 64, @vfull);
+            if vf >= 0 { freach[vf] = 1; }
+            vi += 1;
+        }
+        vs += 1;
+    }
     // the routines that cout uses for a bool and for a pointer (the syntax tree calls them, the parser does not see it)
     int pbl = find_func("__print_bool");
     if pbl >= 0 && m >= 0 { freach[pbl] = 1; }
@@ -2045,6 +2111,9 @@ void gen_call() {
         else if str_eq(@callee, "__atomic_bit_xor") { str_copy(@callee, "__fetch_xor", 256); }
     }
     note_call(@callee);
+    int vsl = vcall_slot;
+    int vsl_off = vcall_off;
+    vcall_slot = 0 - 1;
     int pre = call_pre;
     call_pre = 0;
     int is_method = call_method;
@@ -2273,6 +2342,13 @@ void gen_call() {
             emit_line("ldr q0, [x0]");
             emit_line("str q0, [x1]");
         }
+        drop_args(n);
+        if tmp_off != 0 { ins_n("add x0, x29, #", tmp_off); }
+    } else if vsl >= 0 {
+        // a virtual method: the table of the object, the address of the method in it, then the call (x0 = the object, the other arguments are in place)
+        ins_mem("ldr", "x16", "x0", vsl_off);
+        ins_mem("ldr", "x16", "x16", vsl * 8);
+        emit_line("blr x16");
         drop_args(n);
         if tmp_off != 0 { ins_n("add x0, x29, #", tmp_off); }
     } else {
@@ -2648,6 +2724,8 @@ void lvalue_loop() {
                 str_copy(@m_full, @sname + st * 64, 64);
                 str_copy(@m_full + str_len(@m_full), "__", 4);
                 str_copy(@m_full + str_len(@m_full), @m_name, 100);
+                int m_fn = find_method_in(st, @m_name, @m_full);          // also a method of a base struct (m_full gets its name)
+                if m_fn < 0 { str_copy(@m_full, @sname + st * 64, 64); str_copy(@m_full + str_len(@m_full), "__", 4); str_copy(@m_full + str_len(@m_full), @m_name, 100); }
                 if find_func(@m_full) < 0 && pass_no >= 2 { die_no_member(st, 1, @m_name); }
                 if pass_no >= 2 && fself[find_func(@m_full)] == 0 { die_name("this function is static: call it as Struct::name(...)", @m_name); }
                 str_copy(@id_name, @m_full, 256);
@@ -2657,6 +2735,8 @@ void lvalue_loop() {
                 }
                 call_pre = 1;
                 call_method = 1;
+                vcall_slot = virt_slot(st, @m_name);
+                if vcall_slot >= 0 { vcall_off = svoff[st] - 1; }
                 gen_call();
                 if ex_ty >= 100 && (tok_is(".") || tok_is("[")) {
                     // obj.method().field : the result struct (a temporary) is the new object

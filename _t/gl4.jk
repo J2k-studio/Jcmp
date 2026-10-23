@@ -1,0 +1,29 @@
+#import <stdlib>
+#import <opengl3>
+int main() {
+    Gl gl = Gl::open(64, 64, 3, 1);
+    if !gl.ok { cout << "no GL: " << gl.log << "\n"; return 1; }
+    cout << "renderer " << gl.renderer << "\n";
+    String vs = "#version 300 es\nlayout(location = 0) in vec2 pos;\nvoid main() { gl_Position = vec4(pos, 0.0, 1.0); }\n";
+    String fs = "#version 300 es\nprecision mediump float;\nout vec4 color;\nvoid main() { color = vec4(1.0, 0.5, 0.0, 1.0); }\n";
+    int prog = gl.program(vs, fs);
+    if prog == 0 { cout << "shader: " << gl.log << "\n"; return 1; }
+    gl.clear_color(0.0, 0.0, 0.0, 1.0);
+    gl.clear_color_buffer();
+    gl.use(prog);
+    Floats tri = Floats::make(6);
+    tri.set(0, -1.0); tri.set(1, -1.0); tri.set(2, 1.0); tri.set(3, -1.0); tri.set(4, 0.0); tri.set(5, 1.0);
+    gl.draw_triangles(tri, 3);
+    String px = gl.read_pixels(32, 20, 1, 1);
+    cout << "triangle pixel " << (px[0] & 255) << " " << (px[1] & 255) << " " << (px[2] & 255) << " " << (px[3] & 255) << "\n";
+    String out = gl.read_pixels(1, 62, 1, 1);
+    cout << "corner pixel   " << (out[0] & 255) << " " << (out[1] & 255) << " " << (out[2] & 255) << "\n";
+    // a compute shader: v[i] = v[i] * 2 + 1
+    String cs = "#version 310 es\nlayout(local_size_x = 8) in;\nlayout(std430, binding = 0) buffer Data { float v[]; };\nvoid main() { uint i = gl_GlobalInvocationID.x; v[i] = v[i] * 2.0 + 1.0; }\n";
+    Floats data = Floats::make(16);
+    for i in 0..16 { data.set(i, (float)i); }
+    Floats res = gl.compute(cs, data, 2, 1, 1);
+    if gl.log.len > 0 { cout << "log: " << gl.log << "\n"; }
+    cout << "compute: " << res.get(0) << " " << res.get(1) << " " << res.get(5) << " " << res.get(15) << "\n";
+    return 0;
+}

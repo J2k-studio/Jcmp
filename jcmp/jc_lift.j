@@ -2277,9 +2277,14 @@ void ir_run() {
     lf_failed = 0;
     if (ir_opt & 8192) != 0 && opt_debug == 0 && ir_mode == 2 && inl_off == 0 { ir_collect(); }
     if cc_dir != null { cc_cut(); }
+    par_pass(0);                                             // the loop over the functions, on many cores when the program is big (jc_par.j)
+}
+
+void ir_run_loop() {
     int i = 0;
     while i < out_len {
         int en = rg_end(i);
+        if par_open >= 0 && !rg_is_func(i) { par_close_open(); }
         if x_target == 32 && !rg_is_func(i) && rg_is_naked(i) {
             // a naked function (the low level of the language): lifted with no frame
             int pn = en + 1;
@@ -2302,6 +2307,7 @@ void ir_run() {
             continue;
         }
         if rg_is_func(i) {
+            bool par_skip = par_skip_function();
             // the end of the function: the epilogue (ret) or, in main, the exit call
             int p = i;
             bool done = false;
@@ -2327,7 +2333,7 @@ void ir_run() {
             }
             ir_stat_fn[nl] = 0;
             bool ok = false;
-            if done && cnt < 60000 {
+            if done && cnt < 60000 && !par_skip {
                 if lf_load(i, p) {
                     if lf_function(@ir_stat_fn) == 1 {
                         ok = true;

@@ -2242,6 +2242,170 @@ hello jao
 
 เขียนและสร้างบนมือถือ: `coderin hello.jk` (Ctrl-S บันทึก Ctrl-Q ออก) แล้ว `jcmp hello.jk -o hello && ./hello` ใน `makej` การสร้างก็เป็นไฟล์เช่นกัน
 
+## บทที่ 61. ไลบรารีของเครื่อง: `-dyn` และ `<native>`
+
+โปรแกรม J2K ปกติเป็นแบบ *static* คือไฟล์เดียวที่คุยกับเคอร์เนลด้วย system call และไม่ต้องใช้อะไรอีก แต่การ์ดจอใช้ผ่านไลบรารีของเครื่อง (`libvulkan.so`, `libEGL.so`, `libGLESv3.so`, `libOpenCL.so`) โปรแกรมจึงต้องเป็นแบบ *dynamic* คือตัวโหลดของ Android เป็นคนสตาร์ตและให้ `libdl.so` กับ `libc.so` สั่งด้วยตัวเลือกเดียว:
+
+```
+jcmp -dyn gpu.jk -o gpu       # โปรแกรม dynamic รันใน Termux และในแอป Jaric ได้ โดยไม่ต้องมีแอปอื่น
+```
+
+ไลบรารี `<native>` ทำที่เหลือ: `Native::open("libvulkan.so")` ให้ *handle* (0 ถ้าไม่มีไลบรารี) `Native::sym(handle, "ชื่อ")` ให้ที่อยู่ของฟังก์ชัน `Native::call1 .. call8` เรียกฟังก์ชันด้วยจำนวนเต็มและพอยน์เตอร์ (ได้ค่าที่ฟังก์ชันคืน) หน่วยความจำที่ฟังก์ชัน C เติมอ่านด้วย `Native::peek32`, `peek64`, `peek8` และเขียนด้วย `poke32`, `poke64` ส่วน `Native::text(ที่อยู่)` สร้าง String จากข้อความแบบ C
+
+```jk
+#import <stdlib>
+#import <native>
+
+int main() {
+    int lib = Native::open("libvulkan.so");
+    if lib == 0 {
+        cout << "no libvulkan here, or the program was not built with jcmp -dyn\n";
+        return 1;
+    }
+    int fn = Native::sym(lib, "vkEnumerateInstanceVersion");   // ฟังก์ชัน: VkResult vkEnumerateInstanceVersion(uint32_t* version)
+    char out[16];                                              // ที่ว่างสำหรับเลขที่ฟังก์ชันจะเขียน
+    out[0] = 0; out[1] = 0; out[2] = 0; out[3] = 0;
+    int result = Native::call1(fn, (int)@out);                 // เรียกด้วยที่อยู่ของ out
+    int v = Native::peek32((int)@out);                         // อ่าน 32 บิตที่ฟังก์ชันเขียน
+    cout << "Vulkan " << (v >> 22) << "." << ((v >> 12) & 1023) << "\n";
+    return 0;
+}
+```
+
+บนเครื่องของผู้เขียนพิมพ์ `Vulkan 1.1` ถ้าสร้างแบบปกติ (static) จะพิมพ์ข้อความแรก เพราะโปรแกรม static ไม่มี `libdl.so`
+
+หลักการสั้นๆ: ไลบรารีอ่าน `/proc/self/maps` หาว่า `libdl.so` อยู่ที่ไหนในหน่วยความจำ อ่านตารางสัญลักษณ์ของมันและหา `dlopen` กับ `dlsym` แล้วสร้าง function pointer จากเลขนั้นเรียกเหมือนฟังก์ชันทั่วไป ส่วนอาร์กิวเมนต์ทศนิยม (OpenGL ใช้เยอะ) ส่งด้วย `Native::callf1 .. callf4` (ทศนิยมล้วน) และ `Native::calli_f1 .. calli_f4` (ตัวเลขก่อน ตามด้วยทศนิยม) เพราะมาตรฐาน C ต้องการให้อยู่ใน register คนละชุดกับที่ J2K ใช้
+
+## บทที่ 62. OpenGL ES: ภาพแรกที่ชิปวาด
+
+`<opengl3>` สร้าง context OpenGL ES แบบ *นอกจอ* (พื้นผิวขนาดที่ขอ ไม่แสดงบนจอ) บนไดรเวอร์จริง ทุกคำสั่งเหมือนเอกสาร OpenGL ES แต่สะกดแบบ J2K (`glClearColor` คือ `gl.clear_color`)
+
+```jk
+#import <stdlib>
+#import <opengl3>
+
+int main() {
+    Gl gl = Gl::open(64, 64, 3, 1);                    // 64 x 64 พิกเซล OpenGL ES 3.1 (ใช้ 2, 0 สำหรับ 2.0 แบบเก่า)
+    if !gl.ok {
+        cout << "no OpenGL here: " << gl.log << "\n";  // gl.log บอกเหตุผล
+        return 1;
+    }
+    cout << "chip: " << gl.renderer << "\n";           // เช่น Mali-G76
+    gl.clear_color(1.0, 0.5, 0.0, 1.0);                // แดง เขียว น้ำเงิน โปร่งใส: สีส้ม
+    gl.clear_color_buffer();                           // ชิประบายสีทั้งภาพ
+    String pixels = gl.read_pixels(10, 10, 1, 1);      // อ่านพิกเซลกลับมาหนึ่งจุด: 4 ไบต์
+    cout << (pixels[0] & 255) << " " << (pixels[1] & 255) << " " << (pixels[2] & 255) << "\n";
+    gl.close();
+    return 0;
+}
+```
+
+พิมพ์ `255 128 0` (เลขของสีส้ม) `read_pixels` คืนไบต์ แดง เขียว น้ำเงิน โปร่งใส ของแต่ละพิกเซล เริ่มจากแถวล่างสุด (OpenGL นับจากล่างขึ้นบน) การแสดงภาพบนจอของแอป Jaric ส่งพิกเซลด้วยข้อความ `gfx` (ไลบรารี `<gamej>` เป็นตัวอย่าง) หรือใช้ไลบรารี `<gpu>` ที่ส่ง *คำสั่ง* ให้แอปวาดบนจอ
+
+## บทที่ 63. สามเหลี่ยมและเชเดอร์
+
+ชิปรันโปรแกรมเล็กๆ ชื่อ *เชเดอร์* เขียนด้วย GLSL (ภาษาคล้าย C) *vertex shader* วางมุมของสามเหลี่ยม *fragment shader* ให้สีแต่ละพิกเซล `gl.program(vertex, fragment)` คอมไพล์และลิงก์ทั้งสอง คืน 0 และเติม `gl.log` เมื่อเชเดอร์มีที่ผิด (ข้อความของไดรเวอร์บอกบรรทัด)
+
+```jk
+#import <stdlib>
+#import <opengl3>
+
+int main() {
+    Gl gl = Gl::open(64, 64, 3, 1);
+    if !gl.ok { cout << gl.log << "\n"; return 1; }
+    String vertex = "#version 300 es\nlayout(location = 0) in vec2 pos;\nvoid main() { gl_Position = vec4(pos, 0.0, 1.0); }\n";
+    String fragment = "#version 300 es\nprecision mediump float;\nout vec4 color;\nvoid main() { color = vec4(1.0, 0.5, 0.0, 1.0); }\n";
+    int prog = gl.program(vertex, fragment);
+    if prog == 0 { cout << "shader: " << gl.log << "\n"; return 1; }
+    gl.clear_color(0.0, 0.0, 0.0, 1.0);
+    gl.clear_color_buffer();
+    gl.use(prog);
+    Floats corners = Floats::make(6);                  // สามมุม แต่ละมุม x กับ y ตั้งแต่ -1 ถึง 1
+    corners.set(0, -1.0); corners.set(1, -1.0);
+    corners.set(2, 1.0);  corners.set(3, -1.0);
+    corners.set(4, 0.0);  corners.set(5, 1.0);
+    gl.draw_triangles(corners, 3);
+    String inside = gl.read_pixels(32, 20, 1, 1);      // พิกเซลในสามเหลี่ยม
+    String outside = gl.read_pixels(1, 62, 1, 1);      // พิกเซลมุมซ้ายบน
+    cout << (inside[0] & 255) << " " << (outside[0] & 255) << "\n";
+    gl.close();
+    return 0;
+}
+```
+
+พิมพ์ `255 0` คือส้มข้างใน ดำข้างนอก `Floats` คือก้อนหน่วยความจำของเลข 32 บิต (สิ่งที่ชิปอ่าน) ใช้ `set(i, x)` และ `get(i)` ขั้นตอนเดียวกันวาดสามเหลี่ยมได้เป็นพัน: ใส่หลายมุมใน `Floats` เดียว ส่งครั้งเดียว วาดครั้งเดียว
+
+## บทที่ 64. ชิปเป็นเครื่องคิดเลข: compute shader
+
+OpenGL ES 3.1 รันเชเดอร์ที่ไม่วาดอะไร มีแต่ *คำนวณ* ให้ก้อนตัวเลข บอกว่าจะเริ่มกี่กลุ่มเธรด แล้วชิปรันโปรแกรมเล็กเดียวกันกับทุกตัวเลขพร้อมกัน (หลายร้อยตัวในเวลาเดียวกัน) `gl.compute(source, data, groups_x, groups_y, groups_z)` ทำทุกขั้นและคืนตัวเลขที่เปลี่ยนแล้ว
+
+```jk
+#import <stdlib>
+#import <opengl3>
+
+int main() {
+    Gl gl = Gl::open(8, 8, 3, 1);
+    if !gl.ok { cout << gl.log << "\n"; return 1; }
+    // แต่ละเธรดรับเลขหนึ่งตัว: v = v * 2 + 1  local_size_x = 8: หนึ่งกลุ่มมี 8 เธรด
+    String shader = "#version 310 es\nlayout(local_size_x = 8) in;\nlayout(std430, binding = 0) buffer Data { float v[]; };\nvoid main() { uint i = gl_GlobalInvocationID.x; v[i] = v[i] * 2.0 + 1.0; }\n";
+    Floats data = Floats::make(16);
+    for i in 0..16 { data.set(i, (float)i); }
+    Floats result = gl.compute(shader, data, 2, 1, 1);   // 2 กลุ่ม x 8 เธรด = 16 ตัวเลข
+    if gl.log.len > 0 { cout << "log: " << gl.log << "\n"; }
+    cout << result.get(0) << " " << result.get(5) << " " << result.get(15) << "\n";
+    gl.close();
+    return 0;
+}
+```
+
+พิมพ์ `1.000000 11.000000 31.000000` ชิปไม่ได้เร็วกว่าสำหรับเลขตัวเดียว แต่ชนะเมื่อมีตัวเลขเยอะมากและทำงานเดียวกันกับทุกตัว: ภาพ ฟิสิกส์ของวัตถุจำนวนมาก เมทริกซ์ ชั้นของโครงข่ายประสาท (`<neuron>` ใช้ได้ภายหลัง)
+
+## บทที่ 65. Vulkan: ถามชิป
+
+Vulkan คืออินเทอร์เฟซสมัยใหม่ ต้องเขียนมากกว่า ควบคุมได้มากกว่า ไดรเวอร์ทำงานน้อยกว่า `<vulkan>` เป็นก้าวแรก: สร้าง *instance* หาชิปและบอกว่าทำอะไรได้ ขั้นอื่น (device, queue, buffer, pipeline) ทำแบบเดียวกัน: โครงสร้างในหน่วยความจำ ฟังก์ชันที่หาจากชื่อ และ `Native::call`
+
+```jk
+#import <stdlib>
+#import <vulkan>
+
+int main() {
+    Vk vk = Vk::open();
+    if !vk.ok { cout << vk.log << "\n"; return 1; }
+    cout << vk.device_name << ", Vulkan " << vk.api_text() << "\n";
+    cout << "memory " << vk.memory_mb << " MB, queues " << vk.queue_families << ", compute " << vk.has_compute << "\n";
+    vk.close();
+    return 0;
+}
+```
+
+บนเครื่องของผู้เขียน: `Mali-G76, Vulkan 1.1.97`, 7460 MB, queue family เดียวที่คำนวณได้ สร้างด้วย `jcmp -dyn` โครงสร้างของ Vulkan คือก้อนไบต์ที่มีฟิลด์ในตำแหน่งตายตัว (สเปกบอกออฟเซ็ต) `Native::poke32(address + offset, value)` เขียนหนึ่งฟิลด์ ดูซอร์สของ `<vulkan>` (`jcmp -showlib vulkan`) ว่าเติม `VkApplicationInfo` และ `VkInstanceCreateInfo` อย่างไร
+
+## บทที่ 66. เกม: Jaric Engine
+
+`makej init -game` สร้างโปรเจกต์ที่มีเกมเล็กและบทเรียนห้าบท (`makej play1` .. `play5`) ไลบรารี `<gamej>` คือเอนจิน: ลูปเป็นของคุณ (`while game.running()`) เอนจินให้ปุ่ม การแตะ เวลาของแต่ละรอบ (`g.dt`) การวาด (`clear rect circle line text art`) การชน (`Game::overlap`) และเสียง บนเทอร์มินัลวาดด้วยบล็อกครึ่งช่อง ในแอป Jaric วาดบนพื้นผิวภาพ `makej apk` ทำเป็นแอป Android `makej pack` ทำเป็นแพ็กเกจ `.jec`
+
+```jk
+#import <stdlib>
+#import <gamej>
+
+int main() {
+    Game g = Game::open("Lesson");            // ทั้งจอ
+    double x = 20.0;                          // ตำแหน่งของสี่เหลี่ยม
+    while g.running() {                       // เป็นเท็จหลังกด Esc
+        g.begin();                            // อ่านปุ่ม วัดเวลา (g.dt หน่วยวินาที)
+        if g.held(Key::left()) { x -= 40.0 * g.dt; }       // 40 พิกเซลต่อวินาที: ความเร็วเท่ากันทุกเครื่อง
+        if g.held(Key::right()) { x += 40.0 * g.dt; }
+        g.clear(Game::rgb(10, 20, 40));       // สีของท้องฟ้า
+        g.rect((int)x, 30, 6, 6, Game::rgb(255, 200, 60));  // x y กว้าง สูง สี
+        g.end();                              // แสดงภาพ รอรอบถัดไป
+    }
+    g.close();
+    return 0;
+}
+```
+
+ถ้าจะคุยกับชิปเอง ใช้ `<gpu>` ในแอป (สามเหลี่ยม ภาพ สีย้อม: คำสั่งชุดเดียวต่อหนึ่งภาพ) หรือ `<opengl3>` / `<vulkan>` ในโปรแกรม dynamic แผนของเอนจิน (ชั้น ระบบฉากแบบ Godot API แบบ MonoGame) อยู่ในเอกสารของโครงการ Jaric
+
 ## ต่อไป
 
 * [LANGUAGE.md](LANGUAGE.md) — ทุกความสามารถพร้อมตัวอย่าง (function pointer, ชนิด unsigned, `sizeof` ฯลฯ)

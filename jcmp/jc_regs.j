@@ -1080,12 +1080,18 @@ void rg_function(int is_main) {
 
 void regs_run() {
     regs_len = 0;
+    par_pass(1);                                             // on many cores when the program is big (jc_par.j)
+}
+
+void regs_run_loop() {
     int i = 0;
     int work = 1;
     if opt_regs == 0 { work = 0; }
     while i < out_len {
         int en = rg_end(i);
+        if par_open >= 0 && !rg_is_func(i) { par_close_open(); }
         if work == 1 && rg_is_func(i) {
+            bool par_skip = par_skip_function();
             // the function: from its label to its last line (the ret after the first epilogue; for main the exit call)
             int is_main = 0;
             if rg_has(i, "main:\n") { is_main = 1; }
@@ -1113,6 +1119,14 @@ void regs_run() {
                 // not understood (a helper of the runtime): its first line is copied, the lines after it are looked at one by one
                 rg_copy(i, en);
                 i = en + 1;
+            } else if par_skip {
+                int q = i;                                     // another process works on this function: it is copied as it is
+                while q < p {
+                    int qe = rg_end(q);
+                    if !rg_has(q, ";H") { rg_copy(q, qe); }
+                    q = qe + 1;
+                }
+                i = p;
             } else {
                 int fstart = regs_len;
                 rg_function(is_main);
