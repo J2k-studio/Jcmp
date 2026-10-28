@@ -1,11 +1,35 @@
+<p align="center"><img src="docs/banner.svg" alt="J2K and Jcmp" width="100%"></p>
+
 # J2K & Jcmp
 
-**J2K** is a small systems programming language, designed from scratch and close to the machine.
-**Jcmp** is its native compiler: it reads `.jk` / `.j` source and writes a Linux ARM64 executable
-directly (its own assembler and ELF writer — no LLVM, no GCC, no `as`, no `ld`).
+> **A language that talks straight to the CPU. Written in itself, built on a phone.**
 
-The compiler is **written in J2K itself** and builds itself (self-hosting).
-Everything was developed on a phone (ARM64, Termux).
+**J2K** is a small systems language, designed from scratch and close to the machine.
+**Jcmp** is its native compiler: it reads `.jk` / `.j` source and writes a Linux ARM64 executable
+directly (its own assembler and ELF writer: no LLVM, no GCC, no `as`, no `ld`).
+It is **self-hosting**: the compiler is written in J2K and rebuilds itself, byte for byte.
+
+## Why it exists
+
+* **One person, one phone, no borrowed toolchain.** Every layer is ours: language, compiler, assembler, linker, standard library, the tools, the terminal app and the start of an operating system.
+* **Close to the machine, with the comforts of a modern language:** pointers and raw registers when you want them; strings, generics, `Option`/`Result`, `defer`, lambdas, inheritance, default arguments and `"x = {x}"` text when you do not.
+* **Fast by design:** the goal is output as fast as `clang -O2` (today about 1.5 to 4 times slower on loops and recursion, faster on some, and getting closer each release).
+
+## What is done
+
+| | |
+|---|---|
+| **Compiler** | self-hosting, Linux ARM64 and ARM32, `-j N` many cores, native GPU (`-dyn`), shared libraries for C / Java / Python (`export`, `-l`), 600+ tests |
+| **Language** | structs, methods and operator methods, enums with data, generics, `try`/`throw`, threads, inheritance (`virtual` / `override`), default arguments, text with values inside |
+| **Tools** ([Jcmp-Tools](https://github.com/J2k-studio/Jcmp-Tools)) | shell, package manager, editor, build tool, git, music player, small AI, an emulator that runs ARM64 programs and kernels |
+| **Jaric** | an Android terminal app that is the first mode of **Jaric OS**; a kernel with processes, a file system, pipes and a real shell, started in the emulator, with its own boot screen |
+
+## Where it is going
+
+1. **Speed:** match `clang -O2` (division by constants, vector loops, better registers).
+2. **More targets:** x86-64, then WebAssembly or Windows.
+3. **Languages that meet:** J2K libraries that Java, C and Python call; tools that build Android apps from J2K.
+4. **Jaric OS with a real screen:** phone mode (portrait) and desktop mode (landscape), apps for graphics, video and sound on the Jaric Engine.
 
 ```jk
 // hello.jk
