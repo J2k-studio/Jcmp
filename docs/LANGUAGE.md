@@ -149,6 +149,17 @@ void main() { cout << add(2, 3) << "\n"; }       // functions may be used before
 At most 16 parameters (the 9th and later travel through a small area of global memory, so programs that call functions from several threads would need another scheme). A function can be used above its definition. Arrays are passed with
 their length (see below). Structs are passed by value (copied); use `T^` to share.
 
+### Default arguments
+
+The last parameters may have a default value: a constant (a whole number, a bool, a char, `null`, an enum member). A call may leave those parameters out; the compiler puts the value in. A parameter without a default cannot come after one with a default.
+
+```jk
+int add(int a, int b = 10, int c = 100) { return a + b + c; }
+void main() { cout << add(1) << " " << add(1, 2) << " " << add(1, 2, 3) << "\n"; }     // 111 103 6
+```
+
+Methods work the same way (`int bump(self, int d = 1)`). Named arguments are not built (syntax-design 98, B).
+
 ## Arrays and strings
 
 A function can have any number of array parameters (`int dot(int a[], int b[])`), anywhere in the list. `str(x)` makes a String from a number, a char, a bool or a String: `str(42)`, `str(2.5)`, `str('x')`, `str(true)`.
@@ -221,6 +232,13 @@ c += "!";                    // append (a String, a text or a char)
 cin >> a;                    // one word
 ```
 
+* **Text with values inside** (owner's design, section 99 of the syntax notes): `{expression}` in a text is the value of the expression as text, so `"x = {x}, y = {y + 1}"` means `"x = " + str(x) + ", y = " + str(y + 1)`. The expression is a number, a char, a bool or a String (what `str` takes). `{{` and `}}` are a `{` and a `}`. A `{` that is not followed by a letter or `(` stays as it is (`"{ text }"`, `"{}"`).
+
+```jk
+int x = 5;
+String name = "Jao";
+cout << "x = {x}, next = {x + 1}, hi {name}! {{braces}}\n";    // x = 5, next = 6, hi Jao! {braces}
+```
 * Methods: `push(char)`, `pop()`, `append(x)`, `clear()`, `find(x)` (index or -1), `slice(from, to)`, `c()` (the characters as a plain text, valid until the String changes), `len`, `free()`.
 * More methods: `trim()`, `upper()`, `lower()` (ASCII letters), `replace(a, b)`, `repeat(n)` (each gives a new String); `starts_with(x)`, `ends_with(x)`, `contains(x)` (true/false);
   `to_int()`, `to_double()` (the whole String must be a number, else it throws `not a number`); `split(sep)` gives a new `String[]` and `join(sep)` on a `String[]` joins it again.

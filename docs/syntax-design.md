@@ -2237,3 +2237,32 @@ a^.speak();                                               // woof (the Dog's)
 **Rules:** (1) one base only (no multiple inheritance); (2) the fields of the base come first, in the same order, so a `Dog^` can be used as an `Animal^` (no copy); (3) a struct with a `virtual` method, or derived from one, starts with one hidden pointer to its table of methods; a struct without any is exactly as before (same size, same speed); (4) a call through a value (`Dog d; d.speak()`) or a `Dog^` is decided at compile time (no table); only a call through a pointer to a base whose method is `virtual` goes through the table; (5) `override` without a matching `virtual` in a base is an error, a missing `override` is a warning; (6) assigning a `Dog` value to an `Animal` variable cuts the extra fields (a warning: "slicing"); (7) `base::method(self)` calls the base version (the spelling `Animal::speak(self)`); (8) `is` / `as` (a test of the real type and a safe cast) are a later step; (9) owned memory: freeing an `Animal^` frees the whole `Dog` (the size is in the table); the destructor-like free of fields of the derived struct runs first.
 **Compared** — C++: `class Dog : public Animal`, `virtual`, `override` (the same words; no multiple inheritance, no private bases, no constructors that call each other: J2K has none); C#/Java: single inheritance, `override`; Go/Rust: no inheritance (composition + interfaces/traits): an alternative for the owner is interfaces without data inheritance (`interface Speaker { void speak(self); }` and `struct Dog impl Speaker`) which is simpler to implement and safer; both can exist. **Question for the owner:** data inheritance as above, interfaces only, or both?
 **Work:** parser (`: Base`, `virtual`, `override`), field layout with a base prefix, lookup of a method through the chain of bases, the table of methods in the global data and its pointer written when an object is made (`Dog d;`, `alloc Dog`, array of Dog), the call through the table, the checks of the rules, tests. About 600 lines in `jc_stmt.j` / `jc_expr.j` / `jc_ast.j` / `jc_astlow.j` (both the text path and the tree path).
+
+## 96. Interfaces (proposal of the assistant, 2026-10-23; NOT decided — the owner said both data inheritance and interfaces are wanted)
+Rule of three: borrowed from other languages / easy for a person / easy for the machine.
+| Option | Shape | Borrowed from | Person | Machine |
+|---|---|---|---|---|
+| **A** list the interfaces | `interface Speaker { void speak(self); }` and `struct Dog : Animal impl Speaker { ... }` ; a call through `Speaker^ s` | C# / Java / Rust (`impl`) | clear: the struct says what it promises; the compiler checks it | a pointer to an interface = the object pointer + a table (2 words) made where the conversion `(Speaker^)@dog` happens; no change to the layout of the struct |
+| **B** by shape (structural) | the same `interface`, but any struct that has the methods fits, no `impl` | Go, TypeScript | shortest to write; a method renamed by accident drops out silently | same as A |
+| **C** only virtual structs | no new word: a base struct with `virtual void speak(self);` (no body = must be overridden) is the interface; a struct can still have one base | C++ abstract classes | no new idea, but one base only (no "implements two") | already built (vtable of 1.2.0.0) |
+Recommendation: **A** (explicit, checked, no hidden surprise; multiple interfaces per struct). C is the cheap first step if the owner wants it sooner.
+
+## 97. Concurrency forms (proposal, NOT decided; today: `Thread`, `Mutex`, `Atomic` in `<cpu>`)
+* **A library first (no new syntax):** `Task<T> t = Task::run(f, arg); T r = t.wait();` on a thread pool, and `Channel<T>` (`send`, `receive`, `close`). Easy to read, easy for the machine (threads), no change to the compiler.
+* **B keywords `async` / `await`** (C#, JS, Rust, Python): a function marked `async` returns a `Task<T>`, `await` waits without blocking a pool thread; needs the compiler to turn the function into a state machine (a big step).
+* **C coroutines `yield`** (Python, Lua, Kotlin): the function pauses itself; also a state machine.
+Recommendation: **A now**, B later when the use is clear (the engine and the store need tasks, not the keywords).
+
+## 98. Default arguments and named arguments (DECIDED 2026-10-27: A, designed by AI at user request "ตัดสินใจเลย", adjustable; B can be added later)
+* **A** default in the declaration: `void draw(int x, int y, int color = 0xFFFFFF)`; the call may leave it out. Borrowed from C++/C#/Kotlin; the compiler fills the missing value at the call (no overloads).
+* **B** A plus named arguments at the call: `draw(10, 20, color: 0xFF0000)` (C#, Kotlin, Python) — good for engine APIs with many options.
+Recommendation: A first, B when the owner likes it.
+**Decision:** A. A default value is a constant expression after `=` in the declaration, only on the last parameters; the compiler fills the missing value at the call. Named arguments (B) stay open.
+**Built** 2026-10-27: constants only (whole number, bool, char, null, enum member), also on methods; test t519.
+
+## 99. Text with values inside (DECIDED 2026-10-27 by the owner: A; see docs/design/20-printing.md for `cout`)
+* **A** interpolation `"x = {x}, y = {y + 1}"` (C#, Python f-strings, Kotlin `$x`): the least to write; the compiler builds the String.
+* **B** a function `Fmt::text("x = {}, y = {}", x, y)` (Rust `format!`, C++ `std::format`): no new syntax in the string; the arguments are checked by count only.
+* **C** keep `+` and `str(x)` (today).
+Recommendation: A for a plain `{name}` / `{expression}` (escape with `{{`), B stays as the library form.
+**Decision (owner):** A, interpolation `"x = {x}, y = {y + 1}"`, `{{` and `}}` for literal braces; `Fmt::text` may come later as a library form.

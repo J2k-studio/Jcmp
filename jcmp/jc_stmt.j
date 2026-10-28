@@ -2232,7 +2232,7 @@ void parse_local_decl_core() {
                 if d_list > d_count { die_help("more values than the array can hold", "make the array bigger or give fewer values"); }
             } else {
             if tok_kind != T_STR { die("a string was expected"); }
-            if size_of(d_elem) != 1 { die_help("only a char array can start from a string", "write char name[N] = \"text\"; for other arrays give a list {a, b, c}"); }
+            if size_of(d_elem) != 1 { die_help("only a char array can start from a string", "write char name[N] = \"text\"; for other arrays give a list {{a, b, c}}"); }
             if d_nd != 1 { die("only a one-dimensional array can start from a string"); }
             d_str = 1;
             if d_count < 0 { d_count = tok_str_len + 1; }
@@ -2808,6 +2808,7 @@ void parse_function() {
     }
     expect_pending = 0;
     int f_declared = 0;
+    fdefn[f_idx] = 0;
     // pass 3: a function that main cannot reach is parsed but not emitted
     int f_skip = 0;
     int sv_out = out_len;
@@ -2978,6 +2979,15 @@ void parse_function() {
             if f_declared >= 8 && f_declared < 16 && ty_ptr == 0 && p_tid == 91 && ty_dyn == 0 { fpd8[f_idx] = fpd8[f_idx] + (1 << (f_declared - 8)); }
             if f_declared < 8 { fpstr[f_idx * 8 + f_declared] = 0; if ty_ptr != 0 { fpstr[f_idx * 8 + f_declared] = 2; } if is_str_dyn(p_dyn) { fpstr[f_idx * 8 + f_declared] = 1; } }
             next();
+            if tok_is("=") {
+                // a default value: a constant; the call may leave this parameter (and the ones after it) out
+                next();
+                fdefv[f_idx * 16 + f_declared] = parse_const();
+                if cf_flag == 1 { die("a default value must be a whole number, a bool, a char or null"); }
+                if fdefn[f_idx] == 0 { fdefn[f_idx] = f_declared + 1; }
+            } else if fdefn[f_idx] != 0 {
+                die_help("a parameter after one with a default value needs a default value too", "write the parameters with defaults last: void f(int a, int b = 0)");
+            }
             if tok_is("[") {
                 // T name[] : an address and a length (name__len) arrive together
                 next();
@@ -3142,7 +3152,7 @@ void parse_function() {
         emit_line("mov x8, 94");
         emit_line("svc 0");
     } else {
-        if fvoid[f_idx] == 0 {
+        if fvoid[f_idx] == 0 && bare_mode == 0 {          // (a raw file has no runtime to stop in: no check there)
             // the body ended without a return: that is an error at run time (a normal return jumps over this)
             emit_line("bl j2k_noret");
             used_noret = 1;
@@ -3235,7 +3245,7 @@ void parse_global(char^ name) {
                 if g_list > g_count { die_help("more values than the array can hold", "make the array bigger or give fewer values"); }
             } else {
             if tok_kind != T_STR { die("a string was expected"); }
-            if size_of(g_elem) != 1 { die_help("only a char array can start from a string", "write char name[N] = \"text\"; for other arrays give a list {a, b, c}"); }
+            if size_of(g_elem) != 1 { die_help("only a char array can start from a string", "write char name[N] = \"text\"; for other arrays give a list {{a, b, c}}"); }
             if g_nd != 1 { die("only a one-dimensional array can start from a string"); }
             g_str = 1;
             if g_count < 0 { g_count = tok_str_len + 1; }

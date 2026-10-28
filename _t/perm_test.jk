@@ -1,0 +1,6 @@
+#import <stdlib>
+#import <gamej>
+int main() {
+    cout << Game::allowed("audio") << " " << Game::allowed("network") << "\n";
+    return 0;
+}

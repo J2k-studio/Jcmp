@@ -1490,6 +1490,112 @@ bool slice_rewrite(int wn) {
 }
 
 // the next token
+// "x = {x}, y = {y + 1}": a text with {expression} inside is written as ("x = " + str(x) + ", y = " + str(y + 1)) in the text of the file,
+// and read again (a {{ is a { and a }} is a }). Only a text that has a {name or {( ... } or a {{ / }} is changed. cur_pos is at the opening quote.
+char interp_tmp[4096];
+bool interp_rewrite() {
+    int base = cur_base;
+    int p = cur_pos + 1;
+    int found = 0;
+    // 1. find the end of the text on this line and see whether there is anything to do
+    while true {
+        if p >= cur_len { return false; }
+        int c = src_bufs[base + p];
+        if c == 10 { return false; }
+        if c == '"' { break; }
+        if c == 92 { p += 2; continue; }
+        if c == '{' {
+            int n1 = src_bufs[base + p + 1];
+            if n1 == '{' { found = 1; p += 2; continue; }
+            if is_letter(n1) || n1 == '(' {
+                int d = 1;
+                int e = p + 1;
+                while e < cur_len && d > 0 {
+                    int ec = src_bufs[base + e];
+                    if ec == 10 || ec == '"' { return false; }
+                    if ec == '{' { d += 1; }
+                    if ec == '}' { d -= 1; }
+                    e += 1;
+                }
+                if d != 0 { return false; }
+                found = 1;
+                p = e;
+                continue;
+            }
+        }
+        if c == '}' && src_bufs[base + p + 1] == '}' { found = 1; p += 2; continue; }
+        p += 1;
+    }
+    if found == 0 { return false; }
+    int close = p;
+    // 2. build the new text
+    int q = 0;
+    int parts = 0;
+    int lit_open = 0;              // 1 while a "..." piece is being written
+    interp_tmp[q] = '('; q += 1;
+    p = cur_pos + 1;
+    while p < close {
+        if q > 4000 { return false; }
+        int c2 = src_bufs[base + p];
+        if c2 == 92 {
+            if lit_open == 0 { if parts > 0 { interp_tmp[q] = ' '; interp_tmp[q + 1] = '+'; interp_tmp[q + 2] = ' '; q += 3; } interp_tmp[q] = '"'; q += 1; lit_open = 1; parts += 1; }
+            interp_tmp[q] = c2; interp_tmp[q + 1] = src_bufs[base + p + 1]; q += 2; p += 2;
+            continue;
+        }
+        if c2 == '{' && src_bufs[base + p + 1] != '{' {
+            int d2 = 1;
+            int e2 = p + 1;
+            while d2 > 0 {
+                int ec2 = src_bufs[base + e2];
+                if ec2 == '{' { d2 += 1; }
+                if ec2 == '}' { d2 -= 1; }
+                e2 += 1;
+            }
+            if lit_open == 1 { interp_tmp[q] = '"'; q += 1; lit_open = 0; }
+            if parts > 0 { interp_tmp[q] = ' '; interp_tmp[q + 1] = '+'; interp_tmp[q + 2] = ' '; q += 3; }
+            interp_tmp[q] = 's'; interp_tmp[q + 1] = 't'; interp_tmp[q + 2] = 'r'; interp_tmp[q + 3] = '('; q += 4;
+            int k = p + 1;
+            while k < e2 - 1 { interp_tmp[q] = src_bufs[base + k]; q += 1; k += 1; if q > 4000 { return false; } }
+            interp_tmp[q] = ')'; q += 1;
+            parts += 1;
+            p = e2;
+            continue;
+        }
+        if lit_open == 0 {
+            if parts > 0 { interp_tmp[q] = ' '; interp_tmp[q + 1] = '+'; interp_tmp[q + 2] = ' '; q += 3; }
+            interp_tmp[q] = '"'; q += 1; lit_open = 1; parts += 1;
+        }
+        if (c2 == '{' || c2 == '}') && src_bufs[base + p + 1] == c2 { p += 1; }       // {{ and }} are one brace
+        int lc2 = src_bufs[base + p];
+        if lc2 == '{' || lc2 == '}' {                       // a brace in the new text is written \x7b / \x7d, so that the text is not read as an interpolation again
+            interp_tmp[q] = 92; interp_tmp[q + 1] = 'x'; interp_tmp[q + 2] = '7'; q += 3;
+            if lc2 == '{' { interp_tmp[q] = 'b'; } else { interp_tmp[q] = 'd'; }
+            q += 1; p += 1;
+            continue;
+        }
+        interp_tmp[q] = lc2; q += 1; p += 1;
+    }
+    if lit_open == 1 { interp_tmp[q] = '"'; q += 1; }
+    if parts == 0 { interp_tmp[q] = '"'; interp_tmp[q + 1] = '"'; q += 2; }
+    interp_tmp[q] = ')'; q += 1;
+    // 3. put it in the place of the text and move the rest of the file
+    int oldlen = close + 1 - cur_pos;
+    int delta = q - oldlen;
+    if cur_len + delta + 2 >= 524288 { return false; }
+    int tail = cur_len - (close + 1) + 1;
+    if delta > 0 {
+        int m = tail - 1;
+        while m >= 0 { src_bufs[base + close + 1 + delta + m] = src_bufs[base + close + 1 + m]; m -= 1; }
+    } else if delta < 0 {
+        int m2 = 0;
+        while m2 < tail { src_bufs[base + close + 1 + delta + m2] = src_bufs[base + close + 1 + m2]; m2 += 1; }
+    }
+    int w = 0;
+    while w < q { src_bufs[base + cur_pos + w] = interp_tmp[w]; w += 1; }
+    cur_len += delta;
+    return true;
+}
+
 void next() {
     tok_seq += 1;
     prev_tok_line = err_line;
@@ -1850,6 +1956,7 @@ void next() {
         return;
     }
     if c == '"' {
+        if interp_rewrite() { next(); return; }
         adv();
         tok_kind = T_STR;
         int sn = 0;

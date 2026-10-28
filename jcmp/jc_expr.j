@@ -722,6 +722,8 @@ int ginit_count;
 // functions seen so far (to tell a call from an unknown name)
 char fname[1048576];          // 2048 x 64
 int fnpar[16384];             // declared parameters (an array parameter counts once)
+int fdefn[16384];            // the first parameter that has a default value (0 = none, else the index + 1); the values are in fdefv[function * 16 + parameter]
+int fdefv[262144];
 int fvoid[16384];            // 1 if the function returns void
 int fbuiltin[16384];         // 1 if the function is written in a built-in library (prelude, std)
 int fpstr[131072];             // 1 for a parameter of type String (8 per function)
@@ -1594,6 +1596,20 @@ void check_arg_count(int fi, int skip, int given) {
     die(@m);
 }
 
+// the parameters that the call left out and that have a default value get it now (pushed like arguments); returns how many
+int fill_defaults(int pfi, int pskip, int argno) {
+    int added = 0;
+    if pfi < 0 || pass_no < 2 || fdefn[pfi] == 0 { return 0; }
+    int pk = argno + pskip;
+    while pk >= fdefn[pfi] - 1 && pk < fnpar[pfi] {
+        ins_n("mov x0, ", fdefv[pfi * 16 + pk]);
+        push_x0();
+        added += 1;
+        pk += 1;
+    }
+    return added;
+}
+
 int parse_args() {
     int n = 0;
     int amask = arr_call_mask;
@@ -1606,9 +1622,10 @@ int parse_args() {
     call_skip = 0;
     int argno = 0;
     if tok_is(")") {
-        check_arg_count(pfi, pskip, 0);
+        int d0 = fill_defaults(pfi, pskip, 0);
+        check_arg_count(pfi, pskip, d0);
         next();
-        return 0;
+        return d0;
     }
     while true {
         if (amask >> argno) % 2 == 1 {
@@ -1660,9 +1677,10 @@ int parse_args() {
             break;
         }
     }
-    check_arg_count(pfi, pskip, argno);
+    int dn = fill_defaults(pfi, pskip, argno);
+    check_arg_count(pfi, pskip, argno + dn);
     expect(")");
-    return n;
+    return n + dn;
 }
 
 // loads the pushed arguments into x0..x7. With 8 or fewer the stack slots are given back here;

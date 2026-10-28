@@ -2385,7 +2385,7 @@ On the author's phone: `Mali-G76, Vulkan 1.1.97`, 7460 MB, one queue family that
 
 ## Lesson 66. Games: Jaric Engine
 
-`makej init -game` makes a project with a small game and five lessons (`makej play1` .. `play5`). The library `<gamej>` is the engine: the loop is yours (`while game.running()`), the engine gives the keys and touches, the time of a turn (`g.dt`), drawing (`clear rect circle line text art`), collision (`Game::overlap`) and sound. In a terminal it draws with half blocks; in the Jaric app it draws on a surface; `makej apk` makes it an Android app, `makej pack` a `.jec` package.
+`makej init -game` makes a project with a small game and five lessons (`makej play1` .. `play5`). The library `<gamej>` is the engine: the loop is yours (`while game.running()`), the engine gives the keys and touches, the time of a turn (`g.dt`), drawing (`clear rect circle line text art`), collision (`Game::overlap`) and sound. In a terminal it draws with half blocks; in the Jaric app it draws on a surface; `makej apk` makes it an Android app, `makej pack` a `.jc` package.
 
 ```jk
 #import <stdlib>

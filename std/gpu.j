@@ -1,4 +1,4 @@
-// gpu 0.1.0 -- the graphics chip for J2K programs.   #import <gpu>   (needs jcmp 1.1.0.0; license: MPL-2.0)
+// gpu 0.1.1 -- the graphics chip for J2K programs.   #import <gpu>   (needs jcmp 1.1.0.0; license: MPL-2.0)
 //   Gpu g = Gpu::open(320, 180);                  // a picture of 320 x 180 logical pixels, scaled to the screen (in the Jaric app)
 //   if !g.ok() { cout << "no graphics chip here\n"; return; }
 //   g.load(1, "ship.png");                        // a picture file becomes the texture 1
@@ -109,9 +109,15 @@ struct Gpu {
         if !self.good { return; }
         String p = file;
         if !p.starts_with("/") {
-            switch Env::get("JEC_ASSETS") {
+            switch Env::get("JC_ASSETS") {
                 Option::Some(a): { if Fs::exists(a + "/" + file) { p = a + "/" + file; } }
                 Option::None: { }
+            }
+            if !Fs::exists(p) {                                   // JEC_ASSETS: the old name, read for one more release
+                switch Env::get("JEC_ASSETS") {
+                    Option::Some(a2): { if Fs::exists(a2 + "/" + file) { p = a2 + "/" + file; } }
+                    Option::None: { }
+                }
             }
         }
         cout << "\e]7777;gpu;tex;" << id << ";" << p << "\a";

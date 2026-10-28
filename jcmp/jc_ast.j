@@ -451,6 +451,14 @@ int ast_call(int fidx) {
         return 0;
     }
     next();
+    if fdefn[fidx] != 0 && n < fnpar[fidx] && n >= fdefn[fidx] - 1 {
+        while n < fnpar[fidx] {                          // the parameters left out get their default value
+            int dnode = ast_node(AK_NUM, 0, 0, 0, fdefv[fidx * 16 + n]);
+            if first == 0 { first = dnode; } else { ast_nx[last] = dnode; }
+            last = dnode;
+            n += 1;
+        }
+    }
     if n != fnpar[fidx] {
         ast_fail("a call with another number of arguments");
         return 0;

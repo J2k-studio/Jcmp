@@ -2382,7 +2382,7 @@ int main() {
 
 ## บทที่ 66. เกม: Jaric Engine
 
-`makej init -game` สร้างโปรเจกต์ที่มีเกมเล็กและบทเรียนห้าบท (`makej play1` .. `play5`) ไลบรารี `<gamej>` คือเอนจิน: ลูปเป็นของคุณ (`while game.running()`) เอนจินให้ปุ่ม การแตะ เวลาของแต่ละรอบ (`g.dt`) การวาด (`clear rect circle line text art`) การชน (`Game::overlap`) และเสียง บนเทอร์มินัลวาดด้วยบล็อกครึ่งช่อง ในแอป Jaric วาดบนพื้นผิวภาพ `makej apk` ทำเป็นแอป Android `makej pack` ทำเป็นแพ็กเกจ `.jec`
+`makej init -game` สร้างโปรเจกต์ที่มีเกมเล็กและบทเรียนห้าบท (`makej play1` .. `play5`) ไลบรารี `<gamej>` คือเอนจิน: ลูปเป็นของคุณ (`while game.running()`) เอนจินให้ปุ่ม การแตะ เวลาของแต่ละรอบ (`g.dt`) การวาด (`clear rect circle line text art`) การชน (`Game::overlap`) และเสียง บนเทอร์มินัลวาดด้วยบล็อกครึ่งช่อง ในแอป Jaric วาดบนพื้นผิวภาพ `makej apk` ทำเป็นแอป Android `makej pack` ทำเป็นแพ็กเกจ `.jc`
 
 ```jk
 #import <stdlib>

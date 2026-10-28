@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.2.1.0 (2026-10-28)
+* **Added:** default arguments, text with values inside and raw-mode returns (below). Bootstrap checked 7+ times in a row, suite 621 passed.
+* **Added (default arguments, syntax-design section 98, A):** `int add(int a, int b = 10)`: the last parameters may have a constant default and a call may leave them out (functions and methods). A parameter without a default after one with a default is an error. Test `t519_default_args`.
+* **Fixed (raw mode):** a `#!library` file can have functions that give a value (`int f()`, `bool f()`): the check "the function ended without a return" needs the runtime and is left out in a raw file (before: `internal error ... adr x0, j2k_fntab`). Test `t518_bare_return`.
+* **Added (text with values inside, syntax-design section 99, the owner chose A):** `"x = {x}, y = {y + 1}"` is `"x = " + str(x) + ", y = " + str(y + 1)`; `{{` and `}}` are braces. The lexer rewrites such a text before it is read (a text without `{name` / `{(` / `{{` / `}}` is not touched, so old programs keep working). Test `t517_interp`.
+* **Decided:** default arguments, section 98: A (designed by the AI at the owner's request, adjustable); built (above).
+* **Added (the release scripts):** `ship_tool.sh` publishes the compiler of every release also as the tool `jcmp` of Jcmp-Tools (`jget tool jcmp`); `ship.sh` calls it. The tool had stayed at 1.0.0.0, so tools that need a newer compiler (makej, mujic, neuron ...) failed on phones with jcmp 0.9.x ("unknown escape sequence"). The tool `jcmp` 1.2.0.0 is published now.
+* **Changed (docs):** the package of Jaric is called `.jc` (was `.jec`) in the documents; `docs/syntax-design.md` sections 96-99 hold proposals for interfaces, concurrency forms (`Task`, `async`), default arguments and text with values inside; the owner chooses (questions in Thai in `docs/open-questions.md`). `docs/plan-parts.md` has the plan after 1.2.0.0.
+* **Changed (library):** `gpu` reads `JC_ASSETS` (and still `JEC_ASSETS`). **Added:** `gamej` 0.2.1: `Game::allowed("audio")` and `sound` checks the permission `audio` when `jc` started the program (`JC_PERMS`).
+* **Checked:** the bootstrap was run 6 times in a row after the release: the J2K compiler built itself identically every time (the one failure seen once during the 1.2.0.0 chain did not come back).
+
 ## 1.2.0.0
 * **Inheritance:** `struct Dog : Animal` (the fields of the base come first, at the same places; the methods of the base are found through the chain). `virtual` / `override` methods are called through the real type: `Animal^ a` calls the method of a `Dog`. A struct with virtual methods needs `void init(self)` (it sets the hidden pointer to the table of methods). Tests t515, t516.
 * **Native GPU:** `jcmp -dyn` makes a dynamic executable that Android's loader starts; the libraries `native`, `opengl3` (OpenGL ES 3.1, compute shaders), `vulkan`, `gpu` and `gamej` use it. Tests t512 to t514, t510, t511.

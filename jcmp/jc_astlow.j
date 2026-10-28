@@ -5361,7 +5361,7 @@ int ast_lower_body(int ti, char^ name) {
         gl_term = 1;
     } else {
         // falling off the end of a function that gives a value: the runtime stops (as the text path does)
-        if gl_term == 0 && fvoid[fi] == 0 {
+        if gl_term == 0 && fvoid[fi] == 0 && bare_mode == 0 {
             gl_ensure();
             int ce = ir_add(IR_CALL, 1, 0, 0, 0, ir_name_index("j2k_noret"));
             ir_set_args(ce, 0, @gl_args);

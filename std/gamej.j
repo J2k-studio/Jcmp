@@ -1,4 +1,4 @@
-// gamej 0.2.0 -- JARIC ENGINE, a small game engine for the terminal and the Jaric app.   #import <gamej>   (needs jcmp 1.1.0.0; license: MPL-2.0)
+// gamej 0.2.1 -- JARIC ENGINE, a small game engine for the terminal and the Jaric app.   #import <gamej>   (needs jcmp 1.1.0.0; license: MPL-2.0)
 //   Game g = Game::open("Pong");                  // the whole terminal is the screen; each text cell is two pixels (half blocks, 24-bit colour)
 //   while g.running() {
 //       g.begin();                                // keys, the time since the last frame (g.dt, seconds)
@@ -357,7 +357,23 @@ struct Game {
         return ax < bx + bw && bx < ax + aw && ay < by + bh && by < ay + ah;
     }
 
+    // The permissions of a program that jc started (JC_PERMS, with commas): a program started another way has all of them.
+    static bool allowed(String name) {
+        switch Env::get("JC_PERMS") {
+            Option::Some(p): {
+                String list = "," + p + ",";
+                return list.contains("," + name + ",");
+            }
+            Option::None: { return true; }
+        }
+        return true;
+    }
+
     void sound(self, String path) {
+        if !Game::allowed("audio") {
+            cerr << "gamej: this program has no permission 'audio' (jc perm ID audio on); no sound\n";
+            return;
+        }
         switch Env::get("JARIC") {
             Option::Some(v): { cout << "\e]7777;audio;play;" << path << "\a"; }
             Option::None: { }
