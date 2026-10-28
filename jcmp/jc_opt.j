@@ -5911,7 +5911,7 @@ bool vz_make(int q, int l) {
 }
 
 void op_vectorize() {
-    if opt_debug == 1 { return; }
+    if opt_debug == 1 || opt_novec == 1 { return; }
     op_counted_loops();
     if cl_n == 0 { return; }
     int nl = cl_n;

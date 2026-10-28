@@ -3,7 +3,7 @@
 // Use:    jcmp1 input.jk -o program
 // the version of the compiler (also in the file VERSION; release.sh checks that they agree)
 #allow syscall                         // the compiler is the layer under Sys: it calls the system by number on purpose
-#define JCMP_VERSION "1.2.1.0"
+#define JCMP_VERSION "1.2.2.0"
 
 #import "jc_base"
 #import "jc_asm"
@@ -425,6 +425,8 @@ void main() {
         } else if str_eq(a, "-irlicm") {
             ir_mode = 2;
             ir_opt = ir_opt | 1;
+        } else if str_eq(a, "-novec") {
+            opt_novec = 1;
         } else if str_eq(a, "-stp") {
             fr_on = 1;
         } else if str_eq(a, "-iropt") {

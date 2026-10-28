@@ -1,6 +1,8 @@
-# J2K / Jcmp 1.2.1.0
+# J2K / Jcmp 1.2.2.0
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
+
+**1.2.2.0:** `jcmp -novec` (no NEON code), messages that name `jc lib install`, nine new game-engine libraries.
 
 **1.2.1.0:** default arguments (`int add(int a, int b = 10)`), text with values inside (`"x = {x}"`), functions that return a value in raw `#!library` files.
 

@@ -22,7 +22,7 @@ What jcmp does not do, or does less well, today. A limit that has a workaround s
 
 ## Library
 * Network: IPv4 only. `https` is TLS 1.3 with the check of the certificate chain; there is no server side of TLS.
-* The libraries `simd`, `quat`, `complex`, `stats`, `canvas` and `screen` are downloaded with `jget -li install NAME` (the index is the repository `Jcmp-libs` on GitHub; the checksum is checked before a file is installed). Libraries of other authors are not listed yet.
+* The libraries `simd`, `quat`, `complex`, `stats`, `canvas` and `screen` are downloaded with `jc lib install NAME` (the index is the repository `Jcmp-libs` on GitHub; the checksum is checked before a file is installed). Libraries of other authors are not listed yet.
 * [API.md](API.md) lists every function of every library; some are helpers of the library (the steps of a hash, for example) that the compiler does not hide yet.
 
 ## Tools

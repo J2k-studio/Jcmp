@@ -2099,7 +2099,7 @@ The file that separate compilation writes for a module (names, types, sizes of s
 
 ### 81.1 The words of `jget` (owner, 2026-10-17: "make jget useful like curl and wget, not only for jcmp")
 * `jget -h URL [-o FILE]` fetches the data at URL (the owner wrote `jget -h https://...`; `-h` is "http", so help is `jget --help`). `jget URL` is the same.
-* `jget -li install NAME`, `jget -li uninstall NAME`, `jget -li list`, `jget -li installed` for libraries (`-li` = library; the owner's wording). The v0 words `install remove list installed` still work.
+* `jc lib install NAME`, `jc lib uninstall NAME`, `jc lib list`, `jc lib installed` for libraries (`-li` = library; the owner's wording). The v0 words `install remove list installed` still work.
 * The download is done by `curl`, else `wget`. A web client of its own needs a name lookup (DNS, over UDP) and TLS; that is a larger piece of work (after 1.0.0.0, or earlier if the owner wants).
 * `NAME` of a library that is inside the compiler (`cpu`, `net`, `math` ...): nothing to install, `jget` says so.
 

@@ -1058,7 +1058,7 @@ int scale = 3;
 
 The folder `Library` of jcmp holds the libraries that come with it: the standard library (`core number text files system time data crypto net`, all of `#import <stdlib>`), `math` (with `vector`
 and `matrix`) and `cpu`. The others are **downloaded when you need them** with [jget](https://github.com/J2k-studio/Jcmp-Tools): `simd` (`#import <simd>`), `quat`, `complex`, `stats`
-(`using math::quat;` ...) and `canvas`, `screen` (`#import <gfx>`, `using gfx::canvas;`): `jget -li install simd`, `jget -li install gfx`. A program that imports a library that is not installed gets the message
+(`using math::quat;` ...) and `canvas`, `screen` (`#import <gfx>`, `using gfx::canvas;`): `jc lib install simd`, `jc lib install gfx`. A program that imports a library that is not installed gets the message
 `the library 'simd' is not installed` with that command. They are put in `~/.j2k/Library`, where the compiler looks (and in the folders of `J2K_PATH`).
 
 ## `#import <simd>`: vector types, step S1 (0.9.117)

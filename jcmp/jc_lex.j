@@ -389,7 +389,7 @@ void die_name(char^ msg, char^ name) {
         write_err("  help: Sys:: is also the system layer of the library: write #import <stdlib> and using stdlib; (or using system;) to call Sys::name(...)\n");
     }
     if msg[0] == 'l' && msg[1] == 'i' && msg[2] == 'b' {
-        write_err("  help: looked in the -I folders, J2K_PATH, ~/.j2k/Library and the Library folder next to the compiler (jget -li install NAME fetches a library from the index; jget is a separate tool); built in: stdlib, core, number, text, files, system, time, data, crypto, math, gfx, cpu, simd\n");
+        write_err("  help: looked in the -I folders, J2K_PATH, ~/.j2k/Library and the Library folder next to the compiler (jc lib install NAME fetches a library from the index; jget is a separate tool); built in: stdlib, core, number, text, files, system, time, data, crypto, math, gfx, cpu, simd\n");
     }
     die_end();
 }
@@ -889,7 +889,7 @@ void ext_put(char^ name) {
 }
 
 // the file of the library NAME: NAME.j in the folder Library (the libraries that come with the compiler), else in the places of the libraries that
-// are installed later (-I, J2K_PATH, ~/.j2k/Library: jget puts them there). false when there is none.
+// are installed later (-I, J2K_PATH, ~/.j2k/Library: jc puts them there). false when there is none.
 bool lib_resolve(char^ name, char^ out) {
     if lib_external == 1 {
         str_copy(out, @lib_dir, 250);
@@ -911,7 +911,7 @@ void push_lib(char^ name) {
         str_copy(@m, "the library '", 20);
         append_text(@m, name);
         append_text(@m, "' is not installed");
-        die_help(@m, "install it with  jget -li install NAME  (the download tool: https://github.com/J2k-studio/Jcmp-Tools); the libraries that come with jcmp are in its folder Library");
+        die_help(@m, "install it with  jc lib install NAME  (jc: https://github.com/J2k-studio/Jcmp-Tools; jget -li install NAME still works if you have jc)  (the tools: https://github.com/J2k-studio/Jcmp-Tools); the libraries that come with jcmp are in its folder Library");
     }
     if lx_depth >= 15 { die("imports nested too deeply"); }
     stk_pos[lx_depth] = cur_pos;

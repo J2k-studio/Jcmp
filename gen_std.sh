@@ -62,7 +62,7 @@ text += gen_units("push_std_units", units, "push_std_units(mask): the units of t
 for lib in ("cpu", "vector", "matrix"):
     writelib(lib, [lib])
 os.makedirs("build/libs", exist_ok=True)
-for lib in ("simd", "quat", "complex", "stats", "canvas", "screen", "neuron", "deflate", "gamej", "gpu", "native", "opengl3", "vulkan"):
+for lib in ("simd", "quat", "complex", "stats", "canvas", "screen", "neuron", "deflate", "png", "sprite", "tilemap", "phys2d", "profile", "jobs", "spritebatch", "shaders", "compute", "compute", "gamej", "gpu", "native", "opengl3", "vulkan"):
     t = libtext([lib])
     open("build/libs/%s.j" % lib, "w").write(t)
     if os.path.isdir(os.path.expanduser("~/Jcmp-libs/libs")):

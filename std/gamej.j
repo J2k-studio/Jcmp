@@ -1,4 +1,4 @@
-// gamej 0.2.1 -- JARIC ENGINE, a small game engine for the terminal and the Jaric app.   #import <gamej>   (needs jcmp 1.1.0.0; license: MPL-2.0)
+// gamej 0.2.2 -- JARIC ENGINE, a small game engine for the terminal and the Jaric app.   #import <gamej>   (needs jcmp 1.1.0.0; license: MPL-2.0)
 //   Game g = Game::open("Pong");                  // the whole terminal is the screen; each text cell is two pixels (half blocks, 24-bit colour)
 //   while g.running() {
 //       g.begin();                                // keys, the time since the last frame (g.dt, seconds)
@@ -30,6 +30,8 @@ struct Key {
 char game_tio[64];
 bool game_raw;
 bool game_tty;
+bool game_os;                  // the program runs in Jaric OS (the system says so: JARIC_OS): the picture goes to the screen of the system (call 400), the touch comes from it (call 401)
+int game_os_seq;
 
 void game_raw_on() {
     if game_raw || Sys::isatty(0) != 0 { return; }
@@ -95,7 +97,13 @@ struct Game {
             Option::Some(v): { g.limit = v.to_int(); }
             Option::None: { }
         }
-        if !game_tty && g.limit == 0 { g.limit = 1; }
+        game_os = false;
+        switch Env::get("JARIC_OS") {
+            Option::Some(v): { if v.len > 0 { game_os = true; } }
+            Option::None: { }
+        }
+        if game_os { game_tty = false; game_os_seq = 0; }
+        if !game_tty && !game_os && g.limit == 0 { g.limit = 1; }
         if !game_tty { g.cols = 80; g.rows = 24; }
         g.w = g.cols;
         g.h = g.rows * 2;
@@ -113,11 +121,16 @@ struct Game {
             Option::Some(v): { in_app = false; }
             Option::None: { }
         }
+        if game_os {                                              // Jaric OS: a small picture that the system makes bigger (3 times on the phone)
+            g.w = 180;
+            g.h = 100;
+        }
         if in_app && game_tty {
             g.surf = true;
             g.w = 160;
             g.h = 90;
         }
+        if game_os { g.sbuf = (char^)Mem::alloc(g.w * g.h * 4 + 16); }
         g.px = arr(g.w * g.h + 1);
         g.prev = arr(g.w * g.h + 1);
         for i in 0..g.w * g.h { g.px.push(0); g.prev.push(0 - 1); }
@@ -198,6 +211,24 @@ struct Game {
         self.last_ms = now;
         for i in 0..512 { self.key_hit[i] = 0; }
         self.touch_hit = false;
+        if game_os {
+            int ev[8];
+            for q in 0..8 { ev[q] = 0; }
+            syscall(401, @ev);                                     // seq, x, y, state (1 down, 2 move, 3 up), id, scale, left, top
+            if ev[0] != game_os_seq {
+                game_os_seq = ev[0];
+                int sc = ev[5];
+                if sc < 1 { sc = 1; }
+                if ev[3] == 1 || ev[3] == 2 || ev[3] == 3 {
+                    self.touch_x = (ev[1] - ev[6]) / sc;
+                    self.touch_y = (ev[2] - ev[7]) / sc;
+                }
+                if ev[3] == 1 { self.touch_down = true; self.touch_hit = true; }
+                else if ev[3] == 2 { self.touch_down = true; }
+                else if ev[3] == 3 { self.touch_down = false; }
+            }
+            return;
+        }
         if !game_tty { return; }
         while Input::ready(0) {
             int c = game_byte(0);
@@ -382,14 +413,26 @@ struct Game {
 
     // draws the frame (only the cells that changed) and waits for the next one
     void end(self) {
-        if game_tty { self.present(); }
+        if game_tty || game_os { self.present(); }
         self.frame += 1;
         if self.limit > 0 && self.frame >= self.limit { self.alive = false; }
         int spent = Time::now_ms() - self.last_ms;
-        if spent < self.target_ms && game_tty { Time::sleep_ms(self.target_ms - spent); }
+        if spent < self.target_ms && (game_tty || game_os) { Time::sleep_ms(self.target_ms - spent); }
     }
 
     void present(self) {
+        if game_os {
+            int n = self.w * self.h;
+            for i in 0..n {
+                int c = self.px[i];
+                self.sbuf[i * 4] = (char)(c & 255);
+                self.sbuf[i * 4 + 1] = (char)((c >> 8) & 255);
+                self.sbuf[i * 4 + 2] = (char)((c >> 16) & 255);
+                self.sbuf[i * 4 + 3] = (char)255;
+            }
+            syscall(400, (int)self.sbuf, self.w, self.h);
+            return;
+        }
         if self.surf {
             int n = self.w * self.h;
             for i in 0..n {

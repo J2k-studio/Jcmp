@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.2.0 (2026-10-29)
+* **Added:** `jcmp -novec`: no loop is turned into NEON code (for machines and emulators without NEON, such as the emulator of Jaric OS). The same program, the same results, only slower.
+* **Changed:** the messages about a missing library tell `jc lib install NAME` (the installer of libraries and tools is `jc`; `jget` only downloads). Documents follow (`jc install`, `jc lib`).
+* **Added (libraries, downloaded with `jc lib install`):** `png`, `sprite`, `tilemap`, `phys2d`, `profile`, `jobs`, `spritebatch`, `shaders`, `compute` (the game engine parts) and `gamej` 0.2.2 (a backend for Jaric OS).
+* **Fixed:** none. Suite: 630 passed, 0 failed; the bootstrap built the compiler identically.
+
 ## 1.2.1.0 (2026-10-28)
 * **Added:** default arguments, text with values inside and raw-mode returns (below). Bootstrap checked 7+ times in a row, suite 621 passed.
 * **Added (default arguments, syntax-design section 98, A):** `int add(int a, int b = 10)`: the last parameters may have a constant default and a call may leave them out (functions and methods). A parameter without a default after one with a default is an error. Test `t519_default_args`.
