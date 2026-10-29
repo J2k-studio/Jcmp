@@ -1,0 +1,17 @@
+#import <stdlib>
+#import <simd>
+void kernel(float^ fa, float^ fb, float^ fc, int n) {
+    for i in 0..n {
+        for k in 0..n {
+            float a = fa[i * n + k];
+            f32x4 av = {a, a, a, a};
+            for j in 0..n / 4 {
+                f32x4 bv = f32x4::load(fb, k * n + j * 4);
+                f32x4 cv = f32x4::load(fc, i * n + j * 4);
+                cv = cv + av * bv;
+                cv.store(fc, i * n + j * 4);
+            }
+        }
+    }
+}
+void main() { float^ x = (float^)Mem::alloc(64); kernel(x, x, x, 4); }

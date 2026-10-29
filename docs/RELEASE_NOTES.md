@@ -1,6 +1,8 @@
-# J2K / Jcmp 1.2.4.0
+# J2K / Jcmp 1.2.5.0
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
+
+**1.2.5.0:** the libraries `web` (HTTP client), `telegram` and `discord` (bots), `neuron` 0.2.0 with a matrix product 5-7 times faster, the first benchmark against C (`bench/`) and the plan to make loops fast.
 
 **1.2.4.0:** a root like an OS (`JARIC_ROOT`: `/etc`, `/home`, `/u` for the programs made by jcmp), `Sys::chdir`, the library `qr` (reads QR codes), `Env` no longer crashes in a shared library (`-l`).
 

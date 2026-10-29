@@ -1,0 +1,31 @@
+#import <stdlib>
+#import <cpu>
+#import <time>
+using cpu::thread;
+// how many cores the program can use: the same loop of arithmetic on 1, 2, 4, 8 threads; the time of the whole set and how much more work was done a second
+int ITER = 60000000;
+int[] results;
+
+void work(void^ arg) {
+    int id = (int)arg;
+    int s = id;
+    for i in 0..ITER { s = s * 1664525 + 1013904223; s = s xor (s shr 13); }
+    results[id] = s;
+}
+
+int main() {
+    results = arr(16);
+    for i in 0..16 { results.push(0); }
+    int counts[4] = {1, 2, 4, 8};
+    for c in 0..4 {
+        int n = counts[c];
+        int t0 = Time::mono_ns();
+        Thread[] ts = arr(8);
+        for k in 0..n { ts.push(create(work, (void^)k)); }
+        for k in 0..n { ts[k].join(); }
+        int t1 = Time::mono_ns();
+        double ms = (double)(t1 - t0) / 1000000.0;
+        cout << n << " threads: " << ms << " ms   work done a second: " << (double)n * (double)ITER / ms / 1000.0 << " M iterations\n";
+    }
+    return 0;
+}

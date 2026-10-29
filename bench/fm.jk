@@ -1,0 +1,5 @@
+#import <stdlib>
+#import <simd>
+struct V { f32x4 q; }
+f32x4 fm(f32x4 s, f32x4 a, f32x4 b) { f32x4 r = s + a * b; return r; }
+void main() { f32x4 a = {1.0, 2.0, 3.0, 4.0}; f32x4 r = fm(a, a, a); cout << (int)r.w << "\n"; }

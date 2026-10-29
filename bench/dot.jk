@@ -1,0 +1,40 @@
+#import <stdlib>
+#import <simd>
+#import <time>
+// C = A * B with B transposed first: every C[i,j] is a dot product of two rows: loads of 4 numbers, no splat, 4 accumulators
+void matmul_t(float^ a, float^ bt, float^ c, int n) {
+    for i in 0..n {
+        for j in 0..n {
+            f32x4 s0 = {0.0, 0.0, 0.0, 0.0};
+            f32x4 s1 = {0.0, 0.0, 0.0, 0.0};
+            int k = 0;
+            while k < n {
+                f32x4 a0 = f32x4::load(a, i * n + k);
+                f32x4 b0 = f32x4::load(bt, j * n + k);
+                f32x4 a1 = f32x4::load(a, i * n + k + 4);
+                f32x4 b1 = f32x4::load(bt, j * n + k + 4);
+                s0 = s0 + a0 * b0;
+                s1 = s1 + a1 * b1;
+                k += 8;
+            }
+            f32x4 s = s0 + s1;
+            c[i * n + j] = s.sum();
+        }
+    }
+}
+int main() {
+    int n = 128;
+    float^ fa = (float^)Mem::alloc(n * n * 4);
+    float^ fb = (float^)Mem::alloc(n * n * 4);
+    float^ bt = (float^)Mem::alloc(n * n * 4);
+    float^ fc = (float^)Mem::alloc(n * n * 4);
+    for i in 0..n * n { fa[i] = (float)(i % 7) * 0.25; fb[i] = (float)(i % 5) * 0.5; fc[i] = 0.0; }
+    int t0 = Time::mono_ns();
+    for i in 0..n { for j in 0..n { bt[j * n + i] = fb[i * n + j]; } }
+    matmul_t(fa, bt, fc, n);
+    int t1 = Time::mono_ns();
+    double ms = (double)(t1 - t0) / 1000000.0;
+    double flops = 2.0 * (double)n * (double)n * (double)n;
+    cout << "dot-product NEON (B transposed)  " << ms << " ms   " << flops / ms / 1000000.0 << " GFLOPS   check " << fc[n * n - 1] << "\n";
+    return 0;
+}

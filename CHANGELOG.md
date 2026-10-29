@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.5.0 (2026-10-29)
+* **Added (libraries):** `web` 0.1.0 (an HTTP client for APIs: any method, headers, body, status, redirects, chunked answers, https), `telegram` 0.1.0 (a bot: `me`, `poll`, `send`) and `discord` 0.1.0 (a bot over REST: `send`, `messages`); tests t545-t547 run them against pretend servers (no real token in a test).
+* **Added (library):** `neuron` 0.2.0: `Tensor.matmul_fast` (float32, NEON dot products, 4 threads): 5-7 times faster than `matmul` on 128x128 and 256x256 tables (0.5 to 2.5 and 4.7 GFLOPS on a Kirin 990); `Dense` uses it; test t544.
+* **Added (measurements and plan):** `bench/` (matmul against C: the first numbers, `cores.jk`: how many cores a program uses), `docs/design/21-loop-speed.md` (what the code of a loop shows and the passes to make it fast), syntax-design 101-103 (names `<camcv>` `<vision>`, the proposal for `f16`/`bf16`/`i8`/`i4`, decisions of the owner).
+* **Fixed:** none (the compiler itself did not change: this release brings the libraries, tests and numbers).
+
+
 ## 1.2.4.0 (2026-10-29)
 * **Added (a root like an OS):** with `JARIC_ROOT=DIR` in the environment, every program made by jcmp reads a path that begins with `/` in that folder when its first name is a folder there: `/etc/hosts` is `DIR/etc/hosts`, `/` is `DIR`, `/u` is `/sdcard`; the places of the system (`/proc /dev /sys /sdcard /storage /data /system ...`) stay real. `Sys::chdir`, and `Sys::getcwd` shows the path back. Without `JARIC_ROOT` nothing changes. The Jaric app 0.0.147 uses it. Test `t543_virtual_root`.
 * **Fixed:** `Env::get`, `Env::args`, `Proc::run` and the environment lookups of `net` and `crypto` crashed inside a shared library (`-l`: no start of a program); they answer "nothing" now. Test `t542_lib_env`.

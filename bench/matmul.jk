@@ -1,0 +1,48 @@
+#import <stdlib>
+#import <simd>
+#import <time>
+// matmul benchmark: C = A * B for N x N, three ways: double scalar, float32 scalar, float32 with f32x4 (NEON)
+int N = 128;
+
+int main() {
+    int n = N;
+    double[] da = arr(n * n + 1);
+    double[] db = arr(n * n + 1);
+    double[] dc = arr(n * n + 1);
+    for i in 0..n * n { da.push((double)(i % 7) * 0.25); db.push((double)(i % 5) * 0.5); dc.push(0.0); }
+    int t0 = Time::mono_ns();
+    for i in 0..n { for j in 0..n { double s = 0.0; for k in 0..n { s += da[i * n + k] * db[k * n + j]; } dc[i * n + j] = s; } }
+    int t1 = Time::mono_ns();
+    double flops = 2.0 * (double)n * (double)n * (double)n;
+    double ms1 = (double)(t1 - t0) / 1000000.0;
+    cout << "double scalar   " << ms1 << " ms   " << flops / ms1 / 1000000.0 << " GFLOPS   check " << dc[n * n - 1] << "\n";
+
+    float^ fa = (float^)Mem::alloc(n * n * 4);
+    float^ fb = (float^)Mem::alloc(n * n * 4);
+    float^ fc = (float^)Mem::alloc(n * n * 4);
+    for i in 0..n * n { fa[i] = (float)(i % 7) * 0.25; fb[i] = (float)(i % 5) * 0.5; fc[i] = 0.0; }
+    int t2 = Time::mono_ns();
+    for i in 0..n { for j in 0..n { float s = 0.0; for k in 0..n { s += fa[i * n + k] * fb[k * n + j]; } fc[i * n + j] = s; } }
+    int t3 = Time::mono_ns();
+    double ms2 = (double)(t3 - t2) / 1000000.0;
+    cout << "float32 scalar  " << ms2 << " ms   " << flops / ms2 / 1000000.0 << " GFLOPS   check " << fc[n * n - 1] << "\n";
+
+    // f32x4: C[i, j..j+3] += A[i,k] * B[k, j..j+3]
+    for i in 0..n * n { fc[i] = 0.0; }
+    int t4 = Time::mono_ns();
+    for i in 0..n {
+        for k in 0..n {
+            f32x4 av = {fa[i * n + k], fa[i * n + k], fa[i * n + k], fa[i * n + k]};
+            for j in 0..n / 4 {
+                f32x4 bv = f32x4::load(fb, k * n + j * 4);
+                f32x4 cv = f32x4::load(fc, i * n + j * 4);
+                cv = cv + av * bv;
+                cv.store(fc, i * n + j * 4);
+            }
+        }
+    }
+    int t5 = Time::mono_ns();
+    double ms3 = (double)(t5 - t4) / 1000000.0;
+    cout << "float32 f32x4   " << ms3 << " ms   " << flops / ms3 / 1000000.0 << " GFLOPS   check " << fc[n * n - 1] << "\n";
+    return 0;
+}

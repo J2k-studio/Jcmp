@@ -1,0 +1,29 @@
+#import <stdlib>
+#import <simd>
+#import <cpu>
+#import <time>
+#import <neuron>
+using cpu::thread;
+// Tensor.matmul (plain loop, double) against Tensor.matmul_fast (float32, NEON, 4 threads)
+void run(int n) {
+    Tensor a = Tensor::zeros(n, n);
+    Tensor b = Tensor::zeros(n, n);
+    for i in 0..n * n { a.d[i] = (double)(i % 7) * 0.25; b.d[i] = (double)(i % 5) * 0.5; }
+    int t0 = Time::mono_ns();
+    Tensor c1 = a.matmul(b);
+    int t1 = Time::mono_ns();
+    Tensor c2 = a.matmul_fast(b);
+    int t2 = Time::mono_ns();
+    double worst = 0.0;
+    for i in 0..n * n { double d = c1.d[i] - c2.d[i]; if d < 0.0 { d = 0.0 - d; } if d > worst { worst = d; } }
+    double flops = 2.0 * (double)n * (double)n * (double)n;
+    double ms1 = (double)(t1 - t0) / 1000000.0;
+    double ms2 = (double)(t2 - t1) / 1000000.0;
+    cout << n << "x" << n << ": plain " << ms1 << " ms (" << flops / ms1 / 1000000.0 << " GFLOPS)   fast " << ms2 << " ms (" << flops / ms2 / 1000000.0 << " GFLOPS)   " << ms1 / ms2 << " times faster   biggest difference " << worst << "\n";
+}
+int main() {
+    run(64);
+    run(128);
+    run(256);
+    return 0;
+}
