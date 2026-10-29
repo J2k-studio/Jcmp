@@ -1,6 +1,0 @@
-naked void cf4() {
-    Cpu::inst("fmov", x9, x0);
-    tail cf4b;
-}
-naked void cf4b() { ret; }
-int main() { return 0; }

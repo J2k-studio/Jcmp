@@ -1,5 +1,0 @@
-void cf(int fn, float a, float b, float c, float d) {
-    void(float, float, float, float)^ f = (void(float, float, float, float)^)fn;
-    f(a, b, c, d);
-}
-int main() { cf(0, 1.0, 2.0, 3.0, 4.0); return 0; }

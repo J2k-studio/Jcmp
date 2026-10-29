@@ -1,6 +1,0 @@
-#import <stdlib>
-int main() {
-    String[] a = Env::args();
-    cout << "hello from a dynamic J2K program, args " << a.len << "\n";
-    return 3;
-}

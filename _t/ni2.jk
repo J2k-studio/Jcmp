@@ -1,5 +1,0 @@
-naked void cf4() {
-    Cpu::inst("fmov", s0, w1);
-    ret;
-}
-int main() { return 0; }

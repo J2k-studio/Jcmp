@@ -712,6 +712,61 @@ Fields are laid out like C (naturally aligned). Structs nest, can hold arrays, c
 with `=`, passed and returned by value. `static` functions are called as `Struct::name(...)`,
 instance methods as `object.name(...)`; mixing them up is an error.
 
+## Inheritance, virtual methods and interfaces (`itf`)
+
+A struct can have one base: `struct Dog : Animal { ... }`. The fields of the base come first, and a pointer to a `Dog` goes where an `Animal^` is wanted.
+A method marked `virtual` is chosen when the program runs; a derived struct changes it with `override`. A struct with virtual methods needs its own
+`void init(self) { }` (call it once on every object: it sets the pointer to the table of the methods). Call a method through a pointer with `p^.name()`.
+
+```jk
+struct Animal {
+    int legs;
+    void init(self) { self.legs = 4; }
+    virtual void speak(self) { cout << "..."; }
+}
+struct Dog : Animal {
+    void init(self) { self.legs = 4; }
+    override void speak(self) { cout << "Woof"; }
+}
+void talk(Animal^ a) { a^.speak(); cout << "\n"; }
+void main() {
+    Dog d; d.init();
+    talk(@d);
+}
+```
+
+An **interface** is written with `itf`: only the methods, no bodies, no fields. A struct says `impl Name` and writes every method (no `override` needed;
+a missing one is a compile error). A pointer to the interface takes any struct that implements it:
+
+```jk
+itf Shape {
+    double area(self);
+    void grow(self, double k);
+}
+struct Sq impl Shape {
+    double s;
+    void init(self) { }
+    double area(self) { return self.s * self.s; }
+    void grow(self, double k) { self.s = self.s * k; }
+}
+struct Rect impl Shape {
+    double w;
+    double h;
+    void init(self) { }
+    double area(self) { return self.w * self.h; }
+    void grow(self, double k) { self.w = self.w * k; self.h = self.h * k; }
+}
+double twice(Shape^ a) { a^.grow(2.0); return a^.area(); }
+void main() {
+    Sq q; q.init(); q.s = 3.0;
+    Rect r; r.init(); r.w = 2.0; r.h = 5.0;
+    cout << twice(@q) << " " << twice(@r) << "\n";
+}
+```
+
+In this version a struct has one base **or** one interface (`struct Dog : Animal impl Speaker` is refused with a message; several interfaces are planned). A virtual
+method may also be written without a body in a plain struct (`virtual int value(self);`): calling it before a derived struct overrides it stops the program with a message.
+
 ## Floats
 
 ```jk
@@ -1214,6 +1269,10 @@ void main() {
 ```
 
 The program prints `3421780262` (the same number as zlib's `crc32`).
+
+### OpenGL, Vulkan and the libraries of the system: no flag
+
+A program that says `#import <native>` (and so `#import <opengl3>` or `#import <vulkan>`, which import it) is built by jcmp as a dynamic executable by itself: it gets `libc.so` and `libdl.so` from the loader of Android and can call the C functions of the phone (`jcmp -dyn` before; it still works). A shared library built with `-l` needs no flag either: it uses the libraries of the process that loads it. In a game that is an Android app, the app (a `GLSurfaceView`) owns the OpenGL ES context and calls the exported functions of the game on its GL thread; the game then says `Gl gl = Gl::attach(w, h);` and draws on that context.
 
 ## Shared libraries: `export` and `-l`
 

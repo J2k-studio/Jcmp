@@ -1,4 +1,4 @@
-// gpu 0.1.1 -- the graphics chip for J2K programs.   #import <gpu>   (needs jcmp 1.1.0.0; license: MPL-2.0)
+// gpu 0.2.0 -- the graphics chip for J2K programs.   #import <gpu>   (needs jcmp 1.1.0.0; license: MPL-2.0)
 //   Gpu g = Gpu::open(320, 180);                  // a picture of 320 x 180 logical pixels, scaled to the screen (in the Jaric app)
 //   if !g.ok() { cout << "no graphics chip here\n"; return; }
 //   g.load(1, "ship.png");                        // a picture file becomes the texture 1
@@ -16,6 +16,7 @@
 // Colours are 0xAARRGGBB (Gpu::rgb is opaque, Gpu::rgba(r,g,b,a) has an alpha). Touch: g.touching() g.tapped() g.touch_x g.touch_y.
 // Elsewhere (a terminal) Gpu::open gives a Gpu that is not ok(): use the library gamej there. Esc and the back key end the game.
 // g.renderer is the name of the chip when the app told it (for example "Mali-G76").
+#import <canvas2d>
 
 char gpu_tio[64];
 bool gpu_raw;
@@ -249,4 +250,30 @@ struct Gpu {
         }
         self.alive = false;
     }
+}
+
+
+// The Canvas2d interface (<canvas2d>) on the commands of the Jaric app: a game written for Canvas2d draws through this one in the app.
+//   Gpu g = Gpu::open(320, 180);   AppCanvas c; c.init(); c.g = @g;      Canvas2d^ cv = @c;     (begin / end are the loop of the Gpu: g.begin(), g.end())
+struct AppCanvas impl Canvas2d {
+    Gpu^ g;
+    int next_pic;
+    void init(self) { self.next_pic = 1; }
+    void begin(self) { }
+    void clear(self, int argb) { self.g^.clear(argb); }
+    void rect(self, double x, double y, double w, double h, int argb) { self.g^.rect((int)x, (int)y, (int)w, (int)h, argb); }
+    void tri(self, double x0, double y0, double x1, double y1, double x2, double y2, int argb) { self.g^.tri((int)x0, (int)y0, (int)x1, (int)y1, (int)x2, (int)y2, argb); }
+    void line(self, double x0, double y0, double x1, double y1, double width, int argb) { self.g^.line((int)x0, (int)y0, (int)x1, (int)y1, (int)width, argb); }
+    void circle(self, double cx, double cy, double r, int argb) { self.g^.circle((int)cx, (int)cy, (int)r, argb); }
+    void end(self) { }
+    bool has_instancing(self) { return false; }
+    bool has_shaders(self) { return false; }
+    // the pictures are loaded by the app: the picture number is the one of g.load(id, file)
+    int load(self, String path) {
+        int id = self.next_pic;
+        self.next_pic += 1;
+        self.g^.load(id, path);
+        return id;
+    }
+    void image(self, int pic, double x, double y, double w, double h, int tint) { self.g^.image(pic, (int)x, (int)y, (int)w, (int)h, tint); }
 }

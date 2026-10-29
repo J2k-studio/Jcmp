@@ -3089,6 +3089,12 @@ void parse_function() {
     fn_ls = err_ls;
     if cur_is_main == 1 && req_cpu != 0 { rt_call("Cpu__require_check"); }                // #require cpu "...": stop at once when the CPU lacks the extension
     if cur_is_main == 1 && opt_debug == 1 { rt_call("Mem__debug_on"); }       // the checks of the heap are on
+    if cur_is_main == 1 && x_target == 32 && pass_no >= 2 { emit_vtable_fill(); }           // ARM32: the tables of the virtual methods are filled here (the start only copies numbers)
+    if abs_body_ok == 1 && tok_is(";") {
+        // a virtual method without a body (always in an itf): a body that stops the program with a message is made here
+        push_macro("{ throw \"a method without a body was called\"; }");
+        next();
+    }
     if pass_no >= 2 && f_self >= 0 && f_self < scount && svcnt[f_self] > 0 && tok_is("{") {
         int dl = str_len(@d_fname);
         if dl > 6 && d_fname[dl - 1] == 't' && d_fname[dl - 2] == 'i' && d_fname[dl - 3] == 'n' && d_fname[dl - 4] == 'i' && d_fname[dl - 5] == '_' && d_fname[dl - 6] == '_' {
@@ -3101,7 +3107,7 @@ void parse_function() {
             next();
         }
     }
-    if pass_no == 3 && f_skip == 0 && f_naked == 0 && f_interrupt == 0 && !(cur_is_main == 1 && req_cpu != 0) && (ast_report != 0 || ast_lower_on != 0) && (lvl_lib[lx_depth] == 0 || x_target == 32) { ast_probe(f_idx); }
+    if pass_no == 3 && f_skip == 0 && f_naked == 0 && f_interrupt == 0 && !(cur_is_main == 1 && req_cpu != 0) && !(cur_is_main == 1 && x_target == 32 && any_virtual() == 1) && (ast_report != 0 || ast_lower_on != 0) && (lvl_lib[lx_depth] == 0 || x_target == 32) { ast_probe(f_idx); }
     parse_block();
     ow_site = 5;
     ow_id = 0;
@@ -3383,7 +3389,9 @@ void parse_global(char^ name) {
 
 // struct Name { TYPE field; TYPE field[N]; [static] RET method([self,] params) { ... } }
 void parse_struct() {
-    next();                              // "struct"
+    int is_itf = 0;
+    if tok_is("itf") { is_itf = 1; }
+    next();                              // "struct" or "itf"
     if tok_kind != T_IDENT { die("a struct name was expected"); }
     int sd = find_struct(@tok_text);
     if pass_no == 1 {
@@ -3394,19 +3402,23 @@ void parse_struct() {
         sfirst[sd] = fldcount;
         snf[sd] = 0;
         ssize[sd] = 8;
+        sitf[sd] = is_itf;
         scount += 1;
     }
     if sd < 0 { die("internal: struct not registered"); }
     next();
     int off = 0;
     if pass_no == 1 { sparent[sd] = 0; svoff[sd] = 0; svcnt[sd] = 0; }
-    if tok_is(":") {
+    int via_impl = 0;
+    if tok_is(":") || tok_is("impl") {
+        if tok_is("impl") { via_impl = 1; }
         // struct Dog : Animal { ... }: the fields of the base come first (the same places), then the fields of Dog; a Dog uses the methods of the base
         next();
         if tok_kind != T_IDENT { die_help("the name of the base struct was expected after the colon", "write struct Dog : Animal { ... }"); }
         int bs = find_struct(@tok_text);
         if bs < 0 { die_help("the base struct is not known here", "the base struct must be written before the struct that inherits from it"); }
         if bs == sd { die("a struct cannot inherit from itself"); }
+        if via_impl == 1 && sitf[bs] == 0 { die_help("impl names an interface (itf), and this is a struct", "declare it with itf, or write struct Dog : Base"); }
         if pass_no == 1 {
             sparent[sd] = bs + 1;
             int bi = sfirst[bs];
@@ -3441,6 +3453,7 @@ void parse_struct() {
             }
         }
         next();
+        if tok_is("impl") { die_help("a struct has one base or one interface in this version", "write struct Dog impl Speaker { ... } or struct Dog : Animal { ... }; several interfaces are planned"); }
     }
     expect("{");
     if pass_no >= 2 && svcnt[sd] > 0 {
@@ -3460,6 +3473,7 @@ void parse_struct() {
         op_pending = 0;
         if tok_is("virtual") { is_virtual = 1; next(); }
         else if tok_is("override") { is_override = 1; next(); }
+        else if is_itf == 1 && !tok_is("static") && !tok_is("operator") { is_virtual = 1; }          // in an itf every method is virtual and has no body
         if tok_is("operator") {
             op_pending = 1;              // operator vec3 add(self, vec3 o) { ... }: usable as a + b
             next();
@@ -3478,6 +3492,7 @@ void parse_struct() {
         int f_tid = ty_tid;
         int f_dynf = ty_dyn;
         next();
+        if tok_is("(") && is_virtual == 0 && is_override == 0 && is_static == 0 && sparent[sd] > 0 && sitf[sparent[sd] - 1] == 1 && virt_slot(sd, @m_name) >= 0 { is_override = 1; }       // a method of a struct that implements an itf: no word needed
         if tok_is("(") && (is_virtual == 1 || is_override == 1) {
             if is_static == 1 { die("a static function cannot be virtual"); }
             int vs0 = virt_slot(sd, @m_name);
@@ -3519,7 +3534,9 @@ void parse_struct() {
             str_copy(@d_fname + str_len(@d_fname), @m_name, 100);
             fn_self_struct = sd;
             if is_static == 1 { fn_self_struct = 0 - 1; }
+            if is_virtual == 1 { abs_body_ok = 1; }
             parse_function();
+            abs_body_ok = 0;
             continue;
         }
         int f_kind = 0;
@@ -3573,11 +3590,23 @@ void parse_struct() {
     }
     expect("}");
     accept(";");
-    if pass_no >= 2 && svcnt[sd] > 0 {
+    if pass_no >= 2 && svcnt[sd] > 0 && sitf[sd] == 0 {
         char vin[80];
         str_copy(@vin, @sname + sd * 64, 64);
         append_text(@vin, "__init");
         if find_func(@vin) < 0 { die_name("a struct with virtual methods needs a method  void init(self) { }  (it sets the pointer to the table of the methods; a derived struct needs its own)", @sname + sd * 64); }
+    }
+    if pass_no >= 2 && sitf[sd] == 0 && sparent[sd] > 0 && sitf[sparent[sd] - 1] == 1 {
+        // struct Dog impl Speaker: every method of the interface must be written
+        int ik = 0;
+        while ik < svcnt[sd] {
+            char imn[160];
+            str_copy(@imn, @sname + sd * 64, 64);
+            append_text(@imn, "__");
+            append_text(@imn, @svname + (sd * 32 + ik) * 64);
+            if find_func(@imn) < 0 { die_name("this struct does not write a method of its interface", @svname + (sd * 32 + ik) * 64); }
+            ik += 1;
+        }
     }
     if pass_no == 1 { ssize[sd] = (off + 7) / 8 * 8; }
     if pass_no == 1 && ssize[sd] == 0 { ssize[sd] = 8; }
@@ -3648,7 +3677,7 @@ void parse_one_item() {
         lex_import();
     } else if tok_is("enum") {
         parse_enum();
-    } else if tok_is("struct") {
+    } else if tok_is("struct") || tok_is("itf") {
         parse_struct();
     } else if tok_is("using") {
         parse_using();
@@ -3807,8 +3836,19 @@ void emit_segv_handler() {
 
 // the values the global variables start with (and the constants of the floats and the structs), the pages that are made read-only:
 // the same for a program (at its start) and for a library (when it is loaded)
-void emit_global_init() {
-    // the tables of the virtual methods: the address of the method of every slot (of the struct itself, or of the base it takes it from)
+// 1 when some struct has virtual methods (then main, on ARM32, is made from text: it begins by filling the tables)
+int any_virtual() {
+    int k = 0;
+    while k < scount {
+        if svcnt[k] > 0 { return 1; }
+        k += 1;
+    }
+    return 0;
+}
+
+// the tables of the virtual methods: the address of the method of every slot (of the struct itself, or of the base it takes it from).
+// On ARM32 the start of the program only copies numbers into the global area, so main fills the tables when it begins.
+void emit_vtable_fill() {
     int vts = 0;
     while vts < scount {
         if svcnt[vts] > 0 {
@@ -3830,6 +3870,10 @@ void emit_global_init() {
         }
         vts += 1;
     }
+}
+
+void emit_global_init() {
+    if x_target != 32 { emit_vtable_fill(); }
     int i = 0;
     while i < ginit_count {
         ins_n("mov x9, ", ginit_val[i]);

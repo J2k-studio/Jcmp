@@ -1,9 +1,0 @@
-struct S { bool a; bool b; int c; }
-int main() {
-    S s;
-    s.a = true;
-    s.b = true;
-    s.c = 7;
-    if s.a && s.b { return s.c; }
-    return 1;
-}

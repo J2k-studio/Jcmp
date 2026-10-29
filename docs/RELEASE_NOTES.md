@@ -1,6 +1,8 @@
-# J2K / Jcmp 1.2.2.0
+# J2K / Jcmp 1.2.3.0
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
+
+**1.2.3.0:** interfaces (`itf` / `impl`), `#import <native>` makes the program dynamic by itself (no `-dyn`), virtual methods fixed on ARM32, new libraries (`canvas2d`, `glcanvas`, `glapp`, `tasks`, OpenGL ES textures and instancing).
 
 **1.2.2.0:** `jcmp -novec` (no NEON code), messages that name `jc lib install`, nine new game-engine libraries.
 

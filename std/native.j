@@ -1,7 +1,7 @@
-// native 0.1.0 -- call the libraries of the system (Vulkan, OpenGL ES, OpenCL, libc ...) from J2K.   #import <native>   (needs jcmp 1.1.1 or newer; license: MPL-2.0)
+// native 0.1.1 -- call the libraries of the system (Vulkan, OpenGL ES, OpenCL, libc ...) from J2K.   #import <native>   (needs jcmp 1.1.1 or newer; license: MPL-2.0)
 //   int lib = Native::open("libvulkan.so");              // 0 when it is not there
 //   int fn = Native::sym(lib, "vkEnumerateInstanceVersion");
-//   int rc = Native::call1(fn, (int)@version);           // call1 .. call8: integer and pointer arguments, the result in x0
+//   int rc = Native::call1(fn, (int)@version);           // call1 .. call9: integer and pointer arguments, the result in x0
 // It works in a program built with  jcmp -dyn  (a dynamic executable: the loader of Android gives it libdl.so and libc.so) and in a
 // shared library (-l) that Android loads. A static program (the default) has no libdl: Native::open gives 0 there.
 // How: the memory of libdl.so is read (the maps of the process and its ELF tables) to find dlopen and dlsym, then they are called
@@ -95,6 +95,28 @@ bool native_start() {
 
 // Calls of C functions that take floating point arguments. J2K passes a float as its bits in an integer register; the C convention wants it in s0, s1 ...
 // These small naked functions move the bits there and jump to the C function (which returns to the caller of the helper).
+// call9: a C function with 9 arguments (glTexImage2D ...): the first six go in registers, the last three are in a block of three numbers;
+// the trampoline puts them where the C function looks (x6, x7 and the 9th on the stack, AAPCS64) and calls it.
+naked int native_call9(int fn, int a1, int a2, int a3, int a4, int a5, int a6, int^ blk) {
+    sp -= 32;
+    [sp + 8] = x30;
+    x16 = x0;
+    x9 = x7;
+    x0 = x1;
+    x1 = x2;
+    x2 = x3;
+    x3 = x4;
+    x4 = x5;
+    x5 = x6;
+    x6 = [x9 + 0];
+    x7 = [x9 + 8];
+    x10 = [x9 + 16];
+    [sp + 0] = x10;
+    Cpu::inst("blr", x16);
+    x30 = [sp + 8];
+    sp += 32;
+    ret;
+}
 naked void native_cf1(int fn, int a) {
     Cpu::inst("mov", x16, x0);
     Cpu::inst("fmov", s0, w1);
@@ -182,6 +204,14 @@ struct Native {
     static int call6(int fn, int a, int b, int c, int d, int e, int g) { int(int, int, int, int, int, int)^ f = (int(int, int, int, int, int, int)^)fn; return f(a, b, c, d, e, g); }
     static int call7(int fn, int a, int b, int c, int d, int e, int g, int h) { int(int, int, int, int, int, int, int)^ f = (int(int, int, int, int, int, int, int)^)fn; return f(a, b, c, d, e, g, h); }
     static int call8(int fn, int a, int b, int c, int d, int e, int g, int h, int i) { int(int, int, int, int, int, int, int, int)^ f = (int(int, int, int, int, int, int, int, int)^)fn; return f(a, b, c, d, e, g, h, i); }
+    // nine integer or pointer arguments (glTexImage2D, glTexSubImage2D)
+    static int call9(int fn, int a, int b, int c, int d, int e, int g, int h, int i, int j) {
+        int blk[3];
+        blk[0] = h;
+        blk[1] = i;
+        blk[2] = j;
+        return native_call9(fn, a, b, c, d, e, g, @blk[0]);
+    }
     // float arguments (OpenGL: glClearColor, glUniform4f ...); the result is dropped
     static void callf1(int fn, float a) { native_cf1(fn, native_fbits(a)); }
     static void callf2(int fn, float a, float b) { native_cf2(fn, native_fbits(a), native_fbits(b)); }

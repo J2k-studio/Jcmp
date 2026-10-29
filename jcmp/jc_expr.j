@@ -67,6 +67,8 @@ char sname[16384];           // 256 x 64
 int ssize[256];               // bytes, a multiple of 8
 int sfirst[256];              // its first field in the field tables
 int snf[256];                 // how many fields
+int sitf[256];                  // 1: this struct was declared with itf (an interface: virtual methods without bodies)
+int abs_body_ok;                // 1 while a virtual method is parsed: a ';' may stand where the body would be
 int sparent[256];               // the struct this one inherits from (struct Dog : Animal) plus 1; 0 for none
 int svoff[256];                 // the place of the pointer to the table of the methods in a struct, plus 1 (0: no virtual methods)
 int svcnt[256];                 // the number of virtual methods

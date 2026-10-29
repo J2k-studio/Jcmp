@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.2.3.0 (2026-10-28)
+* **Added:** `#import <native>` (so `<opengl3>` and `<vulkan>`) makes the program a dynamic executable by itself: no `-dyn` needed. `Gl::attach` (opengl3 0.3.0) draws on the OpenGL ES context an app made current; a `-l` library that draws with the chip was checked in a foreign process (python).
+* **Added:** interfaces `itf` / `impl` (version 1); the library `<tasks>`, `<profile>`, `<jobs>`, `<spritebatch>`, `<shaders>`, `<compute>`, opengl3 0.2.0 (textures, framebuffers, instancing), `Native::call9`.
+* **Added (libraries):** `<canvas2d>` (the `Canvas2d` interface: one way to draw 2D), `<glcanvas>` (its OpenGL ES 3 backend: a whole frame in one draw call), `AppCanvas` in `<gpu>` 0.2.0 (the same interface on the Jaric app commands).
+* **Added (library):** `<glapp>`: a game that is a shared library inside an Android app (a `GLSurfaceView` calls `game_init / game_resize / game_frame / game_touch`); `makej` 0.10.0 builds the app (`render = "gl"`).
+* **Fixed:** a program with more than about 1000 functions (many libraries) ran a method of a struct inside an array as a method of a list (`free`, `push`...) or crashed: the number of a function was taken for the code of such a method. Test `t540_many_functions`.
+* **Fixed:** virtual methods and interfaces work on ARM32 (the tables of methods were never filled there).
+
 ## 1.2.2.0 (2026-10-29)
 * **Added:** `jcmp -novec`: no loop is turned into NEON code (for machines and emulators without NEON, such as the emulator of Jaric OS). The same program, the same results, only slower.
 * **Changed:** the messages about a missing library tell `jc lib install NAME` (the installer of libraries and tools is `jc`; `jget` only downloads). Documents follow (`jc install`, `jc lib`).

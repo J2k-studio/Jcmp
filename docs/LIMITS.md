@@ -18,6 +18,7 @@ What jcmp does not do, or does less well, today. A limit that has a workaround s
 ## Language
 * No separate compilation: a program is compiled from all its sources into one executable (the cache keeps the code of the functions that did not change).
 * A `#multithread` loop cannot be nested, and its body may not use `try`.
+* Interfaces (`itf`): a struct has one base or one interface, not both and not several (planned).
 * No `async` / `await` yet; threads are in `<cpu>` (`Thread`, `Mutex`, `Atomic`).
 
 ## Library

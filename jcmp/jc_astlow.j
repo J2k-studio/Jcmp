@@ -1582,9 +1582,9 @@ void at_store(int f_idx) {
         at_ty[base + i] = ast_ty[i];
         if k == AK_METHOD { at_val[base + i] = as1_mfn(i); }
         if k == AK_METHOD && (as1_dyn(ast_ty[ast_a[i]]) || as1_dstruct(ast_ty[ast_a[i]])) && !as1_sdyn(ast_ty[ast_a[i]]) {
-            at_val[base + i] = 1000 + as1_dynmethod(i);
+            at_val[base + i] = 1000000 + as1_dynmethod(i);
         }
-        if k == AK_METHOD && as1_sdyn(ast_ty[ast_a[i]]) { at_val[base + i] = 3000 + as1_samethod(i); }
+        if k == AK_METHOD && as1_sdyn(ast_ty[ast_a[i]]) { at_val[base + i] = 3000000 + as1_samethod(i); }
         if k == AK_METHOD && ast_ty[ast_a[i]] / 65536 == 4 {
             // 2000 + 1..4 the statements and pop, 2005 slice, 2006 trim, 2007 upper, 2008 lower, 2009 repeat
             int sm = as1_strmethod(i);
@@ -1596,7 +1596,7 @@ void at_store(int f_idx) {
                 if str_eq(smn, "lower") { sm = 8; }
                 if str_eq(smn, "repeat") { sm = 9; }
             }
-            at_val[base + i] = 2000 + sm;
+            at_val[base + i] = 2000000 + sm;
         }
         if k == AK_FIELD && ast_val[i] < 0 && as1_fixed_len(i) {
             // the number of elements: a field and a global know it now, a local gets it when its declaration is lowered
@@ -2582,7 +2582,7 @@ void gl_dyn_value_bits(int code, int v) {
 }
 
 void gl_dynmethod(int n) {
-    int op = at_val[n] - 1000;
+    int op = at_val[n] - 1000000;
     int r = at_a[n];
     int code = as1_dcode(at_ty[r]);
     int a = at_b[n];
@@ -3084,15 +3084,15 @@ void gl_expr(int n) {
         gl_load(1, 1, fo2);
         return;
     }
-    if k == AK_METHOD && at_val[n] >= 3000 {
+    if k == AK_METHOD && at_val[n] >= 3000000 {
         gl_samethod(n);
         return;
     }
-    if k == AK_METHOD && at_val[n] >= 2000 {
+    if k == AK_METHOD && at_val[n] >= 2000000 {
         gl_strmethod(n);
         return;
     }
-    if k == AK_METHOD && at_val[n] >= 1000 {
+    if k == AK_METHOD && at_val[n] >= 1000000 {
         gl_dynmethod(n);
         return;
     }
@@ -3900,12 +3900,12 @@ void gl_sval(int n) {
         gl_pload(n);
         return;
     }
-    if k == AK_CALL || (k == AK_METHOD && at_val[n] >= 0 && at_val[n] < 1000) {
+    if k == AK_CALL || (k == AK_METHOD && at_val[n] >= 0 && at_val[n] < 1000000) {
         gl_call(n);
         gl_skeep(n);
         return;
     }
-    if k == AK_METHOD && at_val[n] >= 3000 {
+    if k == AK_METHOD && at_val[n] >= 3000000 {
         gl_samethod(n);
         return;
     }
@@ -3956,7 +3956,7 @@ void gl_sval(int n) {
         return;
     }
     // slice / trim / upper / lower / repeat of a String variable (at_val 2005 .. 2009)
-    int mo = at_val[n] - 2000;
+    int mo = at_val[n] - 2000000;
     int r = at_a[n];
     int a1 = at_b[n];
     gl_srv(r);
@@ -4067,7 +4067,7 @@ void gl_scmp(int n) {
 
 // the member functions of an array of Strings: at_val 3001 .. 3011 (as1_samethod)
 void gl_samethod(int n) {
-    int mo = at_val[n] - 3000;
+    int mo = at_val[n] - 3000000;
     int r = at_a[n];
     int a = at_b[n];
     gl_pload(r);
@@ -4166,7 +4166,7 @@ void gl_split(int n) {
 }
 
 void gl_strmethod(int n) {
-    int mo = at_val[n] - 2000;
+    int mo = at_val[n] - 2000000;
     int a = at_b[n];
     gl_ensure();
     if mo == 18 {
@@ -4235,7 +4235,7 @@ void gl_sadopt(int n) {
     gl_ensure();
     if k == AK_STR {
         gl_rt2("__Str__from", 1);
-    } else if k == AK_BIN || k == AK_CALL || (k == AK_METHOD && at_val[n] >= 2005) || (k == AK_METHOD && at_val[n] >= 0 && at_val[n] < 1000) || (k == AK_BUILTIN && at_val[n] == 13) {
+    } else if k == AK_BIN || k == AK_CALL || (k == AK_METHOD && at_val[n] >= 2000005) || (k == AK_METHOD && at_val[n] >= 0 && at_val[n] < 1000000) || (k == AK_BUILTIN && at_val[n] == 13) {
         // a new String: taken over, the temporary is null
         if !go_null(at_c[n], 5) { gl_failx(15); }
     } else {
@@ -4472,7 +4472,7 @@ void gl_foreach(int n) {
         gl_lv(sq);
         gl_ensure();
         if gl_ab != 1 || gl_ao != 0 { ir_add(IR_ADD, 1, gl_ab, gl_ao, 1, 0); }
-    } else if at_kind[sq] == AK_METHOD && at_val[sq] == 2020 {
+    } else if at_kind[sq] == AK_METHOD && at_val[sq] == 2000020 {
         gl_split(sq);
     } else if at_kind[sq] == AK_CALL || at_kind[sq] == AK_METHOD {
         gl_call(sq);
@@ -4596,9 +4596,9 @@ void gl_stmt(int n) {
             ir_add(IR_CONST, 1, 0, 0, 0, 0);
         } else if at_kind[dinit] == AK_NUM {
             ir_add(IR_CONST, 1, 0, 0, 0, 0);
-        } else if at_kind[dinit] == AK_METHOD && at_val[dinit] == 2020 {
+        } else if at_kind[dinit] == AK_METHOD && at_val[dinit] == 2000020 {
             gl_split(dinit);
-        } else if at_kind[dinit] == AK_CALL || (at_kind[dinit] == AK_METHOD && at_val[dinit] < 1000) {
+        } else if at_kind[dinit] == AK_CALL || (at_kind[dinit] == AK_METHOD && at_val[dinit] < 1000000) {
             gl_call(dinit);
         } else if at_kind[dinit] != AK_BUILTIN {
             gl_pload(dinit);
@@ -4874,7 +4874,7 @@ void gl_stmt(int n) {
                 gl_rt2("__Str__from", 1);
             } else if at_kind[rs] == AK_VAR {
                 if !(go_peek() == 4 && ow_b[go_pos] == 1 && ow_a[go_pos] == gl_off[at_val[rs]]) { gl_rt2("__Str__clone", 1); }
-            } else if !(at_kind[rs] == AK_BIN || at_kind[rs] == AK_CALL || (at_kind[rs] == AK_METHOD && at_val[rs] >= 2005) || (at_kind[rs] == AK_METHOD && at_val[rs] >= 0 && at_val[rs] < 1000) || (at_kind[rs] == AK_BUILTIN && at_val[rs] == 13)) {
+            } else if !(at_kind[rs] == AK_BIN || at_kind[rs] == AK_CALL || (at_kind[rs] == AK_METHOD && at_val[rs] >= 2000005) || (at_kind[rs] == AK_METHOD && at_val[rs] >= 0 && at_val[rs] < 1000000) || (at_kind[rs] == AK_BUILTIN && at_val[rs] == 13)) {
                 gl_rt2("__Str__clone", 1);                  // an element of an array, a field, ...: not ours to give away, the caller gets a copy
             }
         } else if at_a[n] != 0 {
@@ -5005,7 +5005,7 @@ void gl_tmps(int n) {
         gl_nslot += 8;
         return;
     }
-    if at_ty[n] / 65536 == 4 && (k == AK_BIN || (k == AK_METHOD && at_val[n] < 3000) || (k == AK_BUILTIN && at_val[n] == 13)) {
+    if at_ty[n] / 65536 == 4 && (k == AK_BIN || (k == AK_METHOD && at_val[n] < 3000000) || (k == AK_BUILTIN && at_val[n] == 13)) {
         // a new String: the operands first, then the temporary
         if k == AK_BUILTIN {
             gl_tmps(at_a[n]);
@@ -5014,7 +5014,7 @@ void gl_tmps(int n) {
             gl_tmps(at_b[n]);
         } else {
             gl_tmps(at_a[n]);
-            if at_kind[at_a[n]] == AK_STR && at_ty[at_a[n]] / 65536 == 4 && at_val[n] >= 2000 { gl_stemp(at_a[n]); }
+            if at_kind[at_a[n]] == AK_STR && at_ty[at_a[n]] / 65536 == 4 && at_val[n] >= 2000000 { gl_stemp(at_a[n]); }
             int sa = at_b[n];
             while sa != 0 {
                 gl_tmps(sa);
@@ -5024,16 +5024,16 @@ void gl_tmps(int n) {
         gl_stemp(n);
         return;
     }
-    if k == AK_METHOD && at_val[n] >= 1000 {
+    if k == AK_METHOD && at_val[n] >= 1000000 {
         // a member function of a dynamic array or a String: the receiver (a temporary String has its slot first), then the arguments
         gl_tmps(at_a[n]);
-        if at_kind[at_a[n]] == AK_STR && at_ty[at_a[n]] / 65536 == 4 && at_val[n] >= 2000 { gl_stemp(at_a[n]); }
+        if at_kind[at_a[n]] == AK_STR && at_ty[at_a[n]] / 65536 == 4 && at_val[n] >= 2000000 { gl_stemp(at_a[n]); }
         int ma = at_b[n];
         while ma != 0 {
             gl_tmps(ma);
             ma = at_nx[ma];
         }
-        if at_val[n] == 3002 || at_val[n] == 3010 { gl_stemp(n); }
+        if at_val[n] == 3000002 || at_val[n] == 3000010 { gl_stemp(n); }
         return;
     }
     if k == AK_CALL || k == AK_METHOD {

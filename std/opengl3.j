@@ -1,5 +1,7 @@
-// opengl3 0.1.0 -- OpenGL ES 3.1 (and 2.0) from J2K, on the real driver of the phone: no app is needed.   #import <opengl3>
-//   (needs  jcmp -dyn  and the library native; license: MPL-2.0)
+// opengl3 0.3.0 -- OpenGL ES 3.1 (and 2.0) from J2K, on the real driver of the phone: no app is needed.   #import <opengl3>
+//   (needs jcmp 1.2.3 for the automatic dynamic build, or jcmp -dyn before; the library native; license: MPL-2.0)
+//   0.2.0: textures (make_texture, make_target_texture), framebuffers (render to a texture), vertex arrays, indices (Ints, draw_elements), instancing, additive blending; native 0.1.1 has call9 (glTexImage2D).
+//   0.3.0: Gl::attach(w, h) uses the OpenGL ES context that an app made current (the game is a .so loaded by a GLSurfaceView); a program that imports <opengl3> needs no -dyn.
 //   Gl gl = Gl::open(256, 256, 3, 1);               // an off-screen context (EGL pbuffer): width, height, ES version 3.1 (or 2, 0)
 //   gl.clear_color(0.1, 0.2, 0.4, 1.0);   gl.clear_color_buffer();
 //   int prog = gl.program(vertex_source, fragment_source);        // 0 and gl.log when a shader does not compile
@@ -26,6 +28,26 @@ struct Floats {
     float get(self, int i) {
         float^ p = (float^)self.ptr;
         return p[i];
+    }
+}
+
+// whole numbers of 4 bytes, for the indices of a mesh
+struct Ints {
+    int ptr;
+    int n;
+    static Ints make(int count) {
+        Ints f;
+        f.ptr = (int)Mem::alloc(count * 4 + 16);
+        f.n = count;
+        return f;
+    }
+    void set(self, int i, int v) {
+        int^ p = (int^)self.ptr;
+        char^ c = (char^)self.ptr;
+        c[i * 4] = (char)(v & 255);
+        c[i * 4 + 1] = (char)((v >> 8) & 255);
+        c[i * 4 + 2] = (char)((v >> 16) & 255);
+        c[i * 4 + 3] = (char)((v >> 24) & 255);
     }
 }
 
@@ -71,7 +93,7 @@ struct Gl {
         g.egl = Native::open("libEGL.so");
         g.gles = Native::open("libGLESv3.so");
         if g.gles == 0 { g.gles = Native::open("libGLESv2.so"); }
-        if g.egl == 0 || g.gles == 0 { g.log = "libEGL / libGLES not found (build the program with jcmp -dyn)"; return g; }
+        if g.egl == 0 || g.gles == 0 { g.log = "libEGL / libGLES not found (a program that imports <native> or <opengl3> is made dynamic by the compiler)"; return g; }
         int get_display = Native::sym(g.egl, "eglGetDisplay");
         int initialize = Native::sym(g.egl, "eglInitialize");
         int bind_api = Native::sym(g.egl, "eglBindAPI");
@@ -126,12 +148,41 @@ struct Gl {
         return g;
     }
 
+    // Use the OpenGL ES context that is already current in this thread (an Android app made it: GLSurfaceView calls the game on its GL thread).
+    // Nothing is created here; close() does not destroy anything. Give the size of the surface with resize().
+    static Gl attach(int w, int h) {
+        Gl g;
+        g.w = w;
+        g.h = h;
+        g.major = 3;
+        g.minor = 0;
+        g.ok = false;
+        g.log = "";
+        g.renderer = "";
+        g.fns = arr(64);
+        g.names = arr(64);
+        g.egl = 0;
+        g.dpy = 0;
+        g.ctx = 0;
+        g.surf = 0;
+        g.gles = Native::open("libGLESv3.so");
+        if g.gles == 0 { g.gles = Native::open("libGLESv2.so"); }
+        if g.gles == 0 { g.log = "libGLES not found"; return g; }
+        g.ok = true;
+        int r = Native::call1(g.fn("glGetString"), 7937);          // GL_RENDERER (0 when no context is current)
+        if r == 0 { g.ok = false; g.log = "no OpenGL ES context is current in this thread"; return g; }
+        g.renderer = Native::text(r);
+        return g;
+    }
+    void resize(self, int w, int h) { self.w = w; self.h = h; self.viewport(0, 0, w, h); }
+
     void close(self) {
-        if self.ok {
+        if self.ok && self.egl != 0 {
             int mc = Native::sym(self.egl, "eglMakeCurrent");
             Native::call4(mc, self.dpy, 0, 0, 0);
             self.ok = false;
         }
+        if self.egl == 0 { self.ok = false; }                       // attached: the app owns the context
     }
 
     // ---- state and clearing
@@ -216,6 +267,74 @@ struct Gl {
         self.vertex_attrib(0, 2, 2, 0);
         self.draw_arrays(4, 0, count);
     }
+
+    // ---- textures, targets to draw into, vertex arrays, indices, instances
+    int gen_texture(self) {
+        int p = (int)Mem::alloc(16);
+        Native::call2(self.fn("glGenTextures"), 1, p);
+        return Native::peek32(p);
+    }
+    // unit 0, 1, 2 ... (the shader reads  uniform sampler2D  with uniform1i(loc, unit))
+    void bind_texture(self, int unit, int tex) {
+        Native::call1(self.fn("glActiveTexture"), 33984 + unit);
+        Native::call2(self.fn("glBindTexture"), 3553, tex);
+    }
+    void texture_params(self, bool linear, bool repeat) {
+        int f = 9728;
+        if linear { f = 9729; }
+        int wrap = 33071;
+        if repeat { wrap = 10497; }
+        Native::call3(self.fn("glTexParameteri"), 3553, 10241, f);
+        Native::call3(self.fn("glTexParameteri"), 3553, 10240, f);
+        Native::call3(self.fn("glTexParameteri"), 3553, 10242, wrap);
+        Native::call3(self.fn("glTexParameteri"), 3553, 10243, wrap);
+    }
+    // a texture from the bytes red, green, blue, alpha of w x h dots (the first row is the bottom row of the texture: v = 0)
+    int make_texture(self, int w, int h, String rgba, bool linear) {
+        int tex = self.gen_texture();
+        self.bind_texture(0, tex);
+        self.texture_params(linear, false);
+        Native::call2(self.fn("glPixelStorei"), 3317, 1);
+        Native::call9(self.fn("glTexImage2D"), 3553, 0, 6408, w, h, 0, 6408, 5121, (int)rgba.c());
+        return tex;
+    }
+    // an empty texture that can be drawn into (see make_framebuffer)
+    int make_target_texture(self, int w, int h, bool linear) {
+        int tex = self.gen_texture();
+        self.bind_texture(0, tex);
+        self.texture_params(linear, false);
+        Native::call9(self.fn("glTexImage2D"), 3553, 0, 6408, w, h, 0, 6408, 5121, 0);
+        return tex;
+    }
+    int gen_framebuffer(self) {
+        int p = (int)Mem::alloc(16);
+        Native::call2(self.fn("glGenFramebuffers"), 1, p);
+        return Native::peek32(p);
+    }
+    // 0 is the default framebuffer
+    void bind_framebuffer(self, int fbo) { Native::call2(self.fn("glBindFramebuffer"), 36160, fbo); }
+    // a framebuffer whose colour is the texture; 0 when it is not complete
+    int make_framebuffer(self, int tex) {
+        int fbo = self.gen_framebuffer();
+        self.bind_framebuffer(fbo);
+        Native::call5(self.fn("glFramebufferTexture2D"), 36160, 36064, 3553, tex, 0);
+        if Native::call1(self.fn("glCheckFramebufferStatus"), 36160) != 36053 { return 0; }
+        return fbo;
+    }
+    int gen_vertex_array(self) {
+        int p = (int)Mem::alloc(16);
+        Native::call2(self.fn("glGenVertexArrays"), 1, p);
+        return Native::peek32(p);
+    }
+    void bind_vertex_array(self, int vao) { Native::call1(self.fn("glBindVertexArray"), vao); }
+    // indices: the buffer bound to 34963 (element array) before draw_elements
+    void buffer_data_ints(self, int target, Ints data, int usage) { Native::call4(self.fn("glBufferData"), target, data.n * 4, data.ptr, usage); }
+    void draw_elements(self, int mode, int count) { Native::call4(self.fn("glDrawElements"), mode, count, 5125, 0); }
+    // an attribute that changes once per instance (d = 1) instead of once per vertex
+    void vertex_divisor(self, int index, int d) { Native::call2(self.fn("glVertexAttribDivisor"), index, d); }
+    void draw_arrays_instanced(self, int mode, int first, int count, int instances) { Native::call4(self.fn("glDrawArraysInstanced"), mode, first, count, instances); }
+    // light adds up (fire, glow, bloom)
+    void blend_additive(self) { Native::call1(self.fn("glEnable"), 3042); Native::call2(self.fn("glBlendFunc"), 770, 1); }
 
     // ---- reading the picture
     // the pixels of a rectangle: 4 bytes each (red, green, blue, alpha), the first row is the bottom one

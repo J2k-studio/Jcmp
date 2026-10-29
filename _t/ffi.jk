@@ -1,7 +1,0 @@
-int add(int a, int b) { return a + b; }
-int main() {
-    int(int, int)^ f = add;
-    int addr = (int)f;
-    int(int, int)^ g = (int(int, int)^)addr;
-    return g(40, 2);
-}

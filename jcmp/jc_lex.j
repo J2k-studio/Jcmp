@@ -1292,6 +1292,8 @@ void lex_import() {
         lname[ln] = 0;
         lrel[ln] = 0;
         if !tok_is(">") { die("> expected to end import <name>"); }
+        // a program that uses the libraries of the system (<native>, and so <opengl3> and <vulkan>) is made a dynamic executable by itself: no -dyn needed
+        if str_eq(@lname, "native") && x_lib == 0 && x_target != 32 { x_lib = 1; x_dyn = 1; }
         // the library is loaded from here on: import_library calls next() for the token after >
         import_library(@lname, @lrel);
         return;
