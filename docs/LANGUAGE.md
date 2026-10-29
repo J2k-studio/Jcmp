@@ -1297,3 +1297,15 @@ jcmp mylib.jk -l -o libmy.so
 * The functions that are not marked `export` stay inside (and are not in the file if no exported function reaches them).
 * Try it from python: `ctypes.CDLL('./libmy.so').add(2, 3)` is 5.
 * Not yet: `cout` inside a library, ARM32, and a library that calls another library. The test `t502` in the repository loads a library the way a C program does.
+
+
+## A root like an OS (JARIC_ROOT)
+A phone does not let an app make `/bin` or `/etc`. A program made by jcmp can still see them: set the environment variable `JARIC_ROOT` to a folder (the Jaric app sets it to its files folder) and the paths that begin with `/` are read inside that folder when their first name is a folder there:
+```
+JARIC_ROOT=/data/data/com.jaric.app/files
+Fs::read_text("/etc/motd")       // files/etc/motd
+Sys::chdir("/");  Sys::getcwd    // "/" (the folder files/ shown as /)
+Fs::exists("/u/DCIM")            // /sdcard/DCIM (/u is the storage of the user)
+Fs::exists("/proc/version")      // the real one: /proc /dev /sys /sdcard /storage /data /system ... are never hidden
+```
+It works for everything that goes through `Sys` (Fs, Dir, Proc, jsh, jbox, your programs). Programs of other makers (Python, git of Termux) do not know it and use real paths. Without `JARIC_ROOT` nothing changes. In a shared library (`-l`) there is no environment, so there is no virtual root (and `Env::get` answers "nothing").

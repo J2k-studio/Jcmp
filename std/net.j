@@ -154,6 +154,8 @@ struct Net {
     }
     // the value of an environment variable, or "" (the net unit does not need the system unit)
     static String dns_env(String name) {
+        int^ gg0 = (int^)__gl();
+        if gg0[0] == 0 { return ""; }        // a shared library (-l) has no start of a program: no arguments, no environment
         int i = argc() + 1;
         while arg(i) != null {
             char^ e = (char^)arg(i);

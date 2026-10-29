@@ -1,6 +1,8 @@
-# J2K / Jcmp 1.2.3.0
+# J2K / Jcmp 1.2.4.0
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
+
+**1.2.4.0:** a root like an OS (`JARIC_ROOT`: `/etc`, `/home`, `/u` for the programs made by jcmp), `Sys::chdir`, the library `qr` (reads QR codes), `Env` no longer crashes in a shared library (`-l`).
 
 **1.2.3.0:** interfaces (`itf` / `impl`), `#import <native>` makes the program dynamic by itself (no `-dyn`), virtual methods fixed on ARM32, new libraries (`canvas2d`, `glcanvas`, `glapp`, `tasks`, OpenGL ES textures and instancing).
 

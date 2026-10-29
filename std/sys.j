@@ -26,11 +26,109 @@ struct Sys {
     static int call(int number, int a0, int a1, int a2, int a3, int a4, int a5) {
         return syscall(number, a0, a1, a2, a3, a4, a5);
     }
+    // is the first name (n letters) one of the real places of the system?
+    static bool vr_system(char^ s, int n) {
+        char^ names = "proc dev sys sdcard storage data system apex vendor product odm cache config acct linkerconfig metadata mnt oem init sbin d ";
+        int i = 0;
+        while names[i] != 0 {
+            int e = i;
+            while names[e] != ' ' { e += 1; }
+            if e - i == n {
+                int m = 0;
+                while m < n && names[i + m] == s[m] { m += 1; }
+                if m == n { return true; }
+            }
+            i = e + 1;
+        }
+        return false;
+    }
+    // ---- the virtual root of Jaric. When the environment has JARIC_ROOT (the folder of the app: files/ with home, usr, ... and the links bin, etc, tmp, lib, var),
+    // a path that begins with / and whose first name is a folder of that place is read there: /etc/hosts is JARIC_ROOT/etc/hosts, / is JARIC_ROOT, /u is the
+    // storage of the user (/sdcard). The real places of the system (/proc, /dev, /sys, /sdcard, /storage, /data, /system ...) and every path that does not
+    // begin with / stay as they are. Without JARIC_ROOT nothing changes. The answer is written in buf (4096 bytes) or is the path itself.
+    static char^ vroot(char^ path, char^ buf) {
+        if path == null { return path; }
+        if path[0] != '/' { return path; }
+        int^ gg = (int^)__gl();
+        if gg[0] == 0 { return path; }                            // a shared library (-l): no environment, no virtual root
+        int i = argc() + 1;
+        char^ root = null;
+        while arg(i) != null {
+            char^ e = arg(i);
+            if e[0] == 'J' && e[1] == 'A' && e[2] == 'R' && e[3] == 'I' && e[4] == 'C' && e[5] == '_' && e[6] == 'R' && e[7] == 'O' && e[8] == 'O' && e[9] == 'T' && e[10] == '=' { root = e + 11; break; }
+            i += 1;
+        }
+        if root == null || root[0] == 0 { return path; }
+        int rl = 0;
+        while root[rl] != 0 { rl += 1; }
+        if rl > 3000 { return path; }
+        // the first name of the path
+        int nl = 0;
+        while path[1 + nl] != 0 && path[1 + nl] != '/' { nl += 1; }
+        int k = 0;
+        if nl == 0 {                                              // "/" itself
+            while k < rl { buf[k] = root[k]; k += 1; }
+            buf[k] = 0;
+            return buf;
+        }
+        // the places of the system are not hidden by a folder of the same name
+        if Sys::vr_system(path + 1, nl) { return path; }
+        if nl == 1 && path[1] == 'u' {                            // /u is the storage of the user
+            char^ sd = "/sdcard";
+            while k < 7 { buf[k] = sd[k]; k += 1; }
+            int j = 2;
+            while path[j] != 0 && k < 4000 { buf[k] = path[j]; k += 1; j += 1; }
+            buf[k] = 0;
+            return buf;
+        }
+        // the folder of that name in the root: is it there?
+        k = 0;
+        while k < rl { buf[k] = root[k]; k += 1; }
+        buf[k] = '/'; k += 1;
+        int j = 0;
+        while j < nl { buf[k] = path[1 + j]; k += 1; j += 1; }
+        buf[k] = 0;
+        char st[128];
+        if syscall(79, -100, buf, (char^)@st, 0) < 0 { return path; }
+        // yes: the whole path in the root
+        k = 0;
+        while k < rl { buf[k] = root[k]; k += 1; }
+        j = 0;
+        while path[j] != 0 && k < 4090 { buf[k] = path[j]; k += 1; j += 1; }
+        buf[k] = 0;
+        return buf;
+    }
+    // the path of the real folder the other way: the answer of getcwd begins with JARIC_ROOT: it is shown as / ...
+    static int vr_back(char^ buf, int n) {
+        int^ gg = (int^)__gl();
+        if gg[0] == 0 || n <= 1 { return n; }
+        int i = argc() + 1;
+        char^ root = null;
+        while arg(i) != null {
+            char^ e = arg(i);
+            if e[0] == 'J' && e[1] == 'A' && e[2] == 'R' && e[3] == 'I' && e[4] == 'C' && e[5] == '_' && e[6] == 'R' && e[7] == 'O' && e[8] == 'O' && e[9] == 'T' && e[10] == '=' { root = e + 11; break; }
+            i += 1;
+        }
+        if root == null || root[0] == 0 { return n; }
+        int rl = 0;
+        while root[rl] != 0 { rl += 1; }
+        int m = 0;
+        while m < rl && buf[m] == root[m] { m += 1; }
+        if m < rl { return n; }
+        if buf[rl] != 0 && buf[rl] != '/' { return n; }
+        if buf[rl] == 0 { buf[0] = '/'; buf[1] = 0; return 2; }
+        int k = 0;
+        while buf[rl + k] != 0 { buf[k] = buf[rl + k]; k += 1; }
+        buf[k] = 0;
+        return k + 1;
+    }
+
     // ---- files
     // flags and mode are the numbers of this machine; open_read / open_write / open_append / open_dir need none
     static int open(char^ path, int flags, int mode) {
         if path == null { return -14; }
-        return syscall(56, -100, path, flags, mode);
+        char vb[4096];
+        return syscall(56, -100, Sys::vroot(path, (char^)@vb), flags, mode);
     }
     static int open_read(char^ path) { return Sys::open(path, 0, 0); }
     // create or empty the file; mode 0644 (before the umask)
@@ -61,28 +159,35 @@ struct Sys {
     }
     static int unlink(char^ path) {
         if path == null { return -14; }
-        return syscall(35, -100, path, 0);
+        char vb[4096];
+        return syscall(35, -100, Sys::vroot(path, (char^)@vb), 0);
     }
     static int rmdir(char^ path) {
         if path == null { return -14; }
-        return syscall(35, -100, path, 0x200);
+        char vb[4096];
+        return syscall(35, -100, Sys::vroot(path, (char^)@vb), 0x200);
     }
     static int rename(char^ from, char^ to) {
         if from == null || to == null { return -14; }
-        return syscall(38, -100, from, -100, to);
+        char vb[4096];
+        char vc[4096];
+        return syscall(38, -100, Sys::vroot(from, (char^)@vb), -100, Sys::vroot(to, (char^)@vc));
     }
     static int mkdir(char^ path, int mode) {
         if path == null { return -14; }
-        return syscall(34, -100, path, mode);
+        char vb[4096];
+        return syscall(34, -100, Sys::vroot(path, (char^)@vb), mode);
     }
     static int chmod(char^ path, int mode) {
         if path == null { return -14; }
-        return syscall(53, -100, path, mode, 0);
+        char vb[4096];
+        return syscall(53, -100, Sys::vroot(path, (char^)@vb), mode, 0);
     }
     // the details of a file in buf (128 bytes); the mode is the 4 bytes at offset 16, the size the 8 bytes at offset 48
     static int stat(char^ path, void^ buf) {
         if path == null || buf == null { return -14; }
-        return syscall(79, -100, path, buf, 0);
+        char vb[4096];
+        return syscall(79, -100, Sys::vroot(path, (char^)@vb), buf, 0);
     }
     static int fstat(int fd, void^ buf) {
         if buf == null { return -14; }
@@ -91,7 +196,8 @@ struct Sys {
     static int readlink(char^ path, char^ buf, int n) {
         if path == null || buf == null { return -14; }
         if n <= 0 { return -22; }
-        return syscall(78, -100, path, buf, n);
+        char vb[4096];
+        return syscall(78, -100, Sys::vroot(path, (char^)@vb), buf, n);
     }
     // the entries of a folder opened with open_dir (linux_dirent64)
     static int getdents(int fd, void^ buf, int n) {
@@ -102,7 +208,15 @@ struct Sys {
     static int getcwd(char^ buf, int n) {
         if buf == null { return -14; }
         if n <= 0 { return -22; }
-        return syscall(17, buf, n);
+        int r = syscall(17, buf, n);
+        if r > 0 { return Sys::vr_back(buf, r); }
+        return r;
+    }
+    // change the folder of the program (a virtual path is read as in open)
+    static int chdir(char^ path) {
+        if path == null { return -14; }
+        char vb[4096];
+        return syscall(49, Sys::vroot(path, (char^)@vb), 0, 0, 0, 0, 0);
     }
     // is the file number a terminal? (the call TCGETS: 0 yes)
     static int isatty(int fd) {
@@ -160,7 +274,8 @@ struct Sys {
     static int execve(char^ path, void^ argv, void^ envp) {
         if path == null || argv == null { return -14; }
         __flush();
-        return syscall(221, path, argv, envp);
+        char vb[4096];
+        return syscall(221, Sys::vroot(path, (char^)@vb), argv, envp);
     }
     // wait for the child pid; its state goes to *status
     static int wait(int pid, int^ status) {
@@ -192,7 +307,8 @@ struct Sys {
     // 0 when the file or folder can be seen (it exists), else the error
     static int access(char^ path) {
         if path == null { return -14; }
-        return syscall(48, -100, path, 0, 0);
+        char vb[4096];
+        return syscall(48, -100, Sys::vroot(path, (char^)@vb), 0, 0);
     }
     // the clock: which = 0 the time of day, 1 a clock that only goes forward; the seconds and the nanoseconds go to ts[0] and ts[1]
     static int clock_gettime(int which, int^ ts) {

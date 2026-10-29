@@ -25,6 +25,16 @@ struct Sys {
     static char^ arg(int i);
     // ---- a call that is not here yet
     static int call(int number, int a0, int a1, int a2, int a3, int a4, int a5);
+    // is the first name (n letters) one of the real places of the system?
+    static bool vr_system(char^ s, int n);
+    // ---- the virtual root of Jaric. When the environment has JARIC_ROOT (the folder of the app: files/ with home, usr, ... and the links bin, etc, tmp, lib, var),
+    // a path that begins with / and whose first name is a folder of that place is read there: /etc/hosts is JARIC_ROOT/etc/hosts, / is JARIC_ROOT, /u is the
+    // storage of the user (/sdcard). The real places of the system (/proc, /dev, /sys, /sdcard, /storage, /data, /system ...) and every path that does not
+    // begin with / stay as they are. Without JARIC_ROOT nothing changes. The answer is written in buf (4096 bytes) or is the path itself.
+    static char^ vroot(char^ path, char^ buf);
+    // the path of the real folder the other way: the answer of getcwd begins with JARIC_ROOT: it is shown as / ...
+    static int vr_back(char^ buf, int n);
+
     // ---- files
     // flags and mode are the numbers of this machine; open_read / open_write / open_append / open_dir need none
     static int open(char^ path, int flags, int mode);
@@ -52,6 +62,8 @@ struct Sys {
     // the entries of a folder opened with open_dir (linux_dirent64)
     static int getdents(int fd, void^ buf, int n);
     static int getcwd(char^ buf, int n);
+    // change the folder of the program (a virtual path is read as in open)
+    static int chdir(char^ path);
     // is the file number a terminal? (the call TCGETS: 0 yes)
     static int isatty(int fd);
     // the size of the terminal in buf (8 bytes: rows, columns, 2 more numbers of 16 bits)

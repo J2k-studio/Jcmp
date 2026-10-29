@@ -2,6 +2,8 @@
 struct Env {
     // the value of an environment variable
     static Option<String> get(String name) {
+        int^ gg0 = (int^)__gl();
+        if gg0[0] == 0 { return Option<String>::None; }        // a shared library (-l) has no start of a program: no arguments, no environment
         int i = argc() + 1;
         int nl = name.len;
         char^ nm = name.c();
@@ -20,6 +22,8 @@ struct Env {
     }
     // the arguments of the program (the first one is the program itself)
     static String[] args() {
+        int^ gg0 = (int^)__gl();
+        if gg0[0] == 0 { String[] none = arr(1); return none; }        // a shared library (-l) has no start of a program: no arguments, no environment
         String[] r = arr(argc() + 1);
         for i in 0..argc() {
             String a = "";
@@ -42,7 +46,8 @@ struct Proc {
         for i in 0..na { argv[i + 1] = (int)args[i].c(); }
         argv[na + 1] = 0;
         int ne = 0;
-        while arg(argc() + 1 + ne) != null { ne += 1; }
+        int^ gg1 = (int^)__gl();
+        while gg1[0] != 0 && arg(argc() + 1 + ne) != null { ne += 1; }
         int^ envp = (int^)Mem::alloc(8 * (ne + 1));
         for i in 0..ne { envp[i] = (int)arg(argc() + 1 + i); }
         envp[ne] = 0;

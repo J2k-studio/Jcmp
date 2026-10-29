@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.4.0 (2026-10-29)
+* **Added (a root like an OS):** with `JARIC_ROOT=DIR` in the environment, every program made by jcmp reads a path that begins with `/` in that folder when its first name is a folder there: `/etc/hosts` is `DIR/etc/hosts`, `/` is `DIR`, `/u` is `/sdcard`; the places of the system (`/proc /dev /sys /sdcard /storage /data /system ...`) stay real. `Sys::chdir`, and `Sys::getcwd` shows the path back. Without `JARIC_ROOT` nothing changes. The Jaric app 0.0.147 uses it. Test `t543_virtual_root`.
+* **Fixed:** `Env::get`, `Env::args`, `Proc::run` and the environment lookups of `net` and `crypto` crashed inside a shared library (`-l`: no start of a program); they answer "nothing" now. Test `t542_lib_env`.
+* **Added (library):** `<qr>` 0.1.0: reads QR codes from a picture (`Qr::scan(px, w, h, @ok)`): versions 1 to 40, the four levels of error correction (Reed-Solomon repairs mistakes), numbers, letters and UTF-8 text, any turning, uneven light, a little tilt. Test `t541_qr`.
+* **Added (library):** `glcanvas` 0.2.1: `GlCanvas::image_rot` draws a picture turned about its middle (for a rocket that turns).
+* **Fixed:** none.
+
 ## 1.2.3.0 (2026-10-28)
 * **Added:** `#import <native>` (so `<opengl3>` and `<vulkan>`) makes the program a dynamic executable by itself: no `-dyn` needed. `Gl::attach` (opengl3 0.3.0) draws on the OpenGL ES context an app made current; a `-l` library that draws with the chip was checked in a foreign process (python).
 * **Added:** interfaces `itf` / `impl` (version 1); the library `<tasks>`, `<profile>`, `<jobs>`, `<spritebatch>`, `<shaders>`, `<compute>`, opengl3 0.2.0 (textures, framebuffers, instancing), `Native::call9`.

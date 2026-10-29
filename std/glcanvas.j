@@ -1,4 +1,5 @@
-// glcanvas 0.2.0 -- the Canvas2d interface on OpenGL ES 3 (and on ES 2): every shape of a frame goes into one buffer and is drawn with ONE call.   #import <opengl3> <canvas2d> <glcanvas>   (license: MPL-2.0)
+// glcanvas 0.2.1 -- the Canvas2d interface on OpenGL ES 3 (and on ES 2): every shape of a frame goes into one buffer and is drawn with ONE call.   #import <opengl3> <canvas2d> <glcanvas>   (license: MPL-2.0)
+//   0.2.1: image_rot (a picture turned about its middle; a method of GlCanvas, not of the interface).
 //   0.2.0: pictures (load a PNG, image()), the same code on an OpenGL ES 2 context (Gl::open(w, h, 2, 0)): no vertex arrays, shaders of GLSL 100.
 //   Gl gl = Gl::open(320, 180, 3, 1);                      // off-screen; in an app: Gl::attach(w, h)
 //   GlCanvas c; c.init(); c.setup(gl, 320.0, 180.0);       // sets the shader, the buffer and the size of the surface in dots
@@ -201,16 +202,25 @@ struct GlCanvas impl Canvas2d {
 
     // the picture in the box (x, y, w, h); drawn at once (the shapes before it are drawn first, so the order is kept)
     void image(self, int pic, double x, double y, double w, double h, int tint) {
+        self.image_rot(pic, x + w * 0.5, y + h * 0.5, w, h, 0.0, tint);
+    }
+
+    // the picture in a box of w x h dots whose middle is (cx, cy), turned by `angle` radians (clockwise on the screen, about the middle)
+    void image_rot(self, int pic, double cx, double cy, double w, double h, double angle, int tint) {
         if pic <= 0 || pic >= self.pics.len || !self.ready { return; }
         self.flush();
         Floats q = Floats::make(24);
-        double xs[6] = {x, x + w, x + w, x, x + w, x};
-        double ys[6] = {y, y, y + h, y, y + h, y + h};
+        double ca = Math::cos(angle);
+        double sa = Math::sin(angle);
+        double hx[6] = {0.0 - 0.5, 0.5, 0.5, 0.0 - 0.5, 0.5, 0.0 - 0.5};
+        double hy[6] = {0.0 - 0.5, 0.0 - 0.5, 0.5, 0.0 - 0.5, 0.5, 0.5};
         double us[6] = {0.0, 1.0, 1.0, 0.0, 1.0, 0.0};
         double vs[6] = {0.0, 0.0, 1.0, 0.0, 1.0, 1.0};
         for i in 0..6 {
-            q.set(i * 4, (float)xs[i]);
-            q.set(i * 4 + 1, (float)ys[i]);
+            double px = hx[i] * w;
+            double py = hy[i] * h;
+            q.set(i * 4, (float)(cx + px * ca - py * sa));
+            q.set(i * 4 + 1, (float)(cy + px * sa + py * ca));
             q.set(i * 4 + 2, (float)us[i]);
             q.set(i * 4 + 3, (float)vs[i]);
         }

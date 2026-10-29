@@ -2415,6 +2415,8 @@ struct Crypto {
     }
     // ---------------------------------------------------------------- the trust store and the check of a chain
     static String env_value(String name) {
+        int^ gg0 = (int^)__gl();
+        if gg0[0] == 0 { return ""; }        // a shared library (-l) has no start of a program: no arguments, no environment
         int i = argc() + 1;
         while arg(i) != null {
             char^ e = (char^)arg(i);
