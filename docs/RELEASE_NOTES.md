@@ -1,6 +1,8 @@
-# J2K / Jcmp 1.2.7.0
+# J2K / Jcmp 1.2.8.0
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
+
+**1.2.8.0:** `jcmp fmt` (the formatter: white space only, never the meaning; `-c` checks, `-p` prints), the language roadmap and the first comparison with C and C++ in the docs.
 
 **1.2.7.0:** a `float` variable lives in a floating-point register and float arrays are read and written with one instruction (about 25% faster loops of floats), the library `neurongpu` (the matrix product on the GPU), `retrieve` (search in your own texts), `mlp` (train a small network in a few lines), `vulkan` 0.3.0 (compute from SPIR-V), `simd` 0.10.0.
 

@@ -141,3 +141,12 @@ Markdown files are shown nicely by GitHub, and `README.md` is the front page. A 
 | program size | 8 MB of generated assembler text |
 
 A program that reaches a limit gets a clear `error: too many ...` message.
+
+
+## The formatter: `jcmp fmt`
+
+    jcmp fmt prog.jk lib.j        write the files back, formatted (a file that is formatted is not touched)
+    jcmp fmt -c prog.jk           only check: says "would change" and stops with 1 (for a test or a hook before a commit)
+    jcmp fmt -p prog.jk           print the formatted text
+
+It changes **white space only**, never the meaning: line ends are `\n`, no space or tab at the end of a line, a tab at the start of a line is four spaces, at most one empty line in a row and none at the start of the file, one `\n` at the end. Doing it twice changes nothing. Re-indenting by the braces and breaking long lines come in later versions (they need decisions about the style).

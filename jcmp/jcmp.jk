@@ -3,7 +3,7 @@
 // Use:    jcmp1 input.jk -o program
 // the version of the compiler (also in the file VERSION; release.sh checks that they agree)
 #allow syscall                         // the compiler is the layer under Sys: it calls the system by number on purpose
-#define JCMP_VERSION "1.2.7.0"
+#define JCMP_VERSION "1.2.8.0"
 
 #import "jc_base"
 #import "jc_asm"
@@ -26,6 +26,7 @@
 #import "jc_cache"
 #import "jc_jh"
 #import "jc_logo"
+#import "jc_fmt"
 
 // ------------------------------------------------ the program (main lives here, not in a .j part)
 
@@ -104,6 +105,7 @@ void help() {
     write_out("  -update [version] replace the compiler and its library (as a pair) by the latest release, or by the given version\n");
     write_out("  -showlib name    write the source of a library that is inside the compiler (net, text, math ...) and stop\n");
     write_out("  -nofma           do not fuse a * b + c into one instruction (the last bit of the result may differ with it)\n");
+    write_out("  fmt [-c|-p] FILE...  the formatter (white space only): write the files back; -c only check (stop with 1 if one would change); -p print\n");
     write_out("  -color           coloured messages (the default when stderr is a terminal)\n");
     write_out("  -nocolor         plain messages\n");
     write_out("  -version         print the version\n");
@@ -323,6 +325,7 @@ void main() {
     char^ out_elf = null;
     char^ out_asm = null;
     int ai = 1;
+    if argc() >= 2 && str_eq(arg(1), "fmt") { syscall(93, fmt_main(2)); }
     char termios[64];
     if syscall(29, 2, 21505, @termios) == 0 { use_color = 1; }       // standard error is a terminal: colours
     while ai < argc() {

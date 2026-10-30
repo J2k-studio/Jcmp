@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.8.0 (2026-10-30)
+* **Added (docs):** `docs/design/25-language-roadmap.md` (the versions to 2.0, what each promises, the ten next steps, the rule for features near the hardware) and the first table of J2K against C and C++ (`bench/vs_c`, taken on a busy phone).
+* **Added (compiler):** `jcmp fmt [-c|-p] FILE...`, the formatter (white space only: line ends, trailing spaces, tabs at the start of a line, blank lines, the last newline; idempotent; the code of 63 programs is the same before and after). Test t566.
+* **Fixed:** none.
+
 ## 1.2.7.0 (2026-10-30)
 * **Added (compiler):** a `float` local lives in a floating-point register (`d8`..`d15`) instead of the stack: the slot is a whole 8-byte value, assignments read and write it where it is, the register pass knows `fmov sK, wR` / `fmov wR, sK`, and new peepholes turn `fmov` through a whole-number register into `fmov sM, sK` and a float load or store of an array element into `ldr sK` / `str sK` (a loop that sums floats is about 25% faster; the assembler knows `fmov sN, sM` and `ldr` / `str` of an `s` register). The search of the dead-register question follows a loop once (it ran out of steps before). Test t561.
 * **Added (libraries):** `neurongpu` 0.1.0 (`NeuronGpu::enable(min_work)`: the products of `Tensor32.matmul` on the GPU, 1.5 times faster at 256 x 256 and 2.4 times at 512 x 512 on a Kirin 990; `neuron` 0.7.1 has the hook), `retrieve` 0.1.0 (BM25 search over passages of text, English and Thai; the first part of the assistant), `simd` 0.10.0, `mlp` 0.1.0 (train a small network in a few lines: `Mlp::make`, `fit`, `fit_classes`, `predict`, `accuracy`, `save` / `load`), `vulkan` 0.3.0 (a device and queue, buffers the CPU and GPU share, a compute pipeline from SPIR-V: a vector add runs on the Mali through Vulkan); lessons for 20 libraries in Jcmp-libs. Tests t562-t565.
