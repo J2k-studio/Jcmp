@@ -747,6 +747,70 @@ void vr_dead_addrs() {
 }
 
 // false: the function cannot be written with its vectors (it stays as the parser wrote it)
+// {a, a, a, a}: four inserts of the same value (each maybe after the same load) into the lanes 0, 4, 8, 12 become one dup (docs/design/21-loop-speed.md, P1)
+int vr_skip_nop(int i) {
+    while i < ir_n && ir_op[i] == IR_NOP { i += 1; }
+    return i;
+}
+
+int vr_back_nop(int i) {
+    while i >= 0 && ir_op[i] == IR_NOP { i -= 1; }
+    return i;
+}
+
+bool vr_same_load(int x, int y) {
+    return ir_op[x] == IR_LOAD && ir_op[y] == IR_LOAD && ir_d[x] == ir_d[y] && ir_a[x] == ir_a[y] && ir_b[x] == ir_b[y] && ir_bi[x] == ir_bi[y] && ir_k[x] == ir_k[y] && ir_w[x] == ir_w[y];
+}
+
+void vr_splat() {
+    int i = 0;
+    while i < ir_n {
+        if ir_op[i] == IR_VINS && ir_w[i] == 4 && ir_k[i] == 0 && ir_d[i] == ir_a[i] {
+            int v = ir_d[i];
+            int src = ir_b[i];
+            int ld0 = 0 - 1;
+            int pb = vr_back_nop(i - 1);
+            if pb >= 0 && ir_op[pb] == IR_LOAD && ir_d[pb] == src { ld0 = pb; }
+            int lastp = i;
+            int pend[8];
+            int npend = 0;
+            int lane = 1;
+            int p = vr_skip_nop(i + 1);
+            bool ok = true;
+            while lane < 4 && ok {
+                if ld0 >= 0 {
+                    if p < ir_n && vr_same_load(ld0, p) { pend[npend] = p; npend += 1; p = vr_skip_nop(p + 1); } else { ok = false; }
+                }
+                if ok {
+                    if p < ir_n && ir_op[p] == IR_VINS && ir_w[p] == 4 && ir_k[p] == lane * 4 && ir_d[p] == v && ir_a[p] == v && ir_b[p] == src {
+                        pend[npend] = p;
+                        npend += 1;
+                        lastp = p;
+                        p = vr_skip_nop(p + 1);
+                        lane += 1;
+                    } else { ok = false; }
+                }
+            }
+            if ok {
+                ir_op[i] = IR_VDUP;
+                ir_a[i] = src;
+                ir_b[i] = 0;
+                ir_bi[i] = 0;
+                ir_k[i] = 0;
+                ir_w[i] = 2;
+                int q = 0;
+                while q < npend {
+                    int n = pend[q];
+                    ir_op[n] = IR_NOP; ir_d[n] = 0; ir_a[n] = 0; ir_b[n] = 0; ir_bi[n] = 1; ir_k[n] = 0; ir_w[n] = 0;
+                    q += 1;
+                }
+                i = lastp;
+            }
+        }
+        i += 1;
+    }
+}
+
 bool vr_run() {
     bool any = false;
     int i = 0;
@@ -950,6 +1014,7 @@ bool vr_run() {
     }
     vr_copies();
     vr_dead_addrs();
+    vr_splat();
     // the registers: every vector is an ordinary vreg now, so the live ranges are worked out again
     int zo = 0;
     while zo < ob_n { vr_cand[zo] = 0; zo += 1; }

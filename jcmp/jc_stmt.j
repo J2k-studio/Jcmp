@@ -2975,6 +2975,7 @@ void parse_function() {
             int p_dyn = ty_dyn;
             if ty_ptr != 0 { p_tid = 0; }
             if f_declared < 8 { fptid[f_idx * 8 + f_declared] = p_tid; }
+            if f_declared >= 8 && f_declared < 16 { fptid2[f_idx * 8 + f_declared - 8] = p_tid; }
             if f_declared == 8 { fpd8[f_idx] = 0; }
             if f_declared >= 8 && f_declared < 16 && ty_ptr == 0 && p_tid == 91 && ty_dyn == 0 { fpd8[f_idx] = fpd8[f_idx] + (1 << (f_declared - 8)); }
             if f_declared < 8 { fpstr[f_idx * 8 + f_declared] = 0; if ty_ptr != 0 { fpstr[f_idx * 8 + f_declared] = 2; } if is_str_dyn(p_dyn) { fpstr[f_idx * 8 + f_declared] = 1; } }

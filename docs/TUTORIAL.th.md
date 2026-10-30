@@ -2406,6 +2406,711 @@ int main() {
 
 ถ้าจะคุยกับชิปเอง ใช้ `<gpu>` ในแอป (สามเหลี่ยม ภาพ สีย้อม: คำสั่งชุดเดียวต่อหนึ่งภาพ) หรือ `<opengl3>` / `<vulkan>` ในโปรแกรม dynamic แผนของเอนจิน (ชั้น ระบบฉากแบบ Godot API แบบ MonoGame) อยู่ในเอกสารของโครงการ Jaric
 
+## บทที่ 67. คุยกับเว็บ: `<web>`
+
+บริการส่วนใหญ่บนเน็ตใช้ HTTP `#import <web>` เป็นตัวไคลเอนต์: เรียกครั้งเดียวได้คำตอบที่มี **status** (200 คือดี 404 คือไม่พบ ...), **header** และ **body** status 400 ขึ้นไป *ไม่ใช่* ข้อผิดพลาดของโปรแกรม (body มักอธิบายไว้) มีแต่การเชื่อมต่อที่ล้มเท่านั้นที่เป็น `Error`
+
+```jk
+#import <stdlib>
+#import <web>
+
+int main() {
+    Result<HttpResponse, Error> r = Web::get("https://example.org/", "");     // url, extra header lines ("" for none)
+    switch r {
+        Result::Ok(a): {
+            cout << "status " << a.status << ", " << a.body.len << " bytes\n";
+            cout << "type: " << a.header("content-type") << "\n";             // a header of the answer, any case
+        }
+        Result::Err(e): { cout << "no answer: " << e.message << "\n"; }
+    }
+    return 0;
+}
+```
+
+ส่งข้อมูล: `Web::post_json(url, headers, json_text)`, `Web::post_form(url, headers, "a=1&b=2")` หรือ `Web::request("PUT", url, headers, body)` header คือบรรทัดคั่นด้วย `\r\n`; `Web::url_encode(text)` ทำให้ข้อความปลอดภัยสำหรับใส่ในที่อยู่ ตามการเปลี่ยนเส้นทางให้ (สูงสุด 5 ครั้ง) ใช้ `https` ได้ หนึ่งคำขอใช้หนึ่งการเชื่อมต่อ
+
+```jk
+#import <stdlib>
+#import <web>
+
+// asks an API that answers with JSON and prints one field
+int main() {
+    String key = "my-secret-key";                                              // never write a real key in a file you share
+    Result<HttpResponse, Error> r = Web::post_json("https://example.org/api", "Authorization: Bearer " + key, "{\"question\":\"hello\"}");
+    switch r {
+        Result::Ok(a): {
+            if a.status >= 400 { cout << "the service said " << a.status << ": " << a.body << "\n"; return 1; }
+            Result<JsonDoc, Error> pj = Json::parse(a.body);
+            switch pj {
+                Result::Ok(d): {
+                    int n = d.get(0, "answer");                                 // 0 is the top object
+                    if n >= 0 { cout << d.text(n) << "\n"; }
+                }
+                Result::Err(e2): { cout << "not JSON\n"; }
+            }
+        }
+        Result::Err(e): { cout << "no answer: " << e.message << "\n"; }
+    }
+    return 0;
+}
+```
+
+**ลอง:** เปลี่ยนที่อยู่เป็นบริการที่คุณใช้; พิมพ์ `a.head` เพื่อดู header ทั้งหมด; ขอที่อยู่ที่ไม่มีอยู่จริงแล้วอ่าน status
+
+## บทที่ 68. บอตที่ตอบได้: `<telegram>` และ `<discord>`
+
+บอตคือโปรแกรมที่มีบัญชีในบริการแชต คุณสร้างบอตในบริการนั้น (Telegram: แชตกับ BotFather; Discord: developer portal) ได้ **token** (ข้อความลับยาวๆ: อย่าใส่ในไฟล์ที่แชร์หรือใน git อ่านจากตัวแปรสภาพแวดล้อมหรือไฟล์ที่มีแต่คุณอ่านได้) แล้วโปรแกรมคุยกับบริการผ่าน `<web>` ที่อยู่ข้างใต้
+
+```jk
+#import <stdlib>
+#import <telegram>
+
+int main() {
+    String token = "";
+    switch Env::get("TG_TOKEN") { Option::Some(t): { token = t + ""; } Option::None: { } }
+    if token.len == 0 { cout << "set TG_TOKEN first\n"; return 1; }
+    Telegram bot = Telegram::bot(token);
+    int next = 0;
+    while true {
+        switch bot.poll(next, 25) {                                  // waits up to 25 seconds for news (long polling)
+            Result::Ok(up): {
+                for i in 0..up.count() {
+                    TgMessage m = up.get(i);                         // m.chat  m.from  m.text
+                    bot.send(m.chat, "you said: " + m.text);
+                }
+                next = up.next;                                      // where to go on: the messages seen are not given again
+            }
+            Result::Err(e): { cout << "error: " << e.message << "\n"; return 1; }
+        }
+    }
+    return 0;
+}
+```
+
+`<discord>` ใช้แนวเดียวกัน `Discord::bot(token)`, `bot.send(channel, "ข้อความ")` และ `bot.messages(channel, last_id, 20)` (ข้อความล่าสุด เรียงเก่าไปใหม่ เก็บ `ms.last` ไว้ส่งครั้งหน้า) เลขของ Discord ใหญ่มาก ช่องและข้อความจึงเป็น **ข้อความ (text)** ต้องเปิด "Message Content Intent" ใน portal ไม่งั้นข้อความจะว่าง
+
+```jk
+#import <stdlib>
+#import <discord>
+
+int main() {
+    Discord bot = Discord::bot("TOKEN-of-the-bot");
+    switch bot.send("123456789012345678", "hello from J2K") {
+        Result::Ok(x): { cout << "sent\n"; }
+        Result::Err(e): { cout << "failed: " << e.message << "\n"; }         // Discord's own words: 401 = the token is wrong
+    }
+    return 0;
+}
+```
+
+กติกาของบอตที่ดี: ตอบเฉพาะคน (`by_bot` ของข้อความ Discord บอกได้) ไม่ถามถี่เกินไป (HTTP 429 แปลว่ารอ) ไม่พิมพ์ token ออกมา และทดสอบกับบอตของคุณเองในแชตของคุณเองก่อนเชิญไปที่อื่น
+
+## บทที่ 69. ข่าวสดๆ: WebSocket และ Gateway ของ Discord
+
+การถามซ้ำๆ ("polling") เสียเวลา **WebSocket** คือการเชื่อมต่อที่เปิดค้างไว้: เซิร์ฟเวอร์ส่งข้อความมาทันทีที่มี `<websocket>` สร้างให้: `Ws::connect("wss://host/path", "")` ได้ `WebSocket`; ใช้ `send_text`, `recv` (รอข้อความเต็มถัดไป) และ `recv_wait(ms)` (รอไม่เกิน `ms` มิลลิวินาที: kind 0 เมื่อยังไม่มีอะไรมา)
+
+```jk
+#import <stdlib>
+#import <websocket>
+
+int main() {
+    switch Ws::connect("wss://example.org/socket", "") {
+        Result::Ok(ws): {
+            ws.send_text("hello");
+            int waited = 0;
+            while waited < 10 {
+                WsMessage m = ws.recv_wait(1000);                   // one second at most
+                if m.kind == 0 { waited += 1; continue; }           // nothing yet: do something else, or wait again
+                if m.kind == 8 { cout << "closed: " << m.text << "\n"; break; }
+                cout << "got: " << m.text << "\n";                  // kind 1 text, 2 binary
+                break;
+            }
+            ws.close();
+        }
+        Result::Err(e): { cout << "cannot connect: " << e.message << "\n"; }
+    }
+    return 0;
+}
+```
+
+Gateway ของ Discord คือ WebSocket ที่มีกติกา (hello, identify, heartbeat ทุกไม่กี่วินาที) `<discord>` ทำกติกาให้: `Gw::connect(token, Gw::intents())` แล้ว `gw.next(1000)` ให้เหตุการณ์ทีละอัน (และส่ง heartbeat ภายใน จึงควรเรียกบ่อยๆ)
+
+```jk
+#import <stdlib>
+#import <discord>
+
+int main() {
+    String token = "TOKEN-of-the-bot";
+    Discord bot = Discord::bot(token);
+    switch Gw::connect(token, Gw::intents()) {
+        Result::Ok(gw): {
+            bool run = true;
+            while run {
+                DcEvent e = gw.next(1000);
+                if e.kind == "MESSAGE_CREATE" && !e.by_bot { bot.send(e.channel, "you said: " + e.text); }
+                if e.kind == "CLOSED" || e.kind == "RECONNECT" || e.kind == "INVALID_SESSION" { run = false; }
+            }
+        }
+        Result::Err(e): { cout << "cannot connect: " << e.message << "\n"; }
+    }
+    return 0;
+}
+```
+
+## บทที่ 70. ตัวเลขที่เรียนรู้ได้: tensor และ gradient
+
+โครงข่ายประสาทคือกองของการคูณที่ตัวเลขถูกปรับจนคำตอบถูก `<neuron>` ให้ชิ้นส่วนมา **`Tensor32`** คือตารางของ float 32 บิต (แถว x คอลัมน์) **`Graph`** จดการคำนวณไว้ เพื่อย้อนกลับไปบอกว่าตัวเลขแต่ละตัวควรเปลี่ยนอย่างไร (**gradient**)
+
+โปรแกรมเรียนรู้ที่เล็กที่สุด: หา `w` และ `b` ให้ `y = w x + b` พอดีกับจุดที่อยู่บน `y = 2x + 1`
+
+```jk
+#import <stdlib>
+#import <neuron>
+
+Graph g;                                         // a Graph is big: keep it in a global (do not pass it around by value)
+
+int main() {
+    g = Graph::make();
+    int w = g.param(Tensor32::zeros(1, 1));      // a parameter: a number that learns
+    int b = g.param(Tensor32::zeros(1, 1));
+    g.mark();                                    // what is made until now stays; what comes after is one step
+    double[] xv = arr(4);
+    xv.push(0.0); xv.push(1.0); xv.push(2.0); xv.push(3.0);
+    double[] yv = arr(4);
+    yv.push(1.0); yv.push(3.0); yv.push(5.0); yv.push(7.0);
+    Tensor32 xs = Tensor32::from_list(4, 1, xv);
+    Tensor32 ys = Tensor32::from_list(4, 1, yv);
+    for step in 0..300 {
+        int x = g.input(xs);
+        int guess = g.add(g.matmul(x, w), b);    // x @ w + b: the four guesses
+        int loss = g.mse(guess, ys);             // the mean of the squares of the errors
+        g.backward(loss);                        // the gradient of every parameter
+        g.sgd(0.1);                              // a small step downhill
+        g.clear();                               // forget the step, keep the parameters
+    }
+    cout << "w = " << g.value(w).get(0, 0) << "  b = " << g.value(b).get(0, 0) << "\n";    // near 2 and 1
+    return 0;
+}
+```
+
+ศัพท์: **loss** = คำตอบผิดแค่ไหน (ยิ่งน้อยยิ่งดี); **learning rate** = ขนาดก้าว (ที่นี่ 0.1 ใหญ่เกินจะกระโดดไปมา เล็กเกินจะช้ามาก); **backward** = หา gradient ด้วยกฎลูกโซ่จาก loss ไปถึงพารามิเตอร์ทุกตัว การดำเนินการของ `Graph`: `matmul`, `add` (ตารางแถวเดียวถูกบวกเข้าทุกแถว: bias), `mul`, `relu`, `tanh`, `sigmoid`, `gelu`, `silu`, `softmax_ce`, `mse`, `embed`, `layer_norm`, `rms_norm`, `attention`, `conv2d`, `maxpool` gradient ทุกตัวของไลบรารีถูกตรวจกับผลต่างเชิงตัวเลขในเทส คุณทำเองกับไอเดียของคุณได้ (เปลี่ยนเลขไป 0.01 ทั้งสองทางแล้วดูว่า loss เปลี่ยนตามที่ gradient บอก)
+
+**ลอง:** เปลี่ยน 300 เป็น 30 สเต็ปแล้วดู `w` หยุดก่อนถึง; เปลี่ยนจุดเป็น `y = -3x + 4`
+
+## บทที่ 71. สอนโครงข่าย: ชั้น, batch และ AdamW
+
+เซลล์ประสาทเดียวเรียนรู้เส้นตรง ถ้าจะเรียนเส้นโค้งหรือแยกคลาส ต้องมีหลายชั้นโดยมีส่วนโค้งคั่น **`Linear`** คือ `x @ w + b`; ระหว่างชั้นใส่ `tanh` (หรือ `relu`) ไม่งั้นทุกชั้นยุบเป็นเส้นตรงเส้นเดียว การทดสอบคลาสสิกคือ XOR ที่เส้นตรงเส้นเดียวทำไม่ได้
+
+```jk
+#import <stdlib>
+#import <neuron>
+
+Graph g;
+
+int main() {
+    g = Graph::make();
+    Linear l1 = g.linear(2, 8, 1);               // 2 numbers in, 8 out; the last number only seeds the start values
+    Linear l2 = g.linear(8, 1, 2);
+    g.mark();
+    double[] xv = arr(8);
+    xv.push(0.0); xv.push(0.0); xv.push(0.0); xv.push(1.0); xv.push(1.0); xv.push(0.0); xv.push(1.0); xv.push(1.0);
+    double[] yv = arr(4);
+    yv.push(0.0); yv.push(1.0); yv.push(1.0); yv.push(0.0);
+    Tensor32 xs = Tensor32::from_list(4, 2, xv);
+    Tensor32 ys = Tensor32::from_list(4, 1, yv);
+    double last = 0.0;
+    for step in 0..400 {
+        int h = g.tanh(g.apply(l1, g.input(xs)));
+        int out = g.sigmoid(g.apply(l2, h));                 // 0 .. 1
+        int loss = g.mse(out, ys);
+        last = (double)g.value(loss).d[0];
+        g.backward(loss);
+        g.adamw(0.05, 0.0);                                  // AdamW: a learning rate for each number, adjusted as it goes
+        g.clear();
+    }
+    cout << "loss " << last << "\n";
+    int h2 = g.tanh(g.apply(l1, g.input(xs)));
+    Tensor32 o = g.value(g.sigmoid(g.apply(l2, h2)));
+    for i in 0..4 { cout << xs.get(i, 0) << " xor " << xs.get(i, 1) << " = " << o.get(i, 0) << "\n"; }
+    g.save("xor.model");                                     // the parameters as a text file
+    return 0;
+}
+```
+
+เมื่อมีตัวอย่างมาก ให้ใช้ **mini-batch**: `shuffled(n, seed)` ให้ลำดับสลับของ `0..n-1`, `xs.gather(idx)` ดึงแถวเหล่านั้น `g.clip(5.0)` ย่อ gradient ที่ใหญ่เกิน และ `Sched::cosine(step, total, warm, lr, low)` ทำให้ learning rate ขึ้นใน `warm` สเต็ปแล้วลดแบบโคไซน์ ถ้าจะแยก **คลาส** ให้จบด้วย `g.softmax_ce(scores, classes)` (หนึ่งเลขคลาสต่อหนึ่งแถว) บันทึกและโหลด: `g.save(path)`, `g.load(path)` บนกราฟที่มีพารามิเตอร์เหมือนกัน
+
+**ระวัง:** loss ที่ไม่ลด (learning rate ใหญ่หรือเล็กเกิน), loss บนข้อมูลที่เรียนลดแต่ loss บนข้อมูลที่ไม่เคยเห็นไม่ลด (โมเดลแค่จำ: เพิ่มข้อมูลหรือลดขนาดโมเดล)
+
+## บทที่ 72. โมเดลภาษาที่คุณเทรนบนมือถือ
+
+โมเดลภาษาอ่านข้อความแล้วเรียนว่าตัวอักษร (หรือคำ) ถัดไปคืออะไร `Gpt` ใน `<neuron>` คือ GPT ตัวเล็ก: embedding, บล็อกที่มี attention (ทุกตำแหน่งมองตำแหน่งก่อนหน้า) และชั้นที่ให้คะแนนโทเคนถัดไป ทำงาน **ทีละไบต์** ภาษาไทย อังกฤษ และโค้ดจึงไม่ต้องมีตัวตัดคำ
+
+```jk
+#import <stdlib>
+#import <neuron>
+
+Gpt m;
+
+int main() {
+    String text = "the cat sat on the mat. the dog sat on the log. ";
+    String all = "";
+    for r in 0..40 { all = all + text; }
+    int[] data = Gpt::bytes(all);                            // the text as numbers 0-255
+    m = Gpt::make(256, 16, 32, 2, 1, 1);                     // vocabulary, context, width, heads, layers, seed
+    int seed = 1;
+    for step in 0..200 {
+        int[] starts = arr(5);                               // where in the text this batch of 4 sequences starts
+        for q in 0..4 { seed = (seed * 1103515245 + 12345) & 2147483647; starts.push(seed % (data.len - 20)); }
+        double loss = m.step(data, starts, 0.02, 0.0, 1.0);  // learning rate, weight decay, clip
+        if step % 50 == 0 { cout << "step " << step << " loss " << loss << "\n"; }
+    }
+    cout << "[" << m.write(Gpt::bytes("the cat s"), 24, 0.0, 0, 1) << "]\n";   // temperature 0: the most likely letter each time
+    m.save("cats.gpt");
+    return 0;
+}
+```
+
+เครื่องมือ `neuron` ทำสิ่งเดียวกันกับไฟล์หรือโฟลเดอร์ใดก็ได้: `neuron gpt train notes.txt`, `neuron gpt train docs/ size=medium minutes=10` แล้ว `neuron gpt write cats.gpt "the cat"` ระหว่างเทรนมันพิมพ์ loss **check** ที่วัดบนหนึ่งในสิบส่วนท้ายของข้อความที่ไม่เคยถูกเรียน: นั่นคือเลขที่ควรเชื่อ ถ้า loss บนข้อความที่เรียนลดแต่ check ไม่ลด แปลว่าโมเดลแค่จำ
+
+โมเดลที่เทรนบนมือถือมีเลขหลักพันถึงไม่กี่ล้านตัวและอ่านข้อมูลระดับเมกะไบต์ มันเรียนสไตล์และนิสัยของข้อความที่อ่าน (สไตล์โค้ด ภาษา โน้ตของคุณ) และเติมบรรทัดได้ แต่ไม่รู้จักโลกเหมือนโมเดลใหญ่ ใช้กับงานแคบๆ ด้วยข้อความของคุณเอง โดยมีการค้นหานำหน้าสำหรับข้อเท็จจริง
+
+## บทที่ 73. รันโมเดลที่คนอื่นทำ: GGUF และ `<llama>`
+
+โมเดลใหญ่ถูกเทรนที่อื่นแล้วแจกเป็นไฟล์ **GGUF** (รูปแบบของ llama.cpp) `<gguf>` อ่านมัน (ส่วนหัว คำ ตารางตัวเลข) และ `<llama>` รันตระกูล Llama บน CPU: RMS norm, ตำแหน่งแบบหมุน, grouped-query attention, feed-forward แบบมีประตู และแคชที่จำโทเคนก่อนหน้า น้ำหนักมักถูก **quantise** (Q8_0, Q4_0: หนึ่งไบต์หรือสี่บิตต่อน้ำหนัก พร้อมสเกลทุก 32 ตัว): ไฟล์เล็กลง 4–8 เท่า และเมื่อเก็บเป็นไบต์ในหน่วยความจำ การคูณอ่านหน่วยความจำน้อยลง 4 เท่า (ขีดจำกัดของมือถือคือแบนด์วิดท์หน่วยความจำ ไม่ใช่ความเร็วคูณ) การคูณใช้คำสั่ง int8 dot ของชิป (`i8x16` บทที่ 74)
+
+```jk
+#import <stdlib>
+#import <llama>
+
+int main() {
+    switch Lm::load("stories15M-q4_0.gguf") {                // from huggingface.co/ggml-org/tiny-llamas (19 MB)
+        Result::Ok(m): {
+            int[] ids = m.encode("Once upon a time");        // token numbers, the start token first
+            String story = m.generate(ids, 80, 0.8, 40, 0.95, 1);    // 80 new tokens: temperature, top-k, top-p, seed
+            cout << "Once upon a time" << story << "\n";
+        }
+        Result::Err(e): { cout << "cannot load: " << e.message << "\n"; }
+    }
+    return 0;
+}
+```
+
+อุณหภูมิกำหนดว่าเลือกกล้าแค่ไหน (0 = เลือกโทเคนที่น่าจะเป็นที่สุดเสมอ); `top-k` เก็บ k ตัวดีที่สุด `top-p` เก็บตัวดีที่รวมกันได้โอกาส p; seed เดียวกันได้ข้อความเดียวกัน ถ้าจะทีละโทเคน ใช้ `m.step(token)` (ให้คะแนนของโทเคนถัดไป) และ `m.sample(scores, temp, top_k, top_p)` จากเชลล์: `neuron llama MODEL.gguf "start"` และ `neuron bench MODEL.gguf` (โทเคนต่อวินาที) บน Kirin 990 โมเดล 15 ล้านตัวเขียนได้ราว 120 โทเคนต่อวินาที; โมเดล 500 ล้านตัวต้องอ่านหน่วยความจำหนึ่งในสี่กิกะไบต์ต่อโทเคน จึงได้แค่ไม่กี่โทเคนต่อวินาทีจนกว่าหน่วยความจำจะเร็วขึ้น
+
+## บทที่ 74. โค้ดที่เร็ว: ภาษามีต้นทุนเท่าไรและขอความเร็วอย่างไร
+
+วัดก่อนแก้ `bench/lang.jk` ใน repository วัดต้นทุนเล็กๆ บนมือถือของคุณ ผลบน Kirin 990 (หนึ่งคอร์):
+
+| อะไร | ต้นทุน |
+|---|---|
+| `s += a[i]` บน `int[]` (มีเช็ก) / ผ่านพอยน์เตอร์ `int^` | 1.4 ns / 1.0 ns: การเช็กกินราว 40 % |
+| `f += xs[i]` บน `float[]` | 4 ns: ตอนนี้ float ช้ากว่าจำนวนเต็ม (จุดอ่อนที่รู้แล้ว) |
+| เรียกฟังก์ชันเล็ก | 2 ns |
+| อ่านอาร์เรย์ใหญ่ 8 ล้านครั้ง: ต่อเนื่อง / ห่าง 16 ตัว / สุ่ม | 2.5 / 6.5 / 23 ns ต่อครั้ง: **แคชเป็นตัวตัดสิน** |
+
+สามนิสัยที่คุ้มเสมอ: **เดินหน่วยความจำตามลำดับ** (ลูปในสุดวิ่งตามดัชนีที่อยู่ติดกัน), **ทำเป็นบล็อก** ที่พอดีแคช (การคูณเมทริกซ์ใน `<neuron>` ทำทีละสี่คอลัมน์สองแถว), และ **ให้ชิปทำหลายตัวเลขพร้อมกัน** `<simd>` มีเวกเตอร์ขนาดหนึ่งรีจิสเตอร์: `f32x4` (float สี่ตัว), `i32x4`, `f64x2` และ `i8x16` (สิบหกไบต์)
+
+```jk
+#import <stdlib>
+#import <simd>
+
+// the dot product of two float arrays, four numbers at a time
+float dot(float^ a, float^ b, int n) {            // n a multiple of 4
+    f32x4 acc = {0.0, 0.0, 0.0, 0.0};
+    int i = 0;
+    while i < n {
+        acc = acc + f32x4::load(a, i) * f32x4::load(b, i);     // one load and one multiply-add for four numbers
+        i += 4;
+    }
+    return acc.sum();
+}
+
+int main() {
+    float[] a = arr(1001);
+    float[] b = arr(1001);
+    for i in 0..1000 { a.push((float)i * 0.001); b.push(2.0); }
+    cout << dot(@a[0], @b[0], 1000) << "\n";     // 999
+    return 0;
+}
+```
+
+`i8x16` มีอีกอย่างคือ `a.dot(b)`: dot product ของสิบหกไบต์กับสิบหกไบต์ได้ผลบวก 32 บิตสี่ตัวใน **คำสั่งเดียว** (SDOT ของ Cortex-A76) มันทำให้โมเดล quantise เร็ว: `i32x4 d = i8x16::load(w, i).dot(i8x16::load(x, i));` ให้ฟังก์ชันที่ใช้เวกเตอร์เล็กและไม่มีการเรียกฟังก์ชันในลูป คอมไพเลอร์จะได้เก็บเวกเตอร์ทุกตัวในรีจิสเตอร์ (ดูด้วย `jcmp -show NAME file.jk` และ `jcmp -irstat file.jk`) และเปรียบเทียบกับ C ธรรมดาเมื่อสำคัญ: เป้าของ J2K คือห่างจาก C ไม่กี่เท่า และเลขใน `bench/` บอกว่าตอนนี้อยู่ตรงไหน
+
+## บทที่ 75. โปรแกรมและไลบรารีจากเน็ต: `jc`
+
+`jc` นำของมาที่มือถือ สี่ชนิด หนึ่งคำสั่งต่อชนิด:
+
+```text
+jc install NAME          a tool of Jcmp-Tools (jsh, neuron, mulap, imgj ...), or a package (git, python, clang ...)
+jc tools                 the list of tools         jc update        every tool and package that has a newer version
+jc lib list              the libraries of J2K      jc lib install web telegram    a library for #import <name>
+jc pkg search git        look in the packages      jc pkg list | remove NAME
+jc install FILE.jc       a program of the Jaric store (it asks for the permissions it wants)
+```
+
+เครื่องมือ (tool) คือโปรแกรมเดี่ยวที่เขียนด้วย J2K (`jc install neuron`) **แพ็กเกจ (package)** คือโปรแกรมของคนอื่นที่สร้างให้ตรงกับ prefix ของแอป Jaric (`jc install git`, `python`, `python-pip`, `clang`, `dropbear`): แตกลงใน prefix และจดรายการไว้ใน `usr/var/lib/jcpkg/ชื่อ.list` เพื่อให้ `jc pkg remove ชื่อ` เอาออกได้พอดีกับที่ใส่ ไลบรารีคือไฟล์เดียว (`#import <ชื่อ>`): `jc lib install ชื่อ` วางไฟล์ในที่ที่คอมไพเลอร์หา ทุกอย่างถูกตรวจ SHA-256 ก่อนวางลงที่ ถ้า checksum ผิดจะไม่ติดตั้งอะไรเลย
+
+ถ้าจะแชร์เครื่องมือของคุณ: โฟลเดอร์ที่มีโปรแกรม `build.sh`, `test.sh`, `README.md`, `CHANGELOG.md`, `VERSION` ทดสอบ ปล่อยแบบที่ repository Jcmp-Tools ทำ และบรรทัดใน `tools.txt` ทำให้ `jc install` หาเจอ เครื่องมือและไลบรารีทุกตัวต้องมี README ที่บอกว่าคืออะไร ติดตั้งอย่างไร และใช้อย่างไรพร้อมตัวอย่างที่ใช้ได้จริง: เมื่ออ่าน README ที่ไม่สอนอะไร ให้แก้ README
+
+# ภาค 4: จากตัวเลขสู่เครื่อง
+
+## บทที่ 76. นับเลขฐาน 2 และฐาน 16
+
+คอมพิวเตอร์มีเลขแค่สองตัว 0 กับ 1 เพราะสายไฟมีแค่เปิดกับปิด เลข **ฐาน 2** เขียนด้วยสองตัวนี้: `1011` แปลว่า 1x8 + 0x4 + 1x2 + 1x1 = 11 หลักแต่ละหลักมีค่าเป็นสองเท่าของหลักทางขวา: 1, 2, 4, 8, 16, 32, 64, 128 ... หนึ่งหลักคือ **บิต** แปดบิตคือ **ไบต์** (0 ถึง 255) **ฐาน 16** (hex) มีสิบหกตัวคือ `0-9` กับ `a-f` และหนึ่งหลัก hex เท่ากับสี่บิตพอดี คนจึงอ่านไบต์เป็น hex: `0xB0` คือ `1011 0000`
+
+```jk
+#import <stdlib>
+
+// the number n as `width` bits, the highest first
+String bits(int n, int width) {
+    String s = "";
+    int i = width - 1;
+    while i >= 0 {
+        if ((n >> i) & 1) == 1 { s.push('1'); } else { s.push('0'); }
+        i -= 1;
+    }
+    return s;
+}
+
+// the number n as hex digits (at least `width` of them)
+String hex(int n, int width) {
+    String digits = "0123456789abcdef";
+    String s = "";
+    int i = width - 1;
+    while i >= 0 {
+        int d = (n >> (4 * i)) & 15;
+        s.push(digits[d]);
+        i -= 1;
+    }
+    return s;
+}
+
+int main() {
+    for n in 0..9 { cout << n << " = " << bits(n, 8) << " = 0x" << hex(n, 2) << "\n"; }
+    cout << "255 = " << bits(255, 8) << " = 0x" << hex(255, 2) << "\n";
+    cout << "256 = " << bits(256, 9) << " = 0x" << hex(256, 3) << "\n";
+    int x = 0;
+    for i in 0..8 { x = x * 2 + (i % 2); }                  // shifting left and adding a bit is how a number is read digit by digit
+    cout << x << " = " << bits(x, 8) << "\n";                // 01010101 = 85
+    return 0;
+}
+```
+
+`n >> i` เลื่อนบิตไปทางขวา `i` ที่ `& 1` เก็บบิตล่างสุด ดังนั้น `(n >> i) & 1` คือบิตที่ `i` การคูณสองเลื่อนบิตทั้งหมดไปซ้ายหนึ่งที่ (`n << 1`) การหารสองเลื่อนไปขวา ไบต์มี 8 บิต `short` มี 16 `int` ของ J2K มี 64
+
+**ลอง:** พิมพ์ยกกำลังของสองถึง 2^16 เป็นฐานสองและ hex; เขียนฟังก์ชันที่แปลงข้อความ `"1011"` เป็น 11
+
+## บทที่ 77. จำนวนลบ: two's complement
+
+จำนวนลบทำจากบิตอย่างไร? CPU ใช้ **two's complement**: ถ้ามี 8 บิต -1 คือ `11111111`, -2 คือ `11111110`, ... -128 คือ `10000000` บิตสูงสุดคือเครื่องหมาย (1 = ลบ) และมีค่า -128 แทน +128 กฎการกลับเครื่องหมาย: **พลิกทุกบิตแล้วบวกหนึ่ง** ทำให้ `x + (-x)` เป็นศูนย์ทั้งหมดกับตัวทดที่ตกหายไป วงจรบวกตัวเดียวจึงบวกทั้งเลขบวกและลบ และการลบไม่ต้องมีชิ้นส่วนใหม่
+
+```jk
+#import <stdlib>
+
+String bits(int n, int width) {
+    String s = "";
+    int i = width - 1;
+    while i >= 0 {
+        if ((n >> i) & 1) == 1 { s.push('1'); } else { s.push('0'); }
+        i -= 1;
+    }
+    return s;
+}
+
+int main() {
+    for n in 0..4 { cout << "-" << n << " in 8 bits: " << bits(-n, 8) << "\n"; }       // 00000000 11111111 11111110 11111101
+    int five = 5;
+    int flipped = five xor 255;                     // every bit of the 8 turned over
+    cout << "flip 5: " << bits(flipped, 8) << "  plus one: " << bits((flipped + 1) & 255, 8) << " = " << bits(-5, 8) << "\n";
+    i8 small = 127;                                  // the biggest i8
+    small += 1;                                      // one more wraps round to the smallest
+    cout << "127 + 1 in an i8 = " << small << "\n";
+    u8 byte = 200;
+    byte += 100;                                     // 300 does not fit: 300 - 256
+    cout << "200 + 100 in a u8 = " << byte << "\n";
+    cout << "the same bits, two meanings: " << bits(200, 8) << " is 200 as u8, " << (200 - 256) << " as i8\n";
+    return 0;
+}
+```
+
+`int` ของ J2K มี 64 บิต เลขที่เล็กสุดคือ -2^63 ใหญ่สุด 2^63 - 1 บวกหนึ่งจากเลขที่ใหญ่สุดจะวนไปเป็นเลขเล็กสุด `i8`, `i16`, `i32` และ `u8` ... `u64` (บทที่ 54) แสดงเรื่องเดียวกันในขนาดเล็กกว่า เมื่อขยายเลขมีเครื่องหมายขนาดเล็กให้กว้างขึ้น บิตเครื่องหมายถูกคัดลอกไปที่ใหม่ (**sign extension**): `11111110` แบบ 8 บิตกับ `1111111111111110` แบบ 16 บิตต่างก็คือ -2
+
+**ลอง:** 100 + 100 ใน i8 และ 0 - 1 ใน u8 ได้เท่าไร? ลองคิดด้วยมือจากบิตก่อน
+
+## บทที่ 78. ตัวเลขมีจุด: ข้างใน
+
+`double` คือ 64 บิตแบ่งเป็นสามส่วน (**IEEE 754**): 1 บิตเครื่องหมาย, 11 บิตเลขชี้กำลัง, 52 บิตเศษ ค่าคือ `(-1)^เครื่องหมาย x 1.เศษ x 2^(เลขชี้กำลัง - 1023)` `float` มี 1 + 8 + 23 บิต ตัวเลขที่ float เก็บได้จึงไม่กระจายเท่ากัน: ระหว่าง 1 ถึง 2 มีจำนวนเท่ากับระหว่าง 1024 ถึง 2048 และเลขอย่าง 0.1 เขียนแบบฐานสองได้ไม่พอดี (เหมือน 1/3 ในฐานสิบ) นั่นคือเหตุผลที่ `0.1 + 0.2` ไม่เท่ากับ `0.3` พอดี
+
+```jk
+#import <stdlib>
+
+String bits(int n, int width) {
+    String s = "";
+    int i = width - 1;
+    while i >= 0 {
+        if ((n >> i) & 1) == 1 { s.push('1'); } else { s.push('0'); }
+        i -= 1;
+    }
+    return s;
+}
+
+void show(double d) {
+    int^ p = (int^)@d;                               // the same 8 bytes, looked at as a whole number
+    int raw = p[0];
+    int sign = (raw >> 63) & 1;
+    int exponent = (raw >> 52) & 2047;
+    int fraction = raw & 4503599627370495;           // the lowest 52 bits
+    cout << d << ": sign " << sign << ", exponent " << bits(exponent, 11) << " (" << exponent - 1023 << "), fraction " << bits(fraction >> 40, 12) << "...\n";
+}
+
+int main() {
+    show(1.0);
+    show(2.0);
+    show(0.5);
+    show(-6.0);                                      // -1.5 x 2^2
+    show(0.1);
+    double s = 0.1 + 0.2;
+    if s == 0.3 { cout << "0.1 + 0.2 is 0.3\n"; } else { cout << "0.1 + 0.2 is not exactly 0.3\n"; }
+    return 0;
+}
+```
+
+เปรียบเทียบตัวเลขที่วัดมาด้วยช่วงคลาดเคลื่อนเล็กๆ (`abs(a - b) < 0.000001`) อย่าใช้ `==` และอย่าบวกเลขเล็กมากเข้ากับเลขใหญ่มาก: เลขเล็กจะหาย เพราะเศษมีแค่ 52 บิต (`1e16 + 1.0` ได้ `1e16`)
+
+**ลอง:** แสดงบิตของ 3.0 แล้วหาเครื่องหมาย เลขชี้กำลัง และเศษด้วยมือ; หา `x` ที่เล็กที่สุดที่ `1.0 + x == 1.0` (เริ่มจาก 1.0 แล้วหารสองไปเรื่อยๆ)
+
+## บทที่ 79. จากประตูตรรกะสู่ตัวบวก
+
+CPU ทำจาก **ประตู (gate)**: AND, OR, XOR, NOT และบวกได้ด้วยประตูเหล่านี้ การบวกสองบิต `a + b` ได้บิตผลบวกและบิตทด: ผลบวกคือ `a xor b` ทดคือ `a and b` (**half adder**) ถ้ามีตัวทดเข้ามาด้วยก็เป็น **full adder** และแปดตัวต่อกัน แต่ละตัวส่งตัวทดให้ตัวถัดไป บวกสองไบต์ได้ (**ripple adder**) นี่คือคำสั่ง `add` ในซิลิคอน
+
+```jk
+#import <stdlib>
+
+// one full adder: three bits in (a, b and the carry from the right), two bits out
+// the sum goes in sum[0], the carry out is the result
+int full_adder(int a, int b, int carry_in, int^ sum) {
+    int x = a xor b;
+    sum[0] = x xor carry_in;
+    return (a & b) | (x & carry_in);
+}
+
+// two 8-bit numbers added with eight full adders in a row
+int add8(int a, int b) {
+    int result = 0;
+    int carry = 0;
+    int sum[1];
+    for i in 0..8 {
+        carry = full_adder((a >> i) & 1, (b >> i) & 1, carry, @sum[0]);
+        result = result | (sum[0] << i);
+    }
+    return result;                                   // a carry out of the last place falls off, as in a u8
+}
+
+// the multiplier of school: shift and add
+int mul8(int a, int b) {
+    int result = 0;
+    for i in 0..8 {
+        if ((b >> i) & 1) == 1 { result = add8(result, (a << i) & 255); }
+    }
+    return result;
+}
+
+int main() {
+    cout << add8(100, 55) << " " << add8(200, 100) << " " << add8(255, 1) << "\n";      // 155 44 0
+    int bad = 0;
+    for a in 0..256 { for b in 0..256 { if add8(a, b) != (a + b) & 255 { bad += 1; } } }
+    cout << "all 65536 sums agree with +: " << (bad == 0) << "\n";
+    cout << mul8(12, 11) << " " << mul8(20, 20) << "\n";                                  // 132 144 (400 wraps)
+    return 0;
+}
+```
+
+CPU จริงทำทั้งแปด (หรือ 64) หลักพร้อมกันด้วยวงจรฉลาดชื่อ **carry-lookahead** ตัวทดจึงไม่ต้องเดินผ่านทุกหลัก แต่แนวคิดเหมือนกัน และคุณจะเห็นว่าทำไม `a + b` ใช้รอบเดียวส่วนการหารไม่ใช่
+
+**ลอง:** สร้างตัวลบจาก `add8` (กลับเครื่องหมายด้วยกฎของบทที่ 77: พลิกแล้วบวกหนึ่ง); สร้างตัวเปรียบเทียบ 4 บิตด้วยประตูเท่านั้น
+
+## บทที่ 80. CPU จิ๋วของเราเอง
+
+โปรเซสเซอร์ทำอะไร? มันวนสามขั้นตอนไม่สิ้นสุด: **fetch** อ่านคำสั่งถัดไปจากหน่วยความจำที่ตำแหน่งของ **program counter**, **decode** ถอดความ (ทำอะไร ใช้รีจิสเตอร์ไหน), **execute** ทำ ด้านล่างคือ CPU ทั้งตัวในไม่กี่บรรทัด: รีจิสเตอร์สี่ตัว หน่วยความจำเป็นไบต์ และเจ็ดคำสั่ง แต่ละคำสั่งมีหนึ่งไบต์บอกการทำงานแล้วตามด้วยตัวเลขหนึ่งหรือสองไบต์ นี่คือ **เครื่องเสมือน (virtual machine)** ชิปจริงก็เรื่องเดียวกันแต่มีคำสั่งมากกว่าและเร็วกว่า
+
+| opcode | ความหมาย |
+|---|---|
+| 1 r n | `r = n` (ใส่เลข) |
+| 2 r s | `r = r + s` (บวกรีจิสเตอร์ s) |
+| 3 r s | `r = r - s` |
+| 4 r n | `ถ้า r != 0 ให้ pc = n` (กระโดด) |
+| 5 r | พิมพ์รีจิสเตอร์ r |
+| 6 | หยุด |
+
+```jk
+#import <stdlib>
+
+int[] mem;                                           // the program, as bytes
+int reg[4];
+int pc;
+
+// one step: fetch, decode, execute; false after the instruction "stop"
+bool step() {
+    int op = mem[pc];                                // fetch
+    if op == 1 { reg[mem[pc + 1]] = mem[pc + 2]; pc += 3; }                          // r = n
+    else if op == 2 { reg[mem[pc + 1]] += reg[mem[pc + 2]]; pc += 3; }              // r = r + s
+    else if op == 3 { reg[mem[pc + 1]] -= reg[mem[pc + 2]]; pc += 3; }              // r = r - s
+    else if op == 4 { if reg[mem[pc + 1]] != 0 { pc = mem[pc + 2]; } else { pc += 3; } }   // jump if not zero
+    else if op == 5 { cout << "r" << mem[pc + 1] << " = " << reg[mem[pc + 1]] << "\n"; pc += 2; }
+    else { return false; }                           // 6 (or anything else): stop
+    return true;
+}
+
+int main() {
+    mem = arr(32);
+    // r0 = 0 (the sum), r1 = 5 (the counter), r2 = 1: add the counter to the sum, count down, until the counter is 0
+    int[] program = arr(24);
+    program.push(1); program.push(0); program.push(0);          //  0: r0 = 0
+    program.push(1); program.push(1); program.push(5);          //  3: r1 = 5
+    program.push(1); program.push(2); program.push(1);          //  6: r2 = 1
+    program.push(2); program.push(0); program.push(1);          //  9: r0 = r0 + r1
+    program.push(3); program.push(1); program.push(2);          // 12: r1 = r1 - r2
+    program.push(4); program.push(1); program.push(9);          // 15: if r1 != 0 then jump to 9
+    program.push(5); program.push(0);                           // 18: print r0
+    program.push(6);                                            // 20: stop
+    for i in 0..program.len { mem.push(program[i]); }
+    pc = 0;
+    int steps = 0;
+    while step() { steps += 1; }
+    cout << "ran " << steps << " instructions\n";                // the sum 5+4+3+2+1 = 15 printed once
+    return 0;
+}
+```
+
+โปรแกรมทุกตัวคือตัวเลขในหน่วยความจำ CPU ไม่รู้ว่าไบต์ไหนเป็นโค้ดไบต์ไหนเป็นข้อมูล program counter เป็นคนตัดสิน นี่คือเหตุผลที่บั๊กทำให้ข้อมูลของคุณถูกรันเป็นโค้ดได้ และเหตุผลที่การ **กระโดด** (เปลี่ยน `pc`) คือทั้งหมดของลูปและ `if` ในระดับนี้ เครื่องจิ๋วนี้เรียกฟังก์ชันไม่ได้: ถ้าเพิ่มรีจิสเตอร์เก็บที่อยู่กลับ (**link register**, คือ `x30` ใน ARM64) กับสองคำสั่ง `call n` และ `ret` ก็ทำได้
+
+**ลอง:** เพิ่มคำสั่ง `7 r s` ที่คูณ; เขียนโปรแกรมที่ใช้มันคำนวณ 5 x 4 x 3; เพิ่มคำสั่งหน่วยความจำ `load r a` / `store r a`
+
+## บทที่ 81. assembler สำหรับ CPU จิ๋ว
+
+ตัวเลขอ่านยากสำหรับคน จึงมี **assembler** แปลงข้อความอย่าง `add r0, r1` เป็นตัวเลข (**machine code**) มันอ่านบรรทัด ค้นคำ (**mnemonic**) อ่านตัวถูกดำเนินการแล้วเขียนไบต์ ป้ายชื่อ (ชื่อของตำแหน่ง) ต้องแก้ในรอบที่สองเพราะการกระโดดอาจไปข้างหน้า ด้านล่างคือตัวเล็กสำหรับเครื่องของบทที่ 80
+
+```jk
+#import <stdlib>
+
+// the register number of "r2": 2 (or -1)
+int reg_of(String w) {
+    if w.len == 2 && w[0] == 'r' && w[1] >= '0' && w[1] <= '3' { return w[1] - '0'; }
+    return -1;
+}
+
+// the lines of a program, one instruction each: "load r1, 5" "add r0, r1" "sub r1, r2" "jnz r1, loop" "print r0" "stop", and "name:" for a label
+// returns the bytes, or an empty array when a line is wrong (the message says which)
+int[] assemble(String[] lines) {
+    String[] labels = arr(8);
+    int[] at = arr(8);
+    int[] out = arr(64);
+    int[] none = arr(1);
+    for pass in 0..2 {                                       // pass 0 finds where the labels are, pass 1 writes the bytes
+        out = arr(64);
+        for k in 0..lines.len {
+            String line = lines[k].trim();
+            if line.len == 0 { continue; }
+            if line[line.len - 1] == ':' {
+                if pass == 0 { labels.push(line.slice(0, line.len - 1) + ""); at.push(out.len); }
+                continue;
+            }
+            String[] w = line.replace(",", " ").split(" ");
+            String[] p = arr(4);
+            for i in 0..w.len { if w[i].len > 0 { p.push(w[i] + ""); } }
+            String m = p[0];
+            if m == "load" { out.push(1); out.push(reg_of(p[1])); out.push(p[2].to_int()); }
+            else if m == "add" { out.push(2); out.push(reg_of(p[1])); out.push(reg_of(p[2])); }
+            else if m == "sub" { out.push(3); out.push(reg_of(p[1])); out.push(reg_of(p[2])); }
+            else if m == "jnz" {
+                int target = -1;
+                for j in 0..labels.len { if labels[j] == p[2] { target = at[j]; } }
+                if target < 0 && pass == 1 { cout << "unknown label " << p[2] << "\n"; return none; }
+                out.push(4); out.push(reg_of(p[1])); out.push(target);
+            }
+            else if m == "print" { out.push(5); out.push(reg_of(p[1])); }
+            else if m == "stop" { out.push(6); }
+            else { cout << "unknown instruction " << m << " in the line: " << line << "\n"; return none; }
+        }
+    }
+    return out;
+}
+
+int main() {
+    String[] src = arr(12);
+    src.push("load r0, 0"); src.push("load r1, 5"); src.push("load r2, 1");
+    src.push("again:");
+    src.push("add r0, r1"); src.push("sub r1, r2"); src.push("jnz r1, again");
+    src.push("print r0"); src.push("stop");
+    int[] code = assemble(src);
+    String line = "";
+    for i in 0..code.len { line = line + str(code[i]) + " "; }
+    cout << code.len << " bytes: " << line << "\n";           // the program of lesson 80
+    String[] bad = arr(2);
+    bad.push("jump somewhere");
+    assemble(bad);                                            // unknown instruction jump in the line: jump somewhere
+    return 0;
+}
+```
+
+assembler จริงของ J2K เป็นเรื่องเดียวกัน (`jcmp/jc_asm.j`) แต่คำสั่งเป็นของ ARM64: แต่ละคำสั่งคือคำ 32 บิตเดียวที่มีช่องสำหรับการทำงานและรีจิสเตอร์ (บทที่ 82) มันต้องเลือกระหว่างหลายรูปแบบของ mnemonic เดียว (กระโดดสั้นกับยาว) และเช็กว่าตัวเลขพอดีกับช่อง: assembler ที่ดีจะบอกว่า "เลขไม่พอดี" แทนที่จะเขียนคำที่ผิด
+
+**ลอง:** เพิ่มคำสั่ง `mul`; ทำให้ assembler บอกเลขบรรทัดที่ผิด; เขียน "disassembler" ที่แปลงไบต์กลับเป็นข้อความ
+
+## บทที่ 82. ของจริง: คำสั่ง ARM64 เป็น 32 บิต
+
+ทุกคำสั่งของ CPU ARM64 ในมือถือยาว **32 บิต** พอดี แบ่งเป็นช่อง `add x1, x1, x2` (บวกรีจิสเตอร์ 64 บิต) คือ:
+
+```
+ 31 30 29 28-24 23-22 21 20-16  15-10  9-5  4-0
+  1  0  0 01011  00    0  Rm    000000  Rn   Rd        =  0x8B000000 | (Rm << 16) | (Rn << 5) | Rd
+```
+
+`Rm` = 2, `Rn` = 1, `Rd` = 1 ได้ `0x8B020021` โปรแกรมสร้างคำนี้เองแล้วเทียบกับเลขที่ assembler ของคอมไพเลอร์ทำได้ (บทที่ 38 แสดงวิธี `raw<u32>[...]` ใส่คำลงในโค้ด)
+
+```jk
+#import <stdlib>
+
+String hex(int n, int width) {
+    String digits = "0123456789abcdef";
+    String s = "";
+    int i = width - 1;
+    while i >= 0 { s.push(digits[(n >> (4 * i)) & 15]); i -= 1; }
+    return s;
+}
+
+// add xd, xn, xm  (64 bits)
+int encode_add(int d, int n, int m) { return 0x8B000000 | (m << 16) | (n << 5) | d; }
+
+// sub xd, xn, xm
+int encode_sub(int d, int n, int m) { return 0xCB000000 | (m << 16) | (n << 5) | d; }
+
+// mov xd, #imm16  (movz: the number in bits 5-20)
+int encode_movz(int d, int imm) { return 0xD2800000 | (imm << 5) | d; }
+
+int main() {
+    cout << "add x1, x1, x2  = 0x" << hex(encode_add(1, 1, 2), 8) << "\n";     // 8b020021
+    cout << "sub x0, x3, x4  = 0x" << hex(encode_sub(0, 3, 4), 8) << "\n";     // cb040060
+    cout << "mov x5, #1000   = 0x" << hex(encode_movz(5, 1000), 8) << "\n";    // d2807d05
+    // run the word that we built: x1 = x1 + x2 through a raw machine word
+    int a = 40;
+    int b = 2;
+    int r = 0;
+    register {
+        in x1 = a;
+        in x2 = b;
+        raw<u32>[0x8b020021];                        // the word that encode_add(1, 1, 2) made
+        out x1 = r;
+    }
+    cout << a << " + " << b << " = " << r << " (done by the word)\n";
+    return 0;
+}
+```
+
+ดูโค้ดเครื่องที่คอมไพเลอร์ทำให้ฟังก์ชันของคุณด้วย `jcmp -show ชื่อ file.jk`: บรรทัดเหล่านั้นคือคำสั่งในรูปข้อความ และ `jcmp --emit-asm` เก็บข้อความทั้งหมด เพราะทุกคำสั่งขนาดเท่ากัน CPU จึงหาคำถัดไปได้ทันที (`pc + 4`) และถอดความหลายคำพร้อมกัน; CPU ที่คำสั่งยาวไม่เท่ากัน (x86) ต้องทำงานเพิ่มเพื่อหาว่าอันหนึ่งจบตรงไหน รีจิสเตอร์ `x0` ถึง `x7` เก็บอาร์กิวเมนต์ของการเรียนและ `x0` เก็บผลลัพธ์; `x29` คือเฟรม `x30` คือที่อยู่กลับ `sp` คือสแต็ก: บทที่ 35 ถึง 48 ใช้มัน
+
+**ลอง:** เข้ารหัส `ldr x0, [x1]` (`0xF9400020` คือ `ldr x0, [x1, #0]`: หาช่อง); รัน `jcmp -show` กับฟังก์ชันที่บวกสองจำนวน หา `add` ในนั้นแล้วถอดบิตด้วยมือ
+
 ## ต่อไป
 
 * [LANGUAGE.md](LANGUAGE.md) — ทุกความสามารถพร้อมตัวอย่าง (function pointer, ชนิด unsigned, `sizeof` ฯลฯ)

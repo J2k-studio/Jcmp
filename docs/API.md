@@ -1369,6 +1369,7 @@ struct Thread {
 //   i64x2 n = {1, 2};           n.x  n.y                      two 64-bit whole numbers
 //   f32x4 f = {1.0, 2.0, 3.0, 4.0};   f.x f.y f.z f.w         four floats
 //   i32x4 m = {1, 2, 3, 4};     m.x m.y m.z m.w               four 32-bit whole numbers
+//   i8x16 b = i8x16::load(p, 0);   b.dot(c)                    sixteen bytes; the dot product into four i32 lanes (SDOT)
 //
 // The lanes are named x y z w as in vec3. Steps S1-S3 of docs/syntax-design.md 59: the types, the operators, the loads and
 // stores of arrays (f64x2::load(a, i), v.store(a, i)).
@@ -1424,6 +1425,33 @@ struct i32x4 {
     i32 sum(self);
     i32 min(self);
     i32 max(self);
+}
+
+// sixteen bytes in one register (i8x16): the loads and stores are one 16-byte instruction; + and - work lane by lane (wrapping); a.dot(b) is the int8
+// dot product of the Cortex-A76 (SDOT): every 32-bit lane of the result is the sum of four products of bytes, the four lanes 0-3, 4-7, 8-11, 12-15.
+// It is what a quantised matrix product needs: 16 multiply-adds in one instruction. Index of load/store counts bytes (the array is an i8 or char array).
+struct i8x16 {
+    i8 l0;
+ i8 l1;
+ i8 l2;
+ i8 l3;
+ i8 l4;
+ i8 l5;
+ i8 l6;
+ i8 l7;
+    i8 l8;
+ i8 l9;
+ i8 l10;
+ i8 l11;
+ i8 l12;
+ i8 l13;
+ i8 l14;
+ i8 l15;
+
+    static i8x16 load(i8^ p, int i);
+    void store(self, i8^ p, int i);
+    // the meaning of dot (the compiler makes SDOT of it on aarch64)
+    i32x4 dot(self, i8x16 o);
 }
 ```
 

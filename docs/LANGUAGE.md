@@ -1144,6 +1144,23 @@ v.store(@a[0], 4);                        // a[4] = v.x, a[5] = v.y
 (`f64x2` and `i64x2` take an element of 8 bytes, `f32x4` (`float^`) and `i32x4` (`i32^`) of 4 bytes.) In a loop the vectors stay in NEON registers. `v.sum()`, `v.min()` and `v.max()` (0.9.121) give the sum, the smallest and the largest lane (`sum()` of four lanes is `(x + y) + (z + w)`).
 
 
+### `i8x16` and the dot product (1.2.6.0)
+
+`i8x16` is sixteen bytes in one register (`i8` lanes), made for quantised numbers (neural networks, sound). `i8x16::load(i8^ p, i)` and `v.store(p, i)` move 16 bytes (the index counts bytes), `+` and `-` work lane by lane (wrapping round), and `a.dot(b)` is the **int8 dot product** of the CPU (`SDOT`, the Cortex-A76 and newer): every 32-bit lane of the `i32x4` result is the sum of four products of bytes (lanes 0-3, 4-7, 8-11, 12-15), 16 multiply-adds in one instruction. Not on the ARM32 target (the compiler says so).
+```jk
+#import <simd>
+int main() {
+    i8[] a = arr(16);
+    i8[] b = arr(16);
+    for i in 0..16 { a.push((i8)(i + 1)); b.push((i8)2); }
+    i8x16 x = i8x16::load(@a[0], 0);
+    i8x16 y = i8x16::load(@b[0], 0);
+    i32x4 d = x.dot(y);                 // four sums of four products
+    cout << d.sum() << "\n";            // 2 * (1 + 2 + ... + 16) = 272
+    return 0;
+}
+```
+
 
 ## Looking at the code, and keeping it short
 

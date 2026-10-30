@@ -735,6 +735,7 @@ int fowned[16384];           // 1 if the function returns memory it owned (retur
 int fcharret[16384];            // 1 if the function returns a char: cout prints the result as a character
 int fret[16384];              // type of the result
 int fptid[131072];            // type of each parameter (8 per function)
+int fptid2[131072];           // type of the parameters 8 .. 15 (8 per function): an argument that goes on the stack is checked and converted like the others
 int fop[16384];               // 1 if the method was declared with the word `operator` (a + b calls a.add(b))
 int op_pending;              // the word `operator` was read in front of the method being declared
 int fself[16384];             // 1 if the function is a method with self (not static)
@@ -1648,6 +1649,12 @@ int parse_args() {
                 check_assign(fptid[pidx]);
                 arg_ctx_fi = 0 - 1;
             }
+            if pfi >= 0 && argno + pskip >= 8 && argno + pskip < 16 && argno + pskip < fnpar[pfi] {
+                arg_ctx_fi = pfi;
+                arg_ctx_no = argno + 1;
+                check_assign(fptid2[pfi * 8 + argno + pskip - 8]);          // a decimal number for a float parameter (the 9th, ...) is made a float, as for the first eight
+                arg_ctx_fi = 0 - 1;
+            }
             if psig >= 0 && argno < sig_n[psig] { check_assign(sig_p[psig * 16 + argno]); }
             if pfi >= 0 && argno + pskip < 8 && fptid[pfi * 8 + argno + pskip] >= 100 && ex_ty >= 100 && struct_has_free(ex_ty - 100) {
                 // a value that frees itself is moved into the call: a fresh value goes as it is, a local variable is
@@ -2353,15 +2360,26 @@ void gen_call() {
         // x0 = the result (load) or the value (store), x1 = the array, x2 = the index.
         if n != 3 { die("this simd function takes the array and the index"); }
         int smk = simd_mem_kind(@callee);
-        if smk == 1 || smk == 2 || smk == 5 || smk == 6 { emit_line("lsl x2, x2, #3"); } else { emit_line("lsl x2, x2, #2"); }
+        if smk == 1 || smk == 2 || smk == 5 || smk == 6 { emit_line("lsl x2, x2, #3"); } else if smk != 9 && smk != 10 { emit_line("lsl x2, x2, #2"); }
         emit_line("add x1, x1, x2");
-        if smk <= 4 {
+        if smk <= 4 || smk == 9 {
             emit_line("ldr q0, [x1]");
             emit_line("str q0, [x0]");
         } else {
             emit_line("ldr q0, [x0]");
             emit_line("str q0, [x1]");
         }
+        drop_args(n);
+        if tmp_off != 0 { ins_n("add x0, x29, #", tmp_off); }
+    } else if str_eq(@callee, "i8x16__dot") {
+        // a.dot(b) of two i8x16: the sum of the products of four bytes at a time into the four 32-bit lanes of an i32x4 (SDOT of the Cortex-A76).
+        // x0 = the result, x1 = a, x2 = b
+        if n != 3 { die("i8x16 dot takes one i8x16"); }
+        if x_target == 32 { die("i8x16 dot works on aarch64 only (ARM32 has no SDOT)"); }
+        emit_line("ldr q0, [x1]");
+        emit_line("ldr q1, [x2]");
+        emit_line("sdotz v2.4s, v0.16b, v1.16b");
+        emit_line("str q2, [x0]");
         drop_args(n);
         if tmp_off != 0 { ins_n("add x0, x29, #", tmp_off); }
     } else if vsl >= 0 {
@@ -4959,6 +4977,8 @@ int simd_mem_kind(char^ n) {
     if str_eq(n, "i64x2__store") { return 6; }
     if str_eq(n, "f32x4__store") { return 7; }
     if str_eq(n, "i32x4__store") { return 8; }
+    if str_eq(n, "i8x16__load") { return 9; }
+    if str_eq(n, "i8x16__store") { return 10; }
     return 0;
 }
 
@@ -4969,6 +4989,7 @@ int simd_kind(int lt) {
     if str_eq(n, "i64x2") { return 2; }
     if str_eq(n, "f32x4") { return 3; }
     if str_eq(n, "i32x4") { return 4; }
+    if str_eq(n, "i8x16") { return 5; }
     return 0;
 }
 
@@ -4986,9 +5007,10 @@ void emit_copy_call(int sidx) {
 // x0 = the address of the right value (or a number: the same number is used for every lane); the result is a temporary, x0 = its address
 void emit_simd_op(char^ op, int lt, int kind) {
     bool is_f = kind == 1 || kind == 3;
-    char arr[4];
-    str_copy(@arr, ".4s", 4);
-    if kind == 1 || kind == 2 { str_copy(@arr, ".2d", 4); }
+    char arr[8];
+    str_copy(@arr, ".4s", 8);
+    if kind == 1 || kind == 2 { str_copy(@arr, ".2d", 8); }
+    if kind == 5 { str_copy(@arr, ".16b", 8); }
     char ins[8];
     if str_eq(op, "+") { if is_f { str_copy(@ins, "fadd", 8); } else { str_copy(@ins, "add", 8); } }
     else if str_eq(op, "-") { if is_f { str_copy(@ins, "fsub", 8); } else { str_copy(@ins, "sub", 8); } }
@@ -5005,7 +5027,7 @@ void emit_simd_op(char^ op, int lt, int kind) {
     if scalar {
         if kind == 1 && rt != 91 && rt != 92 { die("a number for f64x2 must be a double"); }
         if kind == 3 && rt != 90 && rt != 92 { die("a number for f32x4 must be a float (write (float)x)"); }
-        if (kind == 2 || kind == 4) && !is_numeric(rt) { die("a number for a whole-number simd value must be an int"); }
+        if (kind == 2 || kind == 4 || kind == 5) && !is_numeric(rt) { die("a number for a whole-number simd value must be an int"); }
     }
     add_local("..result", 0, 16 + lt - 100, ssize[lt - 100], 0);
     int tmp_off = loff[lcount - 1];
@@ -5016,7 +5038,7 @@ void emit_simd_op(char^ op, int lt, int kind) {
     if scalar {
         emit_str("dup v1");
         emit_str(@arr);
-        if kind == 3 || kind == 4 { emit_line(", w0"); } else { emit_line(", x0"); }
+        if kind == 3 || kind == 4 || kind == 5 { emit_line(", w0"); } else { emit_line(", x0"); }
     } else {
         emit_line("ldr q1, [x0]");
     }

@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.2.6.0 (2026-10-30)
+* **Added (language):** `i8x16` in `<simd>`: sixteen bytes in one register (`load`, `store`, `+`, `-`) and `a.dot(b)`, the int8 dot product of the CPU (`SDOT`, 16 multiply-adds in one instruction), made as one instruction by the compiler (the lifter, the IR and the assembler know it; the pseudo instruction `sdotz`); tests `t558_i8x16_dot`. A quantised model product is 2-3 times faster with it (`<llama>`: 120 tokens a second for a 15 M model on a Kirin 990).
+* **Added (compiler):** four `IR_VDUP` of the same value (`{a, a, a, a}`) become one `dup` (P1 of docs/design/21-loop-speed.md); the lifter reads `.16b` vectors.
+* **Fixed:** an argument that goes to the 9th to 16th parameter of a function was not checked or converted (a decimal number for a `float` parameter became the bits of a `double`, so the function saw 0); it is now checked like the first eight (test `t560_many_params`). A load or a store of a `<simd>` type in a function that the tree path takes was a call of the plain function: those functions now use the text path that makes the 16-byte instruction.
+* **Added (libraries):** `neuron` 0.7.0 (float32 `Tensor32`, autograd `Graph`, AdamW, layers for text and images, `Gpt` that trains on the phone, faster kernels), `websocket` 0.2.0, `discord` 0.2.0 (the Gateway), `gguf` 0.2.0 and `llama` 0.2.0 (GGUF models with int8 products), `simd` with `i8x16`. Tests t544 to t560.
+* **Added (docs):** the tutorial has 82 lessons (67-75: the web, bots, WebSocket, tensors and gradients, training, a language model, GGUF models, fast code, `jc`; 76-82: binary and hex, negative numbers, floating point inside, gates and an adder, a tiny CPU, its assembler, an ARM64 instruction as 32 bits), `docs/DEVELOPING.md`, the cost of the language measured (`bench/lang.jk`, `tools/bench/langs`).
+
+
 ## 1.2.5.0 (2026-10-29)
 * **Added (libraries):** `web` 0.1.0 (an HTTP client for APIs: any method, headers, body, status, redirects, chunked answers, https), `telegram` 0.1.0 (a bot: `me`, `poll`, `send`) and `discord` 0.1.0 (a bot over REST: `send`, `messages`); tests t545-t547 run them against pretend servers (no real token in a test).
 * **Added (library):** `neuron` 0.2.0: `Tensor.matmul_fast` (float32, NEON dot products, 4 threads): 5-7 times faster than `matmul` on 128x128 and 256x256 tables (0.5 to 2.5 and 4.7 GFLOPS on a Kirin 990); `Dense` uses it; test t544.

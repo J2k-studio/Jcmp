@@ -308,6 +308,7 @@ int lf_vnum(int s, int k, char pre) {
         i += 1;
         if pt_o[o + i] == '2' && pt_o[o + i + 1] == 'd' && pt_o[o + i + 2] == 0 { lf_varr = 1; }
         else if pt_o[o + i] == '4' && pt_o[o + i + 1] == 's' && pt_o[o + i + 2] == 0 { lf_varr = 2; }
+        else if pt_o[o + i] == '1' && pt_o[o + i + 1] == '6' && pt_o[o + i + 2] == 'b' && pt_o[o + i + 3] == 0 { lf_varr = 3; }
         else { return 0 - 1; }
     } else if pt_o[o + i] != 0 {
         return 0 - 1;
@@ -512,6 +513,19 @@ int lf_line(int idx) {
             int qs = lf_emit(IR_STORE, 0, qbase, lf_qv[qn], 0, qoff);
             ir_w[qs] = 16;
         }
+        return 1;
+    }
+    if pt_mn(0, "sdotz") && pt_no[0] == 3 && lf_vnum(0, 0, 'v') >= 0 {
+        // sdotz vD.4s, vN.16b, vM.16b: D = the dot products of the bytes of N and M, four bytes into every 32-bit lane (the assembler makes SDOT of it)
+        int zd = lf_vnum(0, 0, 'v');
+        int zn = lf_vnum(0, 1, 'v');
+        int zm = lf_vnum(0, 2, 'v');
+        if zn < 0 || zm < 0 { return lf_fail("a vector instruction that is not understood"); }
+        if lf_qv[zn] == 0 || lf_qv[zm] == 0 { return lf_fail("a vector register that was not written in this block"); }
+        int zres = ir_vreg(2);
+        int ze = lf_emit(IR_VOP, zres, lf_qv[zn], lf_qv[zm], 0, 11);
+        ir_w[ze] = 2;
+        lf_qv[zd] = zres;
         return 1;
     }
     if pt_no[0] == 3 && lf_vnum(0, 0, 'v') >= 0 {
@@ -1676,6 +1690,17 @@ bool lw_instr(int i, int b) {
             return true;
         }
         int vk = ir_k[i];
+        if vk == 11 {
+            rg_text("sdotz v");
+            rg_int(lw_tmp_reg[d]);
+            rg_text(".4s, v");
+            rg_int(lw_tmp_reg[ir_a[i]]);
+            rg_text(".16b, v");
+            rg_int(lw_tmp_reg[ir_b[i]]);
+            rg_text(".16b");
+            rg_put(10);
+            return true;
+        }
         if vk == 0 { rg_text("fadd v"); }
         else if vk == 1 { rg_text("fsub v"); }
         else if vk == 2 { rg_text("fmul v"); }

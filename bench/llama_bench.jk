@@ -1,0 +1,50 @@
+#import <stdlib>
+#import <llama>
+// neuron bench for language models:  llama_bench model.gguf [tokens]
+// prints the time to load, the tokens per second (prompt and new tokens), the milliseconds per token and the memory of the program
+// (the energy per token needs the battery counters of Android, which a program of Termux cannot read: the app of Jaric will print it)
+String status_value(String key) {
+    Result<String, Error> r = Fs::read_text("/proc/self/status");
+    if !r.is_ok() { return "?"; }
+    String[] ls = r.take().split("\n");
+    for i in 0..ls.len {
+        if ls[i].starts_with(key) { return ls[i].slice(key.len, ls[i].len).trim() + ""; }
+    }
+    return "?";
+}
+void main() {
+    String[] a = Env::args();
+    if a.len < 2 { cout << "usage: llama_bench model.gguf [new tokens]\n"; return; }
+    int count = 64;
+    if a.len >= 3 { count = a[2].to_int(); }
+    int t0 = Time::now_ms();
+    switch Lm::load(a[1]) {
+        Result::Ok(m): {
+            int t1 = Time::now_ms();
+            cout << "model: " << m.embd << " wide, " << m.layers << " layers, " << m.heads << " heads (" << m.kv_heads << " kv), vocab " << m.vocab << "\n";
+            cout << "load: " << (t1 - t0) << " ms, memory after load: " << status_value("VmRSS:") << "\n";
+            int[] ids = m.encode("Once upon a time");
+            m.reset();
+            int p0 = Time::now_ms();
+            Tensor32 lg = Tensor32::zeros(1, 1);
+            for i in 0..ids.len { lg = m.step(ids[i]); }
+            int p1 = Time::now_ms();
+            int made = 0;
+            for k in 0..count {
+                if m.pos >= m.ctx { break; }
+                int t = m.sample(lg, 0.0, 0, 1.0);
+                lg = m.step(t);
+                made += 1;
+            }
+            int p2 = Time::now_ms();
+            double dp = (double)(p1 - p0);
+            double dg = (double)(p2 - p1);
+            if dp < 1.0 { dp = 1.0; }
+            if dg < 1.0 { dg = 1.0; }
+            cout << "prompt: " << ids.len << " tokens in " << (p1 - p0) << " ms = " << (double)ids.len * 1000.0 / dp << " tokens/s\n";
+            cout << "new tokens: " << made << " in " << (p2 - p1) << " ms = " << (double)made * 1000.0 / dg << " tokens/s, " << dg / (double)made << " ms per token\n";
+            cout << "memory at the end: " << status_value("VmRSS:") << " (peak " << status_value("VmHWM:") << ")\n";
+        }
+        Result::Err(e): { cout << "cannot load the model: " << e.message << "\n"; }
+    }
+}

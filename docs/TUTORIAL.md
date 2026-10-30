@@ -2409,6 +2409,711 @@ int main() {
 
 For the chip itself use `<gpu>` in the app (triangles, pictures, tints: one batch of commands per picture) or `<opengl3>` / `<vulkan>` in a dynamic program. The plan of the engine (layers, a scene system like Godot's, the API like MonoGame's) is in the documents of the Jaric project.
 
+## Lesson 67. Talking to the web: `<web>`
+
+Most services of the net speak HTTP. `#import <web>` is a client: one call, the answer has a **status** (200 is good, 404 not found ...), the **headers** and the **body**. A status of 400 or more is *not* an error of the program (the body usually explains it); only a connection that fails is an `Error`.
+
+```jk
+#import <stdlib>
+#import <web>
+
+int main() {
+    Result<HttpResponse, Error> r = Web::get("https://example.org/", "");     // url, extra header lines ("" for none)
+    switch r {
+        Result::Ok(a): {
+            cout << "status " << a.status << ", " << a.body.len << " bytes\n";
+            cout << "type: " << a.header("content-type") << "\n";             // a header of the answer, any case
+        }
+        Result::Err(e): { cout << "no answer: " << e.message << "\n"; }
+    }
+    return 0;
+}
+```
+
+To send data: `Web::post_json(url, headers, json_text)`, `Web::post_form(url, headers, "a=1&b=2")`, or `Web::request("PUT", url, headers, body)`. Headers are lines separated by `\r\n`; `Web::url_encode(text)` makes a text safe for an address. Redirects are followed (5 at most), `https` works, one request uses one connection.
+
+```jk
+#import <stdlib>
+#import <web>
+
+// asks an API that answers with JSON and prints one field
+int main() {
+    String key = "my-secret-key";                                              // never write a real key in a file you share
+    Result<HttpResponse, Error> r = Web::post_json("https://example.org/api", "Authorization: Bearer " + key, "{\"question\":\"hello\"}");
+    switch r {
+        Result::Ok(a): {
+            if a.status >= 400 { cout << "the service said " << a.status << ": " << a.body << "\n"; return 1; }
+            Result<JsonDoc, Error> pj = Json::parse(a.body);
+            switch pj {
+                Result::Ok(d): {
+                    int n = d.get(0, "answer");                                 // 0 is the top object
+                    if n >= 0 { cout << d.text(n) << "\n"; }
+                }
+                Result::Err(e2): { cout << "not JSON\n"; }
+            }
+        }
+        Result::Err(e): { cout << "no answer: " << e.message << "\n"; }
+    }
+    return 0;
+}
+```
+
+**Try:** change the address to a service you use; print `a.head` to see all the headers; ask for an address that does not exist and read the status.
+
+## Lesson 68. A bot that answers: `<telegram>` and `<discord>`
+
+A bot is a program that has an account on a chat service. You make the bot in the service (Telegram: the chat with BotFather; Discord: the developer portal), you get a **token** (a long secret text: keep it out of your files and out of git; read it from an environment variable or a file that only you can read), and the program talks to the service with `<web>` underneath.
+
+```jk
+#import <stdlib>
+#import <telegram>
+
+int main() {
+    String token = "";
+    switch Env::get("TG_TOKEN") { Option::Some(t): { token = t + ""; } Option::None: { } }
+    if token.len == 0 { cout << "set TG_TOKEN first\n"; return 1; }
+    Telegram bot = Telegram::bot(token);
+    int next = 0;
+    while true {
+        switch bot.poll(next, 25) {                                  // waits up to 25 seconds for news (long polling)
+            Result::Ok(up): {
+                for i in 0..up.count() {
+                    TgMessage m = up.get(i);                         // m.chat  m.from  m.text
+                    bot.send(m.chat, "you said: " + m.text);
+                }
+                next = up.next;                                      // where to go on: the messages seen are not given again
+            }
+            Result::Err(e): { cout << "error: " << e.message << "\n"; return 1; }
+        }
+    }
+    return 0;
+}
+```
+
+`<discord>` is the same idea. `Discord::bot(token)`, `bot.send(channel, "text")` and `bot.messages(channel, last_id, 20)` (the newest messages, oldest first; keep `ms.last` and give it next time). Numbers of Discord are huge, so channels and messages are **text**. Turn on "Message Content Intent" in the portal or the text of messages is empty.
+
+```jk
+#import <stdlib>
+#import <discord>
+
+int main() {
+    Discord bot = Discord::bot("TOKEN-of-the-bot");
+    switch bot.send("123456789012345678", "hello from J2K") {
+        Result::Ok(x): { cout << "sent\n"; }
+        Result::Err(e): { cout << "failed: " << e.message << "\n"; }         // Discord's own words: 401 = the token is wrong
+    }
+    return 0;
+}
+```
+
+Rules of good bots: answer only to people (`by_bot` of a Discord message tells), do not ask too fast (HTTP 429 means wait), never print the token, and test with a bot of your own on a chat of your own before you invite it anywhere.
+
+## Lesson 69. Live news: WebSocket and the Discord Gateway
+
+Asking again and again ("polling") wastes time. A **WebSocket** is a connection that stays open: the server sends a message the moment it has one. `<websocket>` makes one: `Ws::connect("wss://host/path", "")` gives a `WebSocket`; `send_text`, `recv` (waits for the next whole message) and `recv_wait(ms)` (waits at most `ms` milliseconds: kind 0 when nothing came).
+
+```jk
+#import <stdlib>
+#import <websocket>
+
+int main() {
+    switch Ws::connect("wss://example.org/socket", "") {
+        Result::Ok(ws): {
+            ws.send_text("hello");
+            int waited = 0;
+            while waited < 10 {
+                WsMessage m = ws.recv_wait(1000);                   // one second at most
+                if m.kind == 0 { waited += 1; continue; }           // nothing yet: do something else, or wait again
+                if m.kind == 8 { cout << "closed: " << m.text << "\n"; break; }
+                cout << "got: " << m.text << "\n";                  // kind 1 text, 2 binary
+                break;
+            }
+            ws.close();
+        }
+        Result::Err(e): { cout << "cannot connect: " << e.message << "\n"; }
+    }
+    return 0;
+}
+```
+
+The Gateway of Discord is a WebSocket with rules (hello, identify, a heartbeat every few seconds). `<discord>` does the rules for you: `Gw::connect(token, Gw::intents())` and then `gw.next(1000)` gives the events one by one (and sends the heartbeat inside, so call it often).
+
+```jk
+#import <stdlib>
+#import <discord>
+
+int main() {
+    String token = "TOKEN-of-the-bot";
+    Discord bot = Discord::bot(token);
+    switch Gw::connect(token, Gw::intents()) {
+        Result::Ok(gw): {
+            bool run = true;
+            while run {
+                DcEvent e = gw.next(1000);
+                if e.kind == "MESSAGE_CREATE" && !e.by_bot { bot.send(e.channel, "you said: " + e.text); }
+                if e.kind == "CLOSED" || e.kind == "RECONNECT" || e.kind == "INVALID_SESSION" { run = false; }
+            }
+        }
+        Result::Err(e): { cout << "cannot connect: " << e.message << "\n"; }
+    }
+    return 0;
+}
+```
+
+## Lesson 70. Numbers that learn: tensors and gradients
+
+A neural network is a pile of multiplications whose numbers are adjusted until the answers are right. `<neuron>` gives the pieces. A **`Tensor32`** is a table of 32-bit floats (rows x columns). A **`Graph`** records the calculation, so that it can go backwards and tell how every number should change (a **gradient**).
+
+The smallest learning program: find `w` and `b` so that `y = w x + b` fits points that lie on `y = 2x + 1`.
+
+```jk
+#import <stdlib>
+#import <neuron>
+
+Graph g;                                         // a Graph is big: keep it in a global (do not pass it around by value)
+
+int main() {
+    g = Graph::make();
+    int w = g.param(Tensor32::zeros(1, 1));      // a parameter: a number that learns
+    int b = g.param(Tensor32::zeros(1, 1));
+    g.mark();                                    // what is made until now stays; what comes after is one step
+    double[] xv = arr(4);
+    xv.push(0.0); xv.push(1.0); xv.push(2.0); xv.push(3.0);
+    double[] yv = arr(4);
+    yv.push(1.0); yv.push(3.0); yv.push(5.0); yv.push(7.0);
+    Tensor32 xs = Tensor32::from_list(4, 1, xv);
+    Tensor32 ys = Tensor32::from_list(4, 1, yv);
+    for step in 0..300 {
+        int x = g.input(xs);
+        int guess = g.add(g.matmul(x, w), b);    // x @ w + b: the four guesses
+        int loss = g.mse(guess, ys);             // the mean of the squares of the errors
+        g.backward(loss);                        // the gradient of every parameter
+        g.sgd(0.1);                              // a small step downhill
+        g.clear();                               // forget the step, keep the parameters
+    }
+    cout << "w = " << g.value(w).get(0, 0) << "  b = " << g.value(b).get(0, 0) << "\n";    // near 2 and 1
+    return 0;
+}
+```
+
+The words: **loss** = how wrong the answers are (smaller is better); **learning rate** = the size of a step (here 0.1; too big and it jumps around, too small and it takes forever); **backward** = the gradients, by the chain rule, from the loss to every parameter. The operations of a `Graph`: `matmul`, `add` (a one-row table is added to every row: the bias), `mul`, `relu`, `tanh`, `sigmoid`, `gelu`, `silu`, `softmax_ce`, `mse`, `embed`, `layer_norm`, `rms_norm`, `attention`, `conv2d`, `maxpool`. Every gradient of the library is checked against a numeric difference in its tests; you can do the same for your own idea (change a number by 0.01 both ways and see that the loss changes as the gradient says).
+
+**Try:** change 300 to 30 steps and watch `w` stop short; change the points to `y = -3x + 4`.
+
+## Lesson 71. Teaching a network: layers, batches and AdamW
+
+One neuron fits a line. To learn a curve or to tell classes apart you need layers with a bend between them. A **`Linear`** layer is `x @ w + b`; between layers put `tanh` (or `relu`) or the layers collapse into one line. The classic test is XOR, which no single line can do.
+
+```jk
+#import <stdlib>
+#import <neuron>
+
+Graph g;
+
+int main() {
+    g = Graph::make();
+    Linear l1 = g.linear(2, 8, 1);               // 2 numbers in, 8 out; the last number only seeds the start values
+    Linear l2 = g.linear(8, 1, 2);
+    g.mark();
+    double[] xv = arr(8);
+    xv.push(0.0); xv.push(0.0); xv.push(0.0); xv.push(1.0); xv.push(1.0); xv.push(0.0); xv.push(1.0); xv.push(1.0);
+    double[] yv = arr(4);
+    yv.push(0.0); yv.push(1.0); yv.push(1.0); yv.push(0.0);
+    Tensor32 xs = Tensor32::from_list(4, 2, xv);
+    Tensor32 ys = Tensor32::from_list(4, 1, yv);
+    double last = 0.0;
+    for step in 0..400 {
+        int h = g.tanh(g.apply(l1, g.input(xs)));
+        int out = g.sigmoid(g.apply(l2, h));                 // 0 .. 1
+        int loss = g.mse(out, ys);
+        last = (double)g.value(loss).d[0];
+        g.backward(loss);
+        g.adamw(0.05, 0.0);                                  // AdamW: a learning rate for each number, adjusted as it goes
+        g.clear();
+    }
+    cout << "loss " << last << "\n";
+    int h2 = g.tanh(g.apply(l1, g.input(xs)));
+    Tensor32 o = g.value(g.sigmoid(g.apply(l2, h2)));
+    for i in 0..4 { cout << xs.get(i, 0) << " xor " << xs.get(i, 1) << " = " << o.get(i, 0) << "\n"; }
+    g.save("xor.model");                                     // the parameters as a text file
+    return 0;
+}
+```
+
+For many examples use **mini-batches**: `shuffled(n, seed)` gives a mixed order of `0..n-1`, `xs.gather(idx)` takes those rows. `g.clip(5.0)` shrinks a gradient that is too big, and `Sched::cosine(step, total, warm, lr, low)` makes the learning rate rise for `warm` steps and then fall like a cosine. To tell **classes** apart end with `g.softmax_ce(scores, classes)` (one class number per row). To save and load: `g.save(path)`, `g.load(path)` on a graph with the same parameters.
+
+**Watch for:** a loss that does not fall (learning rate too big or too small), a loss on the training data that falls while the loss on data it never saw does not (the model only remembers: give more data or a smaller model).
+
+## Lesson 72. A language model that you train on the phone
+
+A language model reads text and learns which letter (or word) comes next. `Gpt` of `<neuron>` is a small GPT: embeddings, blocks with attention (every place looks at the places before it) and a layer that scores the next token. It works **byte by byte**, so Thai, English and code need no tokenizer.
+
+```jk
+#import <stdlib>
+#import <neuron>
+
+Gpt m;
+
+int main() {
+    String text = "the cat sat on the mat. the dog sat on the log. ";
+    String all = "";
+    for r in 0..40 { all = all + text; }
+    int[] data = Gpt::bytes(all);                            // the text as numbers 0-255
+    m = Gpt::make(256, 16, 32, 2, 1, 1);                     // vocabulary, context, width, heads, layers, seed
+    int seed = 1;
+    for step in 0..200 {
+        int[] starts = arr(5);                               // where in the text this batch of 4 sequences starts
+        for q in 0..4 { seed = (seed * 1103515245 + 12345) & 2147483647; starts.push(seed % (data.len - 20)); }
+        double loss = m.step(data, starts, 0.02, 0.0, 1.0);  // learning rate, weight decay, clip
+        if step % 50 == 0 { cout << "step " << step << " loss " << loss << "\n"; }
+    }
+    cout << "[" << m.write(Gpt::bytes("the cat s"), 24, 0.0, 0, 1) << "]\n";   // temperature 0: the most likely letter each time
+    m.save("cats.gpt");
+    return 0;
+}
+```
+
+The tool `neuron` does the same for any file or folder: `neuron gpt train notes.txt`, `neuron gpt train docs/ size=medium minutes=10`, then `neuron gpt write cats.gpt "the cat"`. While it trains it prints the **check** loss, measured on the last tenth of the text that is never learned: that is the number to trust. If the loss on the learned text falls and the check loss does not, the model only remembers.
+
+A model trained on a phone has thousands to a few million numbers and reads megabytes. It learns the style and habits of the text it reads (a code style, a language, your notes) and can complete a line. It does not know the world as the big models do; use it for a narrow job with your own text, with a search in front of it for facts.
+
+## Lesson 73. Running models that others made: GGUF and `<llama>`
+
+Big models are trained elsewhere and shared as **GGUF** files (the format of llama.cpp). `<gguf>` reads them (the header, the words, the tables of numbers) and `<llama>` runs the Llama family on the CPU: RMS norm, rotary positions, grouped-query attention, a gated feed-forward and a cache that remembers the earlier tokens. The weights are usually **quantised** (Q8_0, Q4_0: a byte or four bits per weight with a scale for every 32 weights): the file is 4-8 times smaller and, kept as bytes in memory, a product moves 4 times less memory (the phone's memory bandwidth is the limit, not its multiplications). The product uses the int8 dot product of the chip (`i8x16`, lesson 74).
+
+```jk
+#import <stdlib>
+#import <llama>
+
+int main() {
+    switch Lm::load("stories15M-q4_0.gguf") {                // from huggingface.co/ggml-org/tiny-llamas (19 MB)
+        Result::Ok(m): {
+            int[] ids = m.encode("Once upon a time");        // token numbers, the start token first
+            String story = m.generate(ids, 80, 0.8, 40, 0.95, 1);    // 80 new tokens: temperature, top-k, top-p, seed
+            cout << "Once upon a time" << story << "\n";
+        }
+        Result::Err(e): { cout << "cannot load: " << e.message << "\n"; }
+    }
+    return 0;
+}
+```
+
+The temperature decides how daring the choice is (0 = always the most likely token); `top-k` keeps the k best, `top-p` the best ones that together hold p of the chance; the same seed gives the same text. For one token at a time use `m.step(token)` (it gives the scores of the next token) and `m.sample(scores, temp, top_k, top_p)`. The same from the shell: `neuron llama MODEL.gguf "start"` and `neuron bench MODEL.gguf` (tokens per second). On a Kirin 990 the 15 M model writes about 120 tokens a second; a model of 500 M numbers needs a quarter of a gigabyte per token to be read, so a few tokens a second is the wall until the memory gets faster.
+
+## Lesson 74. Fast code: what the language costs and how to ask for speed
+
+Measure before you change. `bench/lang.jk` of the repository times the small costs on your phone. What it showed on a Kirin 990 (one core):
+
+| what | cost |
+|---|---|
+| `s += a[i]` over an `int[]` (checked) / through an `int^` pointer | 1.4 ns / 1.0 ns: the checks cost about 40 % |
+| `f += xs[i]` over a `float[]` | 4 ns: floats are slower than whole numbers now (a known weakness) |
+| a call of a tiny function | 2 ns |
+| 8 million reads of a big array: in a row / 16 apart / at random places | 2.5 / 6.5 / 23 ns each: **the cache decides** |
+
+Three habits that always pay: **walk memory in order** (the inner loop over the index that is next to the other in memory), **work in blocks** that fit the cache (the matrix product of `<neuron>` takes four columns of two rows at a time), and **let the chip do many numbers at once**. `<simd>` has vectors of one register: `f32x4` (four floats), `i32x4`, `f64x2`, and `i8x16` (sixteen bytes).
+
+```jk
+#import <stdlib>
+#import <simd>
+
+// the dot product of two float arrays, four numbers at a time
+float dot(float^ a, float^ b, int n) {            // n a multiple of 4
+    f32x4 acc = {0.0, 0.0, 0.0, 0.0};
+    int i = 0;
+    while i < n {
+        acc = acc + f32x4::load(a, i) * f32x4::load(b, i);     // one load and one multiply-add for four numbers
+        i += 4;
+    }
+    return acc.sum();
+}
+
+int main() {
+    float[] a = arr(1001);
+    float[] b = arr(1001);
+    for i in 0..1000 { a.push((float)i * 0.001); b.push(2.0); }
+    cout << dot(@a[0], @b[0], 1000) << "\n";     // 999
+    return 0;
+}
+```
+
+`i8x16` has one more trick, `a.dot(b)`: the dot product of sixteen bytes by sixteen bytes into four 32-bit sums in **one instruction** (the SDOT of the Cortex-A76). It is what makes a quantised model fast: `i32x4 d = i8x16::load(w, i).dot(i8x16::load(x, i));`. Keep a function with vectors small, with no calls inside the loop, so that the compiler can keep every vector in a register (look with `jcmp -show NAME file.jk` and `jcmp -irstat file.jk`). A function can have at most 8 parameters. And compare with a plain C version when it matters: the aim of J2K is to be within a small factor of C, and the numbers of `bench/` say where it is now.
+
+## Lesson 75. Programs and libraries from the net: `jc`
+
+`jc` brings things to the phone. Four kinds, one command each:
+
+```text
+jc install NAME          a tool of Jcmp-Tools (jsh, neuron, mulap, imgj ...), or a package (git, python, clang ...)
+jc tools                 the list of tools         jc update        every tool and package that has a newer version
+jc lib list              the libraries of J2K      jc lib install web telegram    a library for #import <name>
+jc pkg search git        look in the packages      jc pkg list | remove NAME
+jc install FILE.jc       a program of the Jaric store (it asks for the permissions it wants)
+```
+
+The tools are single programs written in J2K (`jc install neuron`). The **packages** are the programs of other people built for the prefix of the Jaric app (`jc install git`, `python`, `python-pip`, `clang`, `dropbear`): they are unpacked into the prefix and listed in `usr/var/lib/jcpkg/NAME.list` so that `jc pkg remove NAME` takes away exactly what was put there. The libraries are single files (`#import <name>`): `jc lib install NAME` puts the file where the compiler looks. Everything is checked with a SHA-256 before it is put in place; if a checksum is wrong nothing is installed.
+
+To share your own tool: a folder with the program, `build.sh`, `test.sh`, `README.md`, `CHANGELOG.md`, `VERSION`; test it, release it as the repository Jcmp-Tools does, and a line in `tools.txt` makes `jc install` find it. Every tool and library must have a README that says what it is, how to install it and how to use it with an example that works: when you read a README that does not teach you, fix the README.
+
+# Part 4: from the numbers to the machine
+
+## Lesson 76. Counting in base 2 and base 16
+
+A computer has only two digits, 0 and 1, because a wire is on or off. A number in **base 2** is written with them: `1011` means 1x8 + 0x4 + 1x2 + 1x1 = 11. Each place is worth twice the place on its right: 1, 2, 4, 8, 16, 32, 64, 128 ... A place is a **bit**; eight bits are a **byte** (0 to 255). **Base 16** (hex) has sixteen digits, `0-9` and `a-f`, and one hex digit is exactly four bits, which is why people read bytes in hex: `0xB0` is `1011 0000`.
+
+```jk
+#import <stdlib>
+
+// the number n as `width` bits, the highest first
+String bits(int n, int width) {
+    String s = "";
+    int i = width - 1;
+    while i >= 0 {
+        if ((n >> i) & 1) == 1 { s.push('1'); } else { s.push('0'); }
+        i -= 1;
+    }
+    return s;
+}
+
+// the number n as hex digits (at least `width` of them)
+String hex(int n, int width) {
+    String digits = "0123456789abcdef";
+    String s = "";
+    int i = width - 1;
+    while i >= 0 {
+        int d = (n >> (4 * i)) & 15;
+        s.push(digits[d]);
+        i -= 1;
+    }
+    return s;
+}
+
+int main() {
+    for n in 0..9 { cout << n << " = " << bits(n, 8) << " = 0x" << hex(n, 2) << "\n"; }
+    cout << "255 = " << bits(255, 8) << " = 0x" << hex(255, 2) << "\n";
+    cout << "256 = " << bits(256, 9) << " = 0x" << hex(256, 3) << "\n";
+    int x = 0;
+    for i in 0..8 { x = x * 2 + (i % 2); }                  // shifting left and adding a bit is how a number is read digit by digit
+    cout << x << " = " << bits(x, 8) << "\n";                // 01010101 = 85
+    return 0;
+}
+```
+
+`n >> i` moves the bits `i` places to the right, `& 1` keeps the lowest one: so `(n >> i) & 1` is bit number `i`. Doubling a number moves all its bits one place left (`n << 1`), halving moves them right. A byte holds 8 bits, a `short` 16, an `int` of J2K 64.
+
+**Try:** print the powers of two up to 2^16 in binary and hex; write a function that turns the text `"1011"` into 11.
+
+## Lesson 77. Negative numbers: two's complement
+
+How are negative numbers made of bits? The CPU uses **two's complement**: for 8 bits, the number -1 is `11111111`, -2 is `11111110`, ... -128 is `10000000`. The highest bit is the sign (1 = negative) and it is worth -128 instead of +128. The rule to negate: **flip every bit and add one**, so that `x + (-x)` is all zeros plus a carry that falls off the end. Then the same adder circuit adds positive and negative numbers, and subtraction needs no new part.
+
+```jk
+#import <stdlib>
+
+String bits(int n, int width) {
+    String s = "";
+    int i = width - 1;
+    while i >= 0 {
+        if ((n >> i) & 1) == 1 { s.push('1'); } else { s.push('0'); }
+        i -= 1;
+    }
+    return s;
+}
+
+int main() {
+    for n in 0..4 { cout << "-" << n << " in 8 bits: " << bits(-n, 8) << "\n"; }       // 00000000 11111111 11111110 11111101
+    int five = 5;
+    int flipped = five xor 255;                     // every bit of the 8 turned over
+    cout << "flip 5: " << bits(flipped, 8) << "  plus one: " << bits((flipped + 1) & 255, 8) << " = " << bits(-5, 8) << "\n";
+    i8 small = 127;                                  // the biggest i8
+    small += 1;                                      // one more wraps round to the smallest
+    cout << "127 + 1 in an i8 = " << small << "\n";
+    u8 byte = 200;
+    byte += 100;                                     // 300 does not fit: 300 - 256
+    cout << "200 + 100 in a u8 = " << byte << "\n";
+    cout << "the same bits, two meanings: " << bits(200, 8) << " is 200 as u8, " << (200 - 256) << " as i8\n";
+    return 0;
+}
+```
+
+An `int` of J2K has 64 bits, so its smallest number is -2^63 and its largest 2^63 - 1; adding one to the largest wraps to the smallest. `i8`, `i16`, `i32` and `u8` ... `u64` (lesson 54) show the same thing in smaller sizes. When a small signed number is made wider, the sign bit is copied to the new places (**sign extension**): `11111110` as 8 bits and `1111111111111110` as 16 bits are both -2.
+
+**Try:** what are 100 + 100 in an i8, 0 - 1 in a u8? Make the answer by hand with bits first.
+
+## Lesson 78. Numbers with a point, inside
+
+A `double` is 64 bits in three parts (**IEEE 754**): 1 bit of sign, 11 bits of exponent, 52 bits of fraction. The value is `(-1)^sign x 1.fraction x 2^(exponent - 1023)`. A `float` has 1 + 8 + 23 bits. So the numbers that a float can hold are not evenly spread: there are as many between 1 and 2 as between 1024 and 2048. And a number like 0.1 has no exact form in base 2 (as 1/3 has none in base 10), which is why `0.1 + 0.2` is not exactly `0.3`.
+
+```jk
+#import <stdlib>
+
+String bits(int n, int width) {
+    String s = "";
+    int i = width - 1;
+    while i >= 0 {
+        if ((n >> i) & 1) == 1 { s.push('1'); } else { s.push('0'); }
+        i -= 1;
+    }
+    return s;
+}
+
+void show(double d) {
+    int^ p = (int^)@d;                               // the same 8 bytes, looked at as a whole number
+    int raw = p[0];
+    int sign = (raw >> 63) & 1;
+    int exponent = (raw >> 52) & 2047;
+    int fraction = raw & 4503599627370495;           // the lowest 52 bits
+    cout << d << ": sign " << sign << ", exponent " << bits(exponent, 11) << " (" << exponent - 1023 << "), fraction " << bits(fraction >> 40, 12) << "...\n";
+}
+
+int main() {
+    show(1.0);
+    show(2.0);
+    show(0.5);
+    show(-6.0);                                      // -1.5 x 2^2
+    show(0.1);
+    double s = 0.1 + 0.2;
+    if s == 0.3 { cout << "0.1 + 0.2 is 0.3\n"; } else { cout << "0.1 + 0.2 is not exactly 0.3\n"; }
+    return 0;
+}
+```
+
+Compare numbers that are measured with a small margin (`abs(a - b) < 0.000001`), never with `==`. And do not add a very small number to a very big one: the small one is lost, because the fraction has only 52 bits (`1e16 + 1.0` is `1e16`).
+
+**Try:** show the bits of 3.0 and work out the sign, exponent and fraction by hand; find the smallest `x` for which `1.0 + x == 1.0` (start with 1.0 and halve it).
+
+## Lesson 79. From logic gates to an adder
+
+A CPU is made of **gates**: AND, OR, XOR, NOT. With them you can add. Adding two bits `a + b` gives a sum bit and a carry bit: the sum is `a xor b` and the carry is `a and b` (a **half adder**). With a carry coming in too, it is a **full adder**, and eight of them in a row, each passing its carry to the next, add two bytes (a **ripple adder**). This is what the `add` instruction is, in silicon.
+
+```jk
+#import <stdlib>
+
+// one full adder: three bits in (a, b and the carry from the right), two bits out
+// the sum goes in sum[0], the carry out is the result
+int full_adder(int a, int b, int carry_in, int^ sum) {
+    int x = a xor b;
+    sum[0] = x xor carry_in;
+    return (a & b) | (x & carry_in);
+}
+
+// two 8-bit numbers added with eight full adders in a row
+int add8(int a, int b) {
+    int result = 0;
+    int carry = 0;
+    int sum[1];
+    for i in 0..8 {
+        carry = full_adder((a >> i) & 1, (b >> i) & 1, carry, @sum[0]);
+        result = result | (sum[0] << i);
+    }
+    return result;                                   // a carry out of the last place falls off, as in a u8
+}
+
+// the multiplier of school: shift and add
+int mul8(int a, int b) {
+    int result = 0;
+    for i in 0..8 {
+        if ((b >> i) & 1) == 1 { result = add8(result, (a << i) & 255); }
+    }
+    return result;
+}
+
+int main() {
+    cout << add8(100, 55) << " " << add8(200, 100) << " " << add8(255, 1) << "\n";      // 155 44 0
+    int bad = 0;
+    for a in 0..256 { for b in 0..256 { if add8(a, b) != (a + b) & 255 { bad += 1; } } }
+    cout << "all 65536 sums agree with +: " << (bad == 0) << "\n";
+    cout << mul8(12, 11) << " " << mul8(20, 20) << "\n";                                  // 132 144 (400 wraps)
+    return 0;
+}
+```
+
+The real CPU does the eight (or 64) places at once with a clever **carry-lookahead** circuit, so that the carry does not have to walk through every place. But the idea is the same, and so you see why `a + b` takes one cycle and why a division does not.
+
+**Try:** build a subtractor from `add8` (negate with the rule of lesson 77: flip and add one); build a 4-bit comparator with gates only.
+
+## Lesson 80. A tiny CPU of our own
+
+What does a processor do? It repeats three steps forever: **fetch** the next instruction from memory at the place of the **program counter**, **decode** it (which operation, which registers), **execute** it. Here is a whole CPU in a few lines: four registers, a memory of bytes, and seven instructions that are one byte for the operation and one or two bytes for the numbers. It is a **virtual machine**; a real chip is the same story with more instructions and more speed.
+
+| opcode | meaning |
+|---|---|
+| 1 r n | `r = n` (load a number) |
+| 2 r s | `r = r + s` (add register s) |
+| 3 r s | `r = r - s` |
+| 4 r n | `if r != 0 then pc = n` (a jump) |
+| 5 r | print register r |
+| 6 | stop |
+
+```jk
+#import <stdlib>
+
+int[] mem;                                           // the program, as bytes
+int reg[4];
+int pc;
+
+// one step: fetch, decode, execute; false after the instruction "stop"
+bool step() {
+    int op = mem[pc];                                // fetch
+    if op == 1 { reg[mem[pc + 1]] = mem[pc + 2]; pc += 3; }                          // r = n
+    else if op == 2 { reg[mem[pc + 1]] += reg[mem[pc + 2]]; pc += 3; }              // r = r + s
+    else if op == 3 { reg[mem[pc + 1]] -= reg[mem[pc + 2]]; pc += 3; }              // r = r - s
+    else if op == 4 { if reg[mem[pc + 1]] != 0 { pc = mem[pc + 2]; } else { pc += 3; } }   // jump if not zero
+    else if op == 5 { cout << "r" << mem[pc + 1] << " = " << reg[mem[pc + 1]] << "\n"; pc += 2; }
+    else { return false; }                           // 6 (or anything else): stop
+    return true;
+}
+
+int main() {
+    mem = arr(32);
+    // r0 = 0 (the sum), r1 = 5 (the counter), r2 = 1: add the counter to the sum, count down, until the counter is 0
+    int[] program = arr(24);
+    program.push(1); program.push(0); program.push(0);          //  0: r0 = 0
+    program.push(1); program.push(1); program.push(5);          //  3: r1 = 5
+    program.push(1); program.push(2); program.push(1);          //  6: r2 = 1
+    program.push(2); program.push(0); program.push(1);          //  9: r0 = r0 + r1
+    program.push(3); program.push(1); program.push(2);          // 12: r1 = r1 - r2
+    program.push(4); program.push(1); program.push(9);          // 15: if r1 != 0 then jump to 9
+    program.push(5); program.push(0);                           // 18: print r0
+    program.push(6);                                            // 20: stop
+    for i in 0..program.len { mem.push(program[i]); }
+    pc = 0;
+    int steps = 0;
+    while step() { steps += 1; }
+    cout << "ran " << steps << " instructions\n";                // the sum 5+4+3+2+1 = 15 printed once
+    return 0;
+}
+```
+
+Every program is just numbers in memory; the CPU does not know which bytes are code and which are data, the program counter decides. That is why a bug can run your data as code, and why a **jump** (changing `pc`) is all that a loop or an `if` is, at this level. The tiny machine above has no way to call a function: add a register that holds a return address (a **link register**, `x30` in ARM64) and two instructions, `call n` and `ret`, and it can.
+
+**Try:** add an instruction `7 r s` that multiplies; write a program with it that computes 5 x 4 x 3; add a memory instruction `load r a` / `store r a`.
+
+## Lesson 81. An assembler for the tiny CPU
+
+Numbers are hard for people, so an **assembler** turns text like `add r0, r1` into the numbers (**machine code**). It reads a line, looks up the word (the **mnemonic**), reads the operands and writes the bytes. Labels (names of places) are resolved in a second pass because a jump may go forward. Here is a small one for the machine of lesson 80.
+
+```jk
+#import <stdlib>
+
+// the register number of "r2": 2 (or -1)
+int reg_of(String w) {
+    if w.len == 2 && w[0] == 'r' && w[1] >= '0' && w[1] <= '3' { return w[1] - '0'; }
+    return -1;
+}
+
+// the lines of a program, one instruction each: "load r1, 5" "add r0, r1" "sub r1, r2" "jnz r1, loop" "print r0" "stop", and "name:" for a label
+// returns the bytes, or an empty array when a line is wrong (the message says which)
+int[] assemble(String[] lines) {
+    String[] labels = arr(8);
+    int[] at = arr(8);
+    int[] out = arr(64);
+    int[] none = arr(1);
+    for pass in 0..2 {                                       // pass 0 finds where the labels are, pass 1 writes the bytes
+        out = arr(64);
+        for k in 0..lines.len {
+            String line = lines[k].trim();
+            if line.len == 0 { continue; }
+            if line[line.len - 1] == ':' {
+                if pass == 0 { labels.push(line.slice(0, line.len - 1) + ""); at.push(out.len); }
+                continue;
+            }
+            String[] w = line.replace(",", " ").split(" ");
+            String[] p = arr(4);
+            for i in 0..w.len { if w[i].len > 0 { p.push(w[i] + ""); } }
+            String m = p[0];
+            if m == "load" { out.push(1); out.push(reg_of(p[1])); out.push(p[2].to_int()); }
+            else if m == "add" { out.push(2); out.push(reg_of(p[1])); out.push(reg_of(p[2])); }
+            else if m == "sub" { out.push(3); out.push(reg_of(p[1])); out.push(reg_of(p[2])); }
+            else if m == "jnz" {
+                int target = -1;
+                for j in 0..labels.len { if labels[j] == p[2] { target = at[j]; } }
+                if target < 0 && pass == 1 { cout << "unknown label " << p[2] << "\n"; return none; }
+                out.push(4); out.push(reg_of(p[1])); out.push(target);
+            }
+            else if m == "print" { out.push(5); out.push(reg_of(p[1])); }
+            else if m == "stop" { out.push(6); }
+            else { cout << "unknown instruction " << m << " in the line: " << line << "\n"; return none; }
+        }
+    }
+    return out;
+}
+
+int main() {
+    String[] src = arr(12);
+    src.push("load r0, 0"); src.push("load r1, 5"); src.push("load r2, 1");
+    src.push("again:");
+    src.push("add r0, r1"); src.push("sub r1, r2"); src.push("jnz r1, again");
+    src.push("print r0"); src.push("stop");
+    int[] code = assemble(src);
+    String line = "";
+    for i in 0..code.len { line = line + str(code[i]) + " "; }
+    cout << code.len << " bytes: " << line << "\n";           // the program of lesson 80
+    String[] bad = arr(2);
+    bad.push("jump somewhere");
+    assemble(bad);                                            // unknown instruction jump in the line: jump somewhere
+    return 0;
+}
+```
+
+The real assembler of J2K is the same in kind (`jcmp/jc_asm.j`), only the instructions are ARM64's: each one is one 32-bit word with fields for the operation and the registers (lesson 82). It also has to choose between several encodings of one mnemonic (a short and a long jump) and to check that a number fits its field: a good assembler says "the number does not fit" rather than writing a wrong word.
+
+**Try:** add the instruction `mul`; make the assembler say the line number of a mistake; write a "disassembler" that turns the bytes back into text.
+
+## Lesson 82. The real thing: an ARM64 instruction as 32 bits
+
+Every instruction of the ARM64 CPU of the phone is exactly **32 bits**, cut into fields. `add x1, x1, x2` (64-bit register add) is:
+
+```
+ 31 30 29 28-24 23-22 21 20-16  15-10  9-5  4-0
+  1  0  0 01011  00    0  Rm    000000  Rn   Rd        =  0x8B000000 | (Rm << 16) | (Rn << 5) | Rd
+```
+
+`Rm` = 2, `Rn` = 1, `Rd` = 1 gives `0x8B020021`. A program can build the word itself and compare it with the number that the assembler of the compiler made (lesson 38 shows how `raw<u32>[...]` puts a word in the code).
+
+```jk
+#import <stdlib>
+
+String hex(int n, int width) {
+    String digits = "0123456789abcdef";
+    String s = "";
+    int i = width - 1;
+    while i >= 0 { s.push(digits[(n >> (4 * i)) & 15]); i -= 1; }
+    return s;
+}
+
+// add xd, xn, xm  (64 bits)
+int encode_add(int d, int n, int m) { return 0x8B000000 | (m << 16) | (n << 5) | d; }
+
+// sub xd, xn, xm
+int encode_sub(int d, int n, int m) { return 0xCB000000 | (m << 16) | (n << 5) | d; }
+
+// mov xd, #imm16  (movz: the number in bits 5-20)
+int encode_movz(int d, int imm) { return 0xD2800000 | (imm << 5) | d; }
+
+int main() {
+    cout << "add x1, x1, x2  = 0x" << hex(encode_add(1, 1, 2), 8) << "\n";     // 8b020021
+    cout << "sub x0, x3, x4  = 0x" << hex(encode_sub(0, 3, 4), 8) << "\n";     // cb040060
+    cout << "mov x5, #1000   = 0x" << hex(encode_movz(5, 1000), 8) << "\n";    // d2807d05
+    // run the word that we built: x1 = x1 + x2 through a raw machine word
+    int a = 40;
+    int b = 2;
+    int r = 0;
+    register {
+        in x1 = a;
+        in x2 = b;
+        raw<u32>[0x8b020021];                        // the word that encode_add(1, 1, 2) made
+        out x1 = r;
+    }
+    cout << a << " + " << b << " = " << r << " (done by the word)\n";
+    return 0;
+}
+```
+
+Look at the machine code that the compiler makes for your own function with `jcmp -show NAME file.jk`: the lines are the instructions in text, and `jcmp --emit-asm` keeps the whole text. Because every instruction has the same size, the CPU can find the next one at once (`pc + 4`) and decode many together; a CPU with instructions of different lengths (x86) needs more work to find where one ends. The registers `x0` to `x7` carry the arguments of a call and `x0` the result; `x29` is the frame, `x30` the return address, `sp` the stack: lessons 35 to 48 use them.
+
+**Try:** encode `ldr x0, [x1]` (`0xF9400020` is `ldr x0, [x1, #0]`: find the fields); run `jcmp -show` on a function that adds two numbers and find the `add` in it, then decode its bits by hand.
+
 ## Where next
 
 * [LIBRARIES.md](LIBRARIES.md) — how to use each part of the standard library, by category.

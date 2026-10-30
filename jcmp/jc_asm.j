@@ -1747,6 +1747,19 @@ void as_instruction() {
     if as_mn_is("mul") { if as_at_vreg() { as_h_vec3b(0, 0x4EA09C00, 0x4E209C00); return; } as_h_rrr(0x9B007C00); return; }
     if as_mn_is("udiv") { as_h_rrr(0x9AC00800); return; }
     if as_mn_is("sdiv") { as_h_rrr(0x9AC00C00); return; }
+    if as_mn_is("sdotz") {
+        // the pseudo instruction of the IR: vD.4s = the dot products of the bytes of vN.16b and vM.16b: movi v31.4s, #0; sdot v31.4s, vN.16b, vM.16b; mov vD.16b, v31.16b
+        as_skip_spaces();
+        int zrd = as_parse_vreg();
+        as_expect_comma();
+        int zrn = as_parse_vreg();
+        as_expect_comma();
+        int zrm = as_parse_vreg();
+        as_put32(0x4F00041F);
+        as_put32(0x4E80941F | (zrm << 16) | (zrn << 5));
+        as_put32(0x4EBF1FE0 | zrd);
+        return;
+    }
     if as_mn_is("ushl") { as_h_vec3b(0x6EE04400, 0x6EA04400, 0x6E204400); return; }
     // the bitwise vector instructions work on the 128 bits: every arrangement gives the same code
     if as_mn_is("and") { if as_at_vreg() { as_h_vec3b(0x4E201C00, 0x4E201C00, 0x4E201C00); return; } as_h_logic(0x8A000000, 0x92000000); return; }

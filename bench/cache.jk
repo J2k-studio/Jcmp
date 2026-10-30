@@ -1,0 +1,36 @@
+#import <stdlib>
+// run: jcmp bench/cache.jk -o cache && ./cache   (on an idle phone; the program may run on any core: run it a few times)
+// the latency of a read that has to wait for the one before (pointer chasing) for working sets from 4 KB to 64 MB: the steps show the caches
+int main() {
+    int maxn = 8 * 1024 * 1024;                              // 64 MB of 8-byte entries
+    int^ buf = (int^)Sys::mmap(maxn * 8 + 4096);
+    if (int)buf <= 0 { cout << "no memory\n"; return 1; }
+    int sizes[14];
+    int ns = 0;
+    int kb = 4;
+    while kb <= 65536 { sizes[ns] = kb; ns += 1; kb = kb * 2; }
+    for q in 0..ns {
+        int n = sizes[q] * 1024 / 8;
+        for i in 0..n { buf[i] = i; }
+        int x = 987654321;
+        int i = n - 1;
+        while i > 0 {                                         // Sattolo: one cycle through all the places
+            x = (x * 1103515245 + 12345) & 2147483647;
+            int j = x % i;
+            int t = buf[i]; buf[i] = buf[j]; buf[j] = t;
+            i -= 1;
+        }
+        int steps = 20000000;
+        int best = 1000000000;
+        for rep in 0..3 {
+            int p = 0;
+            int t0 = Time::now_ms();
+            for s in 0..steps { p = buf[p]; }
+            int t = Time::now_ms() - t0;
+            if t < best { best = t; }
+            if p == -1 { cout << "x"; }
+        }
+        cout << sizes[q] << " KB: " << (double)best * 1000000.0 / (double)steps << " ns per read\n";
+    }
+    return 0;
+}

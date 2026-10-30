@@ -681,7 +681,13 @@ int ast_postfix(int base, int kind, int tb) {
                 if st >= 0 && st < scount {
                     char full[128];
                     int mf = find_method_in(st, @mn, @full);                  // also a method of a base struct
-                    if mf >= 0 { rty = ast_fn_ty(mf); }
+                    if mf >= 0 {
+                        if simd_mem_kind(@full) != 0 || str_eq(@full, "i8x16__dot") {
+                            ast_fail("a store or dot of a simd type (the text path makes the instruction)");
+                            return 0;
+                        }
+                        rty = ast_fn_ty(mf);
+                    }
                 }
                 if rty / 65536 == 8 && (ast_pkind == 4 || ast_pkind == 5) { rty = ast_member_ty(ast_pkind, ast_pbase, @mn); }
                 int kb2 = ast_pkind;
@@ -951,6 +957,10 @@ int ast_static_call(bool as_value) {
     }
     if fop[fi] == 1 {
         ast_fail("a static function that is an operator");
+        return 0;
+    }
+    if simd_mem_kind(@full) != 0 {
+        ast_fail("a load of a simd type (the text path makes the 16-byte instruction)");
         return 0;
     }
     if as_value && fvoid[fi] == 1 {

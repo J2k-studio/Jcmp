@@ -1,0 +1,73 @@
+#import <stdlib>
+// what the language costs: array access with and without the checks, a struct of fields against fields in separate arrays, filling an array, a call, allocation, a stride through memory
+struct P { float x; float y; float z; float w; }
+int sink;
+int tiny(int a) { return a + 1; }
+void main() {
+    int n = 4000000;
+    int[] a = arr(n + 1);
+    for i in 0..n { a.push(i & 1023); }
+    int t0 = Time::now_ms();
+    int s = 0;
+    for r in 0..10 { for i in 0..n { s += a[i]; } }
+    int t1 = Time::now_ms();
+    cout << "sum of int[] with a[i]:        " << (t1 - t0) << " ms per 40M  (" << s << ")\n";
+    int^ p = (int^)@a[0];
+    s = 0;
+    for r in 0..10 { for i in 0..n { s += p[i]; } }
+    int t2 = Time::now_ms();
+    cout << "sum through an int^ pointer:   " << (t2 - t1) << " ms per 40M  (" << s << ")\n";
+    // a struct of four floats against four arrays: the sum of one field
+    int m = 1000000;
+    P[] ps = arr(m + 1);
+    for i in 0..m { P q; q.x = (float)(i & 255); q.y = 1.0; q.z = 2.0; q.w = 3.0; ps.push(q); }
+    float[] xs = arr(m + 1);
+    for i in 0..m { xs.push((float)(i & 255)); }
+    float f = 0.0;
+    int t3 = Time::now_ms();
+    for r in 0..20 { for i in 0..m { f += ps[i].x; } }
+    int t4 = Time::now_ms();
+    cout << "sum of one field of P[] (16 B each):   " << (t4 - t3) << " ms per 20M  (" << f << ")\n";
+    f = 0.0;
+    for r in 0..20 { for i in 0..m { f += xs[i]; } }
+    int t5 = Time::now_ms();
+    cout << "sum of float[] (4 B each):             " << (t5 - t4) << " ms per 20M  (" << f << ")\n";
+    // filling: push one at a time, against a block that is already there
+    int t6 = Time::now_ms();
+    for r in 0..5 { float[] z = arr(m + 1); for i in 0..m { z.push(0.0); } sink += z.len; }
+    int t7 = Time::now_ms();
+    cout << "float[] filled with push (1M, x5):     " << (t7 - t6) << " ms\n";
+    float^ blk = (float^)Sys::mmap(m * 4 + 64);
+    for r in 0..5 { for i in 0..m { blk[i] = 0.0; } }
+    int t8 = Time::now_ms();
+    cout << "same through a pointer (zeroed block): " << (t8 - t7) << " ms\n";
+    // a call
+    int c = 0;
+    for r in 0..10 { for i in 0..n { c = tiny(c); } }
+    int t9 = Time::now_ms();
+    cout << "40M calls of tiny(a):                  " << (t9 - t8) << " ms (" << c << ")\n";
+    // allocation: a small array made and let go
+    for i in 0..1000000 { int[] w = arr(8); w.push(i); sink += w.len; }
+    int t10 = Time::now_ms();
+    cout << "1M small arrays made and freed:        " << (t10 - t9) << " ms\n";
+    for i in 0..300000 { String q = "abc"; q = q + "def"; q = q + str(i); sink += q.len; }
+    int t11 = Time::now_ms();
+    cout << "300k String joins:                     " << (t11 - t10) << " ms\n";
+    // the cache: the same number of reads in a row, then 16 numbers apart (a new cache line each time), then at random places
+    int cnt = 8 * 1024 * 1024;
+    int^ big = (int^)Sys::mmap(cnt * 8 + 4096);
+    if (int)big <= 0 { cout << "no memory for the cache test\n"; return; }
+    for i in 0..cnt { big[i] = i; }
+    int u0 = Time::now_ms();
+    s = 0;
+    for i in 0..cnt { s += big[i]; }
+    int u1 = Time::now_ms();
+    cout << "8M reads in a row (64 MB):             " << (u1 - u0) << " ms\n";
+    for st in 0..16 { int i = st; while i < cnt { s += big[i]; i += 16; } }
+    int u2 = Time::now_ms();
+    cout << "8M reads, 16 numbers apart:            " << (u2 - u1) << " ms\n";
+    int x = 12345;
+    for i in 0..cnt { x = (x * 1103515245 + 12345) & 8388607; s += big[x]; }
+    int u3 = Time::now_ms();
+    cout << "8M reads at random places:             " << (u3 - u2) << " ms (" << s << ")\n";
+}

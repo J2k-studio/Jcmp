@@ -1,0 +1,74 @@
+#import <stdlib>
+#import <neuron>
+// train_gpt: trains a GPT on a text file, byte by byte (no tokenizer), on the phone.
+//   train_gpt FILE [steps=2000] [ctx=64] [d=64] [heads=4] [layers=2] [batch=8] [lr=0.003] [out=model.gpt] [resume=1] [every=100] [prompt=text]
+// It prints the loss every `every` steps (train, and on the last tenth of the file that is kept for checking), the time per step, and a sample of what the
+// model writes; the model is saved to `out` every `every` steps. With resume=1 and an existing `out` it goes on from there.
+int rng;
+int next_rand() {
+    int x = rng;
+    x = x xor (x << 13);
+    x = x xor ((x >> 7) & 72057594037927935);
+    x = x xor (x << 17);
+    rng = x;
+    return x & 2147483647;
+}
+String option(String[] a, String name, String fallback) {
+    String key = name + "=";
+    for i in 1..a.len { if a[i].starts_with(key) { return a[i].slice(key.len, a[i].len) + ""; } }
+    return fallback;
+}
+void main() {
+    String[] a = Env::args();
+    if a.len < 2 { cout << "usage: train_gpt FILE [steps=2000] [ctx=64] [d=64] [heads=4] [layers=2] [batch=8] [lr=0.003] [out=model.gpt] [resume=1] [every=100] [prompt=text]\n"; return; }
+    Result<String, Error> rf = Fs::read_bytes(a[1]);
+    if !rf.is_ok() { cout << "cannot read " << a[1] << "\n"; return; }
+    String text = rf.take();
+    int steps = option(a, "steps", "2000").to_int();
+    int ctx = option(a, "ctx", "64").to_int();
+    int d = option(a, "d", "64").to_int();
+    int heads = option(a, "heads", "4").to_int();
+    int layers = option(a, "layers", "2").to_int();
+    int batch = option(a, "batch", "8").to_int();
+    double lr = option(a, "lr", "0.003").to_double();
+    String out = option(a, "out", "model.gpt");
+    int every = option(a, "every", "100").to_int();
+    String prompt = option(a, "prompt", "");
+    int[] data = Gpt::bytes(text);
+    if data.len < ctx * 4 + 2 { cout << "the text is too short for ctx=" << ctx << " (" << data.len << " bytes)\n"; return; }
+    int cut = data.len * 9 / 10;                                   // the last tenth is for checking, never trained on
+    rng = 88172645463325252;
+    Gpt m = Gpt::make(256, ctx, d, heads, layers, 1);
+    if option(a, "resume", "0") == "1" {
+        Gpt old = Gpt::load(out);
+        if old.vocab == 256 { m = old; cout << "resumed from " << out << "\n"; }
+    }
+    int params = 0;
+    for n in 0..m.g.keep { params += m.g.value(n).d.len; }
+    cout << "text " << data.len << " bytes (" << cut << " to learn from), model: " << params << " numbers, ctx " << ctx << ", width " << d << ", " << heads << " heads, " << layers << " layers\n";
+    int t0 = Time::now_ms();
+    double window = 0.0;
+    int count = 0;
+    int warm = steps / 20 + 1;
+    for step in 0..steps {
+        int[] starts = arr(batch + 1);
+        for q in 0..batch { starts.push(next_rand() % (cut - ctx - 1)); }
+        double rate = Sched::cosine(step, steps, warm, lr, lr / 10.0);
+        window += m.step(data, starts, rate, 0.01, 1.0);
+        count += 1;
+        if (step + 1) % every == 0 || step + 1 == steps {
+            int[] vs = arr(9);
+            for q in 0..8 { vs.push(cut + (q * (data.len - cut - ctx - 1)) / 8); }
+            double val = m.loss_on(data, vs);
+            double ms = (double)(Time::now_ms() - t0) / (double)(step + 1);
+            cout << "step " << (step + 1) << "  loss " << window / (double)count << "  check " << val << "  " << ms << " ms/step\n";
+            window = 0.0;
+            count = 0;
+            m.save(out);
+            int[] pr = Gpt::bytes(prompt);
+            if pr.len == 0 { for i in 0..8 { pr.push(data[i]); } }
+            cout << "  [" << Gpt::text_of(pr) << m.write(pr, 120, 0.8, 20, step + 1) << "]\n";
+        }
+    }
+    cout << "saved " << out << "\n";
+}

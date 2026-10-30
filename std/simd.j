@@ -4,6 +4,7 @@
 //   i64x2 n = {1, 2};           n.x  n.y                      two 64-bit whole numbers
 //   f32x4 f = {1.0, 2.0, 3.0, 4.0};   f.x f.y f.z f.w         four floats
 //   i32x4 m = {1, 2, 3, 4};     m.x m.y m.z m.w               four 32-bit whole numbers
+//   i8x16 b = i8x16::load(p, 0);   b.dot(c)                    sixteen bytes; the dot product into four i32 lanes (SDOT)
 //
 // The lanes are named x y z w as in vec3. Steps S1-S3 of docs/syntax-design.md 59: the types, the operators, the loads and
 // stores of arrays (f64x2::load(a, i), v.store(a, i)).
@@ -114,5 +115,32 @@ struct i32x4 {
         if self.w > b { b = self.w; }
         if b > a { return b; }
         return a;
+    }
+}
+
+// sixteen bytes in one register (i8x16): the loads and stores are one 16-byte instruction; + and - work lane by lane (wrapping); a.dot(b) is the int8
+// dot product of the Cortex-A76 (SDOT): every 32-bit lane of the result is the sum of four products of bytes, the four lanes 0-3, 4-7, 8-11, 12-15.
+// It is what a quantised matrix product needs: 16 multiply-adds in one instruction. Index of load/store counts bytes (the array is an i8 or char array).
+struct i8x16 {
+    i8 l0; i8 l1; i8 l2; i8 l3; i8 l4; i8 l5; i8 l6; i8 l7;
+    i8 l8; i8 l9; i8 l10; i8 l11; i8 l12; i8 l13; i8 l14; i8 l15;
+
+    static i8x16 load(i8^ p, int i) {
+        i8x16 r = {p[i], p[i + 1], p[i + 2], p[i + 3], p[i + 4], p[i + 5], p[i + 6], p[i + 7], p[i + 8], p[i + 9], p[i + 10], p[i + 11], p[i + 12], p[i + 13], p[i + 14], p[i + 15]};
+        return r;
+    }
+    void store(self, i8^ p, int i) {
+        p[i] = self.l0; p[i + 1] = self.l1; p[i + 2] = self.l2; p[i + 3] = self.l3;
+        p[i + 4] = self.l4; p[i + 5] = self.l5; p[i + 6] = self.l6; p[i + 7] = self.l7;
+        p[i + 8] = self.l8; p[i + 9] = self.l9; p[i + 10] = self.l10; p[i + 11] = self.l11;
+        p[i + 12] = self.l12; p[i + 13] = self.l13; p[i + 14] = self.l14; p[i + 15] = self.l15;
+    }
+    // the meaning of dot (the compiler makes SDOT of it on aarch64)
+    i32x4 dot(self, i8x16 o) {
+        i32x4 r = {self.l0 * o.l0 + self.l1 * o.l1 + self.l2 * o.l2 + self.l3 * o.l3,
+                   self.l4 * o.l4 + self.l5 * o.l5 + self.l6 * o.l6 + self.l7 * o.l7,
+                   self.l8 * o.l8 + self.l9 * o.l9 + self.l10 * o.l10 + self.l11 * o.l11,
+                   self.l12 * o.l12 + self.l13 * o.l13 + self.l14 * o.l14 + self.l15 * o.l15};
+        return r;
     }
 }

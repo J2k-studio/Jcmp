@@ -2293,3 +2293,7 @@ Recommendation: A for a plain `{name}` / `{expression}` (escape with `{{`), B st
 * **The browser of Jaric is called `Jrawser`** (the window and the tool; the engine is the system WebView: accepted). The small web server of the plan keeps its working name `jserve` until the owner says otherwise.
 * **The assistant is local only** (nothing goes over the network; the plan's tier 2 is dropped). The AI framework `neuron` is to be made usable **fast** (the first work after the benchmarks).
 * **mulap** is to look and work like a lap/lab app (the owner: "like lap"; to be confirmed what is meant) and its screen is **landscape** (a wide studio: pads at the left, the timeline above, the mixer below).
+
+
+## 104. `i8x16` and `a.dot(b)` (built 2026-10-30; the owner chose option B of section 102 and asked to continue; names as proposed there)
+Built as proposed in 102, option B (vector types first): `i8x16` in `<simd>` with `load(i8^ p, i)` / `store`, `+` `-` lane by lane, and `a.dot(b)` -> `i32x4` (SDOT: four sums of four products). Not built yet from 102: `f16x8`, `u8x16`, `i16x8`, `widen`, scalar `f16`/`bf16`/`i4`. Not on ARM32 (compile error). Designed by AI at user request; adjustable.

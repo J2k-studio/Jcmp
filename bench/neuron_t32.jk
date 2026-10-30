@@ -1,0 +1,20 @@
+#import <stdlib>
+#import <neuron>
+// Tensor32.matmul: n x n times n x n, milliseconds and GFLOPS for several sizes
+void main() {
+    int[] sizes = arr(6);
+    sizes.push(16); sizes.push(32); sizes.push(64); sizes.push(100); sizes.push(128); sizes.push(256);
+    for q in 0..6 {
+        int n = sizes[q];
+        Tensor32 a = Tensor32::random(n, n, 1, 1.0);
+        Tensor32 b = Tensor32::random(n, n, 2, 1.0);
+        int reps = 1 + 20000000 / (n * n * n);
+        if reps > 20000 { reps = 20000; }
+        int t0 = Time::now_ms();
+        for r in 0..reps { Tensor32 c = a.matmul(b); }
+        int t1 = Time::now_ms();
+        double ms = (double)(t1 - t0) / (double)reps;
+        double gf = 2.0 * (double)n * (double)n * (double)n / (ms * 1000000.0);
+        cout << n << ": " << ms << " ms, " << gf << " GFLOPS\n";
+    }
+}
