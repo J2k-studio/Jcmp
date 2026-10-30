@@ -223,16 +223,23 @@ void rg_copy(int st, int en) {
 
 // is the line at st "fmov dK, xR" (a double made from the x register R)?
 bool rg_fmov_from(int st, int r) {
-    if !rg_has(st, "fmov d") { return false; }
+    bool single = rg_has(st, "fmov s");          // a float: fmov sK, wR
+    if !rg_has(st, "fmov d") && !single { return false; }
     int en = rg_end(st);
     int k = en - 1;
     while k > st && out_buf[k] >= '0' && out_buf[k] <= '9' { k -= 1; }
-    if out_buf[k] != 'x' || out_buf[k - 1] != ' ' { return false; }
+    if single {
+        if out_buf[k] != 'w' || out_buf[k - 1] != ' ' { return false; }
+    } else if out_buf[k] != 'x' || out_buf[k - 1] != ' ' { return false; }
     return rg_num(k + 1) == r && rg_next == en;
 }
 
 // is the line at st "fmov xR, dK"?
 bool rg_fmov_to(int st, int r) {
+    if rg_has(st, "fmov w") {                    // a float: fmov wR, sK
+        int numw = rg_num(st + 6);
+        return numw == r && rg_has(rg_next, ", s");
+    }
     if !rg_has(st, "fmov x") { return false; }
     int num = rg_num(st + 6);
     return num == r && rg_has(rg_next, ", d");
@@ -1302,8 +1309,10 @@ int pt_label_at(int num) {
 
 // is the register r not needed any more from the line idx on? (slot 3 of the parse arrays is used)
 int pt_steps;
+int pt_vis[65536];                // the labels that this question has been to (a loop: nothing reads the register on the way round)
+int pt_vstamp;
 bool pt_dead(int idx, int r, int budget) {
-    if budget == 40 { pt_steps = 400; }                  // a new question: the whole search may take 400 lines
+    if budget == 40 { pt_steps = 400; pt_vstamp += 1; }                  // a new question: the whole search may take 400 lines
     while pt_steps > 0 {
         if idx >= pt_n { return false; }
         pt_steps -= 1;
@@ -1323,6 +1332,10 @@ bool pt_dead(int idx, int r, int budget) {
             int num = rg_numpt(o + 1);
             int at = pt_label_at(num);
             if at < 0 { return false; }
+            if at < 65536 {
+                if pt_vis[at] == pt_vstamp { return true; }
+                pt_vis[at] = pt_vstamp;
+            }
             idx = at;
             continue;
         }
@@ -1346,7 +1359,9 @@ bool pt_dead(int idx, int r, int budget) {
             int num2 = rg_numpt(o2 + 1);
             int at2 = pt_label_at(num2);
             if at2 < 0 { return false; }
-            if !pt_dead(at2, r, 1) { return false; }
+            bool seen2 = at2 < 65536 && pt_vis[at2] == pt_vstamp;
+            if at2 < 65536 { pt_vis[at2] = pt_vstamp; }
+            if !seen2 && !pt_dead(at2, r, 1) { return false; }
             idx += 1;
             continue;
         }
@@ -2595,6 +2610,68 @@ bool pt_rules(int i) {
         pt_set(j, @pt_line);
         pt_set(i, "");
         return true;
+    }
+    // ldrsw xN, [..] / fmov sK, wN  ->  ldr sK, [..]      fmov wN, sK / strw xN, [..]  ->  str sK, [..]   (xN not needed afterwards)
+    if pt_no[0] == 2 && pt_no[1] == 2 {
+        int lsk = 0 - 1;
+        int lsn = 0 - 1;
+        int lsm = 0;               // 0: the load is line 0 and the memory operand is operand 1 of line 0; 1: the store
+        if pt_mn(0, "ldrsw") && pt_regno(0, 0, 'x') >= 0 && pt_mn(1, "fmov") && pt_regno(1, 0, 's') >= 0 && pt_regno(1, 1, 'w') == pt_regno(0, 0, 'x') {
+            lsk = pt_regno(1, 0, 's'); lsn = pt_regno(0, 0, 'x'); lsm = 0;
+        } else if pt_mn(0, "fmov") && pt_regno(0, 0, 'w') >= 0 && pt_regno(0, 1, 's') >= 0 && pt_mn(1, "strw") && pt_regno(1, 0, 'x') == pt_regno(0, 0, 'w') && !pt_has_reg(1, 1, pt_regno(0, 0, 'w')) {
+            lsk = pt_regno(0, 1, 's'); lsn = pt_regno(0, 0, 'w'); lsm = 1;
+        }
+        if lsk >= 0 && pt_dead(pt_next(j), lsn, 40) {
+            char lb[64];
+            int ln = 0;
+            if lsm == 0 { lb[0] = 'l'; lb[1] = 'd'; lb[2] = 'r'; ln = 3; } else { lb[0] = 's'; lb[1] = 't'; lb[2] = 'r'; ln = 3; }
+            lb[ln] = ' '; lb[ln + 1] = 's'; ln += 2;
+            char lg[8];
+            int lk = 0;
+            int lv = lsk;
+            if lv == 0 { lg[0] = '0'; lk = 1; }
+            while lv > 0 { lg[lk] = '0' + lv % 10; lk += 1; lv = lv / 10; }
+            while lk > 0 { lk -= 1; lb[ln] = lg[lk]; ln += 1; }
+            lb[ln] = ','; lb[ln + 1] = ' '; ln += 2;
+            int mo = (lsm * 4 + 1) * 40;
+            if lsm == 1 { mo = (1 * 4 + 1) * 40; }
+            int mc = 0;
+            while pt_o[mo + mc] != 0 && ln < 62 { lb[ln] = pt_o[mo + mc]; ln += 1; mc += 1; }
+            lb[ln] = 0;
+            if lsm == 0 { pt_set(j, @lb); pt_set(i, ""); } else { pt_set(j, @lb); pt_set(i, ""); }
+            return true;
+        }
+    }
+    // a float that lives in d8..d15: fmov xN, dK / fmov sM, wN  ->  fmov sM, sK      fmov wN, sK / fmov dM, xN  ->  fmov sM, sK   (xN not needed afterwards)
+    if pt_mn(0, "fmov") && pt_no[0] == 2 && pt_mn(1, "fmov") && pt_no[1] == 2 {
+        int fxn = 0 - 1;
+        int fsrc = 0 - 1;
+        int fdst = 0 - 1;
+        if pt_regno(0, 0, 'x') >= 0 && pt_regno(0, 1, 'd') >= 0 && pt_regno(1, 0, 's') >= 0 && pt_regno(1, 1, 'w') == pt_regno(0, 0, 'x') {
+            fxn = pt_regno(0, 0, 'x'); fsrc = pt_regno(0, 1, 'd'); fdst = pt_regno(1, 0, 's');
+        } else if pt_regno(0, 0, 'w') >= 0 && pt_regno(0, 1, 's') >= 0 && pt_regno(1, 0, 'd') >= 0 && pt_regno(1, 1, 'x') == pt_regno(0, 0, 'w') {
+            fxn = pt_regno(0, 0, 'w'); fsrc = pt_regno(0, 1, 's'); fdst = pt_regno(1, 0, 'd');
+        }
+        if fxn >= 0 && pt_dead(pt_next(j), fxn, 40) {
+            char fb[24];
+            fb[0] = 'f'; fb[1] = 'm'; fb[2] = 'o'; fb[3] = 'v'; fb[4] = ' '; fb[5] = 's';
+            int fn = 6;
+            char fg[8];
+            int fk = 0;
+            int fv = fdst;
+            if fv == 0 { fg[0] = '0'; fk = 1; }
+            while fv > 0 { fg[fk] = '0' + fv % 10; fk += 1; fv = fv / 10; }
+            while fk > 0 { fk -= 1; fb[fn] = fg[fk]; fn += 1; }
+            fb[fn] = ','; fb[fn + 1] = ' '; fb[fn + 2] = 's'; fn += 3;
+            fv = fsrc;
+            if fv == 0 { fg[0] = '0'; fk = 1; }
+            while fv > 0 { fg[fk] = '0' + fv % 10; fk += 1; fv = fv / 10; }
+            while fk > 0 { fk -= 1; fb[fn] = fg[fk]; fn += 1; }
+            fb[fn] = 0;
+            pt_set(j, @fb);
+            pt_set(i, "");
+            return true;
+        }
     }
     // fmov dB, dA / I using dB  ->  I using dA   (dB is written by I, or not needed afterwards)
     if pt_mn(0, "fmov") && pt_no[0] == 2 && pt_regno(0, 0, 'd') >= 0 && pt_regno(0, 1, 'd') >= 0 && pt_regno(0, 0, 'd') != pt_regno(0, 1, 'd') && (pt_mn(1, "fadd") || pt_mn(1, "fsub") || pt_mn(1, "fmul") || pt_mn(1, "fdiv") || pt_mn(1, "fsqrt") || pt_mn(1, "fneg") || pt_mn(1, "fabs") || pt_mn(1, "fcmp") || pt_mn(1, "fmov") || pt_mn(1, "fcvtzs") || pt_mn(1, "str") || pt_mn(1, "frintm") || pt_mn(1, "frintp") || pt_mn(1, "frintz")) {

@@ -817,6 +817,8 @@ int v_nd;
 int v_cnt;
 int v_dyn;
 int v_tid;
+int lfl32[8192];             // 1: a scalar float local: its slot is read and written as a whole 8-byte value (the register pass may keep it in a register)
+int v_fl32;                  // 1: the variable is a scalar float local kept as a whole 8-byte slot (lfl32)
 int v_st1;
 int v_st2;
 
@@ -861,6 +863,7 @@ bool lookup_var(char^ name) {
         v_nd = lnd[li];
         v_cnt = lcnt[li];
         v_tid = ltid[li];
+        v_fl32 = lfl32[li];
         v_dyn = ldyn[li];
         v_st1 = lst1[li];
         v_st2 = lst2[li];
@@ -876,6 +879,7 @@ bool lookup_var(char^ name) {
         v_nd = gnd[gi];
         v_cnt = gcnt[gi];
         v_tid = gtid[gi];
+        v_fl32 = 0;
         v_dyn = gdyn[gi];
         v_st1 = gst1[gi];
         v_st2 = gst2[gi];
@@ -938,6 +942,8 @@ void add_local(char^ name, int kind, int elem, int bytes, int ptr) {
     loff[lcount] = frame_bytes;
     int hint_flag = 0;
     if kind == 0 && bytes == 8 && ty_tid < 99 { hint_flag = 1; }
+    lfl32[lcount] = 0;
+    if kind == 0 && elem == 6 && ty_tid == 90 && ptr == 0 && hint_flag == 1 { lfl32[lcount] = 1; }
     lpin[lcount] = 0;
     if next_pin > 0 {
         // a pinned variable: the flag of the hint line is 100 + the register (the register pass puts it there)
@@ -1222,6 +1228,13 @@ void load_through(int code) {
     } else {
         if !load_direct("ldrb", 1) { emit_line("ldrb x0, [x0, #0]"); }
     }
+}
+
+int lv_fl32;                 // 1: the lvalue is a scalar float local (see lfl32): the whole 8-byte slot is read and written
+// the width code to read or write the lvalue with: a float local is a whole 8-byte slot
+int fl32_code(int code) {
+    if lv_fl32 == 1 && code == 6 { return 8; }
+    return code;
 }
 
 // x0 = the value of the given width code at the address in x3
@@ -2546,6 +2559,7 @@ void parse_lvalue() {
     if ali >= 0 && lalias[ali] == 1 { lv_self = 1; }
     addr_of_var();
     lv_code = v_elem;
+    lv_fl32 = v_fl32;
     lv_kind = v_kind;
     lv_ptr = v_ptr;
     lv_tid = v_tid;
@@ -2572,6 +2586,7 @@ void check_moved_use() {
 void lvalue_loop() {
     while true {
         if tok_is(".") && lc(0) == '.' { return; }       // .. is a range (for i in lo..hi), not a field
+        if tok_is("[") || tok_is(".") || tok_is("^") { lv_fl32 = 0; }
         if lv_kind == 3 && tok_is("[") {
             dyn_index();
         } else if lv_kind == 3 && tok_is(".") {
@@ -4480,7 +4495,7 @@ void finish_rvalue() {
         ex_ty = 100 + lv_code - 16;
         return;
     }
-    load_through(lv_code);
+    load_through(fl32_code(lv_code));
     ex_w = lv_code;
     ex_ty = lv_tid;
     if lv_ptr != 0 { ex_ty = 0; ex_isptr = 1; }

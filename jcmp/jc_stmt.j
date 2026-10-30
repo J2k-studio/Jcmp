@@ -382,6 +382,7 @@ void parse_assign_core(char^ target) {
         if ro_g >= 0 && gro[ro_g] == 1 && !(gptr[ro_g] != 0 && lv_fresh == 0) { die_name("this variable is read-only (#pragma read) and cannot be written", @id_name); }
     }
     int a_code = lv_code;
+    int a_wcode = fl32_code(a_code);       // the width to read and write the target with (a float local: its whole 8-byte slot)
     int a_kind = lv_kind;
     int lv_dyn_saved = lv_dyn;
     int a_tid = lv_tid;
@@ -528,7 +529,11 @@ void parse_assign_core(char^ target) {
     }
     int rhs_ty = ex_ty;
     if for_step == 0 { expect(";"); }
-    if tgt_off >= 0 {
+    bool direct_fl = tgt_off >= 0 && a_code == 6 && a_wcode == 8;      // a float local: no address register, the slot is read and written where it is
+    char^ tgt_bname = "x29";
+    if tgt_base == 28 { tgt_bname = "x28"; }
+    if direct_fl {
+    } else if tgt_off >= 0 {
         emit_str("add x3, x");           // x3 = the target's address, x0 = the value
         emit_int(tgt_base);
         emit_str(", #");
@@ -545,7 +550,7 @@ void parse_assign_core(char^ target) {
     }
     emit_line("mov x1, x0");
     if op[0] != 0 {
-        load_from_x3(a_code);
+        if direct_fl { ins_mem("ldr", "x0", tgt_bname, tgt_off); } else { load_from_x3(a_wcode); }
         if is_float(tgt_ty) {
             fp_binop(@op, tgt_ty, rhs_ty);
         } else {
@@ -555,7 +560,7 @@ void parse_assign_core(char^ target) {
         }
         emit_line("mov x1, x0");
     }
-    store_through(a_code);
+    if direct_fl { ins_mem("str", "x1", tgt_bname, tgt_off); } else { store_through(a_wcode); }
     if src_owner >= 0 {
         // p = owner; storing it somewhere that outlives the block (a field, an element, a global,
         // another owner) moves the ownership there; a plain alias variable only borrows it

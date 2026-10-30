@@ -885,6 +885,13 @@ void as_h_mem(int op, int shift) {
         else if op == 0xF900 { op = 0x3D80; }
         else { as_fail(); }
         shift = 4;
+    } else if as_cur() == 's' && as_is_digit(as_peek(1)) {
+        // ldr sN, [..] / str sN, [..]  (a float)
+        rt = as_parse_freg();
+        if op == 0xF940 { op = 0xBD40; }
+        else if op == 0xF900 { op = 0xBD00; }
+        else { as_fail(); }
+        shift = 2;
     } else if as_cur() == 'd' && as_is_digit(as_peek(1)) {
         // ldr dN, [..] / str dN, [..]  (a double)
         rt = as_parse_freg();
@@ -1096,6 +1103,10 @@ void as_h_fmov() {
             int rf = as_parse_freg();                  // fmov dN, dM
             if as_fp_kind != 1 { as_fail(); }
             as_put32(0x1E604000 | (rf << 5) | rd);
+        } else if kind == 0 && as_at_freg() {
+            int rf2 = as_parse_freg();                 // fmov sN, sM
+            if as_fp_kind != 0 { as_fail(); }
+            as_put32(0x1E204000 | (rf2 << 5) | rd);
         } else if kind == 1 {
             int rn = as_parse_reg();
             as_put32(0x9E670000 | (rn << 5) | rd);

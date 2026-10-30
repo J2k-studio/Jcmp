@@ -1,4 +1,4 @@
-// neuron 0.7.0 -- tensors and small neural networks that train on the phone.   #import <neuron>   (needs jcmp 1.1.0.0; license: MPL-2.0)
+// neuron 0.7.1 -- tensors and small neural networks that train on the phone.   #import <neuron>   (needs jcmp 1.1.0.0; license: MPL-2.0)
 // 0.2.0: Tensor::matmul_fast(o): float32 + NEON dot products + threads for big tables (see the fast way below)
 //   Gpt m = Gpt::make(256, 64, 64, 4, 2, 1);   m.step(data, starts, lr, decay, clip);   m.write(prompt, n, temp, topk, seed)      // 0.7.0: a GPT that trains on the phone (bottom of this file)
 //   Tensor a = Tensor::zeros(2, 3);   a.set(0, 1, 5.0);   Tensor c = a.matmul(b);   Tensor p = c.relu().softmax();
@@ -41,6 +41,12 @@ double nt_tanh(double x) {
 // ---- the fast way to multiply (neuron 0.2.0): the numbers are packed as float32 in rows of a multiple of 8, B is turned over so that every
 // result is a dot product of two rows (4 numbers at a time, no splat, two accumulators), and the rows of the result are shared among threads.
 // bench/dot.jk measured: 1.8-2.1 GFLOPS on one core (the plain loop: 0.4), and about 3.5 times more with 4 threads.
+// the GPU hook (see <neurongpu>): when nt_gpu_on is 1 and a product has at least nt_gpu_min multiply-adds, Tensor32.matmul asks nt_gpu_fn
+// (a, b, c, m, k, n; c is zero; it returns 1 when it wrote the product) before it uses the CPU
+int nt_gpu_on;
+int nt_gpu_min;
+int(float^, float^, float^, int, int, int)^ nt_gpu_fn;
+
 float^ mm_a;                     // m rows of kp numbers
 float^ mm_bt;                    // n rows of kp numbers (B turned over)
 float^ mm_c;                     // m rows of n numbers
@@ -483,6 +489,9 @@ struct Tensor32 {
         int k = self.cols();
         int n = o.cols();
         Tensor32 r = Tensor32::zeros(m, n);
+        if nt_gpu_on == 1 && m * k * n >= nt_gpu_min {
+            if nt_gpu_fn(@self.d[0], @o.d[0], @r.d[0], m, k, n) == 1 { return r; }
+        }
         if m * k * n < 2500000 {
             if n % 4 == 0 {
                 nt_mm_small(@self.d[0], @o.d[0], @r.d[0], m, k, n);

@@ -1,6 +1,8 @@
-# J2K / Jcmp 1.2.6.0
+# J2K / Jcmp 1.2.7.0
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
+
+**1.2.7.0:** a `float` variable lives in a floating-point register and float arrays are read and written with one instruction (about 25% faster loops of floats), the library `neurongpu` (the matrix product on the GPU), `retrieve` (search in your own texts), `mlp` (train a small network in a few lines), `vulkan` 0.3.0 (compute from SPIR-V), `simd` 0.10.0.
 
 **1.2.6.0:** `i8x16` and `a.dot(b)` (the int8 dot product, `SDOT`: quantised AI models run 2-3 times faster), arguments beyond the eighth are checked and converted, the libraries `neuron` 0.7.0 (a GPT that trains on the phone), `gguf`/`llama` (run GGUF models), `websocket`, the Gateway of `discord`, and a tutorial of 82 lessons (down to bits, a tiny CPU and ARM64 machine words).
 

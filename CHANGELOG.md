@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.7.0 (2026-10-30)
+* **Added (compiler):** a `float` local lives in a floating-point register (`d8`..`d15`) instead of the stack: the slot is a whole 8-byte value, assignments read and write it where it is, the register pass knows `fmov sK, wR` / `fmov wR, sK`, and new peepholes turn `fmov` through a whole-number register into `fmov sM, sK` and a float load or store of an array element into `ldr sK` / `str sK` (a loop that sums floats is about 25% faster; the assembler knows `fmov sN, sM` and `ldr` / `str` of an `s` register). The search of the dead-register question follows a loop once (it ran out of steps before). Test t561.
+* **Added (libraries):** `neurongpu` 0.1.0 (`NeuronGpu::enable(min_work)`: the products of `Tensor32.matmul` on the GPU, 1.5 times faster at 256 x 256 and 2.4 times at 512 x 512 on a Kirin 990; `neuron` 0.7.1 has the hook), `retrieve` 0.1.0 (BM25 search over passages of text, English and Thai; the first part of the assistant), `simd` 0.10.0, `mlp` 0.1.0 (train a small network in a few lines: `Mlp::make`, `fit`, `fit_classes`, `predict`, `accuracy`, `save` / `load`), `vulkan` 0.3.0 (a device and queue, buffers the CPU and GPU share, a compute pipeline from SPIR-V: a vector add runs on the Mali through Vulkan); lessons for 20 libraries in Jcmp-libs. Tests t562-t565.
+* **Fixed:** the test runner waits for the last heartbeat of the test server (t550) and for the local TLS server to listen (t458, t462) instead of a fixed second: both failed only on a busy phone.
+
 ## 1.2.6.0 (2026-10-30)
 * **Added (language):** `i8x16` in `<simd>`: sixteen bytes in one register (`load`, `store`, `+`, `-`) and `a.dot(b)`, the int8 dot product of the CPU (`SDOT`, 16 multiply-adds in one instruction), made as one instruction by the compiler (the lifter, the IR and the assembler know it; the pseudo instruction `sdotz`); tests `t558_i8x16_dot`. A quantised model product is 2-3 times faster with it (`<llama>`: 120 tokens a second for a 15 M model on a Kirin 990).
 * **Added (compiler):** four `IR_VDUP` of the same value (`{a, a, a, a}`) become one `dup` (P1 of docs/design/21-loop-speed.md); the lifter reads `.16b` vectors.
