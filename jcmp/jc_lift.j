@@ -2121,6 +2121,10 @@ void ir_say(char^ a, char^ b, char^ c) {
 // the passes that every function gets (the same for the functions that are kept for inlining and the others)
 void ir_passes_basic() {
     int cf0 = cf_changes;
+    if (ir_opt & 4) != 0 && opt_nullchk == 1 {
+        op_nullchk();
+        if nc_changes > 0 { op_clean_run(); }
+    }
     if (ir_opt & 4096) != 0 { op_copy_inline(); }
     if (ir_opt & 128) != 0 { op_thread(); }
     if (ir_opt & 32768) != 0 { op_sroa(); }

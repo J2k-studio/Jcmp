@@ -914,6 +914,28 @@ void as_h_mem(int op, int shift) {
         if as_cur() != ',' { as_fail(); }
         as_ci += 1;
         as_skip_spaces();
+        if as_cur() == 'x' {
+            // [xN, xM] or [xN, xM, lsl #k] (k is 0 or the log2 of the size): the address is the base plus the index, shifted
+            int rm = as_parse_reg();
+            int sflag = 0;
+            as_skip_spaces();
+            if as_cur() == ',' {
+                as_ci += 1;
+                as_skip_spaces();
+                if as_cur() != 'l' || as_peek(1) != 's' || as_peek(2) != 'l' { as_fail(); }
+                as_ci += 3;
+                as_skip_spaces();
+                if as_cur() != '#' { as_fail(); }
+                as_ci += 1;
+                int sh = as_parse_number();
+                if sh == shift && shift > 0 { sflag = 1; } else if sh != 0 { as_fail(); }
+                as_skip_spaces();
+            }
+            if as_cur() != ']' { as_fail(); }
+            as_ci += 1;
+            as_put32(((op << 16) & 0xFEFFFFFF) | 0x00200000 | 0x00000800 | (3 << 13) | (sflag << 12) | (rm << 16) | (rn << 5) | rt);
+            return;
+        }
         if as_cur() != '#' { as_fail(); }
         as_ci += 1;
         imm = as_parse_number();

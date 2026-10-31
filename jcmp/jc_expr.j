@@ -4260,8 +4260,19 @@ void dyn_index() {
         used_oob = 1;
     }
     emit_line("ldr x2, [x1, #16]");
-    ins_n("mov x3, ", size_of(code));
-    emit_line("mul x0, x0, x3");
+    int esz = size_of(code);
+    if esz == 1 {
+        // nothing to multiply
+    } else if esz == 2 || esz == 4 || esz == 8 || esz == 16 {
+        int ek = 1;
+        if esz == 4 { ek = 2; }
+        if esz == 8 { ek = 3; }
+        if esz == 16 { ek = 4; }
+        ins_n("lsl x0, x0, #", ek);                  // a shift: the lifter can fold it into the address of the load or store
+    } else {
+        ins_n("mov x3, ", esz);
+        emit_line("mul x0, x0, x3");
+    }
     emit_line("add x0, x0, x2");
     lv_code = code;
     lv_ptr = eptr;

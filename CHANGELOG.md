@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.10.0 (2026-10-30)
+* **Added (compiler, speed of loops over arrays):** the loops use 10-25 % fewer instructions (`y[k] = y[k] * 0.5 + x[k]` in a function: 67 instructions before, 51 now). What changed: the index of an element of 2, 4, 8 or 16 bytes is a shift; a float is loaded and stored straight into a floating-point register (`ldr s0, [x2, x0, lsl #2]`, `str s0, ...`) instead of through a whole-number register and `fmov`; a load and a store can use a register offset (`[xN, xM, lsl #k]`, the assembler knows the form); the check of an array variable for null is dropped when every way in has passed the same check (a data flow over the blocks; `-nonullchk` switches it off); the header of an array is not loaded again while nothing has changed memory (a store into the frame no longer counts as a change); `mov xT, xV` is forwarded into the line that reads xT; the search for dead registers knows that `__panic` never comes back.
+* **Not claimed:** J2K is not yet equal to C. The first comparison (`bench/vs_c`, six programs, measured on a busy phone) shows 1.1 to 4.7 times the time of C -O2; the plan to close it (webs as virtual registers, loop-invariant motion, the vectoriser for floats) is in `docs/design/25-language-roadmap.md`, section 8.
+* **Fixed:** `ship_tool.sh` adds only the tool `jcmp` and `versions.txt` to Jcmp-Tools (it had swept other files in).
+* Same output as 1.2.8.0 on all 309 tests that print something (compared program by program), and the whole suite is run by `ship.sh`.
+
 ## 1.2.8.0 (2026-10-30)
 * **Added (docs):** `docs/design/25-language-roadmap.md` (the versions to 2.0, what each promises, the ten next steps, the rule for features near the hardware) and the first table of J2K against C and C++ (`bench/vs_c`, taken on a busy phone).
 * **Added (compiler):** `jcmp fmt [-c|-p] FILE...`, the formatter (white space only: line ends, trailing spaces, tabs at the start of a line, blank lines, the last newline; idempotent; the code of 63 programs is the same before and after). Test t566.

@@ -1,0 +1,46 @@
+#import <stdlib>
+int fib(int n) { if n < 2 { return n; } return fib(n - 1) + fib(n - 2); }
+int main() {
+    String[] a = Env::args();
+    int w = a[1].to_int();
+    if w == 0 { cout << fib(35) << "\n"; }
+    if w == 1 {
+        float[] x = arr(1000);
+        for i in 0..1000 { x.push(1.5); }
+        float s = 0.0;
+        for r in 0..20000 { int k = 0; while k < 1000 { s += x[k]; k += 1; } }
+        cout << s << "\n";
+    }
+    if w == 2 {
+        float[] x = arr(1000);
+        float[] y = arr(1000);
+        for i in 0..1000 { x.push(1.5); y.push(0.0); }
+        for r in 0..20000 { int k = 0; while k < 1000 { y[k] = y[k] * 0.5 + x[k]; k += 1; } }
+        cout << y[7] << "\n";
+    }
+    if w == 3 {
+        int[] x = arr(1000);
+        for i in 0..1000 { x.push(i); }
+        int s = 0;
+        for r in 0..20000 { int k = 0; while k < 1000 { s += x[k]; k += 1; } }
+        cout << s << "\n";
+    }
+    if w == 4 {
+        int n = 5000000;
+        char[] f = arr(n + 1);
+        for i in 0..n + 1 { f.push(1); }
+        int c = 0;
+        int i = 2;
+        while i <= n {
+            if f[i] == 1 { c += 1; int j = i * 2; while j <= n { f[j] = 0; j += i; } }
+            i += 1;
+        }
+        cout << c << "\n";
+    }
+    if w == 5 {
+        int s = 0;
+        for r in 0..1000000 { int[] t = arr(8); t.push(r); t.push(2); s += t[0] + t[1]; }
+        cout << s << "\n";
+    }
+    return 0;
+}

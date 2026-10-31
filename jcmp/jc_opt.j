@@ -1333,6 +1333,8 @@ int vn_cellvn[16384];
 int vn_q;                       // the deepest stack cell now
 int vn_changes;
 int vn_mem;                     // the memory epoch: every store and every call makes a new one (a load of a global array is the same value inside one epoch)
+int nc_dbg;                      // -ncdbg: say what the null check pass sees
+int vn_neg_open;                // 1: the address of a stack cell (a negative offset of the frame) is taken somewhere: a store through a pointer may be to a cell
 int vn_cellhits;                // how many values were read from a cell instead of being computed again
 
 // the numbers of the hint line  ";H off:size:flag ..."  into op_plain
@@ -1555,6 +1557,21 @@ void vn_block(int b, int cont) {
                     V = vn_find(1002, sl, vn_ver[sl], 0);
                     if V < 0 { V = vn_new(1002, sl, vn_ver[sl], 0); vn_enter(V); }
                     if V >= 0 && vn_al[V] >= 0 { V = vn_al[V]; fwd = true; }
+                } else if ir_a[i] != 30 && ir_a[i] >= 1 && ir_vcls[d] == 0 && opt_nullchk == 1 && vn_reg(ir_a[i]) >= 0 {
+                    // a load through a pointer: the same pointer in the same epoch gives the same value (the epoch changes at every call and at every store but the
+                    // stores into a frame slot or cell that no pointer can reach); the data pointer of the header of an array is read once an access, not once a round
+                    int vh = vn_reg(ir_a[i]);
+                    valuable = true;
+                    memload = true;
+                    V = vn_find(1004, vh, ir_k[i], vn_mem * 64 + ir_w[i] + 16);
+                    if V < 0 {
+                        V = vn_new(1004, vh, ir_k[i], vn_mem * 64 + ir_w[i] + 16);
+                        if V >= 0 {
+                            vn_enter(V);
+                            vn_def[V] = i;
+                            vn_heavy[V] = 2;
+                        }
+                    }
                 } else if ir_a[i] != 30 && ir_a[i] >= 1 && (ir_opt & 4194304) == 0 && ir_vcls[d] == 0 {
                     // a load from an element of a global array: the same address in the same epoch is the same value
                     int vg = vn_reg(29);
@@ -1692,7 +1709,9 @@ void vn_block(int b, int cont) {
             }
         }
         // anything else
-        if op == IR_STORE || op == IR_CALL || op == IR_CALLIND || op == IR_SYSCALL { vn_mem += 1; }
+        // a store into the frame (a plain slot, or a stack cell when nobody takes the address of a cell) cannot change what a pointer reaches
+        bool frame_store = op == IR_STORE && ir_a[i] == 30 && ir_w[i] == 8 && ((ir_k[i] >= 0 && ir_k[i] % 8 == 0 && ir_k[i] / 8 < 8192 && op_plain[ir_k[i] / 8] == 1) || (ir_k[i] < 0 && vn_neg_open == 0));
+        if (op == IR_STORE && !frame_store) || op == IR_CALL || op == IR_CALLIND || op == IR_SYSCALL { vn_mem += 1; }
         if op == IR_STORE {
             int sl2 = vn_slot(i);
             if sl2 >= 0 {
@@ -1784,6 +1803,23 @@ int vn_pc[IR_MAXB];             // the number of predecessors (that the flow can
 void op_walk(int kind) {
     op_graph();
     vn_hints();
+    vn_neg_open = 0;
+    {
+        int ib = 0;
+        while ib < ir_nb {
+            if op_po[ib] >= 0 {
+                int ii = ir_bs[ib];
+                while ii < ir_be[ib] {
+                    int io = ir_op[ii];
+                    if (io == IR_ADDR_SLOT && ir_d[ii] != 30 && (ir_k[ii] < 0 || ir_b[ii] < 0)) || (io == IR_ADD && ir_a[ii] == 30 && ir_bi[ii] == 1 && ir_b[ii] < 0) { vn_neg_open = 1; }
+                    if ir_a[ii] == 30 && io != IR_LOAD && io != IR_STORE && io != IR_ADDR_SLOT && !(io == IR_ADD && ir_bi[ii] == 1) { vn_neg_open = 1; }
+                    ii += 1;
+                }
+            }
+            ib += 1;
+        }
+    }
+    if nc_dbg == 1 { write_err("  vn of "); write_err(@ir_fname); write_err(" neg_open "); write_err_int(vn_neg_open); write_err(" plain16 "); write_err_int(op_plain[2]); write_err(" plain24 "); write_err_int(op_plain[3]); write_err(" hint "); write_err(@lf_hint_text); write_err("\n"); }
     vn_q = op_maxq();
     int b = 0;
     int nb0 = ir_nb;
@@ -3968,7 +4004,7 @@ void op_sroa_finish() {
                     int off = k;
                     if op == IR_ADD { off = ir_b[i]; }
                     int o = fa_object_of(off);
-                    if o >= 0 { ob_esc[o] = 1; }
+                    if o >= 0 && !(opt_nullchk == 1 && nc_is_record(i, b, off)) { ob_esc[o] = 1; }
                     if (ir_opt & 262144) != 0 { write_err("  address of "); write_err_int(off); write_err(" by instruction "); write_err_int(i); write_err(" op "); write_err_int(op); write_err("\n"); }
                 } else if (op == IR_LOAD || op == IR_STORE) && ir_a[i] == 30 && k >= 16 {
                     int o2 = fa_object_of(k);
@@ -4042,6 +4078,248 @@ void op_sroa_finish() {
             t += 1;
         }
         lf_hint_n = nn;
+    }
+}
+
+
+// ---------------------------------------------------------------------------------------------- null checks of array variables
+// Every use of a dynamic array or a String variable loads its slot and checks it for null (a block that calls __Arr__nullerr when it is). The same variable is
+// checked again at every use, three times in `y[k] = y[k] * 0.5 + x[k]`. A slot of the frame whose address is never taken (or is taken only for the
+// cleanup record that frees the array at the end: the record is read by the code that unwinds, nothing else can write through it) can be changed only by
+// a store that names it. So a check is redundant when every way in to it has passed the same check and no store to the slot lies between: the branch
+// becomes a jump and the call of __Arr__nullerr is dead. (A data flow over the blocks: the set of slots known not to be null, joined by AND.)
+int nc_off[64];                  // the offsets of the slots that are checked
+int nc_addr[64];                 // how many times the address of the slot is used for anything but the cleanup record
+int nc_n;
+int nc_in[IR_MAXB];
+int nc_out[IR_MAXB];
+int nc_slot[IR_MAXB];            // the number of the slot that the block ends by checking, or -1
+int nc_ok[IR_MAXB];              // the block where the check passes to
+int nc_panic[IR_MAXB];           // 1: the block calls __Arr__nullerr (it never comes back)
+int nc_changes;
+
+int nc_index(int off) {
+    int i = 0;
+    while i < nc_n {
+        if nc_off[i] == off { return i; }
+        i += 1;
+    }
+    if nc_n >= 62 { return 0 - 1; }
+    nc_off[nc_n] = off;
+    nc_addr[nc_n] = 0;
+    nc_n += 1;
+    return nc_n - 1;
+}
+
+// the instruction after i in the block that is not a nop, or -1
+int nc_next(int i, int b) {
+    int j = i + 1;
+    while j < ir_be[b] && ir_op[j] == IR_NOP { j += 1; }
+    if j >= ir_be[b] { return 0 - 1; }
+    return j;
+}
+
+// is the address made by instruction i (of block b), for the offset off, only given to the cleanup record (the store 16 bytes further)?
+bool nc_is_record(int i, int b, int off) {
+    int j = nc_next(i, b);
+    if !(j >= 0 && ir_op[j] == IR_STORE && ir_a[j] == 30 && ir_w[j] == 8 && ir_b[j] == ir_d[i] && ir_k[j] == off + 16) { return false; }
+    // the record goes on with the address of the function that frees the object, stored 8 bytes further
+    int j2 = nc_next(j, b);
+    if !(j2 >= 0 && ir_op[j2] == IR_ADDR_FUNC) { return false; }
+    int j3 = nc_next(j2, b);
+    return j3 >= 0 && ir_op[j3] == IR_STORE && ir_a[j3] == 30 && ir_b[j3] == ir_d[j2] && ir_k[j3] == off + 24;
+}
+
+// the hint line says that the slot off is a plain 8-byte value (flag 1): value numbering may then reuse its loads
+void nc_make_plain(int off) {
+    int p = 2;
+    while p < lf_hint_n {
+        while p < lf_hint_n && lf_hint_text[p] == 32 { p += 1; }
+        int start = p;
+        int o = 0;
+        while p < lf_hint_n && lf_hint_text[p] >= 48 && lf_hint_text[p] <= 57 { o = o * 10 + (lf_hint_text[p] - 48); p += 1; }
+        if p < lf_hint_n && lf_hint_text[p] == 58 && o == off && p + 3 < lf_hint_n && lf_hint_text[p + 1] == 56 && lf_hint_text[p + 2] == 58 && lf_hint_text[p + 3] == 48
+            && (p + 4 >= lf_hint_n || lf_hint_text[p + 4] == 32) {
+            lf_hint_text[p + 3] = 49;
+            if nc_dbg == 1 { write_err("  made plain: "); write_err_int(off); write_err("\n"); }
+            return;
+        }
+        while p < lf_hint_n && lf_hint_text[p] != 32 { p += 1; }
+    }
+}
+
+void op_nullchk() {
+    nc_changes = 0;
+    if nc_dbg == 1 { write_err("== nullchk of "); write_err(@ir_fname); write_err(" blocks "); write_err_int(ir_nb); write_err("\n"); }
+    op_graph();
+    nc_n = 0;
+    int b = 0;
+    while b < ir_nb {
+        nc_slot[b] = 0 - 1;
+        nc_ok[b] = 0 - 1;
+        nc_panic[b] = 0;
+        b += 1;
+    }
+    // 1. the blocks that check a slot, and the blocks that panic
+    b = 0;
+    while b < ir_nb {
+        if op_po[b] >= 0 && ir_be[b] > ir_bs[b] {
+            int i0 = ir_bs[b];
+            while i0 < ir_be[b] {
+                if ir_op[i0] == IR_CALL && (str_eq(@ir_name + ir_k[i0] * 64, "__Arr__nullerr") || str_eq(@ir_name + ir_k[i0] * 64, "__panic")) { nc_panic[b] = 1; }
+                i0 += 1;
+            }
+        }
+        b += 1;
+    }
+    // a block that only jumps on to a block that panics panics too (the body of an inlined __Arr__nullerr is several blocks)
+    int pr = 0;
+    while pr < 6 {
+        b = 0;
+        while b < ir_nb {
+            if op_po[b] >= 0 && nc_panic[b] == 0 && ir_be[b] > ir_bs[b] {
+                int tt = ir_be[b] - 1;
+                if ir_op[tt] == IR_JMP && ir_t1[tt] >= 0 && nc_panic[ir_t1[tt]] == 1 { nc_panic[b] = 1; }
+            }
+            b += 1;
+        }
+        pr += 1;
+    }
+    b = 0;
+    while b < ir_nb {
+        if op_po[b] >= 0 && ir_be[b] > ir_bs[b] {
+            int t = ir_be[b] - 1;
+            if nc_dbg == 1 && ir_op[t] == IR_BR { write_err("  br in block "); write_err_int(b); write_err(" bi "); write_err_int(ir_bi[t]); write_err(" b "); write_err_int(ir_b[t]); write_err(" k "); write_err_int(ir_k[t]); write_err(" t2 "); write_err_int(ir_t2[t]); write_err(" panic "); if ir_t2[t] >= 0 { write_err_int(nc_panic[ir_t2[t]]); } write_err("\n"); }
+            if ir_op[t] == IR_BR && ir_t2[t] >= 0 && nc_panic[ir_t2[t]] == 1 && ir_bi[t] == 1 && ir_b[t] == 0 && ir_k[t] == IR_NE {
+                // the register that is tested was loaded from a slot of the frame, as the last thing that wrote it in this block
+                int v = ir_a[t];
+                int j = t - 1;
+                while j >= ir_bs[b] && (ir_op[j] == IR_NOP || (ir_d[j] != v && !(ir_op[j] == IR_CALL || ir_op[j] == IR_CALLIND))) { j -= 1; }
+                if j >= ir_bs[b] && ir_op[j] == IR_LOAD && ir_a[j] == 30 && ir_w[j] == 8 && ir_d[j] == v && ir_k[j] >= 16 && ir_k[j] % 8 == 0 {
+                    int ix = nc_index(ir_k[j]);
+                    if ix >= 0 {
+                        nc_slot[b] = ix;
+                        nc_ok[b] = ir_t1[t];
+                    }
+                }
+            }
+        }
+        b += 1;
+    }
+    if nc_dbg == 1 { write_err("nullchk: "); write_err(@ir_fname); write_err(" slots "); write_err_int(nc_n); write_err("\n"); }
+    if nc_n == 0 { return; }
+    // 2. the slots whose address is used for something else than the cleanup record may be changed by anyone: not tracked
+    b = 0;
+    while b < ir_nb {
+        if op_po[b] >= 0 {
+            int i = ir_bs[b];
+            while i < ir_be[b] {
+                int op = ir_op[i];
+                if (op == IR_ADDR_SLOT && ir_d[i] != 30) || (op == IR_ADD && ir_a[i] == 30 && ir_bi[i] == 1) {
+                    int off = ir_k[i];
+                    if op == IR_ADD { off = ir_b[i]; }
+                    int ix = 0 - 1;
+                    int q = 0;
+                    while q < nc_n { if nc_off[q] == off { ix = q; } q += 1; }
+                    if ix >= 0 {
+                        // the cleanup record: the address goes to the slot 16 bytes further, in the next instruction
+                        if !nc_is_record(i, b, off) { nc_addr[ix] += 1; }
+                    }
+                }
+                // a frame pointer that goes anywhere else may reach any slot
+                if (ir_a[i] == 30 && op != IR_LOAD && op != IR_STORE && op != IR_ADDR_SLOT && !(op == IR_ADD && ir_bi[i] == 1))
+                    || (ir_uses_b(op) && ir_bi[i] == 0 && ir_b[i] == 30) {
+                    int q2 = 0;
+                    while q2 < nc_n { nc_addr[q2] += 1; q2 += 1; }
+                }
+                if op == IR_CALL || op == IR_CALLIND || op == IR_SYSCALL {
+                    int g = 0;
+                    while g < ir_ac[i] {
+                        if ir_args[ir_as[i] + g] == 30 {
+                            int q3 = 0;
+                            while q3 < nc_n { nc_addr[q3] += 1; q3 += 1; }
+                        }
+                        g += 1;
+                    }
+                }
+                i += 1;
+            }
+        }
+        b += 1;
+    }
+    // 3. the data flow: the slots known not to be null at the start of each block (all of them to begin with, except at the entry)
+    int all = 0;
+    int q4 = 0;
+    while q4 < nc_n { if nc_addr[q4] == 0 { all = all | (1 << q4); } q4 += 1; }
+    b = 0;
+    while b < ir_nb {
+        nc_in[b] = all;
+        nc_out[b] = all;
+        b += 1;
+    }
+    nc_in[0] = 0;
+    int round = 0;
+    bool changed = true;
+    while changed && round < 30 {
+        changed = false;
+        round += 1;
+        int ri = 0;
+        while ri < op_nrpo {
+            b = op_rpo[ri];
+            ri += 1;
+            if b >= ir_nb || op_po[b] < 0 { continue; }
+            int in = all;
+            if b == 0 { in = 0; }
+            else {
+                int e = op_phead[b];
+                bool any = false;
+                while e >= 0 {
+                    int p = e / 2;
+                    e = op_enext[e];
+                    if op_po[p] < 0 || nc_panic[p] == 1 { continue; }
+                    int pe = nc_out[p];
+                    if nc_slot[p] >= 0 && nc_ok[p] == b { pe = pe | (1 << nc_slot[p]); }
+                    in = in & pe;
+                    any = true;
+                }
+                if !any { in = 0; }
+            }
+            int m = in;
+            int i = ir_bs[b];
+            while i < ir_be[b] {
+                if ir_op[i] == IR_STORE && ir_a[i] == 30 {
+                    int q5 = 0;
+                    while q5 < nc_n {
+                        if ir_k[i] < nc_off[q5] + 8 && ir_k[i] + 8 > nc_off[q5] { m = m & ~(1 << q5); }
+                        q5 += 1;
+                    }
+                }
+                i += 1;
+            }
+            if in != nc_in[b] || m != nc_out[b] { changed = true; }
+            nc_in[b] = in;
+            nc_out[b] = m;
+        }
+    }
+    if nc_dbg == 1 { int qd = 0; while qd < nc_n { write_err("  slot "); write_err_int(nc_off[qd]); write_err(" addr uses "); write_err_int(nc_addr[qd]); write_err("\n"); qd += 1; } }
+    // 4. a check that every way in has passed is a jump
+    b = 0;
+    while b < ir_nb {
+        if op_po[b] >= 0 && nc_slot[b] >= 0 && (nc_out[b] & (1 << nc_slot[b])) != 0 && nc_addr[nc_slot[b]] == 0 {
+            int t2 = ir_be[b] - 1;
+            ir_op[t2] = IR_JMP;
+            ir_t1[t2] = nc_ok[b];
+            ir_t2[t2] = 0 - 1;
+            ir_a[t2] = 0;
+            nc_changes += 1;
+        }
+        b += 1;
+    }
+    // the slots that nobody can change but a store that names them are plain values for value numbering
+    int q6 = 0;
+    while q6 < nc_n {
+        if nc_addr[q6] == 0 { nc_make_plain(nc_off[q6]); }
+        q6 += 1;
     }
 }
 
