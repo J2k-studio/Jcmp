@@ -17,16 +17,14 @@ struct Mem {
     // n bytes, not cleared (null if the system has no memory left)
     // The common case is written out here (one thread, a small block that a free list has): no other function is called.
     static void^ alloc(int n) {
-        if std_debug == 0 && std_mt == 0 && n > 0 && n <= 2032 {
-            int need = ((n + 15) >> 4) * 16 + 16;
-            int c = std_cls_of[need >> 4];
+        if (std_debug | std_mt) == 0 && n > 0 && n <= 2032 {
+            int c = std_cls_of[(n + 31) >> 4];             // (n + 31) >> 4 is the size with the header in 16-byte steps
             int h = std_free_cls[c];
             if h != 0 {
                 int^ hd = (int^)h;
                 std_free_cls[c] = hd[1];
                 hd[1] = 0;
-                std_alloc_n += 1;
-                return (void^)(h + 16);
+                return (void^)(h + 16);                    // the counters of the leak report are kept only in the -d build (dbg_alloc)
             }
         }
         return Mem::alloc_general(n);
@@ -159,14 +157,13 @@ struct Mem {
     }
     // give a block from alloc back (null is ignored); the common case (one thread, a small block of a class) is written out here
     static void free(void^ p) {
-        if std_debug == 0 && std_mt == 0 && (int)p != 0 {
+        if (std_debug | std_mt) == 0 && (int)p != 0 {
             int blk = (int)p - 16;
             int^ head = (int^)blk;
             int size = head[0];
             if (size & 1) == 0 && size <= 2048 {
                 int c = std_cls_exact[size >> 4];
                 if c >= 0 {
-                    std_free_n += 1;
                     head[1] = std_free_cls[c];
                     std_free_cls[c] = blk;
                     return;

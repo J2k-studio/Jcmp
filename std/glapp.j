@@ -1,4 +1,4 @@
-// glapp 0.1.0 -- a game that is a shared library inside an Android app: the app (a GLSurfaceView) owns the screen and the OpenGL ES context
+// glapp 0.2.0 -- a game that is a shared library inside an Android app: the app (a GLSurfaceView) owns the screen and the OpenGL ES context
 // and calls the game on its GL thread.   #import <glapp>   build: jcmp game.jk -l -o libgame.so   (makej with  render = "gl"  in manifest.toml does it all)   (license: MPL-2.0)
 // The game defines four functions (glapp calls them; they are found by name):
 //   void game_init(int w, int h)                   // the surface exists (w x h dots): load pictures, make things
@@ -6,6 +6,8 @@
 //   void game_frame(int ms)                        // draw one frame; ms since the last one. Draw with  Canvas2d^ c = glapp_canvas();  or  glapp_gl()  directly
 //   void game_touch(int action, int x, int y, int id)      // action 1 down, 2 move, 3 up (the same numbers as the Jaric app); x, y in dots of the surface
 // glapp_gl() is the Gl of the context the app made; glapp_canvas() the Canvas2d on it (<glcanvas>, ES 3 or ES 2); glapp_w() / glapp_h() the size.
+// Text (0.2.0): glapp_on_key(my_key) in game_init sets a function  void my_key(int ch)  that gets every typed character (its code; 8 is delete, 10 is enter) from the
+// soft or the hardware keyboard; glapp_keyboard(true) asks the app to show the soft keyboard (false: hide it). A game that sets neither is not changed.
 // The functions below (Java_com_j2k_gamerun_GameLib_*) are the JNI entry points of the class GameLib that the app has; do not call them.
 #import <opengl3>
 #import <canvas2d>
@@ -53,4 +55,20 @@ export void Java_com_j2k_gamerun_GameLib_frame(int env, int cls, int ms) {
 export void Java_com_j2k_gamerun_GameLib_touch(int env, int cls, int action, int x, int y, int id) {
     if glapp_started == 0 { return; }
     game_touch(action, x, y, id);
+}
+
+// ---- text input (0.2.0): the app sends the typed characters, and asks every frame whether the soft keyboard should show
+void(int)^ glapp_key_fn;
+int glapp_kb_wanted;
+
+void glapp_on_key(void(int)^ f) { glapp_key_fn = f; }
+void glapp_keyboard(bool on) { if on { glapp_kb_wanted = 1; } else { glapp_kb_wanted = 0; } }
+
+export void Java_com_j2k_gamerun_GameLib_key(int env, int cls, int ch) {
+    if glapp_started == 0 { return; }
+    if glapp_key_fn != null { glapp_key_fn(ch); }
+}
+
+export int Java_com_j2k_gamerun_GameLib_wantsKeyboard(int env, int cls) {
+    return glapp_kb_wanted;
 }

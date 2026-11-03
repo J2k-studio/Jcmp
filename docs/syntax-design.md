@@ -2297,3 +2297,24 @@ Recommendation: A for a plain `{name}` / `{expression}` (escape with `{{`), B st
 
 ## 104. `i8x16` and `a.dot(b)` (built 2026-10-30; the owner chose option B of section 102 and asked to continue; names as proposed there)
 Built as proposed in 102, option B (vector types first): `i8x16` in `<simd>` with `load(i8^ p, i)` / `store`, `+` `-` lane by lane, and `a.dot(b)` -> `i32x4` (SDOT: four sums of four products). Not built yet from 102: `f16x8`, `u8x16`, `i16x8`, `widen`, scalar `f16`/`bf16`/`i4`. Not on ARM32 (compile error). Designed by AI at user request; adjustable.
+
+
+## 105. `jout` and `jin` (owner's decision, 2026-11-03)
+
+The owner decided that `cout` is also written `jout` and `cin` is also written `jin` ("it does not affect the users": the old names keep working). The compiler reads `jout` as `cout` and `jin` as `cin` in the lexer, so everything that works with the old names works with the new ones, in the same program too. New texts (README, tutorial, lessons) use `jout` and `jin`; the old pages are changed step by step. `cerr`, `coutf` and `cinf` are not renamed yet (question for the owner in `docs/open-questions.md`: `jerr`?). A variable called `jout` or `jin` is no longer possible (as `cout` and `cin` were never). Test t567.
+
+
+## 106. `cout`, `cin`, `cerr` go away; `jerr` (owner's decision, 2026-11-03)
+
+The owner decided that the old names leave the language: `jout`, `jin` and `jerr` are the names (`jerr` is the new spelling of `cerr`; the compiler reads it as `cerr` from now on). The plan so that nobody is hurt:
+1. **1.2.11:** `jerr` works; `jcmp migrate [-c] FILE...` rewrites `cout` / `cin` / `cerr` to the new names in the code of a file (not in strings or comments); the old names still work with no message.
+2. **1.2.12:** the standard library, the tests, the examples and all the documents are migrated with `jcmp migrate` (one commit, checked by the whole suite and `doccheck`); `-Wold-io` (off by default) warns about the old names.
+3. **1.3.0.0:** the warning is on by default (it names the line and says `jcmp migrate`).
+4. **2.0 (or when the owner says):** the old names are an error with the same help line. A program that had a variable called `jout` / `jin` / `jerr` must rename it (they are reserved words from 1.2.10).
+`coutf` and `cinf` follow the same way when the owner chooses their new names (question in `docs/open-questions.md`). Test t568.
+
+
+## 107. Layout helpers for `jout` (owner's decision, 2026-11-03)
+
+The owner chose option C for formatted output: **no `joutf`/`jinf` keywords and no format strings.** Layout is done with ordinary functions in the stream:
+`jout << fmt(x, 2)` (fixed digits), `tohex(n)`, `tobin(n)` (named so, because `hex` is the object of `using Hex`), `pad(s, w)` (left aligned, spaces on the right), `padl(s, w)` (right aligned). They are plain functions of `std/fmt.j` over `Fmt::fixed / hex / bin / pad_right / pad_left`; the long names stay. Reading stays `jin >> x`. Other forms (`{}` as in Rust, `%` as in C) were offered and not chosen; they can be added later as a shortcut because they do not conflict with this. Test t570.

@@ -39,8 +39,8 @@ void __wr(int fd, char^ p, int n) {
         }
         return;
     }
-    if g[110] + n > 65536 { __flush(); }
-    if n >= 65536 {
+    if g[110] + n > 16384 { __flush(); }
+    if n >= 16384 {
         int off2 = 0;
         while off2 < n {
             int r2 = syscall(64, 1, p + off2, n - off2);

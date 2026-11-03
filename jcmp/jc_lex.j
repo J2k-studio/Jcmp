@@ -1847,6 +1847,10 @@ void next() {
         }
         tok_text[wn] = 0;
         tok_kind = T_IDENT;
+        // jout and jin are the names of cout and cin (the owner's decision 2026-11-03, docs/syntax-design.md 105): the same words to the compiler
+        if wn == 4 && str_eq(@tok_text, "jout") { str_copy(@tok_text, "cout", 8); }
+        else if wn == 3 && str_eq(@tok_text, "jin") { str_copy(@tok_text, "cin", 8); }
+        else if wn == 4 && str_eq(@tok_text, "jerr") { str_copy(@tok_text, "cerr", 8); }
         if lc(0) == '[' && slice_rewrite(wn) {
             // a[lo..hi] became span(a, lo, hi): read it again from the start of the name
             cur_pos = slice_start;

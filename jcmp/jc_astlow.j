@@ -2623,7 +2623,44 @@ void gl_dynmethod(int n) {
         gl_store(30, c1, 1);
         gl_depth += 1;
         gl_load(1, 30, c0);
-        gl_rt2("__Arr__slot", 1);
+        int pw = as1_bytes(code);
+        int pk = 0 - 1;
+        if pw == 1 { pk = 0; }
+        if pw == 2 { pk = 1; }
+        if pw == 4 { pk = 2; }
+        if pw == 8 { pk = 3; }
+        if opt_pushfast == 1 && opt_debug == 0 && pk >= 0 {
+            // the common case in line: the array is not null and length < capacity: the place is data + length * size and the length goes up by one;
+            // the call (also for null and a full array) does the rest
+            int lslow = gl_label();
+            int lchk = gl_label();
+            int lfast = gl_label();
+            int ldone = gl_label();
+            gl_br(IR_EQ, 1, 0, 1, lslow, lchk);
+            gl_place(lchk);
+            gl_load(2, 1, 0);
+            gl_load(3, 1, 8);
+            gl_br(IR_UGE, 2, 3, 0, lslow, lfast);
+            gl_place(lfast);
+            gl_load(3, 1, 16);
+            if pk > 0 {
+                ir_add(IR_SHL, 4, 2, pk, 1, 0);
+                ir_add(IR_ADD, 3, 3, 4, 0, 0);
+            } else {
+                ir_add(IR_ADD, 3, 3, 2, 0, 0);
+            }
+            ir_add(IR_ADD, 2, 2, 1, 1, 0);
+            int pl = ir_add(IR_STORE, 0, 1, 2, 0, 0);
+            ir_w[pl] = 8;
+            ir_add(IR_COPY, 1, 3, 0, 0, 0);
+            gl_jmp(ldone);
+            gl_place(lslow);
+            gl_load(1, 30, c0);
+            gl_rt2("__Arr__slot", 1);
+            gl_place(ldone);
+        } else {
+            gl_rt2("__Arr__slot", 1);
+        }
         ir_add(IR_COPY, 3, 1, 0, 0, 0);
         gl_load(2, 30, c1);
         int se = ir_add(IR_STORE, 0, 3, 2, 0, 0);

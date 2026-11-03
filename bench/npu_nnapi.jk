@@ -1,0 +1,113 @@
+#import <stdlib>
+// NNAPI matrix product on a device: npu_nnapi DEVICE M K N  (device 0 = liteadaptor, the NPU; 1 = the reference CPU). Build: jcmp -dyn bench/npu_nnapi.jk -o npu
+#import <native>
+// a matrix product on the NNAPI device (the NPU path of the phone): C (m x n) = A (m x k) * B (k x n), done as a FULLY_CONNECTED operation
+int lib;
+int fn(String name) { return Native::sym(lib, name); }
+int mk_type(int type, int ndim, int dims) {
+    int t = (int)Mem::alloc(32);
+    for i in 0..4 { Native::poke64(t + i * 8, 0); }
+    Native::poke32(t, type);
+    Native::poke32(t + 4, ndim);
+    Native::poke64(t + 8, dims);
+    return t;
+}
+int main() {
+    lib = Native::open("libneuralnetworks.so");
+    if lib == 0 { jout << "no NNAPI\n"; return 1; }
+    int m = 4; int k = 3; int n = 2;
+    String[] av = Env::args();
+    if av.len > 4 { m = av[2].to_int(); k = av[3].to_int(); n = av[4].to_int(); }
+    float^ a = (float^)Mem::alloc(m * k * 4);
+    float^ w = (float^)Mem::alloc(n * k * 4);     // the weights of FULLY_CONNECTED are n x k: B turned over
+    float^ bias = (float^)Mem::alloc(n * 4);
+    float^ out = (float^)Mem::alloc(m * n * 4);
+    for i in 0..m * k { a[i] = (float)(i % 7) * 0.25; }
+    float^ b = (float^)Mem::alloc(k * n * 4);
+    for i in 0..k * n { b[i] = (float)(i % 4) - 1.0; }
+    for r in 0..k { for c in 0..n { w[c * k + r] = b[r * n + c]; } }
+    for i in 0..n { bias[i] = 0.0; }
+    int dA = (int)Mem::alloc(16); Native::poke32(dA, m); Native::poke32(dA + 4, k);
+    int dW = (int)Mem::alloc(16); Native::poke32(dW, n); Native::poke32(dW + 4, k);
+    int dB = (int)Mem::alloc(16); Native::poke32(dB, n);
+    int dO = (int)Mem::alloc(16); Native::poke32(dO, m); Native::poke32(dO + 4, n);
+    int pm = (int)Mem::alloc(16);
+    Native::poke64(pm, 0);
+    int rc = Native::call1(fn("ANeuralNetworksModel_create"), pm);
+    int model = Native::peek64(pm);
+    jout << "model " << rc << "\n";
+    int add = fn("ANeuralNetworksModel_addOperand");
+    rc = Native::call2(add, model, mk_type(3, 2, dA));                  // 0 input
+    rc = rc + Native::call2(add, model, mk_type(3, 2, dW));             // 1 weights
+    rc = rc + Native::call2(add, model, mk_type(3, 1, dB));             // 2 bias
+    rc = rc + Native::call2(add, model, mk_type(1, 0, 0));              // 3 activation (an int32)
+    rc = rc + Native::call2(add, model, mk_type(3, 2, dO));             // 4 output
+    jout << "operands " << rc << "\n";
+    int setv = fn("ANeuralNetworksModel_setOperandValue");
+    int act = (int)Mem::alloc(16); Native::poke32(act, 0);
+    rc = Native::call4(setv, model, 1, (int)w, n * k * 4);
+    rc = rc + Native::call4(setv, model, 2, (int)bias, n * 4);
+    rc = rc + Native::call4(setv, model, 3, act, 4);
+    jout << "values " << rc << "\n";
+    int ins = (int)Mem::alloc(32);
+    Native::poke32(ins, 0); Native::poke32(ins + 4, 1); Native::poke32(ins + 8, 2); Native::poke32(ins + 12, 3);
+    int outs = (int)Mem::alloc(16); Native::poke32(outs, 4);
+    rc = Native::call6(fn("ANeuralNetworksModel_addOperation"), model, 9, 4, ins, 1, outs);
+    jout << "operation " << rc << "\n";
+    int in0 = (int)Mem::alloc(16); Native::poke32(in0, 0);
+    rc = Native::call5(fn("ANeuralNetworksModel_identifyInputsAndOutputs"), model, 1, in0, 1, outs);
+    rc = rc + Native::call2(fn("ANeuralNetworksModel_relaxComputationFloat32toFloat16"), model, 1);       // the NPU computes in half precision
+    rc = rc + Native::call1(fn("ANeuralNetworksModel_finish"), model);
+    jout << "finish " << rc << "\n";
+    // the device: 0 is the first of the list
+    int getd = fn("ANeuralNetworks_getDevice");
+    int pdev = (int)Mem::alloc(16);
+    int which = 0;
+    String[] a1 = Env::args();
+    if a1.len > 1 { which = a1[1].to_int(); }
+    Native::poke64(pdev, 0);
+    Native::call2(getd, which, pdev);
+    int devs = (int)Mem::alloc(16);
+    Native::poke64(devs, Native::peek64(pdev));
+    int pc = (int)Mem::alloc(16);
+    Native::poke64(pc, 0);
+    rc = Native::call4(fn("ANeuralNetworksCompilation_createForDevices"), model, devs, 1, pc);
+    int comp = Native::peek64(pc);
+    jout << "compilation " << rc << "\n";
+    if rc != 0 { return 1; }
+    rc = Native::call1(fn("ANeuralNetworksCompilation_finish"), comp);
+    jout << "compilation finish " << rc << "\n";
+    if rc != 0 { return 1; }
+    int pe = (int)Mem::alloc(16);
+    Native::poke64(pe, 0);
+    rc = Native::call2(fn("ANeuralNetworksExecution_create"), comp, pe);
+    int ex = Native::peek64(pe);
+    rc = rc + Native::call5(fn("ANeuralNetworksExecution_setInput"), ex, 0, 0, (int)a, m * k * 4);
+    rc = rc + Native::call5(fn("ANeuralNetworksExecution_setOutput"), ex, 0, 0, (int)out, m * n * 4);
+    jout << "execution set " << rc << "\n";
+    rc = Native::call1(fn("ANeuralNetworksExecution_compute"), ex);
+    int t0 = Time::now_ms();
+    int reps = 20;
+    for q in 0..reps {
+        int pe2 = (int)Mem::alloc(16);
+        Native::poke64(pe2, 0);
+        Native::call2(fn("ANeuralNetworksExecution_create"), comp, pe2);
+        int ex2 = Native::peek64(pe2);
+        Native::call5(fn("ANeuralNetworksExecution_setInput"), ex2, 0, 0, (int)a, m * k * 4);
+        Native::call5(fn("ANeuralNetworksExecution_setOutput"), ex2, 0, 0, (int)out, m * n * 4);
+        rc = rc + Native::call1(fn("ANeuralNetworksExecution_compute"), ex2);
+    }
+    jout << "compute " << rc << ": " << (double)(Time::now_ms() - t0) / (double)reps << " ms for one product\n";
+    double worst = 0.0;
+    for r in 0..m { for c in 0..n {
+        float want = 0.0;
+        for q in 0..k { want = want + a[r * k + q] * b[q * n + c]; }
+        double e = ((double)(out[r * n + c]) - (double)want) / (1.0 + (double)want);
+        if e < 0.0 { e = 0.0 - e; }
+        if r > 5 { continue; }
+        if e < 0.0 { e = 0.0 - e; }
+        if e > worst { worst = e; }
+    } }
+    jout << "biggest difference from the CPU: " << worst << "\n";
+    return 0;
+}

@@ -4357,7 +4357,46 @@ void dyn_member() {
         }
         push_x0();                       // the value (the address of a struct)
         emit_line("ldr x0, [sp, #16]");
-        rt_call("__Arr__slot");          // x0 = the place of the new element
+        if opt_debug == 0 && opt_pushfast == 1 {
+            // the common case in line: the array is not null and has room (length < capacity): the place is data + length * size, the length goes up by one.
+            // Otherwise (null, full) the call does it and says what is wrong.
+            int pslow = new_label();
+            int pdone = new_label();
+            int psz = size_of(code);
+            if eptr != 0 { psz = 8; }
+            emit_line("cmp x0, 0");
+            jump_if("eq", pslow);
+            emit_line("ldr x1, [x0, #0]");
+            emit_line("ldr x2, [x0, #8]");
+            emit_line("cmp x1, x2");
+            jump_if("hs", pslow);
+            emit_line("ldr x2, [x0, #16]");
+            if psz == 1 {
+                emit_line("add x2, x2, x1");
+            } else if psz == 2 || psz == 4 || psz == 8 || psz == 16 {
+                int psk = 1;
+                if psz == 4 { psk = 2; }
+                if psz == 8 { psk = 3; }
+                if psz == 16 { psk = 4; }
+                ins_n("lsl x3, x1, #", psk);
+                emit_line("add x2, x2, x3");
+            } else {
+                ins_n("mov x3, ", psz);
+                emit_line("madd x2, x1, x3, x2");
+            }
+            emit_line("add x1, x1, #1");
+            emit_line("str x1, [x0, #0]");
+            emit_line("mov x0, x2");
+            emit_str("b ");
+            emit_lab(pdone);
+            emit_nl();
+            place_label(pslow);
+            emit_line("ldr x0, [sp, #16]");
+            rt_call("__Arr__slot");          // x0 = the place of the new element
+            place_label(pdone);
+        } else {
+            rt_call("__Arr__slot");          // x0 = the place of the new element
+        }
         emit_line("mov x3, x0");
         emit_line("ldr x1, [sp, #0]");
         emit_line("add sp, sp, #32");

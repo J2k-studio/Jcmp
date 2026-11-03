@@ -92,3 +92,95 @@ int fmt_main(int first) {
     if mode == 1 && changed > 0 { return 1; }
     return 0;
 }
+
+// jcmp migrate [-c] FILE...: cout -> jout, cin -> jin, cerr -> jerr (and coutf, cinf are left) in the code of a file: not inside a string, a character or a comment.
+// -c only says which files would change. Prints one line for each file that changes.
+int mig_word(int at, int n) {
+    // the length of the word at fmt_in[at] if it is cout, cin or cerr as a whole word, else 0
+    if at > 0 {
+        int pc = fmt_in[at - 1];
+        if (pc >= 'a' && pc <= 'z') || (pc >= 'A' && pc <= 'Z') || (pc >= '0' && pc <= '9') || pc == '_' || pc == '.' { return 0; }
+    }
+    int len = 0;
+    if at + 4 <= n && fmt_in[at] == 'c' && fmt_in[at + 1] == 'o' && fmt_in[at + 2] == 'u' && fmt_in[at + 3] == 't' { len = 4; }
+    else if at + 4 <= n && fmt_in[at] == 'c' && fmt_in[at + 1] == 'e' && fmt_in[at + 2] == 'r' && fmt_in[at + 3] == 'r' { len = 4; }
+    else if at + 3 <= n && fmt_in[at] == 'c' && fmt_in[at + 1] == 'i' && fmt_in[at + 2] == 'n' { len = 3; }
+    if len == 0 { return 0; }
+    if at + len < n {
+        int nc = fmt_in[at + len];
+        if (nc >= 'a' && nc <= 'z') || (nc >= 'A' && nc <= 'Z') || (nc >= '0' && nc <= '9') || nc == '_' { return 0; }
+    }
+    return len;
+}
+
+int mig_text(int n) {
+    int o = 0;
+    int i = 0;
+    while i < n {
+        int c = fmt_in[i];
+        if c == '"' || c == 39 {
+            // a string or a character: copied as it is, up to the closing mark (a backslash protects the next one)
+            int q = c;
+            fmt_out[o] = c; o += 1; i += 1;
+            while i < n && fmt_in[i] != q && fmt_in[i] != 10 {
+                if fmt_in[i] == 92 && i + 1 < n { fmt_out[o] = fmt_in[i]; o += 1; i += 1; }
+                fmt_out[o] = fmt_in[i]; o += 1; i += 1;
+            }
+            if i < n && fmt_in[i] == q { fmt_out[o] = q; o += 1; i += 1; }
+            continue;
+        }
+        if c == '/' && i + 1 < n && fmt_in[i + 1] == '/' {
+            while i < n && fmt_in[i] != 10 { fmt_out[o] = fmt_in[i]; o += 1; i += 1; }
+            continue;
+        }
+        if c == 'c' {
+            int len = mig_word(i, n);
+            if len > 0 {
+                fmt_out[o] = 'j'; o += 1;
+                int k = 1;
+                while k < len { fmt_out[o] = fmt_in[i + k]; o += 1; k += 1; }
+                i += len;
+                continue;
+            }
+        }
+        fmt_out[o] = c; o += 1; i += 1;
+        if o > 4194200 { break; }
+    }
+    return o;
+}
+
+int migrate_main(int first) {
+    bool check = false;
+    int changed = 0;
+    int files = 0;
+    int bad = 0;
+    int ai = first;
+    while ai < argc() {
+        char^ a = arg(ai);
+        if str_eq(a, "-c") { check = true; }
+        else {
+            files += 1;
+            int n = read_file(a, @fmt_in, 4194304);
+            if n < 0 { write_err("jcmp migrate: cannot read "); write_err(a); write_err("\n"); bad = 1; }
+            else {
+                int m = mig_text(n);
+                bool same = m == n;
+                if same { int k = 0; while k < n { if fmt_in[k] != fmt_out[k] { same = false; break; } k += 1; } }
+                if !same {
+                    changed += 1;
+                    write_out(a);
+                    if check { write_out(": would change\n"); }
+                    else {
+                        if write_file(a, @fmt_out, m) < 0 { write_err("jcmp migrate: cannot write "); write_err(a); write_err("\n"); bad = 1; }
+                        else { write_out(": migrated\n"); }
+                    }
+                }
+            }
+        }
+        ai += 1;
+    }
+    if files == 0 { write_err("usage: jcmp migrate [-c] FILE...\n"); return 2; }
+    if bad == 1 { return 2; }
+    if check && changed > 0 { return 1; }
+    return 0;
+}

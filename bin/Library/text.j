@@ -327,6 +327,14 @@ struct Fmt {
     }
 }
 
+// The short names for  jout << ...  (owner's decision 2026-11-03, syntax-design 107): no new syntax, only functions.
+//   jout << fmt(3.14159, 2) << " " << tohex(255) << " [" << pad("ab", 5) << "] [" << padl("7", 3) << "]\n";     -> 3.14 ff [ab   ] [  7]
+String fmt(double x, int digits) { return Fmt::fixed(x, digits); }
+String tohex(int n) { return Fmt::hex(n); }
+String tobin(int n) { return Fmt::bin(n); }
+String pad(String s, int width) { return Fmt::pad_right(s, width, ' '); }
+String padl(String s, int width) { return Fmt::pad_left(s, width, ' '); }
+
 // Regex: a small pattern matcher (a backtracking one), for the common cases.
 //   Regex::matches("[a-z]+@[a-z]+\\.com", "ann@mail.com") -> true     (the whole text)
 //   Regex::find("[0-9]+", "room 42, floor 7") -> 5                    (where the first match starts, or -1)

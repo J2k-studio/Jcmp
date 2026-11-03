@@ -1,6 +1,8 @@
-# J2K / Jcmp 1.2.10.0
+# J2K / Jcmp 1.2.11.0
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
+
+**1.2.11.0:** `jout`, `jin`, `jerr` (the new names of `cout`, `cin`, `cerr`; `jcmp migrate` moves a program to them), the library `<npu>` (a layer on the NPU of the phone), faster pushes and small arrays.
 
 **1.2.10.0:** loops over arrays use 10-25 % fewer instructions (floats go straight into floating-point registers, register-offset loads and stores, repeated null checks and header loads are dropped). It is not yet as fast as C: see `bench/vs_c` and the plan in `docs/design/25-language-roadmap.md`.
 
