@@ -286,6 +286,11 @@ struct __Files {
     static Result<int, Error> fs_try_write(String path, String text) { return Fs::write_text(path, text); }
     static int fs_append(String path, String text) { return Fs::append_text(path, text).take(); }
     static Result<int, Error> fs_try_append(String path, String text) { return Fs::append_text(path, text); }
+    // the long names of the same functions (owner 2026-11-03: "f.read_text is fine too"): fs.read_text(p), fs.read_lines(p), fs.write_text(p, t), fs.append_text(p, t)
+    static String fs_read_text(String path) { return Fs::read_text(path).take(); }
+    static String[] fs_read_lines(String path) { return Fs::read_lines(path).take(); }
+    static int fs_write_text(String path, String text) { return Fs::write_text(path, text).take(); }
+    static int fs_append_text(String path, String text) { return Fs::append_text(path, text).take(); }
     static bool fs_exists(String path) { return Fs::exists(path); }
     static int fs_size(String path) { return Fs::size(path).take(); }
     static Result<int, Error> fs_try_size(String path) { return Fs::size(path); }

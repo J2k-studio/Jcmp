@@ -1,11 +1,11 @@
 // gguf 0.2.0 -- a reader of GGUF model files (the format of llama.cpp): metadata, the tokens, and the tensors as float32.   #import <gguf>   (needs <neuron>, <simd>; license: MPL-2.0)
 //   switch Gg::open("model.gguf") {
 //       Result::Ok(f): {
-//           cout << f.meta("general.architecture") << " " << f.meta_int("llama.block_count", 0) << "\n";
-//           for i in 0..f.tensor_count() { cout << f.name(i) << " " << f.shape_text(i) << " type " << f.type_name(i) << "\n"; }
+//           jout << f.meta("general.architecture") << " " << f.meta_int("llama.block_count", 0) << "\n";
+//           for i in 0..f.tensor_count() { jout << f.name(i) << " " << f.shape_text(i) << " type " << f.type_name(i) << "\n"; }
 //           Tensor32 w = f.load("token_embd.weight");          // dequantised to float32; shape = [ne1, ne0] (rows, row width)
 //       }
-//       Result::Err(e): { cout << e.message << "\n"; }
+//       Result::Err(e): { jout << e.message << "\n"; }
 //   }
 // Types read: F32, F16, Q8_0, Q4_0 (the ones small models use); other tensor types are listed but load() gives an Error text via ok=false.
 // f.tokens (the vocabulary), f.merges (BPE merges, if the file has them). The whole header is read into memory (up to 64 MB); a tensor is read from the file when it is loaded.

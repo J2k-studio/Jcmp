@@ -1,0 +1,28 @@
+// Count words with a Map, then list them in order.
+#import <stdlib>
+using stdlib;
+
+int main() {
+    String text = "the cat and the dog and the bird";
+    Map<String, int> count;
+    String[] words = text.split(" ");
+    for i in 0..words.len {
+        if count.has(words[i]) { count.put(words[i], count.get(words[i]) + 1); }
+        else { count.put(words[i], 1); }
+    }
+    String[] keys = count.keys_list();
+    // sort the keys (a bubble sort: the list is short)
+    for a in 0..keys.len {
+        for b in 0..keys.len - 1 - a {
+            if keys[b] > keys[b + 1] { String t = keys[b] + ""; keys[b] = keys[b + 1] + ""; keys[b + 1] = t; }
+        }
+    }
+    for i in 0..keys.len { jout << pad(keys[i], 6) << count.get(keys[i]) << "\n"; }
+    Set<int> seen;
+    int dup = 0;
+    int[] nums = arr(6);
+    nums.push(3); nums.push(1); nums.push(3); nums.push(2); nums.push(1); nums.push(3);
+    for i in 0..nums.len { if !seen.add(nums[i]) { dup += 1; } }
+    jout << seen.len << " different, " << dup << " repeats\n";
+    return 0;
+}

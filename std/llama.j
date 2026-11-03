@@ -3,9 +3,9 @@
 //       Result::Ok(m): {
 //           int[] ids = m.encode("Once upon a time");              // token numbers (with the start token)
 //           String text = m.generate(ids, 60, 0.8, 40, 0.95, 1);   // 60 new tokens; temperature, top-k (0 = off), top-p (1.0 = off), seed
-//           cout << text << "\n";
+//           jout << text << "\n";
 //       }
-//       Result::Err(e): { cout << e.message << "\n"; }
+//       Result::Err(e): { jout << e.message << "\n"; }
 //   }
 // Lower level: m.reset(); Tensor32 logits = m.step(token) (one token, the cache remembers the earlier ones); m.piece(token) is its text.
 // Weights are read as float32 (F32, F16, Q8_0, Q4_0 files are dequantised when loaded: a 15M model takes about 60 MB). The architecture "llama" (RMS norm, RoPE,

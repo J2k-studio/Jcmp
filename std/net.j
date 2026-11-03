@@ -489,6 +489,99 @@ struct Net {
         }
         return Result<String, Error>::Ok(body);
     }
+    // A whole exchange for tools like curl: the request is  METHOD url  with the extra header lines `headers` (each ends with \r\n) and the text `body` (Content-Length is
+    // added when it is not empty); the answer is the head, an empty line and the body (a chunked body is joined), as one text. follow: 1 goes on to the address of a
+    // redirect (301 302 303 turn a POST into a GET, 307 and 308 keep the method), 0 gives the answer of the redirect. An HTTP code of 400 or more is an answer, not an error.
+    static Result<String, Error> http_exchange(String method, String url, String headers, String body, int follow, int depth) {
+        if depth > 8 { return Result<String, Error>::Err(Error::make(ErrorKind::Invalid, "too many redirects")); }
+        int secure = 0;
+        int plen = 7;
+        int port = 80;
+        if url.starts_with("https://") { secure = 1; plen = 8; port = 443; }
+        else if !url.starts_with("http://") {
+            return Result<String, Error>::Err(Error::make(ErrorKind::Invalid, "not an http or https address: " + url));
+        }
+        String scheme = "http://";
+        if secure == 1 { scheme = "https://"; }
+        String rest = url.slice(plen, url.len);
+        int slash = rest.find("/");
+        String hostport = rest;
+        String path = "/";
+        if slash >= 0 {
+            hostport = rest.slice(0, slash);
+            path = rest.slice(slash, rest.len);
+        }
+        String host = hostport;
+        int colon = hostport.find(":");
+        if colon >= 0 {
+            host = hostport.slice(0, colon);
+            String ps = hostport.slice(colon + 1, hostport.len);
+            port = 0;
+            for i in 0..ps.len {
+                if ps[i] < '0' || ps[i] > '9' { return Result<String, Error>::Err(Error::make(ErrorKind::Invalid, "bad port in " + url)); }
+                port = port * 10 + (ps[i] - '0');
+            }
+        }
+        if host.len == 0 { return Result<String, Error>::Err(Error::make(ErrorKind::Invalid, "no host in " + url)); }
+        int h = 0;
+        switch Net::http_open(host, port, secure) {
+            Result::Ok(x): { h = x; }
+            Result::Err(e): { return Result<String, Error>::Err(Error::make(e.kind, e.message)); }
+        }
+        String req = method + " " + path + " HTTP/1.1\r\nHost: " + hostport + "\r\nConnection: close\r\n";
+        String lowh = Net::http_lower_ascii(headers);
+        if !lowh.starts_with("user-agent:") && lowh.find("\r\nuser-agent:") < 0 { req.append("User-Agent: jget\r\n"); }
+        if !lowh.starts_with("accept:") && lowh.find("\r\naccept:") < 0 { req.append("Accept: */*\r\n"); }
+        req.append(headers);
+        if body.len > 0 { req.append("Content-Length: " + str(body.len) + "\r\n"); }
+        req.append("\r\n");
+        req.append(body);
+        switch Net::http_chan_send(secure, h, req) {
+            Result::Ok(n): { }
+            Result::Err(e): { Net::http_chan_close(secure, h); return Result<String, Error>::Err(Error::make(e.kind, e.message)); }
+        }
+        String all = "";
+        switch Net::http_read_all(secure, h) {
+            Result::Ok(t): { all = t; }
+            Result::Err(e): { Net::http_chan_close(secure, h); return Result<String, Error>::Err(Error::make(e.kind, e.message)); }
+        }
+        Net::http_chan_close(secure, h);
+        int he = all.find("\r\n\r\n");
+        if he < 0 { return Result<String, Error>::Err(Error::make(ErrorKind::Parse, "the answer of " + host + " has no header")); }
+        String head = all.slice(0, he);
+        String rbody = all.slice(he + 4, all.len);
+        if head.len < 12 || !head.starts_with("HTTP/") {
+            return Result<String, Error>::Err(Error::make(ErrorKind::Parse, "the answer of " + host + " is not HTTP"));
+        }
+        int code = 0;
+        for i in 9..12 {
+            if head[i] < '0' || head[i] > '9' { return Result<String, Error>::Err(Error::make(ErrorKind::Parse, "bad status line from " + host)); }
+            code = code * 10 + (head[i] - '0');
+        }
+        String lh = Net::http_lower_ascii(head);
+        if follow == 1 && (code == 301 || code == 302 || code == 303 || code == 307 || code == 308) {
+            int li = lh.find("\r\nlocation:");
+            if li >= 0 {
+                int ls = li + 11;
+                int le = Net::http_find_from(head, "\r\n", ls);
+                if le < 0 { le = head.len; }
+                String loc = head.slice(ls, le).trim();
+                if loc.starts_with("/") { loc = scheme + hostport + loc; }
+                if code == 307 || code == 308 { return Net::http_exchange(method, loc, headers, body, follow, depth + 1); }
+                String m2 = method;
+                String b2 = body;
+                if method != "HEAD" { m2 = "GET"; b2 = ""; }
+                return Net::http_exchange(m2, loc, headers, b2, follow, depth + 1);
+            }
+        }
+        if lh.contains("\r\ntransfer-encoding: chunked") {
+            int ok[1];
+            String d = Net::http_unchunk(rbody, @ok);
+            if ok[0] == 0 { return Result<String, Error>::Err(Error::make(ErrorKind::Parse, "the chunks of " + url + " are damaged")); }
+            return Result<String, Error>::Ok(head + "\r\n\r\n" + d);
+        }
+        return Result<String, Error>::Ok(head + "\r\n\r\n" + rbody);
+    }
     // the parts of an http:// address: [host, host:port, path, port]; one text (the reason) when it cannot be used
     static String[] http_split(String url) {
         String[] r = arr(0);

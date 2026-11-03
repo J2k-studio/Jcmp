@@ -78,7 +78,7 @@ chmod +x jcmp && rm SHA256SUMS
 ```bash
 export PATH="$PWD:$PATH"                      # รันในโฟลเดอร์ที่ลง jcmp
 jcmp -version
-printf '#import <stdlib>\nusing stdlib\nvoid main() { cout << "hi\\n"; }\n' > hi.jk
+printf '#import <stdlib>\nusing stdlib\nvoid main() { jout << "hi\\n"; }\n' > hi.jk
 jcmp hi.jk -o hi && ./hi
 ```
 ไม่ตั้ง `PATH` ก็เรียกด้วยที่อยู่เต็มได้ เช่น `../bin/jcmp hi.jk -o hi`
@@ -93,7 +93,7 @@ jcmp hi.jk -o hi && ./hi
 * **คณิตศาสตร์และกราฟิก:** `#import <math>` + `using math::vector;` (`vec2 vec3 vec4`, swizzle `v.xy` `c.rgb`), `matrix`, `quat`, `complex`, `stats`;
   `#import <gfx>` + `using gfx::canvas;` (ตัวอักษร + depth buffer) หรือ `using gfx::screen;` (จุดสี เส้น วงกลม ไล่สี เรืองแสง)
 * ข้อความ error/warning แบบ `ไฟล์:บรรทัด:คอลัมน์: error: ...` พร้อมบรรทัดซอร์สและ `^`
-* thread (`#import <cpu>`), `cin`, `-d` ตรวจขอบเขต array และรายงานหน่วยความจำที่ไม่ได้คืน
+* thread (`#import <cpu>`), `jin`, `-d` ตรวจขอบเขต array และรายงานหน่วยความจำที่ไม่ได้คืน
 * ความเร็ว: ช้ากว่า `clang -O2` ประมาณ 1.5–4 เท่าในลูปและการเรียกซ้ำ (จะปรับต่อ)
 * รองรับเฉพาะ Linux **ARM64**
 

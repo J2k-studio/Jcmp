@@ -1,0 +1,17 @@
+// Read a file line by line, count the lines and the words, show the longest line.
+#import <stdlib>
+using stdlib;
+
+int main() {
+    String path = "r01_lines.jk";                       // this very file
+    String[] lines = Fs::read_lines(path).take();       // take(): the value, or stop with a message when the file cannot be read
+    int words = 0;
+    String longest = "";
+    for i in 0..lines.len {
+        words += lines[i].split(" ").len;
+        if lines[i].len > longest.len { longest = lines[i] + ""; }
+    }
+    jout << lines.len << " lines, " << words << " words\n";
+    jout << "longest: " << longest.len << " characters\n";
+    return 0;
+}

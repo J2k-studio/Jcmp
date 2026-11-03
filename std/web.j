@@ -1,6 +1,6 @@
 // web 0.1.0 -- an HTTP client for the APIs of the web (any method, headers, a body, the status), over http and https.   #import <web>   (needs <net>; license: MPL-2.0)
 //   HttpResponse r = Web::request("POST", "https://api.example.org/x", "Authorization: Bearer KEY", "{\"a\":1}")?;
-//   cout << r.status << " " << r.body << "\n";          // r.header("content-type") reads a header of the answer
+//   jout << r.status << " " << r.body << "\n";          // r.header("content-type") reads a header of the answer
 //   Web::get(url, headers)    Web::post_json(url, headers, json)    Web::post_form(url, headers, "a=1&b=2")
 // One request, one connection (Connection: close); redirects (301 302 303 307 308) are followed up to 5 times; chunked answers are put together.
 // An answer with a status of 400 or more is NOT an error here (r.status says it, r.body has the text of the API); only a connection that fails is an Error.

@@ -1517,6 +1517,11 @@ void lw_layout() {
                         // the side that comes back to this block is the body of a loop: it follows the test (the exit is written later)
                         int tb = ir_t1[t];
                         if tb != nx && lw_pos[tb] < 0 && tb != ir_lastb && lw_pos[nx] < 0 && lw_reaches(tb, cur) && !lw_reaches(nx, cur) { nx = tb; }
+                        // a block that only goes back to a loop that is written already (the end of a loop body: the step and the jump back) is written after the other side, the code that does the work
+                        if opt_rotate == 1 && nx != tb && lw_pos[nx] < 0 && lw_pos[tb] < 0 && tb != ir_lastb && nx != ir_lastb {
+                            int nt = ir_be[nx] - 1;
+                            if ir_op[nt] == IR_JMP && lw_pos[ir_t1[nt]] >= 0 && !lw_reaches(tb, cur) { nx = tb; }
+                        }
                         if nx == ir_lastb || lw_pos[nx] >= 0 { nx = ir_t1[t]; }
                     }
                 }
@@ -1966,6 +1971,47 @@ void lw_hint() {
     rg_put(10);
 }
 
+// Loop rotation at the end: a jump back to a small test block (a few instructions that end in a conditional branch) is written as a copy of that
+// test: the loop then costs one branch a turn (the test at the bottom jumps to the body) instead of a jump and a branch. The copy does exactly
+// what jumping to the test and running it does, so nothing else has to change; -norotate switches it off.
+int lw_rotdec[IR_MAXB];
+int lw_rotn;
+int lw_back[IR_MAXB];             // 1: a block that a jump from a block written after it (or from itself) goes to: the head of a loop
+
+bool lw_rot_ok(int b, int h) {
+    if opt_rotate != 1 || ir_opt == 0 || h == b || h < 0 || h >= ir_nb { return false; }
+    if op_po[h] < 0 || lw_pos[h] < 0 || lw_pos[b] < 0 || lw_pos[h] > lw_pos[b] { return false; }
+    int t = ir_be[h] - 1;
+    if t < ir_bs[h] || ir_op[t] != IR_BR { return false; }
+    if ir_t1[t] < 0 || ir_t2[t] < 0 { return false; }
+    int n = 0;
+    int k = ir_bs[h];
+    while k < t {
+        int op = ir_op[k];
+        if op != IR_NOP {
+            if op == IR_CALL || op == IR_CALLIND || op == IR_SYSCALL || op == IR_PARAM || op == IR_JMP || op == IR_BR || op == IR_FBR || op == IR_RET || op == IR_TRAP || op == IR_LCALL || op == IR_ADDR_BLOCK { return false; }
+            n += 1;
+            if n > 4 { return false; }
+        }
+        k += 1;
+    }
+    if lw_rotdec[b] == 0 {
+        lw_rotn += 1;
+        lw_rotdec[b] = 1;
+        if opt_rotmax >= 0 && lw_rotn > opt_rotmax { lw_rotdec[b] = 2; }
+    }
+    return lw_rotdec[b] == 1;
+}
+
+bool lw_dup_test(int h, int b) {
+    int k = ir_bs[h];
+    while k < ir_be[h] {
+        if !lw_instr(k, b) { return false; }
+        k += 1;
+    }
+    return true;
+}
+
 bool lw_function() {
     lw_tmp_i = 0;                // the choice of x15 / x16 must not depend on the functions lowered before (the cache of the back end)
     // the deepest stack cell
@@ -2018,6 +2064,7 @@ bool lw_function() {
         if (ir_op[i] == IR_LOAD || ir_op[i] == IR_STORE) && ir_a[i] == 30 && ir_k[i] < 0 { lw_note_cell(lf_frame + lw_maxq + ir_k[i]); }
         i += 1;
     }
+    lw_rotn = 0;
     if ir_opt != 0 { op_webs(); }
     if !vr_run() { return false; }
     lw_layout();
@@ -2025,6 +2072,8 @@ bool lw_function() {
     b = 0;
     while b < ir_nb {
         lw_need[b] = 0;
+        lw_back[b] = 0;
+        lw_rotdec[b] = 0;
         b += 1;
     }
     b = 0;
@@ -2033,7 +2082,20 @@ bool lw_function() {
             int tm = ir_be[b] - 1;
             int tk = ir_op[tm];
             int nx = lw_next(b);
-            if tk == IR_JMP && ir_t1[tm] != nx { lw_need[ir_t1[tm]] = 1; }
+            if tk == IR_JMP && lw_rot_ok(b, ir_t1[tm]) {
+                int ht = ir_be[ir_t1[tm]] - 1;
+                lw_need[ir_t1[ht]] = 1;
+                lw_need[ir_t2[ht]] = 1;
+                if lw_pos[ir_t1[ht]] >= 0 && lw_pos[ir_t1[ht]] <= lw_pos[b] { lw_back[ir_t1[ht]] = 1; }
+                if lw_pos[ir_t2[ht]] >= 0 && lw_pos[ir_t2[ht]] <= lw_pos[b] { lw_back[ir_t2[ht]] = 1; }
+            } else if tk == IR_JMP && ir_t1[tm] != nx {
+                lw_need[ir_t1[tm]] = 1;
+                if lw_pos[ir_t1[tm]] >= 0 && lw_pos[ir_t1[tm]] <= lw_pos[b] { lw_back[ir_t1[tm]] = 1; }
+            }
+            if tk == IR_BR || tk == IR_FBR {
+                if lw_pos[ir_t1[tm]] >= 0 && lw_pos[ir_t1[tm]] <= lw_pos[b] { lw_back[ir_t1[tm]] = 1; }
+                if lw_pos[ir_t2[tm]] >= 0 && lw_pos[ir_t2[tm]] <= lw_pos[b] { lw_back[ir_t2[tm]] = 1; }
+            }
             if tk == IR_BR || tk == IR_FBR {
                 if ir_t1[tm] == nx && ir_t2[tm] != nx { lw_need[ir_t2[tm]] = 1; }
                 else {
@@ -2049,6 +2111,7 @@ bool lw_function() {
         b = lw_ord[ord];
         ord += 1;
         if b == ir_lastb && lf_epi_line < 0 { lw_hint(); }
+        if lw_back[b] == 1 && opt_loopalign == 1 && ir_opt != 0 { rg_text(".align 16\n"); }
         if lw_need[b] == 1 || ir_opt == 0 || (ir_opt & 1024) != 0 {
             rg_text("L");
             rg_int(lw_lab[b]);
@@ -2058,6 +2121,11 @@ bool lw_function() {
         while k < ir_be[b] {
             if lw_fuse(k, b) {
                 k += 2;
+                continue;
+            }
+            if ir_op[k] == IR_JMP && k == ir_be[b] - 1 && lw_rot_ok(b, ir_t1[k]) {
+                if !lw_dup_test(ir_t1[k], b) { return false; }
+                k += 1;
                 continue;
             }
             if !lw_instr(k, b) { return false; }

@@ -4,7 +4,7 @@
 int main() {
     int maxn = 8 * 1024 * 1024;                              // 64 MB of 8-byte entries
     int^ buf = (int^)Sys::mmap(maxn * 8 + 4096);
-    if (int)buf <= 0 { cout << "no memory\n"; return 1; }
+    if (int)buf <= 0 { jout << "no memory\n"; return 1; }
     int sizes[14];
     int ns = 0;
     int kb = 4;
@@ -28,9 +28,9 @@ int main() {
             for s in 0..steps { p = buf[p]; }
             int t = Time::now_ms() - t0;
             if t < best { best = t; }
-            if p == -1 { cout << "x"; }
+            if p == -1 { jout << "x"; }
         }
-        cout << sizes[q] << " KB: " << (double)best * 1000000.0 / (double)steps << " ns per read\n";
+        jout << sizes[q] << " KB: " << (double)best * 1000000.0 / (double)steps << " ns per read\n";
     }
     return 0;
 }

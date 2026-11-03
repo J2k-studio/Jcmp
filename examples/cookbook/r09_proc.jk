@@ -1,0 +1,17 @@
+// Run another program and keep what it prints; read the command line and the environment.
+#import <stdlib>
+using stdlib;
+
+int main() {
+    String[] a = Env::args();
+    jout << "arguments: " << a.len - 1 << "\n";
+    String[] args = arr(2);
+    args.push("hello from echo");
+    String out = Proc::output("echo", args).take();
+    jout << "echo said: " << out.trim() << "\n";
+    switch Env::get("HOME") {
+        Option::Some(h): { jout << "HOME is set\n"; }
+        Option::None: { jout << "no HOME\n"; }
+    }
+    return 0;
+}

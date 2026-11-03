@@ -1,0 +1,16 @@
+// Measure time, wait, and print dates.
+#import <stdlib>
+using stdlib;
+
+int fib(int n) { if n < 2 { return n; } return fib(n - 1) + fib(n - 2); }
+
+int main() {
+    int t0 = Time::mono_ns();
+    int f = fib(27);
+    int ms = (Time::mono_ns() - t0) / 1000000;
+    jout << "fib(27) = " << f << "\n";
+    jout << "it took a measurable time: " << (ms >= 0) << "\n";
+    Time::sleep_ms(20);
+    jout << "slept\n";
+    return 0;
+}

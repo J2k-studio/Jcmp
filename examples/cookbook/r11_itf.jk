@@ -1,0 +1,28 @@
+// An interface (itf): different structs answer the same call.
+#import <stdlib>
+using stdlib;
+
+itf Animal {
+    String sound(self);
+    int legs(self);
+}
+struct Dog impl Animal {
+    void init(self) { }
+    String sound(self) { return "woof"; }
+    int legs(self) { return 4; }
+}
+struct Bird impl Animal {
+    void init(self) { }
+    String sound(self) { return "tweet"; }
+    int legs(self) { return 2; }
+}
+
+void introduce(Animal^ a) { jout << a^.sound() << " on " << a^.legs() << " legs\n"; }
+
+int main() {
+    Dog d;
+    Bird b;
+    introduce(@d);
+    introduce(@b);
+    return 0;
+}

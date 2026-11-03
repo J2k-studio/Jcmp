@@ -1,4 +1,4 @@
-// Reading the keyboard (cin >> x, cinf >> x): a buffer over file descriptor 0.
+// Reading the keyboard (jin >> x, cinf >> x): a buffer over file descriptor 0.
 char std_in_buf[4096];
 int std_in_pos;
 int std_in_len;
@@ -29,7 +29,7 @@ struct __In {
         std_in_err[std_in_en] = 0;
     }
     // throw "invalid input: <what> was expected, but found 'x'": c is the character that was found. The wrong word stays in the input
-    // (a program that catches the error skips it with  cin >> word;  see test t173)
+    // (a program that catches the error skips it with  jin >> word;  see test t173)
     static void bad(char^ what, int c) {
         std_in_en = 0;
         __In::err_put("invalid input: ");

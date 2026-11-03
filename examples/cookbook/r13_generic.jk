@@ -1,0 +1,19 @@
+// A generic struct and a lambda.
+#import <stdlib>
+using stdlib;
+
+struct Pair<A, B> {
+    A first;
+    B second;
+}
+
+int apply_twice(int(int)^ f, int x) { return f(f(x)); }
+
+int main() {
+    Pair<String, int> p;
+    p.first = "age";
+    p.second = 31;
+    jout << p.first << "=" << p.second << "\n";
+    jout << apply_twice(int(int v) { return v * 3; }, 5) << "\n";
+    return 0;
+}

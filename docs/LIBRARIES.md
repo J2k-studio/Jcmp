@@ -27,15 +27,15 @@ void main() {
     // Result: a call that can fail gives a value or an error; you choose what to do
     Result<String, Error> r = Fs::read_text("/no/such/file");
     switch r {
-        Result::Ok(text): cout << "read " << text.len << " bytes\n";
-        Result::Err(e): cout << "failed: " << e.message << "\n";
+        Result::Ok(text): jout << "read " << text.len << " bytes\n";
+        Result::Err(e): jout << "failed: " << e.message << "\n";
     }
     // Arena: many small things, freed all at once
     Arena a;
     a.init(4096);
     int^ x = (int^)a.take(8);
     x[0] = 42;
-    cout << x[0] << " from the arena\n";
+    jout << x[0] << " from the arena\n";
     a.free();
 }
 ```
@@ -58,13 +58,13 @@ failed: cannot open /no/such/file: there is no file or folder with this name (er
 #import <stdlib>
 
 void main() {
-    cout << Math::sqrt(2.0) << " " << Math::pow(2.0, 10.0) << " " << Math::floor(-2.5) << "\n";
-    cout << Math::min(3.0, 1.5) << " " << Math::abs(-4.25) << " " << Math::clamp(15.0, 0.0, 10.0) << "\n";
+    jout << Math::sqrt(2.0) << " " << Math::pow(2.0, 10.0) << " " << Math::floor(-2.5) << "\n";
+    jout << Math::min(3.0, 1.5) << " " << Math::abs(-4.25) << " " << Math::clamp(15.0, 0.0, 10.0) << "\n";
     Result<int, Error> n = Num::parse_int("1234");
-    cout << n.unwrap() + 1 << "\n";
+    jout << n.unwrap() + 1 << "\n";
     Result<double, Error> d = Num::parse_double("2.5");
-    cout << d.unwrap() * 2.0 << "\n";
-    cout << Num::parse_int("12x").is_err() << "\n";
+    jout << d.unwrap() * 2.0 << "\n";
+    jout << Num::parse_int("12x").is_err() << "\n";
 }
 ```
 
@@ -91,13 +91,13 @@ A `String` owns its bytes and frees them itself. It has the methods you expect: 
 void main() {
     String s = "  The quick brown fox  ";
     String t = s.trim();
-    cout << t.upper() << " | " << t.len << " | " << t.find("quick") << "\n";
+    jout << t.upper() << " | " << t.len << " | " << t.find("quick") << "\n";
     String[] words = t.split(" ");
-    cout << words.len << " words, the last is " << words[words.len - 1] << "\n";
-    cout << words.join("-") << "\n";
-    cout << Fmt::pad_left("7", 3, '0') << " " << Fmt::fixed(3.14159, 2) << " " << Fmt::thousands(1234567) << "\n";
-    cout << Regex::matches("[a-z]+@[a-z]+\\.com", "ann@mail.com") << " " << Regex::find_text("[0-9]+", "room 42") << "\n";
-    cout << Hex::encode("Hi") << " " << Base64::encode("Man") << "\n";
+    jout << words.len << " words, the last is " << words[words.len - 1] << "\n";
+    jout << words.join("-") << "\n";
+    jout << Fmt::pad_left("7", 3, '0') << " " << Fmt::fixed(3.14159, 2) << " " << Fmt::thousands(1234567) << "\n";
+    jout << Regex::matches("[a-z]+@[a-z]+\\.com", "ann@mail.com") << " " << Regex::find_text("[0-9]+", "room 42") << "\n";
+    jout << Hex::encode("Hi") << " " << Base64::encode("Man") << "\n";
 }
 ```
 
@@ -111,6 +111,8 @@ The-quick-brown-fox
 true 42
 4869 TWFu
 ```
+
+**Layout inside `jout`.** There is no format string: ordinary functions of `Fmt` have short names for the stream, `fmt(x, 2)` (digits after the point), `tohex(n)`, `tobin(n)`, `pad(s, w)` (left aligned) and `padl(s, w)` (right aligned, for numbers), for example `jout << pad("tea", 8) << padl(fmt(1.5, 2), 7) << " " << tohex(255) << "\n";` prints `tea         1.50 ff`. The long names: `Fmt::fixed`, `Fmt::pad_left(s, w, '0')`, `Fmt::thousands`, `Fmt::percent`, `Fmt::bytes`, `Fmt::base(n, b)`. Tutorial lesson 83 has a table.
 
 **Regex** (a backtracking matcher for the common cases): a character, `.`, `\d \w \s` (and `\D \W \S`), `[abc] [a-z] [^0-9]`, `^ $`, `x* x+ x? x{n} x{n,} x{n,m}` (a `?` after them makes them lazy), groups `( ... )` and `(?: ... )` with `|` inside and a quantifier after, and `|` between alternatives. `Regex::matches` (the whole text), `find` (where), `find_text`, `find_all` (every match), `count`, `replace(p, text, with)` and `split(p, text)`. There are no captures yet. A pattern that could repeat for ever is stopped.
 
@@ -129,13 +131,13 @@ void main() {
     Fs::write_text(Path::join("tl_dir/sub", "a.txt"), "one\ntwo\n").unwrap();
     Fs::append_text("tl_dir/sub/a.txt", "three\n").unwrap();
     String[] lines = Fs::read_lines("tl_dir/sub/a.txt").unwrap();
-    cout << lines.len << " lines, size " << Fs::size("tl_dir/sub/a.txt").unwrap() << "\n";
+    jout << lines.len << " lines, size " << Fs::size("tl_dir/sub/a.txt").unwrap() << "\n";
     String[] names = Dir::list("tl_dir/sub").unwrap();
-    cout << names[0] << " " << Path::ext("tl_dir/sub/a.txt") << " " << Path::stem("a.txt") << "\n";
+    jout << names[0] << " " << Path::ext("tl_dir/sub/a.txt") << " " << Path::stem("a.txt") << "\n";
     Fs::remove("tl_dir/sub/a.txt");
     Dir::remove("tl_dir/sub");
     Dir::remove("tl_dir");
-    cout << Fs::exists("tl_dir") << "\n";
+    jout << Fs::exists("tl_dir") << "\n";
 }
 ```
 
@@ -159,15 +161,15 @@ false
 
 void main() {
     String[] a = Env::args();
-    cout << "arguments: " << a.len << "\n";
-    cout << Env::get("J2K_NO_SUCH_VARIABLE").is_none() << "\n";
+    jout << "arguments: " << a.len << "\n";
+    jout << Env::get("J2K_NO_SUCH_VARIABLE").is_none() << "\n";
     String[] args = arr(0);
     args.push("from a child process");
-    cout << Proc::output("echo", args).unwrap();
+    jout << Proc::output("echo", args).unwrap();
     String[] none = arr(0);
     int code = Proc::run("true", none).unwrap();
-    cout << "exit code " << code << "\n";
-    cout << (Term::cols() > 0) << "\n";
+    jout << "exit code " << code << "\n";
+    jout << (Term::cols() > 0) << "\n";
     Log::set_level(2);
     Log::error("this goes to the standard error");
 }
@@ -183,7 +185,7 @@ exit code 0
 true
 ```
 
-**Tip.** Messages for the person go to `cout`; messages about the program (errors, progress) go to `cerr` or `Log`, so that `program > file` keeps the results clean.
+**Tip.** Messages for the person go to `jout`; messages about the program (errors, progress) go to `jerr` or `Log`, so that `program > file` keeps the results clean.
 
 <a id="time"></a>
 ## Time: `Time`, `Random`, `Date`
@@ -196,15 +198,15 @@ true
 void main() {
     int t0 = Time::mono_ns();
     Time::sleep_ms(10);
-    cout << (Time::mono_ns() - t0 >= 10000000) << "\n";
+    jout << (Time::mono_ns() - t0 >= 10000000) << "\n";
     Random::seed(7);
     int r = Random::range(1, 7);
-    cout << (r >= 1 && r < 7) << " " << (Random::unit() < 1.0) << "\n";
+    jout << (r >= 1 && r < 7) << " " << (Random::unit() < 1.0) << "\n";
     Date d;
     d.set_unix(1700000000);
-    cout << d.text() << " " << d.weekday() << "\n";
+    jout << d.text() << " " << d.weekday() << "\n";
     d.add_days(30);
-    cout << d.text() << "\n";
+    jout << d.text() << "\n";
 }
 ```
 
@@ -234,11 +236,11 @@ void main() {
     ages.put("ann", 31);
     Set<int> seen;
     seen.add(3); seen.add(3);
-    cout << names.len << " " << ages.get("ann") << " " << seen.len << "\n";
+    jout << names.len << " " << ages.get("ann") << " " << seen.len << "\n";
     JsonDoc doc = Json::parse("{\"name\": \"J2K\", \"tags\": [\"a\", \"b\"]}").unwrap();
-    cout << doc.text(doc.get(doc.root(), "name")) << " " << doc.len(doc.get(doc.root(), "tags")) << "\n";
+    jout << doc.text(doc.get(doc.root(), "name")) << " " << doc.len(doc.get(doc.root(), "tags")) << "\n";
     String[] f = Csv::split_line("x,\"y,z\",w");
-    cout << f.len << " " << f[1] << "\n";
+    jout << f.len << " " << f[1] << "\n";
 }
 ```
 
@@ -259,8 +261,8 @@ Output:
 #import <stdlib>
 
 void main() {
-    cout << Sha256::hex("abc") << "\n";
-    cout << Base64::encode("hello") << " " << Hex::encode("hello") << "\n";
+    jout << Sha256::hex("abc") << "\n";
+    jout << Base64::encode("hello") << " " << Hex::encode("hello") << "\n";
 }
 ```
 
@@ -294,7 +296,7 @@ void main() {
     Thread b = create(work, null);
     a.join();
     b.join();
-    cout << total << "\n";
+    jout << total << "\n";
 }
 ```
 
@@ -320,7 +322,7 @@ void main() {
     vec3 a = {1.0, 2.0, 3.0};
     vec3 b = {4.0, 5.0, 6.0};
     vec3 c = a + b * 2.0;
-    cout << c.x << " " << c.y << " " << c.z << " " << c.zyx.x << "\n";
+    jout << c.x << " " << c.y << " " << c.z << " " << c.zyx.x << "\n";
 }
 ```
 
@@ -343,8 +345,8 @@ Output:
 void main() {
     Result<String, Error> r = Net::http_try_get("https://example.com/");
     switch r {
-        Result::Ok(body): cout << body.len << " bytes\n";
-        Result::Err(e): cerr << "failed: " << e.message << "\n";
+        Result::Ok(body): jout << body.len << " bytes\n";
+        Result::Err(e): jerr << "failed: " << e.message << "\n";
     }
 }
 ```
@@ -361,3 +363,14 @@ These libraries come with `jc lib install NAME`. The first three talk to the rea
 * **`<vulkan>`** — `Vk::open()`: an instance and the first chip (`device_name`, `api_text()`, `memory_mb`, `has_compute`); the rest of Vulkan is built with `Native`.
 * **`<gpu>`** — the chip through the Jaric app: `Gpu::open(w, h)`, `clear rect tri tri_colors circle line image image_part load`, touches and keys; one batch of commands per picture.
 * **`<gamej>`** — Jaric Engine, a small game engine: `Game::open`, the loop `begin()` / `end()`, `clear rect circle line text art`, `held hit touching tapped`, `Game::overlap`, `sound`; `makej init -game` makes a project with five lessons.
+
+
+## The screens of an app: `<ui>`, `<glapp>`, `<canvas2d>`
+
+An app made with `makej init -apk` is a shared library (`libgame.so`) that an Android activity calls: `<glapp>` gives it the surface, the touches and the keyboard, `<canvas2d>` draws (`rect tri line circle image`, `canvas_text`), `<ui>` makes the usual parts of a screen. All three come with `jc lib install NAME` (`jc lib install ui` brings the others).
+
+* **`<glapp>`** — you define `game_init(w, h)`, `game_resize(w, h)`, `game_frame(ms)`, `game_touch(action, x, y, id)`; `glapp_canvas()`, `glapp_w()`, `glapp_h()`; text input with `glapp_on_key(f)` and `glapp_keyboard(true)`.
+* **`<canvas2d>`** — `Canvas2d^ c`: `begin clear rect tri line circle load image end`; `Color::rgb(r, g, b)`, `Color::rgba`; `canvas_text(c, x, y, "TEXT", scale, colour)` (a 3 x 5 font: capitals, digits, signs).
+* **`<ui>`** — `Ui u`: `start`, `touch`, `begin(c, w, h)`, `title`, `label`, `button` (true on a click), `toggle(text, @flag)`, `slider(text, @value, lo, hi)`, `cols(n)` / `end_cols`, `spacer`, `end`; the colours and sizes are in `u.th`. See [UI.md](UI.md) for a whole screen and for testing it without a phone.
+
+**Tip.** `apkj build` makes the apk of such an app without `aapt2`, `ecj`, `d8` or `apksigner` (tutorial lesson 85).

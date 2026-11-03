@@ -1,6 +1,6 @@
 // The routines that the ARM32 target needs and that the ARM64 target has as assembly in the compiler (docs/design/15-arm32.md).
 // They are written in J2K and made by the same back end as the program; the compiler calls them by name (__a32_*) for the operations that
-// a 32 bit machine has no instruction for (division, the high half of a product) and for the printing of cout.
+// a 32 bit machine has no instruction for (division, the high half of a product) and for the printing of jout.
 // Nothing here is used by the ARM64 target: a function that nobody calls is not made.
 
 // unsigned 64-bit a / b, a % b (0 when b is 0); the numbers below 2^52 are divided as doubles (exact: a / b is never rounded up to the next
@@ -259,7 +259,7 @@ void __a32_print_uint(int v) {
     __wr(__out_fd(), @buf[at + 1], 31 - at);
 }
 
-// cout of a double: the same text as j2k_print_f64 of the ARM64 target (6 decimals; infinity, nan; 2^64 and more as d.dddddde+NN)
+// jout of a double: the same text as j2k_print_f64 of the ARM64 target (6 decimals; infinity, nan; 2^64 and more as d.dddddde+NN)
 void __a32_print_f64(int bits) {
     int e = (bits >> 52) & 2047;
     if e == 2047 {

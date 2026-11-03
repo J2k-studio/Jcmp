@@ -151,7 +151,7 @@ struct Mlp {
             }
             last = sum / (double)steps;
             self.history.push(last);
-            if self.every > 0 && (e + 1) % self.every == 0 { cout << "epoch " << (e + 1) << " loss " << last << "\n"; }
+            if self.every > 0 && (e + 1) % self.every == 0 { jout << "epoch " << (e + 1) << " loss " << last << "\n"; }
         }
         return last;
     }

@@ -39,7 +39,7 @@ void main() {
         switch Num::parse_int(args[1]) {
             Result::Ok(v): frames = v;
             Result::Err(e): {
-                cout << "usage: logo [frames]\n";
+                jout << "usage: logo [frames]\n";
                 return;
             }
         }
@@ -135,7 +135,7 @@ void main() {
         }
         s.glow(0.5);
         s.show();
-        cout << "\n";
+        jout << "\n";
         if frames == 0 && Term::key_pressed() { break; }
         frame += 1;
         // 24 frames a second: wait until the frame's time has come

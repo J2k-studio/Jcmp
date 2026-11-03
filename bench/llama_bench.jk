@@ -14,15 +14,15 @@ String status_value(String key) {
 }
 void main() {
     String[] a = Env::args();
-    if a.len < 2 { cout << "usage: llama_bench model.gguf [new tokens]\n"; return; }
+    if a.len < 2 { jout << "usage: llama_bench model.gguf [new tokens]\n"; return; }
     int count = 64;
     if a.len >= 3 { count = a[2].to_int(); }
     int t0 = Time::now_ms();
     switch Lm::load(a[1]) {
         Result::Ok(m): {
             int t1 = Time::now_ms();
-            cout << "model: " << m.embd << " wide, " << m.layers << " layers, " << m.heads << " heads (" << m.kv_heads << " kv), vocab " << m.vocab << "\n";
-            cout << "load: " << (t1 - t0) << " ms, memory after load: " << status_value("VmRSS:") << "\n";
+            jout << "model: " << m.embd << " wide, " << m.layers << " layers, " << m.heads << " heads (" << m.kv_heads << " kv), vocab " << m.vocab << "\n";
+            jout << "load: " << (t1 - t0) << " ms, memory after load: " << status_value("VmRSS:") << "\n";
             int[] ids = m.encode("Once upon a time");
             m.reset();
             int p0 = Time::now_ms();
@@ -41,10 +41,10 @@ void main() {
             double dg = (double)(p2 - p1);
             if dp < 1.0 { dp = 1.0; }
             if dg < 1.0 { dg = 1.0; }
-            cout << "prompt: " << ids.len << " tokens in " << (p1 - p0) << " ms = " << (double)ids.len * 1000.0 / dp << " tokens/s\n";
-            cout << "new tokens: " << made << " in " << (p2 - p1) << " ms = " << (double)made * 1000.0 / dg << " tokens/s, " << dg / (double)made << " ms per token\n";
-            cout << "memory at the end: " << status_value("VmRSS:") << " (peak " << status_value("VmHWM:") << ")\n";
+            jout << "prompt: " << ids.len << " tokens in " << (p1 - p0) << " ms = " << (double)ids.len * 1000.0 / dp << " tokens/s\n";
+            jout << "new tokens: " << made << " in " << (p2 - p1) << " ms = " << (double)made * 1000.0 / dg << " tokens/s, " << dg / (double)made << " ms per token\n";
+            jout << "memory at the end: " << status_value("VmRSS:") << " (peak " << status_value("VmHWM:") << ")\n";
         }
-        Result::Err(e): { cout << "cannot load the model: " << e.message << "\n"; }
+        Result::Err(e): { jout << "cannot load the model: " << e.message << "\n"; }
     }
 }

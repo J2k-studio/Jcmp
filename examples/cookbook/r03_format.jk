@@ -1,0 +1,15 @@
+// Lay out numbers and text: fmt (digits), tohex, tobin, pad (left aligned), padl (right aligned), and the long names in Fmt.
+#import <stdlib>
+using stdlib;
+
+int main() {
+    String[] names = arr(3);
+    names.push("apple"); names.push("kiwi"); names.push("watermelon");
+    double[] prices = arr(3);
+    prices.push(1.5); prices.push(0.25); prices.push(12.0);
+    for i in 0..names.len {
+        jout << pad(names[i], 12) << padl(fmt(prices[i], 2), 8) << "\n";
+    }
+    jout << tohex(255) << " " << tobin(10) << " " << Fmt::thousands(1234567) << " " << Fmt::percent(0.256, 1) << " " << Fmt::bytes(1536) << "\n";
+    return 0;
+}

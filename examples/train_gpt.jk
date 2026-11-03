@@ -20,9 +20,9 @@ String option(String[] a, String name, String fallback) {
 }
 void main() {
     String[] a = Env::args();
-    if a.len < 2 { cout << "usage: train_gpt FILE [steps=2000] [ctx=64] [d=64] [heads=4] [layers=2] [batch=8] [lr=0.003] [out=model.gpt] [resume=1] [every=100] [prompt=text]\n"; return; }
+    if a.len < 2 { jout << "usage: train_gpt FILE [steps=2000] [ctx=64] [d=64] [heads=4] [layers=2] [batch=8] [lr=0.003] [out=model.gpt] [resume=1] [every=100] [prompt=text]\n"; return; }
     Result<String, Error> rf = Fs::read_bytes(a[1]);
-    if !rf.is_ok() { cout << "cannot read " << a[1] << "\n"; return; }
+    if !rf.is_ok() { jout << "cannot read " << a[1] << "\n"; return; }
     String text = rf.take();
     int steps = option(a, "steps", "2000").to_int();
     int ctx = option(a, "ctx", "64").to_int();
@@ -35,17 +35,17 @@ void main() {
     int every = option(a, "every", "100").to_int();
     String prompt = option(a, "prompt", "");
     int[] data = Gpt::bytes(text);
-    if data.len < ctx * 4 + 2 { cout << "the text is too short for ctx=" << ctx << " (" << data.len << " bytes)\n"; return; }
+    if data.len < ctx * 4 + 2 { jout << "the text is too short for ctx=" << ctx << " (" << data.len << " bytes)\n"; return; }
     int cut = data.len * 9 / 10;                                   // the last tenth is for checking, never trained on
     rng = 88172645463325252;
     Gpt m = Gpt::make(256, ctx, d, heads, layers, 1);
     if option(a, "resume", "0") == "1" {
         Gpt old = Gpt::load(out);
-        if old.vocab == 256 { m = old; cout << "resumed from " << out << "\n"; }
+        if old.vocab == 256 { m = old; jout << "resumed from " << out << "\n"; }
     }
     int params = 0;
     for n in 0..m.g.keep { params += m.g.value(n).d.len; }
-    cout << "text " << data.len << " bytes (" << cut << " to learn from), model: " << params << " numbers, ctx " << ctx << ", width " << d << ", " << heads << " heads, " << layers << " layers\n";
+    jout << "text " << data.len << " bytes (" << cut << " to learn from), model: " << params << " numbers, ctx " << ctx << ", width " << d << ", " << heads << " heads, " << layers << " layers\n";
     int t0 = Time::now_ms();
     double window = 0.0;
     int count = 0;
@@ -61,14 +61,14 @@ void main() {
             for q in 0..8 { vs.push(cut + (q * (data.len - cut - ctx - 1)) / 8); }
             double val = m.loss_on(data, vs);
             double ms = (double)(Time::now_ms() - t0) / (double)(step + 1);
-            cout << "step " << (step + 1) << "  loss " << window / (double)count << "  check " << val << "  " << ms << " ms/step\n";
+            jout << "step " << (step + 1) << "  loss " << window / (double)count << "  check " << val << "  " << ms << " ms/step\n";
             window = 0.0;
             count = 0;
             m.save(out);
             int[] pr = Gpt::bytes(prompt);
             if pr.len == 0 { for i in 0..8 { pr.push(data[i]); } }
-            cout << "  [" << Gpt::text_of(pr) << m.write(pr, 120, 0.8, 20, step + 1) << "]\n";
+            jout << "  [" << Gpt::text_of(pr) << m.write(pr, 120, 0.8, 20, step + 1) << "]\n";
         }
     }
-    cout << "saved " << out << "\n";
+    jout << "saved " << out << "\n";
 }

@@ -160,7 +160,7 @@ struct Term {
 
 // the keyboard: a line, one key, Enter, a yes / no, a number (designed by AI at user request, adjustable: docs/syntax-design.md 90)
 //   String name = Input::line();   int k = Input::key();   (one key, no Enter, nothing shown on the screen)
-// It reads the file 0 byte by byte (it does not share the buffer of `cin`; use one of the two in a program).
+// It reads the file 0 byte by byte (it does not share the buffer of `jin`; use one of the two in a program).
 struct Input {
     // a line without its new line; "" at the end of the input
     static String line() {
@@ -198,7 +198,7 @@ struct Input {
     }
     // asks and waits for y or n (Enter alone is no); true for y / Y
     static bool yes(String question) {
-        cout << question << " [y/n] ";
+        jout << question << " [y/n] ";
         String a = Input::line();
         if a.len > 0 && (a[0] == 121 || a[0] == 89) { return true; }
         return false;
@@ -286,7 +286,7 @@ struct Input {
         String r = Input::line();
         if tty {
             syscall(29, 0, 21506, @t);
-            cout << "\n";
+            jout << "\n";
         }
         return r;
     }

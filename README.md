@@ -34,7 +34,7 @@ It is **self-hosting**: the compiler is written in J2K and rebuilds itself, byte
 ```jk
 // hello.jk
 void main() {
-    cout << "Hello from J2K!\n";
+    jout << "Hello from J2K!\n";
 }
 ```
 
@@ -60,7 +60,7 @@ Hello from J2K!
 | Diagnostics                                 | `file:line:col: error/warning:` with the source line and `^`; `-st` makes warnings errors |
 | Debug build (`-d`)                          | array bounds checks, a report of memory that was not freed |
 | Memory                                      | `alloc`/`free`, dynamic arrays, automatic freeing of owned memory at the end of a block, structs that free themselves and move |
-| Input                                       | `cin` (type decides what is read; bad input throws) |
+| Input                                       | `jin` (type decides what is read; bad input throws) |
 | Threads                                     | `#import <cpu>`: `Thread` (create, join, detach), `Mutex` (futex based), `#multithread` loops |
 | Speed                                       | about 1.5 to 4 times slower than `clang -O2` on loops and recursion (a peephole pass, operands in registers, division by a literal without `sdiv`); more is planned |
 | Target                                      | Linux **ARM64**; Linux **ARM32** with `-target arm32` (first version, see docs/USAGE.md) |
@@ -190,7 +190,7 @@ Put the folder on your `PATH` (once per shell, or add the line to `~/.bashrc`), 
 export PATH="$PWD:$PATH"            # inside the folder; or the full path of your folder
 jcmp -version                      # jcmp 0.9.158 (J2K compiler, Linux ARM64)
 
-printf '#import <stdlib>\nusing stdlib\nvoid main() { cout << "hi\\n"; }\n' > hi.jk
+printf '#import <stdlib>\nusing stdlib\nvoid main() { jout << "hi\\n"; }\n' > hi.jk
 jcmp hi.jk -o hi && ./hi            # hi
 ```
 
@@ -219,8 +219,8 @@ More: [docs/USAGE.md](docs/USAGE.md) (command line, building, testing) and
 ## The language in one screen
 
 ```jk
-#import <stdlib>                      // the standard library: Sys, Mem, Str, Math, File (and cout, cin)
-using stdlib;                      // use its names without the prefix (cout needs both lines)
+#import <stdlib>                      // the standard library: Sys, Mem, Str, Math, File (and jout, jin)
+using stdlib;                      // use its names without the prefix (jout needs both lines)
 
 enum class Color { Red, Green, Blue };
 
@@ -239,16 +239,16 @@ int sum(int a[]) {              // arrays arrive with their length: a.len
 void main() {
     int numbers[4];
     for i in 0..4 { numbers[i] = i * 10; }
-    cout << "sum = " << sum(numbers) << "\n";
+    jout << "sum = " << sum(numbers) << "\n";
 
     Point p = {3.0, 4.0};
-    cout << "length = " << p.length() << "\n";     // 5.000000
+    jout << "length = " << p.length() << "\n";     // 5.000000
 
     Color c = Color::Green;
     switch c {
-        Color::Red: cout << "red\n";
-        Color::Green: cout << "green\n";
-        _: cout << "other\n";
+        Color::Red: jout << "red\n";
+        Color::Green: jout << "green\n";
+        _: jout << "other\n";
     }
 }
 ```

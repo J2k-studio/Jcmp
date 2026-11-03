@@ -35,6 +35,6 @@ int main() {
     int t1 = Time::mono_ns();
     double ms = (double)(t1 - t0) / 1000000.0;
     double flops = 2.0 * (double)n * (double)n * (double)n;
-    cout << "dot-product NEON (B transposed)  " << ms << " ms   " << flops / ms / 1000000.0 << " GFLOPS   check " << fc[n * n - 1] << "\n";
+    jout << "dot-product NEON (B transposed)  " << ms << " ms   " << flops / ms / 1000000.0 << " GFLOPS   check " << fc[n * n - 1] << "\n";
     return 0;
 }

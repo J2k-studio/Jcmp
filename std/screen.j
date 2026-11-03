@@ -296,20 +296,20 @@ struct Screen {
         return o;
     }
     void show(self) {
-        cout << self.frame();
+        jout << self.frame();
     }
     // clears the terminal (call it once before the first show)
     void begin(self) {
         String s = "";
         s.push((char)27);
         s.append("[2J");
-        cout << s;
+        jout << s;
     }
     // back to the normal colours (call it when the program ends by itself)
     void end(self) {
         String s = "";
         s.push((char)27);
         s.append("[0m");
-        cout << s;
+        jout << s;
     }
 }

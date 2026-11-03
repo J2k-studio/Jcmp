@@ -2,7 +2,7 @@
 //   Profile p = Profile::make();
 //   int t = p.start();   ...work...   p.stop("physics", t);      // adds the time of this run to the timer "physics"
 //   p.frame();                                                    // call once a frame: counts frames
-//   cout << p.report();                                           // one line a timer: name, calls, total ms, average us, share
+//   jout << p.report();                                           // one line a timer: name, calls, total ms, average us, share
 //   p.total_us("physics"), p.calls("physics"), p.average_us("physics"), p.frames, p.reset();
 // Times are in microseconds (monotonic clock). A timer that does not exist yet is made by its first stop().
 

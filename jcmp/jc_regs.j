@@ -20,11 +20,13 @@ int rg_n;
 int rg_state[8192];          // by 8-byte slot of the frame: 0 unknown, 1 a plain value that may move, 2 not allowed
 int rg_wt[8192];
 int rg_dep[65536];
+int rg_bmax[8192];           // by label: the last line that branches back to it (-1: none)
 int rg_ltgt[65536];          // per line, worked out once before the live analysis: the line a jump goes to (-1: none)
 int rg_lfall[65536];         // 1: the flow goes on to the next line
 int rg_lc[65536];            // the candidate that this line loads or stores (-1: none)
 int rg_lload[65536];         // 1: it is a load
 int rg_skip[65536];
+int rg_dead[65536];          // 1: a store of a slot that nobody reads any more (the line is not written)
 int rg_labn[8192];
 int rg_labl[8192];
 int rg_nlab;
@@ -462,6 +464,20 @@ void rg_allocate(int epi, int is_main) {
         }
     }
     if changed { return; }                                      // not settled: no allocation (should not happen)
+    // a store to a slot that is not live after it (nobody loads the value any more) is dead: the line is not written
+    i = 0;
+    while i < rg_n {
+        rg_dead[i] = 0;
+        int cd = rg_lc[i];
+        if cd >= 0 && rg_lload[i] == 0 && opt_icopy == 1 {
+            bool lv = false;
+            if rg_lfall[i] == 1 && i + 1 < rg_n && rg_lv_get(i + 1, cd) { lv = true; }
+            if rg_ltgt[i] >= 0 && rg_lv_get(rg_ltgt[i], cd) { lv = true; }
+            if rg_lfall[i] == 1 && i + 1 >= rg_n { lv = true; }
+            if !lv { rg_dead[i] = 1; }
+        }
+        i += 1;
+    }
     // the intervals: from the first line where the slot is live (or stored) to the last one
     int c2 = 0;
     while c2 < rg_ncand {
@@ -761,6 +777,7 @@ void rg_function(int is_main) {
     i = 0;
     while i < rg_n {
         rg_skip[i] = 0;
+        rg_dead[i] = 0;
         if i + 1 < rg_n && rg_has(rg_ls[i], "add x0, x29, #") && rg_has(rg_ls[i + 1], "ldr x0, [x") && !rg_has(rg_ls[i + 1], "ldr x0, [x0") {
             rg_skip[i] = 1;
         }
@@ -780,6 +797,8 @@ void rg_function(int is_main) {
         }
         i += 1;
     }
+    int bl0 = 0;
+    while bl0 < rg_nlab { rg_bmax[bl0] = 0 - 1; bl0 += 1; }
     // what the lines do
     i = 0;
     while i < rg_n && ok == 1 {
@@ -801,18 +820,26 @@ void rg_function(int is_main) {
                 int target = rg_num(q + 1);
                 int li = 0;
                 while li < rg_nlab {
+                    // the farthest branch back to a label makes the loop; another branch to the same label (a rotated loop has a test at each end of the body) is the same loop
                     if rg_labn[li] == target && rg_labl[li] < i {
-                        int j = rg_labl[li];
-                        while j <= i {
-                            rg_dep[j] += 1;
-                            j += 1;
-                        }
+                        if i > rg_bmax[li] { rg_bmax[li] = i; }
                     }
                     li += 1;
                 }
             }
         }
         i += 1;
+    }
+    bl0 = 0;
+    while bl0 < rg_nlab {
+        if rg_bmax[bl0] >= 0 {
+            int jb = rg_labl[bl0];
+            while jb <= rg_bmax[bl0] {
+                rg_dep[jb] += 1;
+                jb += 1;
+            }
+        }
+        bl0 += 1;
     }
     // the uses of x29
     i = 0;
@@ -828,7 +855,7 @@ void rg_function(int is_main) {
                     else if rg_isload == 1 && rg_fmov_ahead(i, rg_reg) { rg_fl[n / 8] += 1; }
                     else if rg_isload == 0 && rg_fmov_back(i, rg_reg) { rg_fl[n / 8] += 1; }
                     int d = rg_dep[i];
-                    if d > 3 { d = 3; }
+                    if d > 8 { d = 8; }                  // a deep nest counts more than a shallow one (the jumps back from cold code make the depth too big everywhere, by the same amount)
                     int wgt = 1;
                     while d > 0 {
                         wgt = wgt * 8;
@@ -957,6 +984,10 @@ void rg_function(int is_main) {
     while i < rg_n {
         int st = rg_ls[i];
         int en = rg_end(st);
+        if rg_dead[i] == 1 {
+            i += 1;
+            continue;
+        }
         if rg_has(st, ";H") {
             i += 1;
             continue;
@@ -1308,11 +1339,22 @@ int pt_label_at(int num) {
 }
 
 // is the register r not needed any more from the line idx on? (slot 3 of the parse arrays is used)
+
+// how many whole-number arguments the routine that `bl NAME` (in slot s) calls reads (x0 .. x(n-1)); 8 when it is not known
+int pt_call_args(int s) {
+    if pt_no[s] < 1 { return 8; }
+    if pt_op(s, 0, "j2k_print_int") || pt_op(s, 0, "j2k_print_str") || pt_op(s, 0, "j2k_print_f64") || pt_op(s, 0, "j2k_print_char") || pt_op(s, 0, "j2k_print_bool") || pt_op(s, 0, "j2k_print_ptr") || pt_op(s, 0, "j2k_print_uint") { return 1; }
+    if pt_op(s, 0, "__flush") { return 0; }
+    if pt_op(s, 0, "__panic") || pt_op(s, 0, "__Arr__free") || pt_op(s, 0, "__Arr__nullerr") { return 1; }
+    if pt_op(s, 0, "__Arr__grow") || pt_op(s, 0, "__Arr__make") { return 2; }
+    return 8;
+}
 int pt_steps;
 int pt_vis[65536];                // the labels that this question has been to (a loop: nothing reads the register on the way round)
 int pt_vstamp;
 bool pt_dead(int idx, int r, int budget) {
     if budget == 40 { pt_steps = 400; pt_vstamp += 1; }                  // a new question: the whole search may take 400 lines
+    if budget == 41 { pt_steps = 6000; pt_vstamp += 1; }                 // a new question that may look at a whole big function
     while pt_steps > 0 {
         if idx >= pt_n { return false; }
         pt_steps -= 1;
@@ -1350,7 +1392,13 @@ bool pt_dead(int idx, int r, int budget) {
         if pt_mn(3, "ret") { return r != 0; }                // only x0 carries the result
         if pt_mn(3, "mov") && pt_op(3, 0, "x8") && (pt_op(3, 1, "94") || pt_op(3, 1, "93")) { return r != 0; }       // the program ends: only x0 (the exit code) is read
         if pt_mn(3, "blr") && pt_no[3] >= 1 && pt_rd(3, 0, r) { return false; }          // the address of the call is read
+        // the runtime routines that take few arguments: the argument registers above them are not read by the call, and the call clobbers them
+        if r >= 1 && r <= 7 && pt_mn(3, "bl") && r >= pt_call_args(3) { return true; }
         if r >= 8 && r <= 15 && (pt_mn(3, "bl") || pt_mn(3, "blr")) { return true; }       // not an argument register: a call does not read it, and clobbers it
+        if r >= 19 && r <= 28 && (pt_mn(3, "bl") || pt_mn(3, "blr")) {
+            idx += 1;                                          // a call keeps x19 .. x28 (callee-saved) and cannot read them as arguments
+            continue;
+        }
         if pt_mn(3, "bl") || pt_mn(3, "blr") || pt_mn(3, "svc") || pt_mn(3, "br") {
             return false;
         }
@@ -1383,7 +1431,7 @@ bool pt_dead(int idx, int r, int budget) {
             k += 1;
         }
         if reads { return false; }
-        if first_only && pt_no[3] > 0 && (pt_isreg(3, 0) || pt_regno(3, 0, 'd') >= 0 || pt_regno(3, 0, 'w') >= 0) && pt_rd(3, 0, r) {
+        if first_only && pt_no[3] > 0 && (pt_isreg(3, 0) || pt_regno(3, 0, 'd') >= 0 || pt_regno(3, 0, 's') >= 0 || pt_regno(3, 0, 'w') >= 0) && pt_rd(3, 0, r) {
             return true;                                      // msub / madd read their other operands too: that was looked at above
         }
         idx += 1;
@@ -1827,22 +1875,100 @@ bool pt_branch_over(int i) {
 
 // the copy of a double `fmov dT, dV` at the line i: every read of dT in the lines that follow (up to the first label, jump or call, or until
 // dT or dV is written) reads dV instead; the copy goes when dT is not needed after that. Nothing is changed unless all of it works.
+char pt_fk = 'd';              // the kind of the float registers that pt_fwd_copy looks at: 'd' (doubles) or 's' (floats)
 int pt_fc_line[16];
 char pt_fc_txt[1024];
 
 bool pt_op_is_d(int s, int o, int n) {
     int b = (s * 4 + o) * 40;
-    if pt_o[b] != 'd' { return false; }
+    if pt_o[b] != pt_fk { return false; }
     int v = 0;
     int c = 1;
     while pt_o[b + c] >= '0' && pt_o[b + c] <= '9' { v = v * 10 + (pt_o[b + c] - '0'); c += 1; }
     return c > 1 && pt_o[b + c] == 0 && v == n;
 }
 
+
+// the copy of an integer `mov xT, xV` at the line i: the reads of xT in the lines that follow (a b.cond whose target does not need xT is looked through)
+// read xV instead; the copy goes when xT is not needed after that. Only the instructions of the list below are changed; any other line that
+// mentions xT or xV ends it. Nothing is changed unless all of it works.
+int pt_ic_line[16];
+char pt_ic_txt[1024];
+bool pt_fwd_icopy(int i) {
+    if !pt_parse(0, i) { return false; }
+    int rt = pt_regno(0, 0, 'x');
+    int rv = pt_regno(0, 1, 'x');
+    int nrep = 0;
+    int at = pt_next(i);
+    int steps = 0;
+    bool t_dead = false;
+    while at >= 0 && steps < 12 && !t_dead {
+        steps += 1;
+        if pt_txt[at * 64] == 0 { at = pt_next(at); continue; }
+        if !pt_parse(2, at) { return false; }                      // a label: the flow comes from elsewhere too
+        if pt_m[32] == 'b' && pt_m[33] == '.' && pt_o[2 * 4 * 40] == 'L' {
+            int bat = pt_label_at(rg_numpt(2 * 4 * 40 + 1));
+            if bat >= 0 && pt_dead(bat, rt, 40) { at = pt_next(at); continue; }
+            return false;
+        }
+        if pt_m[32] == 'b' || pt_mn(2, "cbz") || pt_mn(2, "cbnz") || pt_mn(2, "tbz") || pt_mn(2, "tbnz") || pt_mn(2, "ret") || pt_mn(2, "svc") || pt_mn(2, "blr") || pt_mn(2, "br") {
+            if pt_dead(at, rt, 40) { t_dead = true; break; }
+            return false;
+        }
+        int np = pt_no[2];
+        bool w0 = pt_writes_first(2);
+        bool reads_t = false;
+        bool mention_v = false;
+        int o = 0;
+        while o < np {
+            if pt_rd(2, o, rt) && !(o == 0 && w0) { reads_t = true; }
+            if pt_rd(2, o, rv) { mention_v = true; }
+            o += 1;
+        }
+        bool dest_t = w0 && np >= 1 && (pt_regno(2, 0, 'x') == rt || pt_regno(2, 0, 'w') == rt);          // a write of wT writes xT too
+        bool dest_v = w0 && np >= 1 && (pt_regno(2, 0, 'x') == rv || pt_regno(2, 0, 'w') == rv);
+        bool mentions = reads_t || dest_t || mention_v;
+        if !mentions { at = pt_next(at); continue; }
+        bool okm = pt_mn(2, "str") || pt_mn(2, "strw") || pt_mn(2, "strb") || pt_mn(2, "strh") || pt_mn(2, "ldr") || pt_mn(2, "ldrsw") || pt_mn(2, "ldrb") || pt_mn(2, "ldrh") || pt_mn(2, "ldrsb") || pt_mn(2, "ldrsh")
+            || pt_mn(2, "cmp") || pt_mn(2, "cmn") || pt_mn(2, "tst") || pt_mn(2, "add") || pt_mn(2, "sub") || pt_mn(2, "mul") || pt_mn(2, "and") || pt_mn(2, "orr") || pt_mn(2, "eor") || pt_mn(2, "lsl") || pt_mn(2, "lsr") || pt_mn(2, "asr")
+            || pt_mn(2, "sxtw") || pt_mn(2, "scvtf") || pt_mn(2, "sdiv") || pt_mn(2, "udiv") || pt_mn(2, "madd") || pt_mn(2, "msub") || pt_mn(2, "neg") || pt_mn(2, "mvn") || pt_mn(2, "mov");
+        if !okm { return false; }
+        bool changed = false;
+        if reads_t {
+            if nrep >= 14 { return false; }
+            pt_build_subst(2, rt, rv);
+            pt_ic_line[nrep] = at;
+            int c2 = 0;
+            while pt_line[c2] != 0 && c2 < 62 { pt_ic_txt[nrep * 64 + c2] = pt_line[c2]; c2 += 1; }
+            pt_ic_txt[nrep * 64 + c2] = 0;
+            nrep += 1;
+            changed = true;
+        }
+        if dest_t { t_dead = true; break; }
+        if dest_v {
+            // xV changes here: later reads of xT could no longer be taken from xV
+            if pt_dead(pt_next(at), rt, 40) { t_dead = true; break; }
+            return false;
+        }
+        at = pt_next(at);
+    }
+    if nrep == 0 { return false; }
+    if !t_dead {
+        if at < 0 || !pt_dead(at, rt, 40) { return false; }
+    }
+    int r = 0;
+    while r < nrep {
+        pt_set(pt_ic_line[r], @pt_ic_txt + r * 64);
+        r += 1;
+    }
+    pt_set(i, "");
+    return true;
+}
+
 bool pt_fwd_copy(int i) {
     if !pt_parse(0, i) { return false; }
-    int t = pt_regno(0, 0, 'd');
-    int v = pt_regno(0, 1, 'd');
+    int t = pt_regno(0, 0, pt_fk);
+    int v = pt_regno(0, 1, pt_fk);
     int nrep = 0;
     int at = pt_next(i);
     int steps = 0;
@@ -1853,6 +1979,12 @@ bool pt_fwd_copy(int i) {
         if !pt_parse(2, at) {
             // a label: the flow comes from elsewhere too
             return false;
+        }
+        if pt_m[32] == 'b' && pt_m[33] == '.' && pt_o[2 * 4 * 40] == 'L' {
+            // a conditional branch (b.eq ...): the copy may be looked through it when the register dT is not needed on the path it jumps to
+            // (the null check and the bounds check jump to a panic and never come back)
+            int bat = pt_label_at(rg_numpt(2 * 4 * 40 + 1));
+            if bat >= 0 && pt_dead(bat, 32 + t, 40) { at = pt_next(at); continue; }
         }
         bool barrier = pt_m[32] == 'b' || pt_mn(2, "cbz") || pt_mn(2, "cbnz") || pt_mn(2, "tbz") || pt_mn(2, "tbnz") || pt_mn(2, "ret") || pt_mn(2, "svc") || pt_mn(2, "blr");
         if barrier {
@@ -1905,7 +2037,7 @@ bool pt_fwd_copy(int i) {
             if pt_op_is_d(2, o, t) {
                 if is_dest { writes_t = true; }
                 else {
-                    nl4[n4] = 'd'; n4 += 1;
+                    nl4[n4] = pt_fk; n4 += 1;
                     if v >= 10 { nl4[n4] = '0' + v / 10; n4 += 1; }
                     nl4[n4] = '0' + v % 10; n4 += 1;
                     changed = true;
@@ -1950,6 +2082,7 @@ bool pt_fwd_copy(int i) {
     pt_set(i, "");
     return true;
 }
+
 
 bool pt_rules(int i) {
     if pt_branch_over(i) { return true; }
@@ -2730,6 +2863,236 @@ bool pt_rules(int i) {
             pt_parse(1, j);
         }
     }
+    // str xA, [x29, #N] / ldr xB, [x29, #N]   ->   str xA, [x29, #N] / mov xB, xA      (the value just stored is in the register; the store stays)
+    if pt_mn(0, "str") && pt_mn(1, "ldr") && pt_no[0] == 2 && pt_no[1] == 2 && pt_regno(0, 0, 'x') >= 0 && pt_regno(1, 0, 'x') >= 0 && opt_icopy == 1 {
+        int sa = pt_regno(0, 0, 'x');
+        int sb = pt_regno(1, 0, 'x');
+        int om0 = (0 * 4 + 1) * 40;
+        int om1 = (1 * 4 + 1) * 40;
+        bool same = pt_o[om0] == '[' && pt_o[om0 + 1] == 'x' && pt_o[om0 + 2] == '2' && pt_o[om0 + 3] == '9';
+        int sc = 0;
+        while same && (pt_o[om0 + sc] != 0 || pt_o[om1 + sc] != 0) {
+            if pt_o[om0 + sc] != pt_o[om1 + sc] { same = false; }
+            sc += 1;
+        }
+        if same && sa < 29 && sb < 29 {
+            if sa == sb { pt_set(j, ""); return true; }
+            char mv[24];
+            int mq = 0;
+            mv[mq] = 'm'; mq += 1; mv[mq] = 'o'; mq += 1; mv[mq] = 'v'; mq += 1; mv[mq] = ' '; mq += 1; mv[mq] = 'x'; mq += 1;
+            if sb >= 10 { mv[mq] = '0' + sb / 10; mq += 1; }
+            mv[mq] = '0' + sb % 10; mq += 1;
+            mv[mq] = ','; mq += 1; mv[mq] = ' '; mq += 1; mv[mq] = 'x'; mq += 1;
+            if sa >= 10 { mv[mq] = '0' + sa / 10; mq += 1; }
+            mv[mq] = '0' + sa % 10; mq += 1;
+            mv[mq] = 0;
+            pt_set(j, @mv);
+            return true;
+        }
+    }
+    // mov xA, BITS / (up to 3 lines that do not touch xA or sK) / fmov sK, wA   ->   (the lines) / fmovsi sK, imm8      when BITS is a float that fmov can write directly (0.5, 1.5, 2.0 ...)
+    if pt_mn(0, "mov") && pt_no[0] == 2 && pt_regno(0, 0, 'x') >= 0 && pt_isnum(0, 1) && opt_icopy == 1 {
+        int ca = pt_regno(0, 0, 'x');
+        int ov = (0 * 4 + 1) * 40;
+        int oc = 0;
+        if pt_o[ov] == '#' { oc = 1; }
+        int bits = 0;
+        int dg = 0;
+        while pt_o[ov + oc] >= '0' && pt_o[ov + oc] <= '9' && dg < 11 { bits = bits * 10 + (pt_o[ov + oc] - '0'); oc += 1; dg += 1; }
+        // the ARM immediate of a single: a : NOT(b) : b b b b b : c d e f g h : 19 zeros
+        int imm8 = 0 - 1;
+        if bits > 0 && bits < 4294967296 && (bits & 524287) == 0 {
+            int sg = (bits >> 31) & 1;
+            int b30 = (bits >> 30) & 1;
+            int b29 = (bits >> 25) & 31;
+            int nb = 1 - b30;
+            bool rep = (nb == 1 && b29 == 31) || (nb == 0 && b29 == 0);
+            if rep { imm8 = (sg << 7) | (nb << 6) | ((bits >> 19) & 63); }
+        }
+        if imm8 >= 0 && ca < 29 {
+            int at = pt_next(i);
+            int steps = 0;
+            int found = 0 - 1;
+            int fk = 0 - 1;
+            while at >= 0 && steps < 4 && found < 0 {
+                steps += 1;
+                if !pt_parse(2, at) { break; }
+                if pt_m[32] == 'b' || pt_mn(2, "cbz") || pt_mn(2, "cbnz") || pt_mn(2, "tbz") || pt_mn(2, "tbnz") || pt_mn(2, "ret") || pt_mn(2, "svc") { break; }
+                if pt_mn(2, "fmov") && pt_no[2] == 2 && pt_regno(2, 1, 'w') == ca && pt_regno(2, 0, 's') >= 0 {
+                    found = at;
+                    fk = pt_regno(2, 0, 's');
+                    break;
+                }
+                bool touch = false;
+                int q = 0;
+                while q < pt_no[2] { if pt_rd(2, q, ca) { touch = true; } q += 1; }
+                if touch { break; }
+                at = pt_next(at);
+            }
+            // the lines in between must not use sK either (the constant lands there later than it was made, but nothing may read or write it in between)
+            bool clean = found >= 0;
+            if clean {
+                int at2 = pt_next(i);
+                while at2 >= 0 && at2 != found {
+                    if pt_parse(2, at2) {
+                        int q2 = 0;
+                        while q2 < pt_no[2] { if pt_rd(2, q2, 32 + fk) { clean = false; } q2 += 1; }
+                    }
+                    at2 = pt_next(at2);
+                }
+            }
+            if clean && pt_dead(pt_next(found), ca, 40) {
+                char fl3[40];
+                int fq3 = 0;
+                char hd[10];
+                hd[0] = 'f'; hd[1] = 'm'; hd[2] = 'o'; hd[3] = 'v'; hd[4] = 's'; hd[5] = 'i'; hd[6] = ' '; hd[7] = 's'; hd[8] = 0;
+                int hq = 0;
+                while hd[hq] != 0 { fl3[fq3] = hd[hq]; fq3 += 1; hq += 1; }
+                if fk >= 10 { fl3[fq3] = '0' + fk / 10; fq3 += 1; }
+                fl3[fq3] = '0' + fk % 10; fq3 += 1;
+                fl3[fq3] = ','; fq3 += 1; fl3[fq3] = ' '; fq3 += 1;
+                if imm8 >= 100 { fl3[fq3] = '0' + imm8 / 100; fq3 += 1; }
+                if imm8 >= 10 { fl3[fq3] = '0' + (imm8 / 10) % 10; fq3 += 1; }
+                fl3[fq3] = '0' + imm8 % 10; fq3 += 1;
+                fl3[fq3] = 0;
+                pt_set(found, @fl3);
+                pt_set(i, "");
+                return true;
+            }
+            pt_parse(0, i);
+            pt_parse(1, j);
+        }
+    }
+    // fmov wA, sK / mov xC, xA / (lines that do not write sK or xC) / mov xB, xC / fmov sK, wB   ->   the same without the last fmov (sK still holds the value;
+    // the float went into an integer register and came back for nothing)
+    if pt_mn(0, "fmov") && pt_no[0] == 2 && pt_regno(0, 0, 'w') >= 0 && pt_regno(0, 1, 's') >= 0 && pt_mn(1, "mov") && pt_no[1] == 2 && pt_regno(1, 1, 'x') == pt_regno(0, 0, 'w') && pt_regno(1, 0, 'x') >= 19 && pt_regno(1, 0, 'x') <= 28 && opt_icopy == 1 {
+        int fk2 = pt_regno(0, 1, 's');
+        int cc = pt_regno(1, 0, 'x');
+        int at3 = pt_next(j);
+        int st3 = 0;
+        int pm = 0 - 1;
+        bool ok3 = true;
+        while at3 >= 0 && st3 < 10 && ok3 && pm < 0 {
+            st3 += 1;
+            if !pt_parse(2, at3) { ok3 = false; break; }
+            if pt_m[32] == 'b' || pt_mn(2, "cbz") || pt_mn(2, "cbnz") || pt_mn(2, "tbz") || pt_mn(2, "tbnz") || pt_mn(2, "ret") || pt_mn(2, "svc") { ok3 = false; break; }
+            // the pair that brings it back
+            if pt_mn(2, "mov") && pt_no[2] == 2 && pt_regno(2, 0, 'x') >= 0 && pt_regno(2, 1, 'x') == cc {
+                int nx = pt_next(at3);
+                if nx >= 0 && pt_parse(3, nx) && pt_mn(3, "fmov") && pt_no[3] == 2 && pt_regno(3, 0, 's') == fk2 && pt_regno(3, 1, 'w') == pt_regno(2, 0, 'x') {
+                    pm = nx;
+                    break;
+                }
+            }
+            // a line that mentions sK at all, or writes xC, ends the search
+            int q3 = 0;
+            while q3 < pt_no[2] {
+                if pt_rd(2, q3, 32 + fk2) { ok3 = false; }
+                if q3 == 0 && pt_rd(2, 0, cc) && pt_writes_first(2) { ok3 = false; }
+                q3 += 1;
+            }
+            at3 = pt_next(at3);
+        }
+        if ok3 && pm >= 0 {
+            pt_set(pm, "");
+            return true;
+        }
+        pt_parse(0, i);
+        pt_parse(1, j);
+    }
+    // a register that is written and not read again, by an instruction that does nothing else (mov, fmov to a w or x register, add sub and or eor shifts without flags): the line goes
+    if opt_icopy == 1 && pt_no[0] >= 2 && (pt_mn(0, "mov") || pt_mn(0, "fmov") || pt_mn(0, "add") || pt_mn(0, "sub") || pt_mn(0, "lsl") || pt_mn(0, "lsr") || pt_mn(0, "asr") || pt_mn(0, "and") || pt_mn(0, "orr") || pt_mn(0, "eor")) {
+        int dw = pt_regno(0, 0, 'x');
+        if dw < 0 { dw = pt_regno(0, 0, 'w'); }
+        if dw >= 0 && dw <= 25 && dw != 18 && !(pt_mn(0, "fmov") && pt_regno(0, 0, 'x') < 0 && pt_regno(0, 0, 'w') < 0) {
+            bool plain = true;
+            int qd = 1;
+            while qd < pt_no[0] { if pt_rd(0, qd, 28) || pt_rd(0, qd, 29) || pt_rd(0, qd, 31) { plain = false; } qd += 1; }
+            if plain && pt_dead(pt_next(i), dw, 41) {
+                pt_set(i, "");
+                return true;
+            }
+            pt_parse(0, i);
+            pt_parse(1, j);
+        }
+    }
+    // mov xT, xV / cmp xV, ...   ->   mov xT, xV / cmp xT, ...      (the same value; xV may then be written by the line before in place: add xT, ... )
+    if pt_mn(0, "mov") && pt_no[0] == 2 && pt_regno(0, 0, 'x') >= 0 && pt_regno(0, 1, 'x') >= 0 && pt_regno(0, 0, 'x') != pt_regno(0, 1, 'x') && (pt_mn(1, "cmp") || pt_mn(1, "cmn") || pt_mn(1, "tst")) && pt_no[1] == 2 && opt_icopy == 1 {
+        int mt = pt_regno(0, 0, 'x');
+        int mv = pt_regno(0, 1, 'x');
+        if mt < 29 && mv < 29 && pt_regno(1, 0, 'x') == mv && pt_regno(1, 1, 'x') != mv {
+            pt_build_subst(1, mv, mt);
+            pt_set(j, @pt_line);
+            return true;
+        }
+    }
+    // lsl xA, xI, #k / (one independent line) / OP rt, [xA, xB]   ->   (the line) / OP rt, [xB, xI, lsl #k]      (the element address after the load of the data pointer)
+    if pt_mn(0, "lsl") && pt_no[0] == 3 && pt_regno(0, 0, 'x') >= 0 && pt_regno(0, 1, 'x') >= 0 && pt_isnum(0, 2) && pt_no[1] >= 2 && opt_icopy == 1 {
+        int la = pt_regno(0, 0, 'x');
+        int li = pt_regno(0, 1, 'x');
+        int o2 = (0 * 4 + 2) * 40;
+        int lk = 0 - 1;
+        if pt_o[o2] == '#' && pt_o[o2 + 1] >= '0' && pt_o[o2 + 1] <= '3' && pt_o[o2 + 2] == 0 { lk = pt_o[o2 + 1] - '0'; }
+        bool mid = pt_mn(1, "ldr") || pt_mn(1, "ldrsw") || pt_mn(1, "ldrb") || pt_mn(1, "ldrh") || pt_mn(1, "add") || pt_mn(1, "sub") || pt_mn(1, "mov") || pt_mn(1, "lsl") || pt_mn(1, "lsr");
+        int n2 = pt_next(j);
+        if lk >= 0 && la != li && mid && n2 >= 0 && pt_writes_first(1) {
+            bool mid_ok = !pt_rd(1, 0, la) && pt_regno(1, 0, 'x') != li && pt_regno(1, 0, 'x') != la;
+            int q = 1;
+            while q < pt_no[1] { if pt_rd(1, q, la) { mid_ok = false; } q += 1; }
+            if mid_ok && pt_parse(2, n2) && pt_no[2] == 2 {
+                int sz2 = 0 - 1;
+                bool st2 = pt_mn(2, "str") || pt_mn(2, "strw") || pt_mn(2, "strb") || pt_mn(2, "strh");
+                if pt_mn(2, "ldr") || pt_mn(2, "str") {
+                    if pt_regno(2, 0, 'x') >= 0 || pt_regno(2, 0, 'd') >= 0 { sz2 = 3; }
+                    else if pt_regno(2, 0, 's') >= 0 { sz2 = 2; }
+                } else if pt_mn(2, "ldrsw") || pt_mn(2, "strw") { sz2 = 2; }
+                else if pt_mn(2, "ldrh") || pt_mn(2, "strh") { sz2 = 1; }
+                else if pt_mn(2, "ldrb") || pt_mn(2, "strb") { sz2 = 0; }
+                // the operand must be exactly "[xA, xB]" with xB another register that is not xA
+                int ob = (2 * 4 + 1) * 40;
+                int xb = 0 - 1;
+                if pt_o[ob] == '[' && pt_o[ob + 1] == 'x' {
+                    int a1 = ob + 2;
+                    int v1 = 0;
+                    while pt_o[a1] >= '0' && pt_o[a1] <= '9' { v1 = v1 * 10 + (pt_o[a1] - '0'); a1 += 1; }
+                    if v1 == la && pt_o[a1] == ',' && pt_o[a1 + 1] == ' ' && pt_o[a1 + 2] == 'x' {
+                        int a2 = a1 + 3;
+                        int v2 = 0;
+                        while pt_o[a2] >= '0' && pt_o[a2] <= '9' { v2 = v2 * 10 + (pt_o[a2] - '0'); a2 += 1; }
+                        if pt_o[a2] == ']' && pt_o[a2 + 1] == 0 && v2 != la { xb = v2; }
+                    }
+                }
+                bool first_is_a2 = pt_regno(2, 0, 'x') == la;
+                if sz2 >= 0 && xb >= 0 && (lk == 0 || lk == sz2) && !(st2 && first_is_a2) && (first_is_a2 || pt_dead(pt_next(n2), la, 40)) {
+                    char fl2[64];
+                    int fq = 0;
+                    int mq2 = 0;
+                    while pt_m[2 * 16 + mq2] != 0 { fl2[fq] = pt_m[2 * 16 + mq2]; fq += 1; mq2 += 1; }
+                    fl2[fq] = ' '; fq += 1;
+                    int o0b = (2 * 4 + 0) * 40;
+                    int oq2 = 0;
+                    while pt_o[o0b + oq2] != 0 { fl2[fq] = pt_o[o0b + oq2]; fq += 1; oq2 += 1; }
+                    fl2[fq] = ','; fq += 1; fl2[fq] = ' '; fq += 1; fl2[fq] = '['; fq += 1; fl2[fq] = 'x'; fq += 1;
+                    if xb >= 10 { fl2[fq] = '0' + xb / 10; fq += 1; }
+                    fl2[fq] = '0' + xb % 10; fq += 1;
+                    fl2[fq] = ','; fq += 1; fl2[fq] = ' '; fq += 1; fl2[fq] = 'x'; fq += 1;
+                    if li >= 10 { fl2[fq] = '0' + li / 10; fq += 1; }
+                    fl2[fq] = '0' + li % 10; fq += 1;
+                    if lk > 0 {
+                        fl2[fq] = ','; fq += 1; fl2[fq] = ' '; fq += 1; fl2[fq] = 'l'; fq += 1; fl2[fq] = 's'; fq += 1; fl2[fq] = 'l'; fq += 1; fl2[fq] = ' '; fq += 1; fl2[fq] = '#'; fq += 1;
+                        fl2[fq] = '0' + lk; fq += 1;
+                    }
+                    fl2[fq] = ']'; fq += 1;
+                    fl2[fq] = 0;
+                    pt_set(n2, @fl2);
+                    pt_set(i, "");
+                    return true;
+                }
+            }
+            pt_parse(0, i);
+            pt_parse(1, j);
+        }
+    }
     // add xA, xB, xC [, lsl #k] / OP rt, [xA, #0]   ->   OP rt, [xB, xC [, lsl #k]]      (a register offset: k is 0 or the log2 of the size; xA written by OP or not needed afterwards)
     if pt_mn(0, "add") && (pt_no[0] == 3 || pt_no[0] == 4) && pt_regno(0, 0, 'x') >= 0 && pt_regno(0, 1, 'x') >= 0 && pt_regno(0, 2, 'x') >= 0 && pt_no[1] == 2 {
         int ra = pt_regno(0, 0, 'x');
@@ -2930,6 +3293,41 @@ bool pt_rules(int i) {
             pt_set(i, "");
             return true;
         }
+    }
+    // mov xT, xV / ... / I that reads xT   ->   (the lines) / I with xV      (see pt_fwd_icopy)
+    if pt_mn(0, "mov") && pt_no[0] == 2 && pt_regno(0, 0, 'x') >= 0 && pt_regno(0, 1, 'x') >= 0 && pt_regno(0, 0, 'x') != pt_regno(0, 1, 'x') && pt_regno(0, 1, 'x') < 29 && opt_icopy == 1 {
+        if pt_fwd_icopy(i) { return true; }
+        pt_parse(0, i);
+        pt_parse(1, j);
+    }
+    // FOP rA, ... / fmov rB, rA   ->   FOP rB, ...      (a floating-point operation, rA a float or a double register not needed afterwards)
+    if opt_icopy == 1 && pt_no[0] >= 2 && pt_mn(1, "fmov") && pt_no[1] == 2 && (pt_mn(0, "fadd") || pt_mn(0, "fsub") || pt_mn(0, "fmul") || pt_mn(0, "fdiv") || pt_mn(0, "fsqrt") || pt_mn(0, "fabs") || pt_mn(0, "fneg") || pt_mn(0, "fmax") || pt_mn(0, "fmin") || pt_mn(0, "fmadd") || pt_mn(0, "fmsub") || pt_mn(0, "fnmadd") || pt_mn(0, "fnmsub")) {
+        char fkind = 'd';
+        int fa1 = pt_regno(0, 0, 'd');
+        if fa1 < 0 { fa1 = pt_regno(0, 0, 's'); fkind = 's'; }
+        int fb1 = pt_regno(1, 0, fkind);
+        int fc1 = pt_regno(1, 1, fkind);
+        if fa1 >= 0 && fb1 >= 0 && fc1 == fa1 && fb1 != fa1 && pt_dead(pt_next(j), 32 + fa1, 40) {
+            char rn[12];
+            int rq = 0;
+            rn[rq] = fkind; rq += 1;
+            if fb1 >= 10 { rn[rq] = '0' + fb1 / 10; rq += 1; }
+            rn[rq] = '0' + fb1 % 10; rq += 1;
+            rn[rq] = 0;
+            pt_build(0, 0, @rn);
+            pt_set(i, @pt_line);
+            pt_set(j, "");
+            return true;
+        }
+    }
+    // the same for floats: fmov sT, sV / ... / OP D, ..., sT, ...
+    if pt_mn(0, "fmov") && pt_no[0] == 2 && pt_regno(0, 0, 's') >= 0 && pt_regno(0, 1, 's') >= 0 && pt_regno(0, 0, 's') != pt_regno(0, 1, 's') && opt_icopy == 1 {
+        pt_fk = 's';
+        bool fwd_s = pt_fwd_copy(i);
+        pt_fk = 'd';
+        if fwd_s { return true; }
+        pt_parse(0, i);
+        pt_parse(1, j);
     }
     // fmov dT, dV / ... / OP D, ..., dT, ...   ->   (the lines) / OP D, ..., dV, ...      (see pt_fwd_copy)
     if pt_mn(0, "fmov") && pt_no[0] == 2 && pt_regno(0, 0, 'd') >= 0 && pt_regno(0, 1, 'd') >= 0 && pt_regno(0, 0, 'd') != pt_regno(0, 1, 'd') {

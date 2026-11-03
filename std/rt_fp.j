@@ -61,7 +61,7 @@ void __out_unbuffer() {
     g[111] = 2;
 }
 
-// cout << a bool: true or false
+// jout << a bool: true or false
 void __print_bool(int v) {
     if v != 0 {
         __wr(__out_fd(), "true", 4);
@@ -70,7 +70,7 @@ void __print_bool(int v) {
     }
 }
 
-// cout << a pointer or an address: 0x and the digits in hex (0x0 for null)
+// jout << a pointer or an address: 0x and the digits in hex (0x0 for null)
 void __print_ptr(int v) {
     char buf[24];
     int at = 22;
@@ -94,7 +94,7 @@ void __print_ptr(int v) {
     __wr(__out_fd(), @buf[at + 1], 22 - at);
 }
 
-// the file that cout writes to: 1, or 2 inside a statement with cerr (the word at 864 of the global area, 0 or 1, plus 1)
+// the file that jout writes to: 1, or 2 inside a statement with jerr (the word at 864 of the global area, 0 or 1, plus 1)
 int __out_fd() {
     int^ gout = (int^)__gl();
     return gout[108] + 1;

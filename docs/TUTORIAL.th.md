@@ -76,14 +76,14 @@ jcmp hello.jk -o hello      # คอมไพล์
 
 ## บทที่ 1. สวัสดีชาวโลก
 
-โปรแกรมเริ่มทำงานที่ `main` คำสั่ง `cout <<` ใช้พิมพ์ และ `\n` คือขึ้นบรรทัดใหม่ บันทึกเป็นไฟล์ `hello.jk`
+โปรแกรมเริ่มทำงานที่ `main` คำสั่ง `jout <<` ใช้พิมพ์ และ `\n` คือขึ้นบรรทัดใหม่ บันทึกเป็นไฟล์ `hello.jk`
 
 ```jk
 #import <stdlib>
 using stdlib;
 
 void main() {
-    cout << "Hello, J2K!\n";
+    jout << "Hello, J2K!\n";
 }
 ```
 
@@ -99,7 +99,7 @@ Hello, J2K!
 ## บทที่ 2. ตัวเลขและตัวแปร
 
 ตัวแปรมีชนิด: `int` (จำนวนเต็ม 64 บิต), `double` (ทศนิยม), `char` (ตัวอักษรหนึ่งตัว), `bool` (จริงหรือเท็จ)
-`cout` พิมพ์ทศนิยมได้ด้วย ทุกบรรทัดจบด้วย `;`
+`jout` พิมพ์ทศนิยมได้ด้วย ทุกบรรทัดจบด้วย `;`
 
 ```jk
 #import <stdlib>
@@ -109,16 +109,16 @@ void main() {
     int apples = 5;
     int pears = 3;
     int total = apples + pears;
-    cout << "total = " << total << "\n";
+    jout << "total = " << total << "\n";
 
     double price = 2.5;
-    cout << "cost = " << price * 4.0 << "\n";
+    jout << "cost = " << price * 4.0 << "\n";
 
     char letter = 'J';
-    cout << letter << "\n";
+    jout << letter << "\n";
 
     bool enough = total > 7;
-    if enough { cout << "enough fruit\n"; }
+    if enough { jout << "enough fruit\n"; }
 }
 ```
 
@@ -144,14 +144,14 @@ using stdlib;
 void main() {
     int score = 72;
     if score >= 90 {
-        cout << "A\n";
+        jout << "A\n";
     } else if score >= 70 {
-        cout << "B\n";
+        jout << "B\n";
     } else {
-        cout << "C\n";
+        jout << "C\n";
     }
     bool passed = score >= 50 && score <= 100;
-    if passed { cout << "passed\n"; }
+    if passed { jout << "passed\n"; }
 }
 ```
 
@@ -176,16 +176,16 @@ using stdlib;
 void main() {
     int i = 1;
     while i <= 3 {
-        cout << i << " ";
+        jout << i << " ";
         i++;
     }
-    cout << "\n";
+    jout << "\n";
 
-    for k in 0..5 { cout << k * k << " "; }
-    cout << "\n";
+    for k in 0..5 { jout << k * k << " "; }
+    jout << "\n";
 
-    for int j = 10; j > 0; j -= 3 { cout << j << " "; }
-    cout << "\n";
+    for int j = 10; j > 0; j -= 3 { jout << j << " "; }
+    jout << "\n";
 }
 ```
 
@@ -208,8 +208,8 @@ void main() {
 using stdlib;
 
 void main() {
-    cout << square(7) << "\n";
-    cout << sum_to(10) << "\n";
+    jout << square(7) << "\n";
+    jout << sum_to(10) << "\n";
     greet("Ann");
 }
 
@@ -224,7 +224,7 @@ int sum_to(int n) {
 }
 
 void greet(char^ name) {
-    cout << "Hello, " << name << "!\n";
+    jout << "Hello, " << name << "!\n";
 }
 ```
 
@@ -252,20 +252,20 @@ void main() {
     for i in 0..5 { scores[i] = (i + 1) * 10; }
     int total = 0;
     for i in 0..scores.len { total += scores[i]; }
-    cout << "total " << total << "\n";
+    jout << "total " << total << "\n";
 
     char word[] = "banana";
     int count = 0;
     for i in 0..word.len {
         if word[i] == 'a' { count++; }
     }
-    cout << word << " has " << count << " letter a\n";
+    jout << word << " has " << count << " letter a\n";
 
     int grid[2][3];
     for r in 0..2 {
         for c in 0..3 { grid[r][c] = r * 3 + c; }
     }
-    cout << grid[1][2] << "\n";
+    jout << grid[1][2] << "\n";
 }
 ```
 
@@ -281,8 +281,8 @@ banana has 3 letter a
 
 ## บทที่ 7. การอ่านข้อมูลจากผู้ใช้
 
-`cin >> a >> b;` อ่านข้อมูลจากคีย์บอร์ด ชนิดของตัวแปรกำหนดว่าจะอ่านอะไร: ตัวเลขสำหรับ `int` คำสำหรับอาร์เรย์ `char`
-`cin` อ่านทศนิยมได้ด้วย คำคั่นด้วยช่องว่างหรือขึ้นบรรทัดใหม่
+`jin >> a >> b;` อ่านข้อมูลจากคีย์บอร์ด ชนิดของตัวแปรกำหนดว่าจะอ่านอะไร: ตัวเลขสำหรับ `int` คำสำหรับอาร์เรย์ `char`
+`jin` อ่านทศนิยมได้ด้วย คำคั่นด้วยช่องว่างหรือขึ้นบรรทัดใหม่
 
 ```jk
 #import <stdlib>
@@ -291,8 +291,8 @@ using stdlib;
 void main() {
     char name[20];
     int age;
-    cin >> name >> age;
-    cout << name << " will be " << age + 1 << " next year\n";
+    jin >> name >> age;
+    jout << name << " will be " << age + 1 << " next year\n";
 }
 ```
 
@@ -308,7 +308,7 @@ Ann will be 31 next year
 
 ## บทที่ 8. บรรทัด ตัวเลข และปุ่ม: read
 
-`cin` อ่านทีละคำ ถ้าต้องการทั้งบรรทัด ตัวเลขจากบรรทัด หรือคำตอบของคำถาม ให้ใช้โมดูล `read` (`using Input;`): `read.line()`, `read.number()`, `read.yes("คำถาม")` ส่วน `read.enter()` รอให้กด Enter และ `read.key()` รอปุ่มเดียวโดยไม่ต้องกด Enter (ดูข้างล่าง)
+`jin` อ่านทีละคำ ถ้าต้องการทั้งบรรทัด ตัวเลขจากบรรทัด หรือคำตอบของคำถาม ให้ใช้โมดูล `read` (`using Input;`): `read.line()`, `read.number()`, `read.yes("คำถาม")` ส่วน `read.enter()` รอให้กด Enter และ `read.key()` รอปุ่มเดียวโดยไม่ต้องกด Enter (ดูข้างล่าง)
 
 ```jk
 #import <stdlib>
@@ -316,12 +316,12 @@ using stdlib;
 using Input;
 
 void main() {
-    cout << "name? ";
+    jout << "name? ";
     String name = read.line();
-    cout << "age? ";
+    jout << "age? ";
     int age = read.number();
-    cout << name << " will be " << age + 1 << " next year\n";
-    if read.yes("again?") { cout << "ok\n"; } else { cout << "bye\n"; }
+    jout << name << " will be " << age + 1 << " next year\n";
+    if read.yes("again?") { jout << "ok\n"; } else { jout << "bye\n"; }
 }
 ```
 
@@ -336,7 +336,7 @@ name? age? Ann will be 31 next year
 again? [y/n] ok
 ```
 
-`read.number()` โยน error เมื่อบรรทัดไม่ใช่จำนวนเต็ม (`read.try_number()` คืน `Result` แทน) `read.key()` คืนรหัสของปุ่ม ไม่แสดงบนจอและไม่ต้องกด Enter: ตัวอักษรคือรหัสของมัน Escape คือ 27 ลูกศรคือ 257 (ขึ้น) 258 (ลง) 259 (ขวา) 260 (ซ้าย) ตามด้วย Home, End, Delete, ปุ่มหน้า และ F1 ถึง F4 และเมื่ออินพุตหมดคือ -1 `read.key_timeout(ms)` ยอมแพ้เมื่อครบเวลา (-2), `read.password()` ซ่อนสิ่งที่พิมพ์ และ `read.decimal()` อ่านตัวเลขที่มีทศนิยม เกมหรือเมนูอ่านแป้นพิมพ์แบบนี้ ใน 1 โปรแกรมใช้ `read` หรือ `cin` อย่างใดอย่างหนึ่ง ไม่ใช้ทั้งสอง
+`read.number()` โยน error เมื่อบรรทัดไม่ใช่จำนวนเต็ม (`read.try_number()` คืน `Result` แทน) `read.key()` คืนรหัสของปุ่ม ไม่แสดงบนจอและไม่ต้องกด Enter: ตัวอักษรคือรหัสของมัน Escape คือ 27 ลูกศรคือ 257 (ขึ้น) 258 (ลง) 259 (ขวา) 260 (ซ้าย) ตามด้วย Home, End, Delete, ปุ่มหน้า และ F1 ถึง F4 และเมื่ออินพุตหมดคือ -1 `read.key_timeout(ms)` ยอมแพ้เมื่อครบเวลา (-2), `read.password()` ซ่อนสิ่งที่พิมพ์ และ `read.decimal()` อ่านตัวเลขที่มีทศนิยม เกมหรือเมนูอ่านแป้นพิมพ์แบบนี้ ใน 1 โปรแกรมใช้ `read` หรือ `jin` อย่างใดอย่างหนึ่ง ไม่ใช้ทั้งสอง
 
 ## บทที่ 9. struct และ method
 
@@ -362,9 +362,9 @@ struct Rect {
 
 void main() {
     Rect r = {3, 4};
-    cout << r.area() << "\n";
+    jout << r.area() << "\n";
     r.grow(1);
-    cout << r.w << "x" << r.h << " area " << r.area() << "\n";
+    jout << r.w << "x" << r.h << " area " << r.area() << "\n";
 }
 ```
 
@@ -390,9 +390,9 @@ enum class Light { Red, Yellow, Green };
 
 void say(Light l) {
     switch l {
-        Light::Red: cout << "stop\n";
-        Light::Yellow: cout << "slow down\n";
-        Light::Green: cout << "go\n";
+        Light::Red: jout << "stop\n";
+        Light::Yellow: jout << "slow down\n";
+        Light::Green: jout << "go\n";
     }
 }
 
@@ -402,9 +402,9 @@ void main() {
 
     int n = 3;
     switch n {
-        1, 2: cout << "small\n";
-        3: cout << "three\n";
-        _: cout << "other\n";
+        1, 2: jout << "small\n";
+        3: jout << "three\n";
+        _: jout << "other\n";
     }
 }
 ```
@@ -436,12 +436,12 @@ void main() {
     int n = 5;
     bump(@n);
     bump(@n);
-    cout << n << "\n";
+    jout << n << "\n";
 
     int a[3];
     a[0] = 10; a[1] = 20; a[2] = 30;
     int^ q = @a;
-    cout << q[1] << "\n";
+    jout << q[1] << "\n";
 }
 ```
 
@@ -470,13 +470,13 @@ int total(int[] list) {
 void main() {
     int[] squares = arr(4);
     for i in 1..6 { squares.push(i * i); }
-    cout << squares.len << " items, total " << total(squares) << "\n";
+    jout << squares.len << " items, total " << total(squares) << "\n";
 
     int^ buffer = (int^)alloc(sizeof(int) * 3);
     buffer[0] = 7;
     buffer[1] = 8;
     buffer[2] = 9;
-    cout << buffer[0] + buffer[2] << "\n";
+    jout << buffer[0] + buffer[2] << "\n";
 }   // squares and buffer are freed here
 ```
 
@@ -492,7 +492,7 @@ void main() {
 ## บทที่ 13. สตริง (String)
 
 `String` เก็บข้อความที่ยาวขึ้นได้ `String s = "hello";` ทำสำเนาของข้อความ `a + b` ต่อสตริง `==` เปรียบเทียบ `s.len` คือความยาว `s[i]` คือตัวอักษรตัวที่ i
-เมธอด: `push`, `append`, `pop`, `clear`, `find`, `slice(จาก, ถึง)`, `c()` (ตัวอักษรในรูปข้อความธรรมดา) `cin >> s` อ่านหนึ่งคำ
+เมธอด: `push`, `append`, `pop`, `clear`, `find`, `slice(จาก, ถึง)`, `c()` (ตัวอักษรในรูปข้อความธรรมดา) `jin >> s` อ่านหนึ่งคำ
 `String` ถูกปล่อยเองตอนจบบล็อก และ `String b = a;` ทำสำเนาแยกอิสระ
 
 ```jk
@@ -508,12 +508,12 @@ void main() {
     String a = "abc";
     String b = a;
     b.push('d');
-    cout << a << " " << b << "\n";
+    jout << a << " " << b << "\n";
 
     String line = "Hello, " + shout("Jao");
-    cout << line << " (" << line.len << " characters)\n";
-    cout << line.find("Jao") << " " << line.slice(0, 5) << "\n";
-    if a == "abc" { cout << "same\n"; }
+    jout << line << " (" << line.len << " characters)\n";
+    jout << line.find("Jao") << " " << line.slice(0, 5) << "\n";
+    if a == "abc" { jout << "same\n"; }
 }
 ```
 
@@ -549,11 +549,11 @@ struct Box<T> {
 }
 
 void main() {
-    cout << largest(3, 9) << "\n";
-    cout << largest(2.5, 1.5) << "\n";
-    cout << largest<int>(8, 2) << "\n";
+    jout << largest(3, 9) << "\n";
+    jout << largest(2.5, 1.5) << "\n";
+    jout << largest<int>(8, 2) << "\n";
     Box<int> b = {7};
-    cout << b.get() << "\n";
+    jout << b.get() << "\n";
 }
 ```
 
@@ -581,21 +581,21 @@ void main() {
     int[] scores = arr(4);
     scores.push(72); scores.push(95); scores.push(60);
     scores.sort();
-    for s in scores { cout << s << " "; }
-    cout << "\n";
+    for s in scores { jout << s << " "; }
+    jout << "\n";
 
     Map<String, int> ages;
     ages.put("ann", 31);
     ages.put("bob", 25);
     ages.put("ann", 32);
-    cout << ages.get("ann") << " " << ages.len << "\n";
+    jout << ages.get("ann") << " " << ages.len << "\n";
     for name in ages.keys_list() {
-        cout << name << " is " << ages.get(name) << "\n";
+        jout << name << " is " << ages.get(name) << "\n";
     }
 
     Set<int> seen;
     for i in 0..20 { seen.add(i % 5); }
-    cout << seen.len << " different, has 3: " << seen.has(3) << "\n";
+    jout << seen.len << " different, has 3: " << seen.has(3) << "\n";
 }
 ```
 
@@ -625,9 +625,9 @@ int apply(int(int, int)^ f, int x, int y) {
 }
 
 void main() {
-    cout << apply(int(int a, int b) { return a + b; }, 3, 4) << "\n";
+    jout << apply(int(int a, int b) { return a + b; }, 3, 4) << "\n";
     int(int)^ triple = int(int x) { return x * 3; };
-    cout << triple(5) << "\n";
+    jout << triple(5) << "\n";
 }
 ```
 
@@ -655,10 +655,10 @@ int divide(int a, int b) {
 
 void main() {
     try {
-        cout << divide(10, 2) << "\n";
-        cout << divide(1, 0) << "\n";
+        jout << divide(10, 2) << "\n";
+        jout << divide(1, 0) << "\n";
     } catch (e) {
-        cout << "error: " << e << "\n";
+        jout << "error: " << e << "\n";
     }
 }
 ```
@@ -681,13 +681,13 @@ using stdlib;
 void main() {
     double a = 3.0;
     double b = 4.0;
-    cout << "hypotenuse = " << sqrt(a * a + b * b) << "\n";
+    jout << "hypotenuse = " << sqrt(a * a + b * b) << "\n";
 
     int whole = (int)floor(7.9);
-    cout << whole << "\n";
+    jout << whole << "\n";
 
     double half = (double)whole / 2.0;
-    cout << half << "\n";
+    jout << half << "\n";
 }
 ```
 
@@ -719,7 +719,7 @@ void main() {
     i32 g = File::open("note.txt", FileMode::Read);
     File::read_line(g, line);
     File::close(g);
-    cout << line << "\n";
+    jout << line << "\n";
 }
 ```
 
@@ -752,7 +752,7 @@ using stdlib;
 #import "mathx"
 
 void main() {
-    cout << cube(3) << "\n";
+    jout << cube(3) << "\n";
 }
 ```
 
@@ -784,7 +784,7 @@ void main() {
     int longest = 0;
     try {
         while true {
-            cin >> w;
+            jin >> w;
             count++;
             int n = length(@w);
             if n > longest { longest = n; }
@@ -792,7 +792,7 @@ void main() {
     } catch (e) {
         // the input is over
     }
-    cout << count << " words, the longest has " << longest << " letters\n";
+    jout << count << " words, the longest has " << longest << " letters\n";
 }
 ```
 
@@ -830,8 +830,8 @@ Result<int, Error> add(String a, String b) {
 
 void show(Result<int, Error> r) {
     switch r {
-        Result::Ok(v): cout << "sum = " << v << "\n";
-        Result::Err(e): cout << "error: " << e.message << "\n";
+        Result::Ok(v): jout << "sum = " << v << "\n";
+        Result::Err(e): jout << "error: " << e.message << "\n";
     }
 }
 
@@ -839,7 +839,7 @@ void main() {
     show(add("20", "22"));
     show(add("20", ""));
     Option<String> home = Env::get("J2K_SURELY_NOT_SET");
-    cout << home.is_none() << " " << Env::get("PATH").is_some() << "\n";
+    jout << home.is_none() << " " << Env::get("PATH").is_some() << "\n";
 }
 ```
 
@@ -862,24 +862,24 @@ true true
 using stdlib;
 
 void work(int n) {
-    defer cout << "leaving work(" << n << ")\n";
+    defer jout << "leaving work(" << n << ")\n";
     if n > 5 {
-        cout << "big\n";
+        jout << "big\n";
         return;
     }
-    cout << "small\n";
+    jout << "small\n";
 }
 
 void main() {
     work(3);
     work(9);
     for i in 0..2 {
-        defer cout << "end of round " << i << "\n";
-        cout << "round " << i << "\n";
+        defer jout << "end of round " << i << "\n";
+        jout << "round " << i << "\n";
     }
-    defer cout << "first defer\n";
-    defer cout << "second defer\n";
-    cout << "main body\n";
+    defer jout << "first defer\n";
+    defer jout << "second defer\n";
+    jout << "main body\n";
 }
 ```
 
@@ -920,7 +920,7 @@ void main() {
     Money a = {250};
     Money b = a + a * 3;
     Money c = 2 * a;
-    cout << b.cents << " " << c.cents << " " << (a + a == c) << "\n";
+    jout << b.cents << " " << c.cents << " " << (a + a == c) << "\n";
 }
 ```
 
@@ -943,16 +943,16 @@ using stdlib;
 void main() {
     Date d;
     d.set_unix(86400 * 365);
-    cout << d.text() << " weekday " << d.weekday() << "\n";
+    jout << d.text() << " weekday " << d.weekday() << "\n";
     d.add_days(60);
-    cout << d.text() << " day of year " << d.day_of_year() << "\n";
-    cout << Date::is_leap(2024) << " " << Date::days_in_month(2024, 2) << "\n";
+    jout << d.text() << " day of year " << d.day_of_year() << "\n";
+    jout << Date::is_leap(2024) << " " << Date::days_in_month(2024, 2) << "\n";
     Random::seed(42);
     int r = Random::range(1, 7);
-    cout << (r >= 1 && r < 7) << " " << (Random::unit() < 1.0) << "\n";
+    jout << (r >= 1 && r < 7) << " " << (Random::unit() < 1.0) << "\n";
     int t0 = Time::mono_ns();
     Time::sleep_ms(20);
-    cout << (Time::mono_ns() - t0 >= 20000000) << "\n";
+    jout << (Time::mono_ns() - t0 >= 20000000) << "\n";
 }
 ```
 
@@ -980,12 +980,12 @@ void main() {
     String text = "{\"name\": \"J2K\", \"version\": 0.9, \"tags\": [\"fast\", \"small\"], \"ok\": true}";
     JsonDoc doc = Json::parse(text).unwrap();
     int root = doc.root();
-    cout << doc.text(doc.get(root, "name")) << " " << doc.number(doc.get(root, "version")) << "\n";
+    jout << doc.text(doc.get(root, "name")) << " " << doc.number(doc.get(root, "version")) << "\n";
     int tags = doc.get(root, "tags");
-    for i in 0..doc.len(tags) { cout << doc.text(doc.at(tags, i)) << " "; }
-    cout << doc.boolean(doc.get(root, "ok")) << "\n";
-    cout << doc.dump(tags) << "\n";
-    cout << Json::quote("say \"hi\"") << "\n";
+    for i in 0..doc.len(tags) { jout << doc.text(doc.at(tags, i)) << " "; }
+    jout << doc.boolean(doc.get(root, "ok")) << "\n";
+    jout << doc.dump(tags) << "\n";
+    jout << Json::quote("say \"hi\"") << "\n";
 }
 ```
 
@@ -1010,10 +1010,10 @@ using stdlib;
 
 void main() {
     String[] f = Csv::split_line("Ann,\"Lee, Jr\",30");
-    cout << f.len << ": " << f[0] << " | " << f[1] << " | " << f[2] << "\n";
-    cout << Csv::join_line(f) << "\n";
-    cout << Fmt::fixed(3.14159, 2) << " " << Fmt::pad_left("7", 3, '0') << " " << Fmt::thousands(1234567) << "\n";
-    cout << Fmt::hex(255) << " " << Fmt::bin(5) << " " << Fmt::percent(0.256, 1) << " " << Fmt::bytes(1536) << "\n";
+    jout << f.len << ": " << f[0] << " | " << f[1] << " | " << f[2] << "\n";
+    jout << Csv::join_line(f) << "\n";
+    jout << Fmt::fixed(3.14159, 2) << " " << Fmt::pad_left("7", 3, '0') << " " << Fmt::thousands(1234567) << "\n";
+    jout << Fmt::hex(255) << " " << Fmt::bin(5) << " " << Fmt::percent(0.256, 1) << " " << Fmt::bytes(1536) << "\n";
 }
 ```
 
@@ -1037,9 +1037,9 @@ ff 101 25.6% 1.5 KB
 using stdlib;
 
 void main() {
-    cout << Regex::matches("[a-z]+@[a-z]+\\.com", "ann@mail.com") << " " << Regex::find("[0-9]+", "room 42, floor 7") << " " << Regex::find_text("[0-9]+", "room 42, floor 7") << "\n";
-    cout << Sha256::hex("abc") << "\n";
-    cout << Hex::encode("Hi") << " " << Base64::encode("Man") << " " << Base64::decode("TWFu").unwrap() << "\n";
+    jout << Regex::matches("[a-z]+@[a-z]+\\.com", "ann@mail.com") << " " << Regex::find("[0-9]+", "room 42, floor 7") << " " << Regex::find_text("[0-9]+", "room 42, floor 7") << "\n";
+    jout << Sha256::hex("abc") << "\n";
+    jout << Hex::encode("Hi") << " " << Base64::encode("Man") << " " << Base64::decode("TWFu").unwrap() << "\n";
 }
 ```
 
@@ -1062,12 +1062,12 @@ ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad
 using stdlib;
 
 void main() {
-    cout << Path::join("dir", "file.txt") << "\n";
+    jout << Path::join("dir", "file.txt") << "\n";
     String[] args = arr(0);
     args.push("hello from a child");
     String out = Proc::output("echo", args).unwrap();
-    cout << out;
-    cout << Env::args().len << "\n";
+    jout << out;
+    jout << Env::args().len << "\n";
     Log::set_level(2);
     Log::info("not shown");
     Log::error("shown on the standard error");
@@ -1097,10 +1097,10 @@ using stdlib;
 
 void main() {
     int x = 0xB0;
-    cout << x << " " << Bit::popcount(x) << " " << Bit::clz(x) << " " << Bit::ctz(x) << "\n";
-    cout << (x >> 4) << " " << (x & 0xF) << " " << (x << 4) << " " << (x xor 0xFF) << "\n";
-    cout << Bit::rotl(1, 63) << "\n";
-    cout << Bit::bswap(0x0102030405060708) << "\n";
+    jout << x << " " << Bit::popcount(x) << " " << Bit::clz(x) << " " << Bit::ctz(x) << "\n";
+    jout << (x >> 4) << " " << (x & 0xF) << " " << (x << 4) << " " << (x xor 0xFF) << "\n";
+    jout << Bit::rotl(1, 63) << "\n";
+    jout << Bit::bswap(0x0102030405060708) << "\n";
 }
 ```
 
@@ -1128,12 +1128,12 @@ void main() {
     // (5, -1) + (0, 1) as numbers of two words: high word first
     BitCarry lo = Bit::add_carry(-1, 1, 0);
     BitCarry hi = Bit::add_carry(5, 0, lo.c);
-    cout << hi.sum << " " << lo.sum << " " << hi.c << "\n";
+    jout << hi.sum << " " << lo.sum << " " << hi.c << "\n";
     BitWide w = Bit::mul_wide(-1, 3);
-    cout << w.hi << " " << w.lo << "\n";
+    jout << w.hi << " " << w.lo << "\n";
     BitDivRem d = Bit::div_rem(-17, 5);
-    cout << d.q << " " << d.r << "\n";
-    cout << Bit::add_sat(9223372036854775807, 5) << "\n";
+    jout << d.q << " " << d.r << "\n";
+    jout << Bit::add_sat(9223372036854775807, 5) << "\n";
 }
 ```
 
@@ -1164,7 +1164,7 @@ int scale(int x, int k) {
 void main() {
     int total = 0;
     for i in 0..10 { total += scale(i, 6); }
-    cout << total << "\n";
+    jout << total << "\n";
 }
 ```
 
@@ -1203,7 +1203,7 @@ int clamp(int x, int lo, int hi) {
 }
 
 void main() {
-    cout << clamp(-5, 0, 10) << " " << clamp(7, 0, 10) << " " << clamp(99, 0, 10) << "\n";
+    jout << clamp(-5, 0, 10) << " " << clamp(7, 0, 10) << " " << clamp(99, 0, 10) << "\n";
 }
 ```
 
@@ -1239,7 +1239,7 @@ void main() {
     a.join();
     b.join();
     c.join();
-    cout << counter << "\n";
+    jout << counter << "\n";
 }
 ```
 
@@ -1275,7 +1275,7 @@ int add_mul(int a, int b, int c) {
 }
 
 void main() {
-    cout << add_mul(2, 3, 4) << "\n";
+    jout << add_mul(2, 3, 4) << "\n";
 }
 ```
 
@@ -1305,7 +1305,7 @@ naked int my_write(int fd, char^ buf, int n) {
 void main() {
     char msg[6] = {'h', 'e', 'l', 'l', 'o', '\n'};
     int n = my_write(1, @msg, 6);
-    cout << n << "\n";
+    jout << n << "\n";
 }
 ```
 
@@ -1339,7 +1339,7 @@ int carry_of(int a, int b) {
 }
 
 void main() {
-    cout << carry_of(-1, 1) << " " << carry_of(1, 2) << "\n";
+    jout << carry_of(-1, 1) << " " << carry_of(1, 2) << "\n";
 }
 ```
 
@@ -1367,7 +1367,7 @@ void main() {
         raw<u32>[0x91000821];
         out x1 = v;
     }
-    cout << v << "\n";
+    jout << v << "\n";
 }
 ```
 
@@ -1392,14 +1392,14 @@ using stdlib;
 void main() {
     int x = 0x0102030405060708;
     char^ b = (char^)@x;
-    for i in 0..8 { cout << (b[i] & 255) << " "; }
-    cout << "\n";
+    for i in 0..8 { jout << (b[i] & 255) << " "; }
+    jout << "\n";
     int a[4];
     for i in 0..4 { a[i] = i * 10; }
     int^ p = @a[0];
     int^ q = @a[3];
-    cout << ((int)q - (int)p) << " " << (p == @a[0]) << " " << (q^) << "\n";
-    cout << sizeof(int) << " " << sizeof(char) << "\n";
+    jout << ((int)q - (int)p) << " " << (p == @a[0]) << " " << (q^) << "\n";
+    jout << sizeof(int) << " " << sizeof(char) << "\n";
 }
 ```
 
@@ -1411,7 +1411,7 @@ void main() {
 8 1
 ```
 
-`0x0102030405060708` ถูกเก็บเป็น `08 07 ... 01` `int` สี่ตัวคือ 32 ไบต์ `a[3]` จึงอยู่หลัง `a[0]` 24 ไบต์ ถ้าพิมพ์ที่อยู่ของตัวแปร (`cout << p;`) จะได้ `0x...` ที่นี่พิมพ์ระยะแทนเพราะที่อยู่เปลี่ยนทุกครั้งที่รัน
+`0x0102030405060708` ถูกเก็บเป็น `08 07 ... 01` `int` สี่ตัวคือ 32 ไบต์ `a[3]` จึงอยู่หลัง `a[0]` 24 ไบต์ ถ้าพิมพ์ที่อยู่ของตัวแปร (`jout << p;`) จะได้ `0x...` ที่นี่พิมพ์ระยะแทนเพราะที่อยู่เปลี่ยนทุกครั้งที่รัน
 
 ## บทที่ 40. คุยกับ kernel โดยตรง
 
@@ -1426,11 +1426,11 @@ void main() {
     msg[0] = 'h'; msg[1] = 'i'; msg[2] = '\n';
     Sys::write(1, @msg, 3);
     int pid = Sys::getpid();
-    cout << (pid > 0) << "\n";
+    jout << (pid > 0) << "\n";
     void^ page = Sys::mmap(4096);
     int^ words = (int^)page;
     for i in 0..512 { words[i] = i * i; }
-    cout << words[511] << "\n";
+    jout << words[511] << "\n";
     Sys::munmap(page, 4096);
 }
 ```
@@ -1443,7 +1443,7 @@ true
 261121
 ```
 
-`mmap` ให้หน้าเต็ม (4096 ไบต์) ที่เป็นศูนย์ตอนเริ่ม ตัว `cout` เองก็จบที่ `Sys::write` ถ้าต้องการ call ที่ไลบรารีไม่มีชื่อให้ ใช้ `Sys::call(เลข, a0 ... a5)` และ `svc` ในบทที่ 36
+`mmap` ให้หน้าเต็ม (4096 ไบต์) ที่เป็นศูนย์ตอนเริ่ม ตัว `jout` เองก็จบที่ `Sys::write` ถ้าต้องการ call ที่ไลบรารีไม่มีชื่อให้ ใช้ `Sys::call(เลข, a0 ... a5)` และ `svc` ในบทที่ 36
 
 ## บทที่ 41. allocator ของคุณเอง
 
@@ -1467,7 +1467,7 @@ void main() {
     int^ a = bump(4);
     int^ b = bump(4);
     for i in 0..4 { a[i] = i; b[i] = i * 100; }
-    cout << a[3] + b[3] << " " << top << " " << ((int)b - (int)a) << "\n";
+    jout << a[3] + b[3] << " " << top << " " << ((int)b - (int)a) << "\n";
     Sys::munmap(heap, 65536);
 }
 ```
@@ -1507,7 +1507,7 @@ void main() {
     Thread b = create(work, null);
     a.join();
     b.join();
-    cout << counter << "\n";
+    jout << counter << "\n";
 }
 ```
 
@@ -1532,7 +1532,7 @@ void main() {
     int sum = 0;
     for i in 0..1000000 { sum += Bit::popcount(i); }
     int ticks = Cpu::counter() - start;
-    cout << sum << " " << (ticks > 0) << " " << (Cpu::frequency() > 0) << "\n";
+    jout << sum << " " << (ticks > 0) << " " << (Cpu::frequency() > 0) << "\n";
 }
 ```
 
@@ -1558,8 +1558,8 @@ void main() {
     vec3 a = {1.0, 2.0, 3.0};
     vec3 b = {4.0, 5.0, 6.0};
     vec3 c = a + b * 2.0;
-    cout << c.x << " " << c.y << " " << c.z << "\n";
-    cout << c.zyx.x << "\n";
+    jout << c.x << " " << c.y << " " << c.z << "\n";
+    jout << c.zyx.x << "\n";
 }
 ```
 
@@ -1614,9 +1614,9 @@ void main() {
     task_ctx[12] = ((int)@task_stack + 16000) & (0 - 16);
     for k in 0..6 {
         ctx_switch(@main_ctx, @task_ctx);
-        cout << value << " ";
+        jout << value << " ";
     }
-    cout << "\n";
+    jout << "\n";
 }
 ```
 
@@ -1669,7 +1669,7 @@ void main() {
     Thread b = create(consumer, null);
     a.join();
     b.join();
-    cout << total << "\n";
+    jout << total << "\n";
 }
 ```
 
@@ -1705,8 +1705,8 @@ done:
 
 void main() {
     int a[5] = {10, 20, 30, 40, 5};
-    cout << sum_words(@a, 5) << "\n";
-    cout << sum_words(@a, 0) << "\n";
+    jout << sum_words(@a, 5) << "\n";
+    jout << sum_words(@a, 0) << "\n";
 }
 ```
 
@@ -1743,9 +1743,9 @@ naked int swap_bytes(int a) {
 }
 
 void main() {
-    cout << mulhi(0x8000000000000000, 6) << " " << mulhi(100, 100) << "\n";
-    cout << reverse_bits(1) << " " << reverse_bits(6) << "\n";
-    cout << swap_bytes(1) << " " << swap_bytes(0x0102030405060708) << "\n";
+    jout << mulhi(0x8000000000000000, 6) << " " << mulhi(100, 100) << "\n";
+    jout << reverse_bits(1) << " " << reverse_bits(6) << "\n";
+    jout << swap_bytes(1) << " " << swap_bytes(0x0102030405060708) << "\n";
 }
 ```
 
@@ -1774,8 +1774,8 @@ using Str::str.len;
 void main() {
     fs.write("tl_demo.txt", "hello modules\n");
     String text = fs.read("tl_demo.txt");
-    cout << text;
-    cout << Fs::fs.size("tl_demo.txt") << " " << Str::str.len("abc") << "\n";
+    jout << text;
+    jout << Fs::fs.size("tl_demo.txt") << " " << Str::str.len("abc") << "\n";
     Fs::fs.remove("tl_demo.txt");
 }
 ```
@@ -1813,17 +1813,17 @@ enum class Shape { Circle(double r), Rect(double w, double h), Empty;
 void main() {
     Color c = Color::Green;
     switch c {
-        Color::Red: cout << "red\n";
-        Color::Green: cout << "green\n";
-        Color::Blue: cout << "blue\n";
+        Color::Red: jout << "red\n";
+        Color::Green: jout << "green\n";
+        Color::Blue: jout << "blue\n";
     }
     Shape a = Shape::Circle(2.0);
     Shape b = Shape::Rect(3.0, 4.5);
     Shape e = Shape::Empty;
-    cout << a.area() << " " << b.area() << " " << e.area() << "\n";
+    jout << a.area() << " " << b.area() << " " << e.area() << "\n";
     switch b {
-        Shape::Rect(w, _): cout << "width " << w << "\n";
-        _: cout << "something else\n";
+        Shape::Rect(w, _): jout << "width " << w << "\n";
+        _: jout << "something else\n";
     }
 }
 ```
@@ -1861,17 +1861,17 @@ struct Line {
 void main() {
     Point p = {3.0, 4.0};
     p.move(1.0, 0.0);
-    cout << p.x << " " << p.dist2() << "\n";
+    jout << p.x << " " << p.dist2() << "\n";
     Line l = {{0.0, 0.0}, {6.0, 8.0}};
-    cout << l.b.dist2() << "\n";
+    jout << l.b.dist2() << "\n";
     Point pts[3];
     for i in 0..3 { pts[i].x = (double)(i + 1); pts[i].y = (double)(i + 1); }
     double total = 0.0;
     for i in 0..3 { total += pts[i].dist2(); }
-    cout << total << "\n";
+    jout << total << "\n";
     Point^ q = @p;
     q^.x = 10.0;
-    cout << p.x << "\n";
+    jout << p.x << "\n";
 }
 ```
 
@@ -1898,7 +1898,7 @@ struct Buffer {
     int^ data;
     int n;
     void free(self) {
-        if self.data != null { cout << "freeing " << self.n << "\n"; free[self.data]; }
+        if self.data != null { jout << "freeing " << self.n << "\n"; free[self.data]; }
     }
 }
 
@@ -1909,14 +1909,14 @@ Buffer make(int n) {
 }
 
 void use(Buffer b) {
-    cout << "using " << b.n << "\n";
+    jout << "using " << b.n << "\n";
 }
 
 void main() {
     Buffer a = make(4);
     Buffer b = a;
     use(b);
-    cout << "end of main\n";
+    jout << "end of main\n";
 }
 ```
 
@@ -1945,10 +1945,10 @@ int apply(int(int)^ f, int v) { return f(v); }
 
 void main() {
     int(int)^ op = twice;
-    cout << op(5) << " " << apply(square, 7) << "\n";
+    jout << op(5) << " " << apply(square, 7) << "\n";
     int k = 3;
     int(int)^ addk = int(int x) { return x + 100; };
-    cout << apply(addk, k) << "\n";
+    jout << apply(addk, k) << "\n";
 }
 ```
 
@@ -1976,14 +1976,14 @@ void main() {
     big += 500000000;
     i32 small = 2000000000;
     small += 2000000000;
-    cout << b << " " << big << " " << small << "\n";
+    jout << b << " " << big << " " << small << "\n";
     int wide = 4000000000;
-    cout << wide + 500000000 << "\n";
-    cout << sizeof(int) << " " << sizeof(u8) << " " << sizeof(double) << " " << sizeof(char) << "\n";
+    jout << wide + 500000000 << "\n";
+    jout << sizeof(int) << " " << sizeof(u8) << " " << sizeof(double) << " " << sizeof(char) << "\n";
     double d = 3.99;
     int t = (int)d;
     char c = (char)65;
-    cout << t << " " << c << " " << (int)'z' << "\n";
+    jout << t << " " << c << " " << (int)'z' << "\n";
 }
 ```
 
@@ -2010,11 +2010,11 @@ void main() {
     alloc[pool[12] >> int^ a];
     alloc[pool[12] >> int^ b];
     for i in 0..3 { a[i] = i + 1; b[i] = (i + 1) * 10; }
-    cout << a[2] + b[2] << "\n";
+    jout << a[2] + b[2] << "\n";
     free[b];
     alloc[pool[12] >> int^ c];
     c[0] = 99;
-    cout << a[0] << " " << c[0] << "\n";
+    jout << a[0] << " " << c[0] << "\n";
     free[pool];
 
     alloc[int^ p = 2];
@@ -2022,7 +2022,7 @@ void main() {
     p[1] = 6;
     grow[p = 8];
     p[7] = 70;
-    cout << p[1] << " " << p[7] << "\n";
+    jout << p[1] << " " << p[7] << "\n";
     free[p];
 }
 ```
@@ -2061,7 +2061,7 @@ naked int answer() {
 int main() {
     int sum = 0;
     for i in 0..4 { sum += table[i]; }
-    cout << sum << " " << limit << " " << answer() << "\n";
+    jout << sum << " " << limit << " " << answer() << "\n";
     return 0;
 }
 ```
@@ -2083,7 +2083,7 @@ int main() {
 using stdlib;
 
 void main() {
-    cout << "hello\n";
+    jout << "hello\n";
 }
 ```
 
@@ -2141,7 +2141,7 @@ makej: done
 using stdlib;
 
 void main() {
-    cout << "a build file is a program\n";
+    jout << "a build file is a program\n";
 }
 ```
 
@@ -2180,7 +2180,7 @@ int main() {
 using stdlib;
 
 void main() {
-    cout << "a library has no main; this lesson is a program so that it runs\n";
+    jout << "a library has no main; this lesson is a program so that it runs\n";
 }
 ```
 
@@ -2205,7 +2205,7 @@ $ python3 -c "import ctypes; L = ctypes.CDLL('./libmy.so'); print(L.add(2, 3), L
 5 11 12
 ```
 
-ฟังก์ชัน `export` ใช้กฎการเรียกของแพลตฟอร์ม: จำนวนเต็มใน `x0 ..` และ `double` ใน `d0 ..` พารามิเตอร์และผลลัพธ์เป็น `int`, `bool`, `char` และ `double` ได้ (ไม่เกิน 8 พารามิเตอร์) String อาร์เรย์ และ struct ยังข้ามขอบเขตไม่ได้ ไลบรารีมีตัวแปรของตัวเอง (`counter` เริ่มที่ 10 ตอนโหลด) และฮีปของตัวเอง ยังไม่ได้: `cout` ในไลบรารี
+ฟังก์ชัน `export` ใช้กฎการเรียกของแพลตฟอร์ม: จำนวนเต็มใน `x0 ..` และ `double` ใน `d0 ..` พารามิเตอร์และผลลัพธ์เป็น `int`, `bool`, `char` และ `double` ได้ (ไม่เกิน 8 พารามิเตอร์) String อาร์เรย์ และ struct ยังข้ามขอบเขตไม่ได้ ไลบรารีมีตัวแปรของตัวเอง (`counter` เริ่มที่ 10 ตอนโหลด) และฮีปของตัวเอง ยังไม่ได้: `jout` ในไลบรารี
 
 ## บทที่ 60. สคริปต์ด้วย jsh และการเขียนโค้ดบนมือถือ
 
@@ -2216,7 +2216,7 @@ $ python3 -c "import ctypes; L = ctypes.CDLL('./libmy.so'); print(L.add(2, 3), L
 using stdlib;
 
 void main() {
-    cout << "write it with coderin, build it with jcmp, run it\n";
+    jout << "write it with coderin, build it with jcmp, run it\n";
 }
 ```
 
@@ -2259,7 +2259,7 @@ jcmp -dyn gpu.jk -o gpu       # โปรแกรม dynamic รันใน Te
 int main() {
     int lib = Native::open("libvulkan.so");
     if lib == 0 {
-        cout << "no libvulkan here, or the program was not built with jcmp -dyn\n";
+        jout << "no libvulkan here, or the program was not built with jcmp -dyn\n";
         return 1;
     }
     int fn = Native::sym(lib, "vkEnumerateInstanceVersion");   // ฟังก์ชัน: VkResult vkEnumerateInstanceVersion(uint32_t* version)
@@ -2267,7 +2267,7 @@ int main() {
     out[0] = 0; out[1] = 0; out[2] = 0; out[3] = 0;
     int result = Native::call1(fn, (int)@out);                 // เรียกด้วยที่อยู่ของ out
     int v = Native::peek32((int)@out);                         // อ่าน 32 บิตที่ฟังก์ชันเขียน
-    cout << "Vulkan " << (v >> 22) << "." << ((v >> 12) & 1023) << "\n";
+    jout << "Vulkan " << (v >> 22) << "." << ((v >> 12) & 1023) << "\n";
     return 0;
 }
 ```
@@ -2287,14 +2287,14 @@ int main() {
 int main() {
     Gl gl = Gl::open(64, 64, 3, 1);                    // 64 x 64 พิกเซล OpenGL ES 3.1 (ใช้ 2, 0 สำหรับ 2.0 แบบเก่า)
     if !gl.ok {
-        cout << "no OpenGL here: " << gl.log << "\n";  // gl.log บอกเหตุผล
+        jout << "no OpenGL here: " << gl.log << "\n";  // gl.log บอกเหตุผล
         return 1;
     }
-    cout << "chip: " << gl.renderer << "\n";           // เช่น Mali-G76
+    jout << "chip: " << gl.renderer << "\n";           // เช่น Mali-G76
     gl.clear_color(1.0, 0.5, 0.0, 1.0);                // แดง เขียว น้ำเงิน โปร่งใส: สีส้ม
     gl.clear_color_buffer();                           // ชิประบายสีทั้งภาพ
     String pixels = gl.read_pixels(10, 10, 1, 1);      // อ่านพิกเซลกลับมาหนึ่งจุด: 4 ไบต์
-    cout << (pixels[0] & 255) << " " << (pixels[1] & 255) << " " << (pixels[2] & 255) << "\n";
+    jout << (pixels[0] & 255) << " " << (pixels[1] & 255) << " " << (pixels[2] & 255) << "\n";
     gl.close();
     return 0;
 }
@@ -2312,11 +2312,11 @@ int main() {
 
 int main() {
     Gl gl = Gl::open(64, 64, 3, 1);
-    if !gl.ok { cout << gl.log << "\n"; return 1; }
+    if !gl.ok { jout << gl.log << "\n"; return 1; }
     String vertex = "#version 300 es\nlayout(location = 0) in vec2 pos;\nvoid main() { gl_Position = vec4(pos, 0.0, 1.0); }\n";
     String fragment = "#version 300 es\nprecision mediump float;\nout vec4 color;\nvoid main() { color = vec4(1.0, 0.5, 0.0, 1.0); }\n";
     int prog = gl.program(vertex, fragment);
-    if prog == 0 { cout << "shader: " << gl.log << "\n"; return 1; }
+    if prog == 0 { jout << "shader: " << gl.log << "\n"; return 1; }
     gl.clear_color(0.0, 0.0, 0.0, 1.0);
     gl.clear_color_buffer();
     gl.use(prog);
@@ -2327,7 +2327,7 @@ int main() {
     gl.draw_triangles(corners, 3);
     String inside = gl.read_pixels(32, 20, 1, 1);      // พิกเซลในสามเหลี่ยม
     String outside = gl.read_pixels(1, 62, 1, 1);      // พิกเซลมุมซ้ายบน
-    cout << (inside[0] & 255) << " " << (outside[0] & 255) << "\n";
+    jout << (inside[0] & 255) << " " << (outside[0] & 255) << "\n";
     gl.close();
     return 0;
 }
@@ -2345,14 +2345,14 @@ OpenGL ES 3.1 รันเชเดอร์ที่ไม่วาดอะไ
 
 int main() {
     Gl gl = Gl::open(8, 8, 3, 1);
-    if !gl.ok { cout << gl.log << "\n"; return 1; }
+    if !gl.ok { jout << gl.log << "\n"; return 1; }
     // แต่ละเธรดรับเลขหนึ่งตัว: v = v * 2 + 1  local_size_x = 8: หนึ่งกลุ่มมี 8 เธรด
     String shader = "#version 310 es\nlayout(local_size_x = 8) in;\nlayout(std430, binding = 0) buffer Data { float v[]; };\nvoid main() { uint i = gl_GlobalInvocationID.x; v[i] = v[i] * 2.0 + 1.0; }\n";
     Floats data = Floats::make(16);
     for i in 0..16 { data.set(i, (float)i); }
     Floats result = gl.compute(shader, data, 2, 1, 1);   // 2 กลุ่ม x 8 เธรด = 16 ตัวเลข
-    if gl.log.len > 0 { cout << "log: " << gl.log << "\n"; }
-    cout << result.get(0) << " " << result.get(5) << " " << result.get(15) << "\n";
+    if gl.log.len > 0 { jout << "log: " << gl.log << "\n"; }
+    jout << result.get(0) << " " << result.get(5) << " " << result.get(15) << "\n";
     gl.close();
     return 0;
 }
@@ -2370,9 +2370,9 @@ Vulkan คืออินเทอร์เฟซสมัยใหม่ ต้
 
 int main() {
     Vk vk = Vk::open();
-    if !vk.ok { cout << vk.log << "\n"; return 1; }
-    cout << vk.device_name << ", Vulkan " << vk.api_text() << "\n";
-    cout << "memory " << vk.memory_mb << " MB, queues " << vk.queue_families << ", compute " << vk.has_compute << "\n";
+    if !vk.ok { jout << vk.log << "\n"; return 1; }
+    jout << vk.device_name << ", Vulkan " << vk.api_text() << "\n";
+    jout << "memory " << vk.memory_mb << " MB, queues " << vk.queue_families << ", compute " << vk.has_compute << "\n";
     vk.close();
     return 0;
 }
@@ -2418,10 +2418,10 @@ int main() {
     Result<HttpResponse, Error> r = Web::get("https://example.org/", "");     // url, extra header lines ("" for none)
     switch r {
         Result::Ok(a): {
-            cout << "status " << a.status << ", " << a.body.len << " bytes\n";
-            cout << "type: " << a.header("content-type") << "\n";             // a header of the answer, any case
+            jout << "status " << a.status << ", " << a.body.len << " bytes\n";
+            jout << "type: " << a.header("content-type") << "\n";             // a header of the answer, any case
         }
-        Result::Err(e): { cout << "no answer: " << e.message << "\n"; }
+        Result::Err(e): { jout << "no answer: " << e.message << "\n"; }
     }
     return 0;
 }
@@ -2439,17 +2439,17 @@ int main() {
     Result<HttpResponse, Error> r = Web::post_json("https://example.org/api", "Authorization: Bearer " + key, "{\"question\":\"hello\"}");
     switch r {
         Result::Ok(a): {
-            if a.status >= 400 { cout << "the service said " << a.status << ": " << a.body << "\n"; return 1; }
+            if a.status >= 400 { jout << "the service said " << a.status << ": " << a.body << "\n"; return 1; }
             Result<JsonDoc, Error> pj = Json::parse(a.body);
             switch pj {
                 Result::Ok(d): {
                     int n = d.get(0, "answer");                                 // 0 is the top object
-                    if n >= 0 { cout << d.text(n) << "\n"; }
+                    if n >= 0 { jout << d.text(n) << "\n"; }
                 }
-                Result::Err(e2): { cout << "not JSON\n"; }
+                Result::Err(e2): { jout << "not JSON\n"; }
             }
         }
-        Result::Err(e): { cout << "no answer: " << e.message << "\n"; }
+        Result::Err(e): { jout << "no answer: " << e.message << "\n"; }
     }
     return 0;
 }
@@ -2468,7 +2468,7 @@ int main() {
 int main() {
     String token = "";
     switch Env::get("TG_TOKEN") { Option::Some(t): { token = t + ""; } Option::None: { } }
-    if token.len == 0 { cout << "set TG_TOKEN first\n"; return 1; }
+    if token.len == 0 { jout << "set TG_TOKEN first\n"; return 1; }
     Telegram bot = Telegram::bot(token);
     int next = 0;
     while true {
@@ -2480,7 +2480,7 @@ int main() {
                 }
                 next = up.next;                                      // where to go on: the messages seen are not given again
             }
-            Result::Err(e): { cout << "error: " << e.message << "\n"; return 1; }
+            Result::Err(e): { jout << "error: " << e.message << "\n"; return 1; }
         }
     }
     return 0;
@@ -2496,8 +2496,8 @@ int main() {
 int main() {
     Discord bot = Discord::bot("TOKEN-of-the-bot");
     switch bot.send("123456789012345678", "hello from J2K") {
-        Result::Ok(x): { cout << "sent\n"; }
-        Result::Err(e): { cout << "failed: " << e.message << "\n"; }         // Discord's own words: 401 = the token is wrong
+        Result::Ok(x): { jout << "sent\n"; }
+        Result::Err(e): { jout << "failed: " << e.message << "\n"; }         // Discord's own words: 401 = the token is wrong
     }
     return 0;
 }
@@ -2521,13 +2521,13 @@ int main() {
             while waited < 10 {
                 WsMessage m = ws.recv_wait(1000);                   // one second at most
                 if m.kind == 0 { waited += 1; continue; }           // nothing yet: do something else, or wait again
-                if m.kind == 8 { cout << "closed: " << m.text << "\n"; break; }
-                cout << "got: " << m.text << "\n";                  // kind 1 text, 2 binary
+                if m.kind == 8 { jout << "closed: " << m.text << "\n"; break; }
+                jout << "got: " << m.text << "\n";                  // kind 1 text, 2 binary
                 break;
             }
             ws.close();
         }
-        Result::Err(e): { cout << "cannot connect: " << e.message << "\n"; }
+        Result::Err(e): { jout << "cannot connect: " << e.message << "\n"; }
     }
     return 0;
 }
@@ -2551,7 +2551,7 @@ int main() {
                 if e.kind == "CLOSED" || e.kind == "RECONNECT" || e.kind == "INVALID_SESSION" { run = false; }
             }
         }
-        Result::Err(e): { cout << "cannot connect: " << e.message << "\n"; }
+        Result::Err(e): { jout << "cannot connect: " << e.message << "\n"; }
     }
     return 0;
 }
@@ -2588,7 +2588,7 @@ int main() {
         g.sgd(0.1);                              // a small step downhill
         g.clear();                               // forget the step, keep the parameters
     }
-    cout << "w = " << g.value(w).get(0, 0) << "  b = " << g.value(b).get(0, 0) << "\n";    // near 2 and 1
+    jout << "w = " << g.value(w).get(0, 0) << "  b = " << g.value(b).get(0, 0) << "\n";    // near 2 and 1
     return 0;
 }
 ```
@@ -2628,10 +2628,10 @@ int main() {
         g.adamw(0.05, 0.0);                                  // AdamW: a learning rate for each number, adjusted as it goes
         g.clear();
     }
-    cout << "loss " << last << "\n";
+    jout << "loss " << last << "\n";
     int h2 = g.tanh(g.apply(l1, g.input(xs)));
     Tensor32 o = g.value(g.sigmoid(g.apply(l2, h2)));
-    for i in 0..4 { cout << xs.get(i, 0) << " xor " << xs.get(i, 1) << " = " << o.get(i, 0) << "\n"; }
+    for i in 0..4 { jout << xs.get(i, 0) << " xor " << xs.get(i, 1) << " = " << o.get(i, 0) << "\n"; }
     g.save("xor.model");                                     // the parameters as a text file
     return 0;
 }
@@ -2662,9 +2662,9 @@ int main() {
         int[] starts = arr(5);                               // where in the text this batch of 4 sequences starts
         for q in 0..4 { seed = (seed * 1103515245 + 12345) & 2147483647; starts.push(seed % (data.len - 20)); }
         double loss = m.step(data, starts, 0.02, 0.0, 1.0);  // learning rate, weight decay, clip
-        if step % 50 == 0 { cout << "step " << step << " loss " << loss << "\n"; }
+        if step % 50 == 0 { jout << "step " << step << " loss " << loss << "\n"; }
     }
-    cout << "[" << m.write(Gpt::bytes("the cat s"), 24, 0.0, 0, 1) << "]\n";   // temperature 0: the most likely letter each time
+    jout << "[" << m.write(Gpt::bytes("the cat s"), 24, 0.0, 0, 1) << "]\n";   // temperature 0: the most likely letter each time
     m.save("cats.gpt");
     return 0;
 }
@@ -2687,9 +2687,9 @@ int main() {
         Result::Ok(m): {
             int[] ids = m.encode("Once upon a time");        // token numbers, the start token first
             String story = m.generate(ids, 80, 0.8, 40, 0.95, 1);    // 80 new tokens: temperature, top-k, top-p, seed
-            cout << "Once upon a time" << story << "\n";
+            jout << "Once upon a time" << story << "\n";
         }
-        Result::Err(e): { cout << "cannot load: " << e.message << "\n"; }
+        Result::Err(e): { jout << "cannot load: " << e.message << "\n"; }
     }
     return 0;
 }
@@ -2729,7 +2729,7 @@ int main() {
     float[] a = arr(1001);
     float[] b = arr(1001);
     for i in 0..1000 { a.push((float)i * 0.001); b.push(2.0); }
-    cout << dot(@a[0], @b[0], 1000) << "\n";     // 999
+    jout << dot(@a[0], @b[0], 1000) << "\n";     // 999
     return 0;
 }
 ```
@@ -2786,12 +2786,12 @@ String hex(int n, int width) {
 }
 
 int main() {
-    for n in 0..9 { cout << n << " = " << bits(n, 8) << " = 0x" << hex(n, 2) << "\n"; }
-    cout << "255 = " << bits(255, 8) << " = 0x" << hex(255, 2) << "\n";
-    cout << "256 = " << bits(256, 9) << " = 0x" << hex(256, 3) << "\n";
+    for n in 0..9 { jout << n << " = " << bits(n, 8) << " = 0x" << hex(n, 2) << "\n"; }
+    jout << "255 = " << bits(255, 8) << " = 0x" << hex(255, 2) << "\n";
+    jout << "256 = " << bits(256, 9) << " = 0x" << hex(256, 3) << "\n";
     int x = 0;
     for i in 0..8 { x = x * 2 + (i % 2); }                  // shifting left and adding a bit is how a number is read digit by digit
-    cout << x << " = " << bits(x, 8) << "\n";                // 01010101 = 85
+    jout << x << " = " << bits(x, 8) << "\n";                // 01010101 = 85
     return 0;
 }
 ```
@@ -2818,17 +2818,17 @@ String bits(int n, int width) {
 }
 
 int main() {
-    for n in 0..4 { cout << "-" << n << " in 8 bits: " << bits(-n, 8) << "\n"; }       // 00000000 11111111 11111110 11111101
+    for n in 0..4 { jout << "-" << n << " in 8 bits: " << bits(-n, 8) << "\n"; }       // 00000000 11111111 11111110 11111101
     int five = 5;
     int flipped = five xor 255;                     // every bit of the 8 turned over
-    cout << "flip 5: " << bits(flipped, 8) << "  plus one: " << bits((flipped + 1) & 255, 8) << " = " << bits(-5, 8) << "\n";
+    jout << "flip 5: " << bits(flipped, 8) << "  plus one: " << bits((flipped + 1) & 255, 8) << " = " << bits(-5, 8) << "\n";
     i8 small = 127;                                  // the biggest i8
     small += 1;                                      // one more wraps round to the smallest
-    cout << "127 + 1 in an i8 = " << small << "\n";
+    jout << "127 + 1 in an i8 = " << small << "\n";
     u8 byte = 200;
     byte += 100;                                     // 300 does not fit: 300 - 256
-    cout << "200 + 100 in a u8 = " << byte << "\n";
-    cout << "the same bits, two meanings: " << bits(200, 8) << " is 200 as u8, " << (200 - 256) << " as i8\n";
+    jout << "200 + 100 in a u8 = " << byte << "\n";
+    jout << "the same bits, two meanings: " << bits(200, 8) << " is 200 as u8, " << (200 - 256) << " as i8\n";
     return 0;
 }
 ```
@@ -2860,7 +2860,7 @@ void show(double d) {
     int sign = (raw >> 63) & 1;
     int exponent = (raw >> 52) & 2047;
     int fraction = raw & 4503599627370495;           // the lowest 52 bits
-    cout << d << ": sign " << sign << ", exponent " << bits(exponent, 11) << " (" << exponent - 1023 << "), fraction " << bits(fraction >> 40, 12) << "...\n";
+    jout << d << ": sign " << sign << ", exponent " << bits(exponent, 11) << " (" << exponent - 1023 << "), fraction " << bits(fraction >> 40, 12) << "...\n";
 }
 
 int main() {
@@ -2870,7 +2870,7 @@ int main() {
     show(-6.0);                                      // -1.5 x 2^2
     show(0.1);
     double s = 0.1 + 0.2;
-    if s == 0.3 { cout << "0.1 + 0.2 is 0.3\n"; } else { cout << "0.1 + 0.2 is not exactly 0.3\n"; }
+    if s == 0.3 { jout << "0.1 + 0.2 is 0.3\n"; } else { jout << "0.1 + 0.2 is not exactly 0.3\n"; }
     return 0;
 }
 ```
@@ -2916,11 +2916,11 @@ int mul8(int a, int b) {
 }
 
 int main() {
-    cout << add8(100, 55) << " " << add8(200, 100) << " " << add8(255, 1) << "\n";      // 155 44 0
+    jout << add8(100, 55) << " " << add8(200, 100) << " " << add8(255, 1) << "\n";      // 155 44 0
     int bad = 0;
     for a in 0..256 { for b in 0..256 { if add8(a, b) != (a + b) & 255 { bad += 1; } } }
-    cout << "all 65536 sums agree with +: " << (bad == 0) << "\n";
-    cout << mul8(12, 11) << " " << mul8(20, 20) << "\n";                                  // 132 144 (400 wraps)
+    jout << "all 65536 sums agree with +: " << (bad == 0) << "\n";
+    jout << mul8(12, 11) << " " << mul8(20, 20) << "\n";                                  // 132 144 (400 wraps)
     return 0;
 }
 ```
@@ -2956,7 +2956,7 @@ bool step() {
     else if op == 2 { reg[mem[pc + 1]] += reg[mem[pc + 2]]; pc += 3; }              // r = r + s
     else if op == 3 { reg[mem[pc + 1]] -= reg[mem[pc + 2]]; pc += 3; }              // r = r - s
     else if op == 4 { if reg[mem[pc + 1]] != 0 { pc = mem[pc + 2]; } else { pc += 3; } }   // jump if not zero
-    else if op == 5 { cout << "r" << mem[pc + 1] << " = " << reg[mem[pc + 1]] << "\n"; pc += 2; }
+    else if op == 5 { jout << "r" << mem[pc + 1] << " = " << reg[mem[pc + 1]] << "\n"; pc += 2; }
     else { return false; }                           // 6 (or anything else): stop
     return true;
 }
@@ -2977,7 +2977,7 @@ int main() {
     pc = 0;
     int steps = 0;
     while step() { steps += 1; }
-    cout << "ran " << steps << " instructions\n";                // the sum 5+4+3+2+1 = 15 printed once
+    jout << "ran " << steps << " instructions\n";                // the sum 5+4+3+2+1 = 15 printed once
     return 0;
 }
 ```
@@ -3025,12 +3025,12 @@ int[] assemble(String[] lines) {
             else if m == "jnz" {
                 int target = -1;
                 for j in 0..labels.len { if labels[j] == p[2] { target = at[j]; } }
-                if target < 0 && pass == 1 { cout << "unknown label " << p[2] << "\n"; return none; }
+                if target < 0 && pass == 1 { jout << "unknown label " << p[2] << "\n"; return none; }
                 out.push(4); out.push(reg_of(p[1])); out.push(target);
             }
             else if m == "print" { out.push(5); out.push(reg_of(p[1])); }
             else if m == "stop" { out.push(6); }
-            else { cout << "unknown instruction " << m << " in the line: " << line << "\n"; return none; }
+            else { jout << "unknown instruction " << m << " in the line: " << line << "\n"; return none; }
         }
     }
     return out;
@@ -3045,7 +3045,7 @@ int main() {
     int[] code = assemble(src);
     String line = "";
     for i in 0..code.len { line = line + str(code[i]) + " "; }
-    cout << code.len << " bytes: " << line << "\n";           // the program of lesson 80
+    jout << code.len << " bytes: " << line << "\n";           // the program of lesson 80
     String[] bad = arr(2);
     bad.push("jump somewhere");
     assemble(bad);                                            // unknown instruction jump in the line: jump somewhere
@@ -3089,9 +3089,9 @@ int encode_sub(int d, int n, int m) { return 0xCB000000 | (m << 16) | (n << 5) |
 int encode_movz(int d, int imm) { return 0xD2800000 | (imm << 5) | d; }
 
 int main() {
-    cout << "add x1, x1, x2  = 0x" << hex(encode_add(1, 1, 2), 8) << "\n";     // 8b020021
-    cout << "sub x0, x3, x4  = 0x" << hex(encode_sub(0, 3, 4), 8) << "\n";     // cb040060
-    cout << "mov x5, #1000   = 0x" << hex(encode_movz(5, 1000), 8) << "\n";    // d2807d05
+    jout << "add x1, x1, x2  = 0x" << hex(encode_add(1, 1, 2), 8) << "\n";     // 8b020021
+    jout << "sub x0, x3, x4  = 0x" << hex(encode_sub(0, 3, 4), 8) << "\n";     // cb040060
+    jout << "mov x5, #1000   = 0x" << hex(encode_movz(5, 1000), 8) << "\n";    // d2807d05
     // run the word that we built: x1 = x1 + x2 through a raw machine word
     int a = 40;
     int b = 2;
@@ -3102,7 +3102,7 @@ int main() {
         raw<u32>[0x8b020021];                        // the word that encode_add(1, 1, 2) made
         out x1 = r;
     }
-    cout << a << " + " << b << " = " << r << " (done by the word)\n";
+    jout << a << " + " << b << " = " << r << " (done by the word)\n";
     return 0;
 }
 ```
@@ -3110,6 +3110,86 @@ int main() {
 ดูโค้ดเครื่องที่คอมไพเลอร์ทำให้ฟังก์ชันของคุณด้วย `jcmp -show ชื่อ file.jk`: บรรทัดเหล่านั้นคือคำสั่งในรูปข้อความ และ `jcmp --emit-asm` เก็บข้อความทั้งหมด เพราะทุกคำสั่งขนาดเท่ากัน CPU จึงหาคำถัดไปได้ทันที (`pc + 4`) และถอดความหลายคำพร้อมกัน; CPU ที่คำสั่งยาวไม่เท่ากัน (x86) ต้องทำงานเพิ่มเพื่อหาว่าอันหนึ่งจบตรงไหน รีจิสเตอร์ `x0` ถึง `x7` เก็บอาร์กิวเมนต์ของการเรียนและ `x0` เก็บผลลัพธ์; `x29` คือเฟรม `x30` คือที่อยู่กลับ `sp` คือสแต็ก: บทที่ 35 ถึง 48 ใช้มัน
 
 **ลอง:** เข้ารหัส `ldr x0, [x1]` (`0xF9400020` คือ `ldr x0, [x1, #0]`: หาช่อง); รัน `jcmp -show` กับฟังก์ชันที่บวกสองจำนวน หา `add` ในนั้นแล้วถอดบิตด้วยมือ
+
+## บทที่ 83. จัดหน้าผลลัพธ์: คอลัมน์ ทศนิยม เลขฐานสิบหก
+
+`jout <<` พิมพ์ค่าตามที่เป็น แต่ตาราง เงิน และที่อยู่ต้องจัดรูปแบบ: กี่หลักทศนิยม คอลัมน์กว้างเท่าไร เลขฐาน 16 J2K ไม่มี format string (`%5.2f`) และไม่มีไวยากรณ์ใหม่: การจัดหน้าทำด้วยฟังก์ชันธรรมดา ที่คุณใส่เข้าไปในสตรีม
+
+| ฟังก์ชัน | ให้อะไร | ตัวอย่าง |
+|---|---|---|
+| `fmt(x, 2)` | ทศนิยมที่มี 2 หลักหลังจุด | `fmt(2.0 / 3.0, 3)` ได้ `0.667` |
+| `tohex(n)` | เลขในฐาน 16 | `tohex(48879)` ได้ `beef` |
+| `tobin(n)` | เลขในฐาน 2 | `tobin(37)` ได้ `100101` |
+| `pad(s, w)` | ข้อความ แล้วเติมช่องว่างจนครบ `w` ตัว (ชิดซ้าย) | `pad("tea", 6)` ได้ `tea   ` |
+| `padl(s, w)` | ช่องว่าง แล้วข้อความ (ชิดขวา: สำหรับตัวเลข) | `padl("7", 3)` ได้ `  7` |
+
+ชื่อยาวอยู่ใน `Fmt`: `Fmt::fixed`, `Fmt::thousands(1234567)` (`1,234,567`), `Fmt::percent(0.256, 1)` (`25.6%`), `Fmt::bytes(1536)` (`1.5 KB`), `Fmt::pad_left(s, w, '0')` (เติมด้วยตัวอักษรใดก็ได้) ข้อความที่ยาวกว่าความกว้างจะไม่ถูกตัด
+
+```jk
+#import <stdlib>
+using stdlib;
+
+int main() {
+    String[] items = arr(3);
+    items.push("tea"); items.push("rice"); items.push("coconut milk");
+    int[] cents = arr(3);
+    cents.push(1250); cents.push(499); cents.push(1500000);
+    for i in 0..items.len {
+        jout << pad(items[i], 14) << padl(Fmt::thousands(cents[i] / 100), 9) << "." << Fmt::pad_left(str(cents[i] % 100), 2, '0') << "\n";
+    }
+    jout << "ratio " << fmt(2.0 / 3.0, 3) << "   hex " << tohex(48879) << "   bits " << tobin(37) << "\n";
+    return 0;
+}
+```
+
+ผลลัพธ์:
+
+```
+tea                  12.50
+rice                  4.99
+coconut milk     15,000.00
+ratio 0.667   hex beef   bits 100101
+```
+
+(ราคาเก็บเป็นสตางค์เพื่อให้ผลรวมแม่น คอลัมน์สุดท้ายคือส่วนบาทที่มีจุลภาคคั่นหลักพัน จุด และสตางค์ที่เติม 0 ข้างหน้า) ทำไมไม่มี `printf`? คอมไพเลอร์รู้ชนิดของทุกค่าในสตรีม คุณจึงเขียน `%d` ให้ double ผิดไม่ได้ และภาษาก็เล็กอยู่
+
+**ลอง:** พิมพ์ตารางสูตรคูณ 1 ถึง 9 เป็นคอลัมน์กว้าง 4 ด้วย `padl`; พิมพ์ `255` เป็น `ff`, `11111111` และ `0xFF` (ต่อ `"0x"` กับ `tohex`)
+
+## บทที่ 84. หน้าจอของแอพ: `<ui>`
+
+แอพ Android ที่สร้างด้วย `makej init -apk` วาดทุกเฟรมเองด้วย OpenGL ES `<ui>` (ติดตั้งด้วย `jc lib install ui`) ให้ปุ่ม ป้ายข้อความ สวิตช์ และสไลเดอร์ ทำงานแบบ *immediate mode*: ทุกเฟรมคุณเรียกวิดเจ็ตจากบนลงล่าง วิดเจ็ตวาดตัวเองและ **บอกว่าเกิดอะไรขึ้น** จึงไม่มีอะไรต้องคอยให้ตรงกับข้อมูลของคุณ
+
+```text
+Ui u;                              // หนึ่งตัวต่อแอพ
+bool sound;  double speed;  int taps;
+
+// game_init:   u.start();                    game_touch(a, x, y, id):  u.touch(a, x, y);
+// game_frame:  Canvas2d^ c = glapp_canvas();  c^.begin();  c^.clear(u.th.bg);
+//              u.begin(c, (double)glapp_w(), (double)glapp_h());
+//              u.title("MY APP");
+//              if u.button("TAP ME") { taps += 1; }            // เป็นจริงในเฟรมที่คลิก
+//              u.toggle("SOUND", @sound);                        // แตะแล้ว sound เปลี่ยน
+//              u.slider("SPEED", @speed, 0.0, 10.0);             // ลากแล้ว speed เปลี่ยน
+//              u.cols(2);  u.button("A");  u.button("B");  u.end_cols();   // เคียงข้างกัน
+//              u.end();  c^.end();
+```
+
+ปุ่มคลิกเมื่อนิ้วลง **และยก** ในกรอบของมัน (ผู้ใช้ที่ลากออกไปคือเปลี่ยนใจ) สีและขนาดอยู่ใน `u.th` ตอนนี้ข้อความเป็นฟอนต์ 3 x 5 ของตัวพิมพ์ใหญ่ ตัวเลข และเครื่องหมาย (ตัวพิมพ์เล็กและภาษาไทยอยู่ในแผน) หน้า (page) คือฟังก์ชันที่เรียกวิดเจ็ตแล้วคืนเลขหน้าถัดไป ดู `docs/UI.md` สำหรับรูปแบบของหน้า และวิธีทดสอบหน้าจอโดยไม่ต้องมีมือถือ (canvas จำลองที่นับการวาด: `test/t573_ui.jk`)
+
+**ลอง:** เพิ่มสไลเดอร์ที่กำหนดขนาดสี่เหลี่ยมซึ่งคุณวาดใต้วิดเจ็ตด้วย `c^.rect`
+
+## บทที่ 85. apk โดยไม่ต้องมีเครื่องมือ Android: `apkj`
+
+apk คือไฟล์ zip ที่มีห้าส่วน: `AndroidManifest.xml` แบบไบนารี, `resources.arsc` (ที่เกือบว่างเปล่า), `classes.dex` (ส่วน Java เล็ก ๆ ที่เริ่มไลบรารีของคุณ), `libgame.so` ของคุณ และลายเซ็น เครื่องมือปกติ (`aapt2`, `ecj`, `d8`, `zipalign`, `apksigner`, Java) หนักสำหรับมือถือ `apkj` เป็นเครื่องมือที่เขียนด้วย J2K ที่ทำทั้งหมดเอง รวมถึงลายเซ็น (ECDSA P-256 พร้อมใบรับรองของตัวเอง):
+
+```text
+apkj key                                           # สร้าง ~/.apkj.key ครั้งเดียว เก็บไว้ (อัปเดตแอพต้องเซ็นด้วยกุญแจเดิม)
+apkj build manifest.toml MyApp.apk lib/arm64-v8a/libgame.so=_out/libgame.so assets/data/hello.txt=assets/hello.txt
+```
+
+`makej apk` เรียกมันให้เมื่อขาดเครื่องมือ Android (หรือใช้ `MAKEJ_APKJ=1`) สำหรับแอพที่มี `render = "gl"` และไม่มี `icon.png` ตรวจด้วยเครื่องมือที่มีอยู่แล้ว: `apksigner verify MyApp.apk` ต้องบอก `Verifies`, `aapt2 dump badging MyApp.apk` แสดงชื่อและเวอร์ชัน และ `unzip -t` ไม่พบข้อผิดพลาด ถ้าขาดเครื่องมือ `makej` จะบอกว่าต้องติดตั้งอะไร (`jc install apkj` หรือแพ็กเกจ) แทนที่จะล้มด้วยข้อความยาว ๆ
+
+**ลอง:** สร้าง manifest ด้วย `apkj manifest manifest.toml AndroidManifest.xml` และเปิดผลด้วย `aapt2 dump xmltree MyApp.apk --file AndroidManifest.xml` (หลัง `apkj build`); เปลี่ยน `version` ใน `manifest.toml` แล้วดู `versionCode` ตาม (`major * 10000 + minor * 100 + patch`)
 
 ## ต่อไป
 

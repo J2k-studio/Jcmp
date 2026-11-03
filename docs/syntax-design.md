@@ -2318,3 +2318,13 @@ The owner decided that the old names leave the language: `jout`, `jin` and `jerr
 
 The owner chose option C for formatted output: **no `joutf`/`jinf` keywords and no format strings.** Layout is done with ordinary functions in the stream:
 `jout << fmt(x, 2)` (fixed digits), `tohex(n)`, `tobin(n)` (named so, because `hex` is the object of `using Hex`), `pad(s, w)` (left aligned, spaces on the right), `padl(s, w)` (right aligned). They are plain functions of `std/fmt.j` over `Fmt::fixed / hex / bin / pad_right / pad_left`; the long names stay. Reading stays `jin >> x`. Other forms (`{}` as in Rust, `%` as in C) were offered and not chosen; they can be added later as a shortcut because they do not conflict with this. Test t570.
+
+
+## 108. Owner's answers on the open language questions, 2026-11-03 (recorded by the assistant; the forms are the ones proposed in 67, 97, 101-107 and design 25)
+1. **Slices:** accepted: option B first (a library type `Span<T>`, no compiler change), the sugar `a[1..5]` can come later. Name (`Span` or `Slice`): not yet chosen.
+2. **`comptime` vs `init`:** accepted: keep `init {}`; `comptime` is added later.
+4. **Tests:** accepted: `test "name" { ... }` blocks, run by a test runner (`jc test` / `makej test`). The exact form is built after the runner exists.
+5. **volatile / device reads:** accepted: `@keep` stays the way to say it (a word `volatile` may be added later as a name for it).
+6. **async:** the answer to "what should we do": keep threads + `Task<T>` + `Channel<T>` (a library, no new keywords); `async`/`await` are not built now.
+7. **Names:** `::` separates a group (`Fs::read_text`, like `std::cout` in C++); `.` calls on a value or a module object (`f.read`, `s.len`). Nothing changes; `_` inside long names stays. (Option "read.text" of the old question is not taken: it would mix the two meanings.) The owner also accepts the long function names behind a module object, `fs.read_text(p)` (with `using Fs;`): added as aliases of `fs.read`, `fs.write`, `fs.append`, `fs.lines` (`fs.read_text`, `fs.write_text`, `fs.append_text`, `fs.read_lines`), test t571.
+8. **Language server:** asked "which way": proposal: one program, `jcmp lsp` as a mode of it; split into a library only if it proves too slow.

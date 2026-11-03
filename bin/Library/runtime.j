@@ -133,14 +133,14 @@ struct BitDivRem { int q; int r; }           // div_rem: the quotient and the re
 // Bit: the work on the bits of a whole number, each is one instruction of the CPU (the compiler puts the instruction where the call is)
 struct Bit {
     // a + b + carry_in (0 or 1): the sum (cut to 64 bits) and the carry out. A number of many words is added word by word with it.
-    static BitCarry add_carry(int a, int b, int cin) {
+    static BitCarry add_carry(int a, int b, int jin) {
         BitCarry r;
         int top = 1 << 63;
         int s = a + b;
         int c = 0;
         if (s xor top) < (a xor top) { c = 1; }          // the sum is smaller than a (as unsigned numbers): it wrapped
-        int s2 = s + cin;
-        if cin == 1 && s2 == 0 { c = 1; }
+        int s2 = s + jin;
+        if jin == 1 && s2 == 0 { c = 1; }
         r.sum = s2;
         r.c = c;
         return r;
@@ -999,7 +999,7 @@ struct __Arr {
 
 
 // String: a dynamic array of char (header [length, capacity, data, 1]) whose data always ends
-// in a 0 byte after the length, so that the data is also a C-style text (cout, c()).
+// in a 0 byte after the length, so that the data is also a C-style text (jout, c()).
 // An operand is a text (kind 0), another String (kind 1) or one character (kind 2).
 char std_str_ch[16];
 struct __Str {
@@ -1796,7 +1796,7 @@ struct __Str {
 }
 
 
-// Reading the keyboard (cin >> x, cinf >> x): a buffer over file descriptor 0.
+// Reading the keyboard (jin >> x, cinf >> x): a buffer over file descriptor 0.
 char std_in_buf[4096];
 int std_in_pos;
 int std_in_len;
@@ -1827,7 +1827,7 @@ struct __In {
         std_in_err[std_in_en] = 0;
     }
     // throw "invalid input: <what> was expected, but found 'x'": c is the character that was found. The wrong word stays in the input
-    // (a program that catches the error skips it with  cin >> word;  see test t173)
+    // (a program that catches the error skips it with  jin >> word;  see test t173)
     static void bad(char^ what, int c) {
         std_in_en = 0;
         __In::err_put("invalid input: ");
@@ -2083,7 +2083,7 @@ void __out_unbuffer() {
     g[111] = 2;
 }
 
-// cout << a bool: true or false
+// jout << a bool: true or false
 void __print_bool(int v) {
     if v != 0 {
         __wr(__out_fd(), "true", 4);
@@ -2092,7 +2092,7 @@ void __print_bool(int v) {
     }
 }
 
-// cout << a pointer or an address: 0x and the digits in hex (0x0 for null)
+// jout << a pointer or an address: 0x and the digits in hex (0x0 for null)
 void __print_ptr(int v) {
     char buf[24];
     int at = 22;
@@ -2116,7 +2116,7 @@ void __print_ptr(int v) {
     __wr(__out_fd(), @buf[at + 1], 22 - at);
 }
 
-// the file that cout writes to: 1, or 2 inside a statement with cerr (the word at 864 of the global area, 0 or 1, plus 1)
+// the file that jout writes to: 1, or 2 inside a statement with jerr (the word at 864 of the global area, 0 or 1, plus 1)
 int __out_fd() {
     int^ gout = (int^)__gl();
     return gout[108] + 1;
@@ -2224,7 +2224,7 @@ struct __Mt {
 
 // The routines that the ARM32 target needs and that the ARM64 target has as assembly in the compiler (docs/design/15-arm32.md).
 // They are written in J2K and made by the same back end as the program; the compiler calls them by name (__a32_*) for the operations that
-// a 32 bit machine has no instruction for (division, the high half of a product) and for the printing of cout.
+// a 32 bit machine has no instruction for (division, the high half of a product) and for the printing of jout.
 // Nothing here is used by the ARM64 target: a function that nobody calls is not made.
 
 // unsigned 64-bit a / b, a % b (0 when b is 0); the numbers below 2^52 are divided as doubles (exact: a / b is never rounded up to the next
@@ -2483,7 +2483,7 @@ void __a32_print_uint(int v) {
     __wr(__out_fd(), @buf[at + 1], 31 - at);
 }
 
-// cout of a double: the same text as j2k_print_f64 of the ARM64 target (6 decimals; infinity, nan; 2^64 and more as d.dddddde+NN)
+// jout of a double: the same text as j2k_print_f64 of the ARM64 target (6 decimals; infinity, nan; 2^64 and more as d.dddddde+NN)
 void __a32_print_f64(int bits) {
     int e = (bits >> 52) & 2047;
     if e == 2047 {

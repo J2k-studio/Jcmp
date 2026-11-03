@@ -1,0 +1,17 @@
+// Errors as values: Result<T, Error>. switch looks at both cases; take() is for "this cannot fail here".
+#import <stdlib>
+using stdlib;
+
+int main() {
+    switch Fs::read_text("no/such/file.txt") {
+        Result::Ok(text): { jout << "read " << text.len << " bytes\n"; }
+        Result::Err(e): { jout << "could not read: " << e.message << "\n"; }
+    }
+    Result<int, Error> r = Fs::write_text("_cook_tmp.txt", "hello\n");
+    switch r {
+        Result::Ok(n): { jout << "wrote " << n << " bytes\n"; }
+        Result::Err(e): { jout << "could not write: " << e.message << "\n"; }
+    }
+    jout << Fs::read_text("_cook_tmp.txt").take().len << "\n";
+    return 0;
+}

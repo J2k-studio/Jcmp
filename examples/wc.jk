@@ -11,12 +11,12 @@ bool is_space(int c) {
 
 void main() {
     if argc() < 2 {
-        cout << "usage: wc file\n";
+        jout << "usage: wc file\n";
         return;
     }
     i32 f = File::open(arg(1), FileMode::Read);
     if f < 0 {
-        cout << "cannot open file\n";
+        jout << "cannot open file\n";
         return;
     }
     int size = File::read(f, data);
@@ -36,5 +36,5 @@ void main() {
         }
         i += 1;
     }
-    cout << lines << " " << words << " " << size << "\n";
+    jout << lines << " " << words << " " << size << "\n";
 }

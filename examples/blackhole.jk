@@ -131,7 +131,7 @@ void main() {
         switch Num::parse_int(args[1]) {
             Result::Ok(v): frames = v;
             Result::Err(e): {
-                cout << "usage: blackhole [frames]\n";
+                jout << "usage: blackhole [frames]\n";
                 return;
             }
         }
@@ -159,7 +159,7 @@ void main() {
         }
         s.glow(0.45);
         s.show();
-        cout << " Ctrl-C or Enter to stop\n";
+        jout << " Ctrl-C or Enter to stop\n";
         if frames == 0 && Term::key_pressed() { break; }
         Time::sleep_ms(10);
         frame += 1;

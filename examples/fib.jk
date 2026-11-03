@@ -9,7 +9,7 @@ int fib(int n) {
 
 void main() {
     for i in 0..15 {
-        cout << fib(i) << " ";
+        jout << fib(i) << " ";
     }
-    cout << "\n";
+    jout << "\n";
 }

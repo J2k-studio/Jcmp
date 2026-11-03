@@ -5,7 +5,7 @@
 //   jcmp -dyn bench/gpu_matmul.jk -o gm && ./gm
 int main() {
     Gl gl = Gl::open(64, 64, 3, 1);
-    if !gl.ok { cout << "no GL: " << gl.log << "\n"; return 1; }
+    if !gl.ok { jout << "no GL: " << gl.log << "\n"; return 1; }
     int[] sizes = arr(4);
     sizes.push(128); sizes.push(256); sizes.push(512); sizes.push(1024);
     for q in 0..4 {
@@ -17,7 +17,7 @@ int main() {
         src = src + " for (uint t = 0u; t < N / 16u; t++) {\n  ta[lr][lc] = a[row * N + t * 16u + lc];\n  tb[lr][lc] = b[(t * 16u + lr) * N + col];\n  barrier();\n";
         src = src + "  for (uint k = 0u; k < 16u; k++) { acc += ta[lr][k] * tb[k][lc]; }\n  barrier();\n }\n c[row * N + col] = acc;\n}\n";
         Kernel k = Kernel::make(gl, src);
-        if !k.ok { cout << "kernel: " << k.error << "\n"; return 1; }
+        if !k.ok { jout << "kernel: " << k.error << "\n"; return 1; }
         Floats fa = Floats::make(n * n);
         Floats fb = Floats::make(n * n);
         Floats fc = Floats::make(n * n);
@@ -38,7 +38,7 @@ int main() {
         // one number checked against the CPU
         double want = 0.0;
         for kk in 0..n { want += (double)(fa.get(5 * n + kk)) * (double)(fb.get(kk * n + 3)); }
-        cout << n << ": " << ms << " ms, " << gf << " GFLOPS (c[5][3] " << out.get(5 * n + 3) << " want " << want << ")\n";
+        jout << n << ": " << ms << " ms, " << gf << " GFLOPS (c[5][3] " << out.get(5 * n + 3) << " want " << want << ")\n";
     }
     return 0;
 }

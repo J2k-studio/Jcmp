@@ -1,7 +1,7 @@
 // compute 0.1.0 -- GPU compute that is compiled once and run many times on numbers that stay on the chip.   #import <opengl3> <compute>   (needs jcmp -dyn; license: MPL-2.0)
 //   Gl gl = Gl::open(64, 64, 3, 1);
 //   Kernel k = Kernel::make(gl, glsl_source);           // "#version 310 es ... layout(std430, binding = 0) buffer A { float a[]; };  layout(std430, binding = 1) buffer B { float b[]; };"
-//   if !k.ok { cout << k.error << "\n"; return; }
+//   if !k.ok { jout << k.error << "\n"; return; }
 //   GpuBuffer a = GpuBuffer::make(gl, 0, data);         // binding 0; `data` is a Floats; it is sent once
 //   k.run(gx, gy, gz);                                  // one run = gx * gy * gz groups of the size written in the shader (local_size_x ...); many runs without copying
 //   Floats out = a.read();                              // the numbers come back only when you ask

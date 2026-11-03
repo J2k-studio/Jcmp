@@ -482,6 +482,11 @@ struct __Files {
     static Result<int, Error> fs_try_write(String path, String text);
     static int fs_append(String path, String text);
     static Result<int, Error> fs_try_append(String path, String text);
+    // the long names of the same functions (owner 2026-11-03: "f.read_text is fine too"): fs.read_text(p), fs.read_lines(p), fs.write_text(p, t), fs.append_text(p, t)
+    static String fs_read_text(String path);
+    static String[] fs_read_lines(String path);
+    static int fs_write_text(String path, String text);
+    static int fs_append_text(String path, String text);
     static bool fs_exists(String path);
     static int fs_size(String path);
     static Result<int, Error> fs_try_size(String path);
@@ -553,7 +558,7 @@ struct Term {
 
 // the keyboard: a line, one key, Enter, a yes / no, a number (designed by AI at user request, adjustable: docs/syntax-design.md 90)
 //   String name = Input::line();   int k = Input::key();   (one key, no Enter, nothing shown on the screen)
-// It reads the file 0 byte by byte (it does not share the buffer of `cin`; use one of the two in a program).
+// It reads the file 0 byte by byte (it does not share the buffer of `jin`; use one of the two in a program).
 struct Input {
     // a line without its new line; "" at the end of the input
     static String line();
@@ -657,7 +662,7 @@ struct __TimeM {
 }
 
 // Date: a day and a time on the calendar (the Gregorian calendar, UTC), from and to seconds since 1970.
-//   Date d;  d.set_unix(86400 * 365);  cout << d.text() << " " << d.weekday() << "\n";     // 1971-01-01 00:00:00 5
+//   Date d;  d.set_unix(86400 * 365);  jout << d.text() << " " << d.weekday() << "\n";     // 1971-01-01 00:00:00 5
 struct Date {
     int year;
     int month;
@@ -1250,6 +1255,10 @@ struct Net {
     static void http_chan_close(int secure, int h);
     static Result<String, Error> http_read_all(int secure, int h);
     static Result<String, Error> http_fetch(String url, int depth);
+    // A whole exchange for tools like curl: the request is  METHOD url  with the extra header lines `headers` (each ends with \r\n) and the text `body` (Content-Length is
+    // added when it is not empty); the answer is the head, an empty line and the body (a chunked body is joined), as one text. follow: 1 goes on to the address of a
+    // redirect (301 302 303 turn a POST into a GET, 307 and 308 keep the method), 0 gives the answer of the redirect. An HTTP code of 400 or more is an answer, not an error.
+    static Result<String, Error> http_exchange(String method, String url, String headers, String body, int follow, int depth);
     // the parts of an http:// address: [host, host:port, path, port]; one text (the reason) when it cannot be used
     static String[] http_split(String url);
     // 1.2 MB, 340.5 KB, 17 B

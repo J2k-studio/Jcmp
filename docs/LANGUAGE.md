@@ -14,19 +14,20 @@ Files: `.jk` is a program (it has `main`); `.j` is a component that other files 
 using stdlib;
 
 void main() {
-    cout << "hi\n";
+    jout << "hi\n";
 }
 ```
 
-`cout` and `cin` need no import and no `using`: they are always there (the other modules of the standard library still need
+`jout` and `jin` need no import and no `using`: they are always there (the other modules of the standard library still need
 `#import <stdlib>`; `using stdlib` makes their names usable without the prefix).
+The standard error stream is `jerr`. The older names `cout`, `cin` and `cerr` still work for now; `jcmp migrate FILE...` rewrites a program to the new names, and `jcmp migrate -c FILE` only checks.
 `using stdlib` makes the names of all the std modules usable without the prefix; if two modules have the same name (`write` is in `Sys` and
 `File`) the compiler reports it and you write `File::write(...)`. `float` is the 32-bit and `double` the 64-bit decimal type (they were
 called `f32` and `f64`; the old names still work with a warning).
 
 `main` may be `void main()` or `int main()` (the returned number is the exit code).
 A new line is written `"\n"` (a backslash and n; not `"/n"`, which is a slash and the letter n and gets a warning) or with the word `nl`,
-which needs no backslash: `cout << x << nl;`. A single value, `cout << x;`, gets its new line by itself.
+which needs no backslash: `jout << x << nl;`. A single value, `jout << x;`, gets its new line by itself.
 Statements end with `;`. Blocks use `{ }` and are always required. `//` and `/* */` are comments.
 
 ## Types
@@ -54,8 +55,8 @@ void main() {
     i8 b = 100;
     int sum = a + b;      // 200 (no overflow in the addition)
     i8 small = a + b;     // -56 (cut to 8 bits when stored)
-    cout << sum << "\n";
-    cout << small << "\n";
+    jout << sum << "\n";
+    jout << small << "\n";
 }
 ```
 
@@ -67,10 +68,10 @@ void main() {
     u8 b = 250;
     b += 10;                         // 260 is cut to 8 bits when stored: 4
     u64 huge = 18446744073709551615;
-    cout << h << " " << b << " " << huge << " " << (huge >> 63) << "\n";
+    jout << h << " " << b << " " << huge << " " << (huge >> 63) << "\n";
     int n = -1;
     u32 back = (u32)n;               // signed <-> unsigned needs a cast
-    cout << back << "\n";
+    jout << back << "\n";
 }
 ```
 
@@ -108,10 +109,10 @@ void main() {
     while n < 3 { n++; }
 
     for int i = 0; i < 10; i += 2 { if i == 6 { break; } }   // C-style
-    for i in 0..5 { cout << i << " "; }                      // 0,1,2,3,4 (end excluded)
-    cout << "\n";
+    for i in 0..5 { jout << i << " "; }                      // 0,1,2,3,4 (end excluded)
+    jout << "\n";
 
-    if n == 3 { cout << "three\n"; } else if n == 4 { cout << "four\n"; } else { cout << "other\n"; }
+    if n == 3 { jout << "three\n"; } else if n == 4 { jout << "four\n"; } else { jout << "other\n"; }
 }
 ```
 
@@ -132,7 +133,7 @@ int apply(Kind k, int a, int b) {
     return r;
 }
 
-void main() { cout << apply(Kind::Plus, 3, 4) << "\n"; }
+void main() { jout << apply(Kind::Plus, 3, 4) << "\n"; }
 ```
 
 No fall-through. `_` is the default. Several values: `1, 2, 3: ...`. An enum `switch`
@@ -143,7 +144,7 @@ without `_` that misses a member gives a warning (`-Wswitch`).
 
 ```jk
 int add(int a, int b) { return a + b; }
-void main() { cout << add(2, 3) << "\n"; }       // functions may be used before they are written
+void main() { jout << add(2, 3) << "\n"; }       // functions may be used before they are written
 ```
 
 At most 16 parameters (the 9th and later travel through a small area of global memory, so programs that call functions from several threads would need another scheme). A function can be used above its definition. Arrays are passed with
@@ -155,7 +156,7 @@ The last parameters may have a default value: a constant (a whole number, a bool
 
 ```jk
 int add(int a, int b = 10, int c = 100) { return a + b + c; }
-void main() { cout << add(1) << " " << add(1, 2) << " " << add(1, 2, 3) << "\n"; }     // 111 103 6
+void main() { jout << add(1) << " " << add(1, 2) << " " << add(1, 2, 3) << "\n"; }     // 111 103 6
 ```
 
 Methods work the same way (`int bump(self, int d = 1)`). Named arguments are not built (syntax-design 98, B).
@@ -180,15 +181,15 @@ void main() {
     double dist[3] = {12.0, 18.0, 25.0};   // a list of values (the rest, if any, is zero)
     int primes[] = {2, 3, 5, 7};     // [] : the size is the number of values (1 dimension; also for globals, with constants)
     char path[] = r"C:\raw\string";  // raw string: no escapes
-    cout << sum(v) << " " << grid[1][2] << " " << name << " " << path << "\n";
-    cout << v.len << "\n";           // 5
+    jout << sum(v) << " " << grid[1][2] << " " << name << " " << path << "\n";
+    jout << v.len << "\n";           // 5
 }
 ```
 
 Strings are `char` arrays ending in 0. Escapes: `\n \t \r \0 \\ \" \'`.
-`cout` prints a char array as text, a `char` as a character, and anything else as a number.
-`cout << x;` with a single number prints a newline after it; in a chain
-(`cout << a << b;`) you write `"\n"` yourself. Floats are printed with `cout` too (6 decimals).
+`jout` prints a char array as text, a `char` as a character, and anything else as a number.
+`jout << x;` with a single number prints a newline after it; in a chain
+(`jout << a << b;`) you write `"\n"` yourself. Floats are printed with `jout` too (6 decimals).
 
 ## Dynamic arrays
 
@@ -202,10 +203,10 @@ int sum(int[] a) {                      // passed by reference: the callee sees 
 void main() {
     int[] list = arr(4);                // T[] : room for 4 elements, length 0
     for i in 1..11 { list.push(i * i); }   // it grows when full
-    cout << list.len << " " << sum(list) << " " << list.pop() << "\n";   // 10 385 100
+    jout << list.len << " " << sum(list) << " " << list.pop() << "\n";   // 10 385 100
     list.resize(3);                     // length 3 (new elements are zero)
     list[1] = 42;
-    cout << list[1] << " " << list.len << "\n";   // 42 3
+    jout << list[1] << " " << list.len << "\n";   // 42 3
     list.free();                        // frees the memory; the variable is null afterwards
 }
 ```
@@ -226,10 +227,10 @@ String a = "abc";            // a copy of the text
 String b = a;                // a separate copy
 b.push('d');                 // a stays "abc"
 String c = a + "-" + b;      // joins; == and != compare
-cout << c << " " << c.len << " " << c[0] << "\n";
-cout << c.find("-") << " " << c.slice(2, 5) << "\n";    // 3 and a new String
+jout << c << " " << c.len << " " << c[0] << "\n";
+jout << c.find("-") << " " << c.slice(2, 5) << "\n";    // 3 and a new String
 c += "!";                    // append (a String, a text or a char)
-cin >> a;                    // one word
+jin >> a;                    // one word
 ```
 
 * **Text with values inside** (owner's design, section 99 of the syntax notes): `{expression}` in a text is the value of the expression as text, so `"x = {x}, y = {y + 1}"` means `"x = " + str(x) + ", y = " + str(y + 1)`. The expression is a number, a char, a bool or a String (what `str` takes). `{{` and `}}` are a `{` and a `}`. A `{` that is not followed by a letter or `(` stays as it is (`"{ text }"`, `"{}"`).
@@ -237,7 +238,7 @@ cin >> a;                    // one word
 ```jk
 int x = 5;
 String name = "Jao";
-cout << "x = {x}, next = {x + 1}, hi {name}! {{braces}}\n";    // x = 5, next = 6, hi Jao! {braces}
+jout << "x = {x}, next = {x + 1}, hi {name}! {{braces}}\n";    // x = 5, next = 6, hi Jao! {braces}
 ```
 * Methods: `push(char)`, `pop()`, `append(x)`, `clear()`, `find(x)` (index or -1), `slice(from, to)`, `c()` (the characters as a plain text, valid until the String changes), `len`, `free()`.
 * More methods: `trim()`, `upper()`, `lower()` (ASCII letters), `replace(a, b)`, `repeat(n)` (each gives a new String); `starts_with(x)`, `ends_with(x)`, `contains(x)` (true/false);
@@ -257,8 +258,8 @@ A function or struct takes types as parameters, written in `<>` after the name; 
 T largest<T>(T a, T b) { if a > b { return a; } return b; }
 struct Pair<A, B> { A first; B second; }
 
-cout << largest(3, 9) << "\n";            // T is worked out from the arguments: int
-cout << largest<int>(3, 9) << "\n";        // or written
+jout << largest(3, 9) << "\n";            // T is worked out from the arguments: int
+jout << largest<int>(3, 9) << "\n";        // or written
 Pair<int, double> p = {1, 2.5};          // a struct always has its types written
 ```
 
@@ -280,7 +281,7 @@ xs.push(5); xs.push(-2); xs.push(9);
 xs.sort();                    // ascending: -2 5 9
 xs.insert(1, 7);              // place, value
 xs.remove(0);
-cout << xs.index_of(9) << xs.contains(4) << "\n";   // place or -1, true/false
+jout << xs.index_of(9) << xs.contains(4) << "\n";   // place or -1, true/false
 
 String[] names = arr(2);
 names.push("carol"); names.push("alice");
@@ -297,12 +298,12 @@ after the loop). `x` is a copy of the element (a String element is only borrowed
 Map<String, int> ages;
 ages.put("ann", 31);
 ages.put("bob", 25);
-cout << ages.get("bob") << ages.has("zed") << ages.len << "\n";   // get throws "key not found"
+jout << ages.get("bob") << ages.has("zed") << ages.len << "\n";   // get throws "key not found"
 ages.remove("ann");
-for k in ages.keys_list() { cout << k << "=" << ages.get(k) << "\n"; }   // values_list() too
+for k in ages.keys_list() { jout << k << "=" << ages.get(k) << "\n"; }   // values_list() too
 
 Set<int> seen;
-if seen.add(3) { cout << "new\n"; }     // add says whether it was new
+if seen.add(3) { jout << "new\n"; }     // add says whether it was new
 ```
 
 * A variable of a struct that has a method `free(self)` is freed by the compiler at the end of its block (also on `return`, `break`, `continue`): that is
@@ -329,7 +330,7 @@ void main() {
     int[] list = arr(4);                    // so is a dynamic array that main made
     list.push(tmp[0]);
     Node^ a = make(1);                      // the caller of make owns the result
-    cout << a^.value + list[0] << "\n";     // 8
+    jout << a^.value + list[0] << "\n";     // 8
 }
 ```
 
@@ -535,7 +536,7 @@ void main() {
     int a[3];
     int^ q = @a;
     q[2] = 7;             // p[i] indexes (counted in elements); there is no p + 1
-    cout << x << " " << a[2] << "\n";
+    jout << x << " " << a[2] << "\n";
 }
 ```
 
@@ -554,11 +555,11 @@ int apply(int(int, int)^ f, int x, int y) { return f(x, y); }
 
 void main() {
     int(int, int)^ op = add;            // RET(PARAMS)^ : a pointer to a function
-    cout << op(3, 4) << "\n";            // 7
+    jout << op(3, 4) << "\n";            // 7
     op = mul;
-    cout << apply(op, 3, 4) << "\n";     // 12
+    jout << apply(op, 3, 4) << "\n";     // 12
     int(int, int)^ none = null;
-    if none == null { cout << "empty\n"; }
+    if none == null { jout << "empty\n"; }
 }
 ```
 
@@ -584,11 +585,11 @@ enum class Shape { Circle(double r), Rect(double w, double h), Empty;      // th
 };
 
 Shape s = Shape::Rect(2.0, 3.0);          // Shape::Empty (no parameters): no ( )
-cout << s.area() << "\n";                 // 6
+jout << s.area() << "\n";                 // 6
 switch s {
-    Shape::Circle(r):  cout << "radius " << r << "\n";
-    Shape::Rect(w, _): cout << "width " << w << "\n";    // _ ignores a value
-    _:                 cout << "something else\n";
+    Shape::Circle(r):  jout << "radius " << r << "\n";
+    Shape::Rect(w, _): jout << "width " << w << "\n";    // _ ignores a value
+    _:                 jout << "something else\n";
 }
 ```
 
@@ -656,7 +657,7 @@ switch add("20", "22") { ... }       // or  Result<int, Error> r = add(...);  sw
 int work(int n) {
     File f = open(path);
     defer f.close();                  // whatever happens below, the file is closed
-    defer cout << "leaving, n = " << n << "\n";
+    defer jout << "leaving, n = " << n << "\n";
     n += 1;
     if n > 5 { return n * 10; }
     return n;
@@ -680,9 +681,9 @@ A lambda is a function without a name, written where you use it. It looks like a
 ```jk
 int apply(int(int, int)^ f, int x, int y) { return f(x, y); }
 
-cout << apply(int(int a, int b) { return a + b; }, 3, 4) << "\n";      // 7
+jout << apply(int(int a, int b) { return a + b; }, 3, 4) << "\n";      // 7
 int(int)^ twice = int(int x) { return x * 2; };                         // keep it in a function pointer
-void()^ hello = void() { cout << "hi\n"; };
+void()^ hello = void() { jout << "hi\n"; };
 ```
 
 A lambda is an ordinary function in disguise (the compiler names it `__lambda_N`), so it **cannot use the variables around it**; it can use
@@ -704,7 +705,7 @@ void main() {
     c.add(5);
     Counter d = {7};                         // brace init: init() does not run
     d.add(1);
-    cout << c.get() << " " << d.get() << " " << Counter::twice(21) << "\n";
+    jout << c.get() << " " << d.get() << " " << Counter::twice(21) << "\n";
 }
 ```
 
@@ -722,13 +723,13 @@ A method marked `virtual` is chosen when the program runs; a derived struct chan
 struct Animal {
     int legs;
     void init(self) { self.legs = 4; }
-    virtual void speak(self) { cout << "..."; }
+    virtual void speak(self) { jout << "..."; }
 }
 struct Dog : Animal {
     void init(self) { self.legs = 4; }
-    override void speak(self) { cout << "Woof"; }
+    override void speak(self) { jout << "Woof"; }
 }
-void talk(Animal^ a) { a^.speak(); cout << "\n"; }
+void talk(Animal^ a) { a^.speak(); jout << "\n"; }
 void main() {
     Dog d; d.init();
     talk(@d);
@@ -760,7 +761,7 @@ double twice(Shape^ a) { a^.grow(2.0); return a^.area(); }
 void main() {
     Sq q; q.init(); q.s = 3.0;
     Rect r; r.init(); r.w = 2.0; r.h = 5.0;
-    cout << twice(@q) << " " << twice(@r) << "\n";
+    jout << twice(@q) << " " << twice(@r) << "\n";
 }
 ```
 
@@ -775,11 +776,11 @@ void main() {
     float half = 0.5;
     double area = 3.14159 * r * r;
     int whole = (int)area;               // casts are explicit
-    cout << area << " " << whole << " " << half << "\n";
+    jout << area << " " << whole << " " << half << "\n";
 }
 ```
 
-`cout` prints floats with 6 decimals. Literals such as `3.14`, `1e-3` adapt to `float`/`double`.
+`jout` prints floats with 6 decimals. Literals such as `3.14`, `1e-3` adapt to `float`/`double`.
 Comparisons treat NaN correctly. `%` does not work on floats.
 
 ## Errors: try / catch / throw
@@ -792,10 +793,10 @@ int divide(int a, int b) {
 
 void main() {
     try {
-        cout << divide(10, 2) << "\n";
-        cout << divide(1, 0) << "\n";
+        jout << divide(10, 2) << "\n";
+        jout << divide(1, 0) << "\n";
     } catch (e) {
-        cout << "error: " << e << "\n";     // e is the text that was thrown
+        jout << "error: " << e << "\n";     // e is the text that was thrown
     }
 }
 ```
@@ -819,24 +820,24 @@ struct Node { int value; Node^ next; }
 
 void main() {
     int a[10];
-    cout << sizeof(int) << " " << sizeof(Node) << " " << sizeof(a) << " " << sizeof(a[0]) << "\n";   // 8 16 80 8
+    jout << sizeof(int) << " " << sizeof(Node) << " " << sizeof(a) << " " << sizeof(a[0]) << "\n";   // 8 16 80 8
 }
 ```
 
 `sizeof(Type)` or `sizeof(variable / element / field)` is a constant known at compile time
 (in bytes, an `int`). Struct sizes include padding. Handy with the heap: `alloc(sizeof(Node))`.
 
-## Input: cin
+## Input: jin
 
 ```jk
 void main() {
     int age;
     char name[16];
     double height;
-    cin >> name >> age;               // words are separated by spaces or new lines
-    cin >> height;
-    cout << name << " " << age << "\n";
-    cout << height << "\n";
+    jin >> name >> age;               // words are separated by spaces or new lines
+    jin >> height;
+    jout << name << " " << age << "\n";
+    jout << height << "\n";
 }
 ```
 
@@ -848,7 +849,7 @@ Bad input throws text you can catch: `invalid input`, `number out of range`, `en
 ```jk
 void main() {
     int n;
-    try { cin >> n; } catch (e) { cout << "not a number: " << e << "\n"; }
+    try { jin >> n; } catch (e) { jout << "not a number: " << e << "\n"; }
 }
 ```
 
@@ -877,7 +878,7 @@ void main() {
     Thread t2 = create(work, null);
     t1.join();                          // wait until a thread has ended
     t2.join();
-    cout << counter << "\n";            // 2000
+    jout << counter << "\n";            // 2000
 }
 ```
 
@@ -900,7 +901,7 @@ void main() {
     for i in 0..1000 {                  // the iterations are shared among the machine's cores
         squares[i] = i * i + offset;    // every iteration must be independent of the others
     }
-    cout << squares[999] << "\n";       // 998006
+    jout << squares[999] << "\n";       // 998006
 }
 ```
 
@@ -921,7 +922,7 @@ using stdlib::str         // call only the Str functions without the prefix (usi
 
 `#import <name>` looks for `name.j` (or `name.jk`, or `name/name.j`) in these places, in this order: the `-I` folder, the folders of the
 environment variable `J2K_PATH` (separated by `:`), `~/.j2k/lib`, and the `lib` folder next to the compiler. `<a.b>` means `a/b`.
-The library used to be called `std`; `import std` and `using std` still work with a warning. Write `#import` (with the `#`): a plain `import` and a bare `import stdlib` (without `< >`) also work, with a warning. `coutf` and `cinf` of older versions still work with a warning: `cout` and `cin` handle every type.
+The library used to be called `std`; `import std` and `using std` still work with a warning. Write `#import` (with the `#`): a plain `import` and a bare `import stdlib` (without `< >`) also work, with a warning. `coutf` and `cinf` of older versions still work with a warning: `jout` and `jin` handle every type.
 
 Standard library (`stdlib`, source in `std/`): 
 
@@ -940,7 +941,7 @@ using stdlib::str;
 void main() {
     char buf[32];
     from_int(@buf, 32, 12345);
-    cout << buf << " has " << len(@buf) << " digits\n";
+    jout << buf << " has " << len(@buf) << " digits\n";
 }
 ```
 
@@ -958,7 +959,7 @@ void main() {
     int fd = Sys::open_write("/tmp/sys_example.txt");
     Sys::write(fd, "hello\n".c(), 6);
     Sys::close(fd);
-    cout << Error::reason(Sys::open_read("/tmp/there_is_no_such_file")) << "\n";
+    jout << Error::reason(Sys::open_read("/tmp/there_is_no_such_file")) << "\n";
 }
 ```
 
@@ -1008,7 +1009,7 @@ struct Money {
 Money a = {250};
 Money b = a + a * 3;             // a.add(a.mul(3))
 Money c = 2 * a;                 // a number on the left of * is the same as a.mul(2)
-cout << (a + b).cents << "\n";   // a call can go on after a value in parentheses
+jout << (a + b).cents << "\n";   // a call can go on after a value in parentheses
 ```
 
 The math libraries are chosen with one import: `#import <math>` and then `using math::vector;` (`vec2 vec3 vec4`) or `using math::matrix;`
@@ -1026,7 +1027,7 @@ using stdlib;
 void main() {
     // text and numbers
     String s = "  Hello, J2K  ";
-    cout << s.trim().upper() << " " << s.trim().count() << "\n";         // HELLO, J2K 10
+    jout << s.trim().upper() << " " << s.trim().count() << "\n";         // HELLO, J2K 10
     // Num::parse_int("42") and Num::parse_double("2.5") give a Result (see the Option, Result and ? section)
     // files, folders, the environment, time and random numbers
     //   Fs::read_text(path)?  Fs::write_text(path, text)?  Dir::list(path)?  Env::get("HOME")  Time::now_ms()  Random::range(1, 6)
@@ -1156,7 +1157,7 @@ int main() {
     i8x16 x = i8x16::load(@a[0], 0);
     i8x16 y = i8x16::load(@b[0], 0);
     i32x4 d = x.dot(y);                 // four sums of four products
-    cout << d.sum() << "\n";            // 2 * (1 + 2 + ... + 16) = 272
+    jout << d.sum() << "\n";            // 2 * (1 + 2 + ... + 16) = 272
     return 0;
 }
 ```
@@ -1174,7 +1175,7 @@ int twice(int x) {
 }
 
 void main() {
-    cout << twice(21) << "\n";
+    jout << twice(21) << "\n";
 }
 ```
 
@@ -1192,30 +1193,30 @@ void main() {
     int a_hi = 5;
     BitCarry lo = Bit::add_carry(a_lo, 1, 0);
     BitCarry hi = Bit::add_carry(a_hi, 0, lo.c);
-    cout << hi.sum << " " << lo.sum << " " << hi.c << "\n";
+    jout << hi.sum << " " << lo.sum << " " << hi.c << "\n";
     BitWide w = Bit::mul_wide(-1, 3);
-    cout << w.hi << " " << w.lo << "\n";
+    jout << w.hi << " " << w.lo << "\n";
     BitDivRem d = Bit::div_rem(-17, 5);
-    cout << d.q << " " << d.r << " " << Bit::add_sat(9223372036854775807, 5) << "\n";
+    jout << d.q << " " << d.r << " " << Bit::add_sat(9223372036854775807, 5) << "\n";
 }
 ```
 
 On ARM64 a `register { }` block can read the flags that an instruction left: `x4 = Flags::c;` (also `z`, `n`, `v`; 0 or 1).
 
 
-## `cerr`: messages for the standard error
+## `jerr`: messages for the standard error
 
-`cerr << ...;` prints like `cout`, but to the standard error. When a program runs as `program > result.txt` the results go to the file and the messages
-of `cerr` still appear on the screen. (`cerr` is part of the standard library, like `cout`: `#import <stdlib>`.)
+`jerr << ...;` prints like `jout`, but to the standard error. When a program runs as `program > result.txt` the results go to the file and the messages
+of `jerr` still appear on the screen. (`jerr` is part of the standard library, like `jout`: `#import <stdlib>`.)
 
 ```jk
 void main() {
-    cout << "result: " << 42 << "\n";
-    cerr << "warning: the input was empty\n";
+    jout << "result: " << 42 << "\n";
+    jerr << "warning: the input was empty\n";
 }
 ```
 
-## What `cout` prints for a `bool` and for a pointer
+## What `jout` prints for a `bool` and for a pointer
 
 A `bool` prints as `true` or `false`. A pointer prints as `0x` and its address in hex (`null` as `0x0`); write `(int)p` to print it as a number.
 
@@ -1223,7 +1224,7 @@ A `bool` prints as `true` or `false`. A pointer prints as `0x` and its address i
 int main() {
     bool ok = 3 > 2;
     int^ p = null;
-    cout << ok << " " << p << nl;
+    jout << ok << " " << p << nl;
     return 0;
 }
 ```
@@ -1232,22 +1233,22 @@ Output: `true 0x0`.
 
 ## Reading the keyboard: `read`
 
-`cin` reads words. For a whole line, one key, or a yes / no question the library has the module `read` (`using Input;`):
+`jin` reads words. For a whole line, one key, or a yes / no question the library has the module `read` (`using Input;`):
 
 ```jk
 #import <stdlib>
 using Input;
 
 void main() {
-    cout << "name? ";
+    jout << "name? ";
     String name = read.line();
     int age = read.number();
-    cout << name << " is " << age << nl;
-    if read.yes("again?") { cout << "ok" << nl; }
+    jout << name << " is " << age << nl;
+    if read.yes("again?") { jout << "ok" << nl; }
 }
 ```
 
-`read.key()` waits for one key without Enter and without showing it; it gives the code of the key (letters are their codes, Escape 27; 257 up, 258 down, 259 right, 260 left, 261 Home, 262 End, 263 Delete, 264 PageUp, 265 PageDown, 266 Insert, 270 .. 273 F1 .. F4; -1 at the end of the input). `read.key_timeout(ms)` waits at most that long and gives -2 when no key came. `read.password()` reads a line without showing it and `read.decimal()` reads a number with a decimal part. `read.enter()` waits for Enter, `read.try_number()` gives a `Result` instead of throwing. Use `read` or `cin` in one program, not both.
+`read.key()` waits for one key without Enter and without showing it; it gives the code of the key (letters are their codes, Escape 27; 257 up, 258 down, 259 right, 260 left, 261 Home, 262 End, 263 Delete, 264 PageUp, 265 PageDown, 266 Insert, 270 .. 273 F1 .. F4; -1 at the end of the input). `read.key_timeout(ms)` waits at most that long and gives -2 when no key came. `read.password()` reads a line without showing it and `read.decimal()` reads a number with a decimal part. `read.enter()` waits for Enter, `read.try_number()` gives a `Result` instead of throwing. Use `read` or `jin` in one program, not both.
 
 ## A variable in a register: `reg<int x19> c`
 
@@ -1259,7 +1260,7 @@ int sq(int v) { return v * v; }
 int main() {
     reg<int x20> acc = 0;
     for i in 0..5 { acc += sq(i); }
-    cout << acc << "\n";
+    jout << acc << "\n";
     return 0;
 }
 ```
@@ -1281,7 +1282,7 @@ void main() {
     char^ text = "123456789";
     int crc = 0xFFFFFFFF;
     for i in 0..9 { crc = Cpu::crc32_u8(crc, text[i] & 255); }
-    cout << ((crc xor 0xFFFFFFFF) & 0xFFFFFFFF) << "\n";
+    jout << ((crc xor 0xFFFFFFFF) & 0xFFFFFFFF) << "\n";
 }
 ```
 
@@ -1313,7 +1314,7 @@ jcmp mylib.jk -l -o libmy.so
 * The library has its own global variables, its own heap and its own `String`s and arrays inside; they never cross its border yet.
 * The functions that are not marked `export` stay inside (and are not in the file if no exported function reaches them).
 * Try it from python: `ctypes.CDLL('./libmy.so').add(2, 3)` is 5.
-* Not yet: `cout` inside a library, ARM32, and a library that calls another library. The test `t502` in the repository loads a library the way a C program does.
+* Not yet: `jout` inside a library, ARM32, and a library that calls another library. The test `t502` in the repository loads a library the way a C program does.
 
 
 ## A root like an OS (JARIC_ROOT)

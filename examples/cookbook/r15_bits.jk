@@ -1,0 +1,16 @@
+// Bits and bytes.
+#import <stdlib>
+using stdlib;
+
+int main() {
+    int flags = 0;
+    flags = flags | (1 << 3);
+    flags = flags | 1;
+    jout << flags << " " << tobin(flags) << " " << ((flags >> 3) & 1) << "\n";
+    int x = 0xF0F0;
+    jout << tohex(x xor 0xFFFF) << " " << tohex(x & 0xFF00) << "\n";
+    char buf[4];
+    buf[0] = 'J'; buf[1] = '2'; buf[2] = 'K'; buf[3] = 0;
+    jout << (int)buf[0] << " " << (int)buf[2] << "\n";
+    return 0;
+}

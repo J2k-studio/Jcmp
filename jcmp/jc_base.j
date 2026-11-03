@@ -200,6 +200,10 @@ int opt_strict;              // -st : warnings are errors
 int opt_novec = 0;           // -novec: no loop is made into NEON vector code (for a machine that has no NEON, such as the emulator of Jaric OS)
 int opt_fma = 1;             // 1: fmul + fadd / fsub of one value become fmadd / fmsub / fnmsub (-nofma switches it off)
 int opt_regs = 1;            // 1: the register pass keeps the busiest whole-number locals of loops in x19..x25 (-noregs switches it off)
+int opt_loopalign = 1;       // 1: the head of a loop starts at a multiple of 16 bytes (".align 16"); -noloopalign: off
+int opt_rotmax = -1;         // -rotmax N: only the first N loops of a function are rotated (to find the loop that a measurement does not like)
+int opt_rotate = 1;          // 1: a jump back to a small test block is written as a copy of the test (loop rotation at the end); -norotate: off
+int opt_icopy = 1;           // 1: a copy `mov xT, xV` is looked through several lines and its readers use xV (pt_fwd_icopy); -noicopy: off
 int opt_pushfast = 1;         // 1: x.push(v) puts the common case in line (room in the array); -nopushfast: always the call
 int opt_nullchk = 1;          // 1: a check of an array variable for null is dropped when every way in has passed the same check (-nonullchk switches it off)
 int x_time;                  // hidden flag -xtime: the time of each stage of the compiler is written to the error output

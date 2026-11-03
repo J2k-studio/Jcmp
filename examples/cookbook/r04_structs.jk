@@ -1,0 +1,35 @@
+// A struct with methods, an array of them, and sorting by a field.
+#import <stdlib>
+using stdlib;
+
+struct Player {
+    String name;
+    int score;
+    void add(self, int points) { self.score += points; }
+    String describe(self) { return self.name + ": " + str(self.score); }
+}
+
+int main() {
+    Player[] ps = arr(4);
+    String[] names = arr(3);
+    names.push("Mali"); names.push("Somchai"); names.push("Nok");
+    for i in 0..names.len {
+        Player p;
+        p.name = names[i] + "";
+        p.score = (i * 7) % 5;
+        ps.push(p);
+    }
+    ps[0].add(10);
+    // a bubble sort on the score, highest first
+    for a in 0..ps.len {
+        for b in 0..ps.len - 1 - a {
+            if ps[b].score < ps[b + 1].score {
+                Player t = ps[b];
+                ps[b] = ps[b + 1];
+                ps[b + 1] = t;
+            }
+        }
+    }
+    for i in 0..ps.len { jout << ps[i].describe() << "\n"; }
+    return 0;
+}

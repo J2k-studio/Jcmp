@@ -2,7 +2,7 @@
 //   Discord bot = Discord::bot("TOKEN-of-the-bot");
 //   bot.send(channel, "hello")?;                              // channel: the number of the channel (as text: Discord numbers are big)
 //   DcMessages ms = bot.messages(channel, last_id, 20)?;       // the messages after last_id ("" = the newest ones), oldest first
-//   for i in 0..ms.count() { DcMessage m = ms.get(i); cout << m.author << ": " << m.text << "\n"; }
+//   for i in 0..ms.count() { DcMessage m = ms.get(i); jout << m.author << ": " << m.text << "\n"; }
 //   last_id = ms.last;                                         // the number of the newest one seen (give it next time)
 // The bot must be invited to the server and, to read the text of messages, "Message Content Intent" must be on in the developer portal.
 //

@@ -1,0 +1,23 @@
+// An enum that carries values, and switch over it.
+#import <stdlib>
+using stdlib;
+
+enum class Shape {
+    Circle(double r),
+    Rect(double w, double h),
+    Dot
+}
+
+double area(Shape s) {
+    switch s {
+        Shape::Circle(r): { return 3.14159 * r * r; }
+        Shape::Rect(w, h): { return w * h; }
+        Shape::Dot: { return 0.0; }
+    }
+    return 0.0;
+}
+
+int main() {
+    jout << fmt(area(Shape::Circle(2.0)), 2) << " " << fmt(area(Shape::Rect(3.0, 4.5)), 2) << " " << fmt(area(Shape::Dot), 2) << "\n";
+    return 0;
+}

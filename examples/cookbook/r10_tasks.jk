@@ -1,0 +1,28 @@
+// Work on several threads: a Task gives a value, a Channel carries values between threads.
+#import <stdlib>
+#import <cpu>
+#import <tasks>
+using stdlib;
+
+int square(void^ arg) {
+    int n = (int)arg;
+    return n * n;
+}
+
+int main() {
+    Task a = Task::run(square, (void^)12);
+    Task b = Task::run(square, (void^)7);
+    jout << a.wait() + b.wait() << "\n";
+    Channel<int> c = Channel<int>::make();
+    c.send(5);
+    c.send(6);
+    c.close();
+    int sum = 0;
+    bool got = true;
+    while got {
+        int v = c.try_receive(@got);
+        if got { sum += v; }
+    }
+    jout << sum << "\n";
+    return 0;
+}

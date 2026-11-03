@@ -1,6 +1,6 @@
 // gpu 0.2.0 -- the graphics chip for J2K programs.   #import <gpu>   (needs jcmp 1.1.0.0; license: MPL-2.0)
 //   Gpu g = Gpu::open(320, 180);                  // a picture of 320 x 180 logical pixels, scaled to the screen (in the Jaric app)
-//   if !g.ok() { cout << "no graphics chip here\n"; return; }
+//   if !g.ok() { jout << "no graphics chip here\n"; return; }
 //   g.load(1, "ship.png");                        // a picture file becomes the texture 1
 //   while g.running() {
 //       g.begin();                                // touches and keys, g.dt
@@ -96,7 +96,7 @@ struct Gpu {
         r[12] = r[12] & 244;
         Sys::call(29, 0, 21506, (int)@r, 0, 0, 0);
         gpu_raw = true;
-        cout << "\e[?1049h\e[?25l\e]7777;gpu;open;" << w << ";" << h << ";" << g.path << "\a";
+        jout << "\e[?1049h\e[?25l\e]7777;gpu;open;" << w << ";" << h << ";" << g.path << "\a";
         g.good = true;
         return g;
     }
@@ -121,7 +121,7 @@ struct Gpu {
                 }
             }
         }
-        cout << "\e]7777;gpu;tex;" << id << ";" << p << "\a";
+        jout << "\e]7777;gpu;tex;" << id << ";" << p << "\a";
     }
 
     void clear(self, int argb) { self.cmd.push(1); self.cmd.push(argb); }
@@ -232,7 +232,7 @@ struct Gpu {
             }
             Sys::call(62, self.fd, 0, 0, 0, 0, 0);
             Sys::write(self.fd, self.buf, need);
-            cout << "\e]7777;gpu;present\a";
+            jout << "\e]7777;gpu;present\a";
             self.cmd = arr(1024);
         }
         self.frame += 1;
@@ -242,7 +242,7 @@ struct Gpu {
 
     void close(self) {
         if self.good {
-            cout << "\e]7777;gpu;close\a\e[0m\e[?25h\e[?1049l";
+            jout << "\e]7777;gpu;close\a\e[0m\e[?25h\e[?1049l";
             Sys::close(self.fd);
             Fs::remove(self.path);
             if gpu_raw { Sys::call(29, 0, 21506, (int)@gpu_tio, 0, 0, 0); gpu_raw = false; }

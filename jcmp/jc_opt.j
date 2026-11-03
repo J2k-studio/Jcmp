@@ -4122,12 +4122,33 @@ int nc_next(int i, int b) {
 // is the address made by instruction i (of block b), for the offset off, only given to the cleanup record (the store 16 bytes further)?
 bool nc_is_record(int i, int b, int off) {
     int j = nc_next(i, b);
-    if !(j >= 0 && ir_op[j] == IR_STORE && ir_a[j] == 30 && ir_w[j] == 8 && ir_b[j] == ir_d[i] && ir_k[j] == off + 16) { return false; }
+    if j < 0 || ir_op[j] != IR_STORE || ir_w[j] != 8 || ir_b[j] != ir_d[i] { return false; }
+    // the record is written through the frame pointer (the store 16 bytes further) or, in the form that the lifter makes first, through the register that holds
+    // its address (v = add v30, off + 8; the slot address goes to [v + 8], the function to [v + 16])
+    int rb = 0 - 1;
+    if ir_a[j] == 30 {
+        if ir_k[j] != off + 16 { return false; }
+    } else {
+        if ir_k[j] != 8 || ir_a[j] < 1 || ir_a[j] > 63 { return false; }
+        rb = ir_a[j];
+        int q = i - 1;
+        bool found = false;
+        while q >= ir_bs[b] && !found {
+            if ir_op[q] != IR_NOP && ir_d[q] == rb {
+                found = true;
+                if !(ir_op[q] == IR_ADD && ir_a[q] == 30 && ir_bi[q] == 1 && ir_b[q] == off + 8) { return false; }
+            }
+            q -= 1;
+        }
+        if !found { return false; }
+    }
     // the record goes on with the address of the function that frees the object, stored 8 bytes further
     int j2 = nc_next(j, b);
     if !(j2 >= 0 && ir_op[j2] == IR_ADDR_FUNC) { return false; }
     int j3 = nc_next(j2, b);
-    return j3 >= 0 && ir_op[j3] == IR_STORE && ir_a[j3] == 30 && ir_b[j3] == ir_d[j2] && ir_k[j3] == off + 24;
+    if j3 < 0 || ir_op[j3] != IR_STORE || ir_b[j3] != ir_d[j2] { return false; }
+    if rb < 0 { return ir_a[j3] == 30 && ir_k[j3] == off + 24; }
+    return ir_a[j3] == rb && ir_k[j3] == 16;
 }
 
 // the hint line says that the slot off is a plain 8-byte value (flag 1): value numbering may then reuse its loads
@@ -4223,7 +4244,15 @@ void op_nullchk() {
                     while q < nc_n { if nc_off[q] == off { ix = q; } q += 1; }
                     if ix >= 0 {
                         // the cleanup record: the address goes to the slot 16 bytes further, in the next instruction
-                        if !nc_is_record(i, b, off) { nc_addr[ix] += 1; }
+                        if !nc_is_record(i, b, off) {
+                            nc_addr[ix] += 1;
+                            if nc_dbg == 1 {
+                                write_err("  address of slot "); write_err_int(off); write_err(" in block "); write_err_int(b); write_err(" op "); write_err_int(op);
+                                int jj = nc_next(i, b);
+                                if jj >= 0 { write_err(" next op "); write_err_int(ir_op[jj]); write_err(" a "); write_err_int(ir_a[jj]); write_err(" k "); write_err_int(ir_k[jj]); write_err(" w "); write_err_int(ir_w[jj]); write_err(" b "); write_err_int(ir_b[jj]); write_err(" d(i) "); write_err_int(ir_d[i]); }
+                                write_err("\n");
+                            }
+                        }
                     }
                 }
                 // a frame pointer that goes anywhere else may reach any slot
@@ -4288,9 +4317,19 @@ void op_nullchk() {
             int i = ir_bs[b];
             while i < ir_be[b] {
                 if ir_op[i] == IR_STORE && ir_a[i] == 30 {
+                    // a store of the result of __Arr__make: that array exists (it panics when there is no memory), so the slot is not null from here on
+                    bool made = false;
+                    if ir_bi[i] == 0 && ir_w[i] == 8 && ir_b[i] >= 1 {
+                        int jm = i - 1;
+                        while jm >= ir_bs[b] && (ir_op[jm] == IR_NOP || ir_d[jm] != ir_b[i]) { jm -= 1; }
+                        if jm >= ir_bs[b] && ir_op[jm] == IR_CALL && str_eq(@ir_name + ir_k[jm] * 64, "__Arr__make") { made = true; }
+                    }
                     int q5 = 0;
                     while q5 < nc_n {
-                        if ir_k[i] < nc_off[q5] + 8 && ir_k[i] + 8 > nc_off[q5] { m = m & ~(1 << q5); }
+                        if ir_k[i] < nc_off[q5] + 8 && ir_k[i] + 8 > nc_off[q5] {
+                            m = m & ~(1 << q5);
+                            if made && ir_k[i] == nc_off[q5] { m = m | (1 << q5); }
+                        }
                         q5 += 1;
                     }
                 }

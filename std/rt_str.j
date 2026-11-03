@@ -1,5 +1,5 @@
 // String: a dynamic array of char (header [length, capacity, data, 1]) whose data always ends
-// in a 0 byte after the length, so that the data is also a C-style text (cout, c()).
+// in a 0 byte after the length, so that the data is also a C-style text (jout, c()).
 // An operand is a text (kind 0), another String (kind 1) or one character (kind 2).
 char std_str_ch[16];
 struct __Str {

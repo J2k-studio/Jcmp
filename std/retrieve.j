@@ -3,7 +3,7 @@
 //   r.add("LANGUAGE.md", text_of_the_file);           // cut into passages at blank lines and at lines that start with #
 //   r.build();                                        // once, after the last add
 //   Hits h = r.search("how do I open a file", 3);     // the best 3 passages
-//   for i in 0..h.n { cout << h.names[i] << "  " << h.scores[i] << "\n" << h.texts[i] << "\n"; }
+//   for i in 0..h.n { jout << h.names[i] << "  " << h.scores[i] << "\n" << h.texts[i] << "\n"; }
 // Words are lower-case letters and digits (and _); Thai and other text without spaces is cut into pairs of characters, so a Thai question finds a Thai passage.
 // A word that is in every passage counts for nothing; a word that is in few passages counts a lot (BM25 with k1 = 1.5, b = 0.75).
 

@@ -31,19 +31,19 @@ Every function of every library, with its comment, is in [API.md](API.md) (made 
 
 ```jk
 #import <text>
-cout << Fmt::fixed(3.14159, 2) << " " << Fmt::thousands(1234567) << " " << Fmt::percent(0.256, 1) << "\n";   // 3.14 1,234,567 25.6%
-cout << Regex::find_text("[0-9]+", "room 42, floor 7") << "\n";                                           // 42
+jout << Fmt::fixed(3.14159, 2) << " " << Fmt::thousands(1234567) << " " << Fmt::percent(0.256, 1) << "\n";   // 3.14 1,234,567 25.6%
+jout << Regex::find_text("[0-9]+", "room 42, floor 7") << "\n";                                           // 42
 ```
 
 ```jk
 #import <time>
-Date d;  d.set_unix(1709211909);  cout << d.text() << " " << d.weekday() << "\n";    // 2024-02-29 13:05:09 4  (4 = Thursday)
+Date d;  d.set_unix(1709211909);  jout << d.text() << " " << d.weekday() << "\n";    // 2024-02-29 13:05:09 4  (4 = Thursday)
 ```
 
 ```jk
 #import <data>
 String cfg = "[server]\nport = 8080\n";
-cout << Toml::get_int(cfg, "server.port").unwrap() << "\n";                 // 8080
+jout << Toml::get_int(cfg, "server.port").unwrap() << "\n";                 // 8080
 ```
 
 ## Short names: `module.function`
@@ -58,11 +58,11 @@ using Fs;                                  // opens the modules of Fs: fs and di
 int main() {
     fs.write("notes.txt", "alpha\nbeta\n");     // the full name is Fs::fs.write(...)
     String[] lines = fs.lines("notes.txt");
-    cout << lines.len << nl;                     // 2
+    jout << lines.len << nl;                     // 2
     try {
         String t = fs.read("missing.txt");
     } catch (e) {
-        cout << e << nl;                         // cannot open missing.txt: there is no file or folder with this name (error 2)
+        jout << e << nl;                         // cannot open missing.txt: there is no file or folder with this name (error 2)
     }
     Result<String, Error> r = fs.try_read("missing.txt");   // the same, as a value
     return 0;
@@ -90,4 +90,4 @@ int main() {
 | `Num` | `num` | `parse_int` `parse_double` (+ `try_`) |
 | `Hex`, `Base64` | `hex`, `base64` | `encode` `decode` (+ `try_decode`) |
 
-A new line can be written `nl` (no backslash): `cout << x << nl;`.
+A new line can be written `nl` (no backslash): `jout << x << nl;`.

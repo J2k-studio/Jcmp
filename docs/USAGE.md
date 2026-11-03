@@ -43,7 +43,7 @@ jcmp -target arm32 hello.jk -o hello32
 ```
 
 `int` is still 64 bits (a pair of registers), so a program gives the same answer on both targets. Most of the language runs: functions,
-loops, 64-bit arithmetic, `double` and `float`, `cout`, strings, dynamic arrays, structs, the heap, `try` / `catch` / `throw`, threads,
+loops, 64-bit arithmetic, `double` and `float`, `jout`, strings, dynamic arrays, structs, the heap, `try` / `catch` / `throw`, threads,
 atomics, lambdas, function pointers, `defer`, `#multithread` loops, SIMD vectors (`f64x2`, `f32x4`, `i32x4` ... with NEON), files,
 processes and the clock. Not yet (the compiler stops with the name of the function, or says so): `-d` (the checks of memory and bounds),
 the `register { }` blocks and other machine-specific code (naked / abi functions, the `Cpu` atomics), `#pragma read`. This version has no register allocation, so the
@@ -86,7 +86,7 @@ for e in hello fib shapes heap; do bin/jcmp examples/$e.jk -o /tmp/$e && /tmp/$e
 ## The standard library
 
 `#import <stdlib>` puts the library in front of your program; `using stdlib` lets you call its functions without the prefix
-(or only one module: `using stdlib::mem`, `str`, `sys`, `math`, `fs`). `cout` and `cin` need `#import <stdlib>` and `using stdlib`. Its source is `std/*.j`.
+(or only one module: `using stdlib::mem`, `str`, `sys`, `math`, `fs`). `jout` and `jin` need `#import <stdlib>` and `using stdlib`. Its source is `std/*.j`.
 See [LANGUAGE.md](LANGUAGE.md).
 
 ### Where the library lives, and `jcmp -update`

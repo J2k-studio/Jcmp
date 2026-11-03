@@ -1,0 +1,22 @@
+// try / catch for errors that are thrown, defer for cleanup on every way out.
+#import <stdlib>
+using stdlib;
+
+int parse(String s) {
+    if s.len == 0 { throw "empty text"; }
+    return s.to_int();
+}
+
+int main() {
+    String[] inputs = arr(2);
+    inputs.push("41"); inputs.push("");
+    for i in 0..inputs.len {
+        defer { jout << "done with " << i << "\n"; }
+        try {
+            jout << parse(inputs[i]) + 1 << "\n";
+        } catch (e) {
+            jout << "caught: " << e << "\n";
+        }
+    }
+    return 0;
+}

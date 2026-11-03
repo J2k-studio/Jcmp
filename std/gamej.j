@@ -146,7 +146,7 @@ struct Game {
         g.font = game_font();
         if game_tty {
             game_raw_on();
-            cout << "\e[?1049h\e[?25l\e[2J";
+            jout << "\e[?1049h\e[?25l\e[2J";
         }
         if g.surf {
             String tmp = "/data/local/tmp";
@@ -168,7 +168,7 @@ struct Game {
                 g.sbuf = (char^)Mem::alloc(g.w * g.h * 4 + 16);
                 for i in 0..g.w * g.h * 4 { g.sbuf[i] = 0; }
                 Sys::write(g.sfd, g.sbuf, g.w * g.h * 4);
-                cout << "\e]7777;gfx;open;" << g.w << ";" << g.h << ";" << g.spath << "\a";
+                jout << "\e]7777;gfx;open;" << g.w << ";" << g.h << ";" << g.spath << "\a";
             }
         }
         return g;
@@ -185,13 +185,13 @@ struct Game {
 
     void close(self) {
         if self.surf {
-            cout << "\e]7777;gfx;close\a";
+            jout << "\e]7777;gfx;close\a";
             Sys::close(self.sfd);
             Fs::remove(self.spath);
             self.surf = false;
         }
         if game_tty {
-            cout << "\e[0m\e[?25h\e[?1049l";
+            jout << "\e[0m\e[?25h\e[?1049l";
             game_raw_off();
         }
         self.alive = false;
@@ -402,11 +402,11 @@ struct Game {
 
     void sound(self, String path) {
         if !Game::allowed("audio") {
-            cerr << "gamej: this program has no permission 'audio' (jc perm ID audio on); no sound\n";
+            jerr << "gamej: this program has no permission 'audio' (jc perm ID audio on); no sound\n";
             return;
         }
         switch Env::get("JARIC") {
-            Option::Some(v): { cout << "\e]7777;audio;play;" << path << "\a"; }
+            Option::Some(v): { jout << "\e]7777;audio;play;" << path << "\a"; }
             Option::None: { }
         }
     }
@@ -444,7 +444,7 @@ struct Game {
             }
             Sys::call(62, self.sfd, 0, 0, 0, 0, 0);               // lseek to the start
             Sys::write(self.sfd, self.sbuf, n * 4);
-            cout << "\e]7777;gfx;present\a";
+            jout << "\e]7777;gfx;present\a";
             return;
         }
         String s = "";
@@ -475,6 +475,6 @@ struct Game {
                 lastcol = x;
             }
         }
-        if s.len > 0 { s.append("\e[0m"); cout << s; }
+        if s.len > 0 { s.append("\e[0m"); jout << s; }
     }
 }

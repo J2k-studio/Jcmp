@@ -19,7 +19,7 @@ void run(int n) {
     double flops = 2.0 * (double)n * (double)n * (double)n;
     double ms1 = (double)(t1 - t0) / 1000000.0;
     double ms2 = (double)(t2 - t1) / 1000000.0;
-    cout << n << "x" << n << ": plain " << ms1 << " ms (" << flops / ms1 / 1000000.0 << " GFLOPS)   fast " << ms2 << " ms (" << flops / ms2 / 1000000.0 << " GFLOPS)   " << ms1 / ms2 << " times faster   biggest difference " << worst << "\n";
+    jout << n << "x" << n << ": plain " << ms1 << " ms (" << flops / ms1 / 1000000.0 << " GFLOPS)   fast " << ms2 << " ms (" << flops / ms2 / 1000000.0 << " GFLOPS)   " << ms1 / ms2 << " times faster   biggest difference " << worst << "\n";
 }
 int main() {
     run(64);

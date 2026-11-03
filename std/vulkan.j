@@ -1,7 +1,7 @@
 // vulkan 0.3.0 -- the first step of Vulkan from J2K, on the real driver (no app needed).   #import <vulkan>   (needs  jcmp -dyn  and the library native)
 //   Vk vk = Vk::open();                              // makes an instance and looks at the first graphics chip
-//   if !vk.ok { cout << vk.log << "\n"; return; }
-//   cout << vk.device_name << " " << vk.api_text() << " memory " << vk.memory_mb << " MB compute " << vk.has_compute << "\n";
+//   if !vk.ok { jout << vk.log << "\n"; return; }
+//   jout << vk.device_name << " " << vk.api_text() << " memory " << vk.memory_mb << " MB compute " << vk.has_compute << "\n";
 //   vk.close();
 // 0.2.0: a logical device and a queue (`vk.make_device()`), buffers in memory the CPU and the GPU both see (`VkBuf b = vk.make_buffer(bytes)`, `b.upload(float^ p, n)`,
 //   `b.download(float^ p, n)`), and the text of every VkResult (`vk_result_text(rc)`).

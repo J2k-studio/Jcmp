@@ -68,14 +68,14 @@ struct BitDivRem { int q; int r; }           // div_rem: the quotient and the re
 // Bit: the work on the bits of a whole number, each is one instruction of the CPU (the compiler puts the instruction where the call is)
 struct Bit {
     // a + b + carry_in (0 or 1): the sum (cut to 64 bits) and the carry out. A number of many words is added word by word with it.
-    static BitCarry add_carry(int a, int b, int cin) {
+    static BitCarry add_carry(int a, int b, int jin) {
         BitCarry r;
         int top = 1 << 63;
         int s = a + b;
         int c = 0;
         if (s xor top) < (a xor top) { c = 1; }          // the sum is smaller than a (as unsigned numbers): it wrapped
-        int s2 = s + cin;
-        if cin == 1 && s2 == 0 { c = 1; }
+        int s2 = s + jin;
+        if jin == 1 && s2 == 0 { c = 1; }
         r.sum = s2;
         r.c = c;
         return r;

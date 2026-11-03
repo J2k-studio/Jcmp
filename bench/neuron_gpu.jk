@@ -3,7 +3,7 @@
 #import <neurongpu>
 // Tensor32.matmul on the CPU and on the GPU:   jcmp -dyn bench/neuron_gpu.jk -o ng && ./ng
 int main() {
-    if !NeuronGpu::enable(1000000) { cout << "no GPU\n"; return 1; }
+    if !NeuronGpu::enable(1000000) { jout << "no GPU\n"; return 1; }
     int[] sizes = arr(4);
     sizes.push(64); sizes.push(128); sizes.push(256); sizes.push(512);
     for q in 0..4 {
@@ -30,7 +30,7 @@ int main() {
             if e < 0.0 { e = 0.0 - e; }
             if e > worst { worst = e; }
         }
-        cout << n << ": cpu " << (double)(t1 - t0) / 6.0 << " ms, gpu " << (double)(t3 - t2) / (double)reps << " ms, biggest difference " << worst << "\n";
+        jout << n << ": cpu " << (double)(t1 - t0) / 6.0 << " ms, gpu " << (double)(t3 - t2) / (double)reps << " ms, biggest difference " << worst << "\n";
     }
     return 0;
 }

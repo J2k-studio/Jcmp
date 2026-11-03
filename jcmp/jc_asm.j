@@ -1822,6 +1822,14 @@ void as_instruction() {
         as_put32(0x1E601000 | ((im & 255) << 13) | fd);
         return;
     }
+    if as_mn_is("fmovsi") {
+        as_skip_spaces();
+        int fs = as_parse_freg();
+        as_expect_comma();
+        int im2 = as_parse_number();
+        as_put32(0x1E201000 | ((im2 & 255) << 13) | fs);          // fmov sN, #imm8 (the 8 bits of the ARM immediate)
+        return;
+    }
     if as_mn_is("stp") { as_h_pair(true); return; }
     if as_mn_is("ldp") { as_h_pair(false); return; }
     if as_mn_is("ldr") { as_h_mem(0xF940, 3); return; }

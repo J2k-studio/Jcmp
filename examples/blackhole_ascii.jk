@@ -92,7 +92,7 @@ void main() {
         switch Num::parse_int(args[1]) {
             Result::Ok(v): frames = v;
             Result::Err(e): {
-                cout << "usage: blackhole_ascii [frames]\n";
+                jout << "usage: blackhole_ascii [frames]\n";
                 return;
             }
         }

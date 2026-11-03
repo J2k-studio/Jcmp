@@ -1,0 +1,18 @@
+// Text: pieces, search, change, build.
+#import <stdlib>
+using stdlib;
+
+int main() {
+    String s = "  J2K is a small, fast language  ";
+    String t = s.trim();
+    jout << "[" << t << "] " << t.len << "\n";
+    jout << t.upper() << " | " << t.lower() << "\n";
+    jout << t.find("small") << " " << t.slice(0, 3) << " " << (t.find("fast") >= 0) << "\n";
+    String[] parts = t.split(" ");
+    jout << parts.len << " words, the last is " << parts[parts.len - 1] << "\n";
+    String r = "";
+    for i in 0..parts.len { r += parts[i].slice(0, 1); }
+    jout << r << "\n";
+    jout << str(42) + "/" + str(7) << " " << "12".to_int() + 1 << "\n";
+    return 0;
+}

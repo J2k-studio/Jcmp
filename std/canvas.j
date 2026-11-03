@@ -116,9 +116,9 @@ struct Canvas {
         String s = "";
         s.push((char)27);
         s.append("[2J");
-        cout << s;
+        jout << s;
     }
     void show(self) {
-        cout << self.frame();
+        jout << self.frame();
     }
 }

@@ -3,7 +3,7 @@
 // Use:    jcmp1 input.jk -o program
 // the version of the compiler (also in the file VERSION; release.sh checks that they agree)
 #allow syscall                         // the compiler is the layer under Sys: it calls the system by number on purpose
-#define JCMP_VERSION "1.2.11.0"
+#define JCMP_VERSION "1.2.12.0"
 
 #import "jc_base"
 #import "jc_asm"
@@ -489,6 +489,22 @@ void main() {
             }
         } else if str_eq(a, "-irdump") {
             ir_mode = 3;
+        } else if str_eq(a, "-noloopalign") {
+            opt_loopalign = 0;
+        } else if str_eq(a, "-rotmax") {
+            ai += 1;
+            char^ rv = arg(ai);
+            int rk = 0;
+            int rn = 0;
+            while rv[rk] >= '0' && rv[rk] <= '9' {
+                rn = rn * 10 + (rv[rk] - '0');
+                rk += 1;
+            }
+            opt_rotmax = rn;
+        } else if str_eq(a, "-norotate") {
+            opt_rotate = 0;
+        } else if str_eq(a, "-noicopy") {
+            opt_icopy = 0;
         } else if str_eq(a, "-nopushfast") {
             opt_pushfast = 0;
         } else if str_eq(a, "-ncdbg") {

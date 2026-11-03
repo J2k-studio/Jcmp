@@ -1,5 +1,5 @@
 // Date: a day and a time on the calendar (the Gregorian calendar, UTC), from and to seconds since 1970.
-//   Date d;  d.set_unix(86400 * 365);  cout << d.text() << " " << d.weekday() << "\n";     // 1971-01-01 00:00:00 5
+//   Date d;  d.set_unix(86400 * 365);  jout << d.text() << " " << d.weekday() << "\n";     // 1971-01-01 00:00:00 5
 struct Date {
     int year;
     int month;           // 1 .. 12

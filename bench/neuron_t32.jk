@@ -15,6 +15,6 @@ void main() {
         int t1 = Time::now_ms();
         double ms = (double)(t1 - t0) / (double)reps;
         double gf = 2.0 * (double)n * (double)n * (double)n / (ms * 1000000.0);
-        cout << n << ": " << ms << " ms, " << gf << " GFLOPS\n";
+        jout << n << ": " << ms << " ms, " << gf << " GFLOPS\n";
     }
 }
