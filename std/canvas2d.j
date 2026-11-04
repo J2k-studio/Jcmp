@@ -25,6 +25,13 @@ itf Canvas2d {
     void image(self, int pic, double x, double y, double w, double h, int tint);                // the picture in a box; tint 0xFFFFFFFF = as it is
 }
 
+// text drawn by a font (the library <font> has one): <ui> draws its words through it when you give it one (u.font(...)); y is the top of the line, px the size
+itf Text2d {
+    double text_width(self, String s, double px);
+    double text_height(self, double px);
+    double text_draw(self, Canvas2d^ c, double x, double y, String s, double px, int color);
+}
+
 struct Color {
     static int rgb(int r, int g, int b) { return 0xff000000 | ((r & 255) << 16) | ((g & 255) << 8) | (b & 255); }
     static int rgba(int r, int g, int b, int a) { return ((a & 255) << 24) | ((r & 255) << 16) | ((g & 255) << 8) | (b & 255); }

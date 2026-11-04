@@ -1,6 +1,8 @@
-# J2K / Jcmp 1.2.12.0
+# J2K / Jcmp 1.2.13.0
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
+
+**1.2.13.0:** loops over arrays are shorter again (the null check and the load of the header of an array move before the loop, constants too: sums of arrays run about 1.8 times faster, a float update about 1.35 times, the outputs are the same), a function of your program that has the name of a newer library function (`pad`, `fmt`) is yours again, the library `<ui>` 0.2.0 with a modern look and a sliding pill tab bar, the libraries `<font>` (real text, Thai too) and `<softcanvas>`, and a tutorial of 89 lessons.
 
 **1.2.12.0:** shorter loops over arrays (the null checks of local arrays are gone, copies and float constants are folded, dead writes are not written), the library `<ui>` (buttons, switches, sliders for apps), the layout functions `fmt`, `tohex`, `pad` for `jout`, a cookbook of 15 runnable programs and three more tutorial lessons. Still not as fast as C: see `bench/vs_c`.
 

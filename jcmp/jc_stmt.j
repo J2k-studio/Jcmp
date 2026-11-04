@@ -2762,6 +2762,17 @@ void emit_param_store(int reg, int off) {
 
 int blk_virtual;               // 1: a function made from  _.name { ... }  (no parameters, naked)
 
+char ovr_names[2048];          // the names of the library functions that a function of the user replaced
+int ovr_n;
+bool ovr_has(char^ name) {
+    int i = 0;
+    while i < ovr_n {
+        if str_eq(@ovr_names + i * 64, name) { return true; }
+        i += 1;
+    }
+    return false;
+}
+
 void parse_function() {
     int f_void = ty_void;
     int f_rettid = ty_tid;
@@ -2771,8 +2782,21 @@ void parse_function() {
     if ty_ptr != 0 || ty_dyn != 0 { cur_ret_isptr = 1; }
     if ty_ptr != 0 { f_rettid = 0; }
     cur_ret_tid = f_rettid;
+    // a function of the user that has the name of a function of the built-in library replaces it (1.2.13): the library one is kept
+    // under the name NAME__std (nothing calls it by that name) so that new functions of the library never break old programs
+    if lvl_lib[lx_depth] == 1 && ovr_n > 0 && pass_no >= 2 && ovr_has(@d_fname) { append_text(@d_fname, "__std"); }
     int f_idx = find_func(@d_fname);
-    if f_idx >= 0 && pass_no == 1 { die_name("this function is defined twice (a name can be used for one function only)", @d_fname); }
+    if f_idx >= 0 && pass_no == 1 {
+        if fbuiltin[f_idx] == 1 && lvl_lib[lx_depth] == 0 && ovr_n < 32 {
+            str_copy(@ovr_names + ovr_n * 64, @d_fname, 64);
+            ovr_n += 1;
+            append_text(@fname + f_idx * 64, "__std");
+            ft_add(f_idx);
+            f_idx = 0 - 1;
+        } else {
+            die_name("this function is defined twice (a name can be used for one function only)", @d_fname);
+        }
+    }
     int f_oper = op_pending;
     op_pending = 0;
     int f_naked = fn_naked;

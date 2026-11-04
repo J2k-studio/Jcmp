@@ -73,6 +73,35 @@ For the complete list of features see [LANGUAGE.md](LANGUAGE.md); for the comman
 58. Several cores, and the build file as a program
 59. Shared libraries: export and -l
 60. Scripts with jsh, and writing on the phone
+61. The libraries of the phone: `-dyn` and `<native>`
+62. OpenGL ES: the first picture, drawn by the chip
+63. A triangle and a shader
+64. The chip as a calculator: compute shaders
+65. Vulkan: asking the chip
+66. Games: Jaric Engine
+67. Talking to the web: `<web>`
+68. A bot that answers: `<telegram>` and `<discord>`
+69. Live news: WebSocket and the Discord Gateway
+70. Numbers that learn: tensors and gradients
+71. Teaching a network: layers, batches and AdamW
+72. A language model that you train on the phone
+73. Running models that others made: GGUF and `<llama>`
+74. Fast code: what the language costs and how to ask for speed
+75. Programs and libraries from the net: `jc`
+76. Counting in base 2 and base 16
+77. Negative numbers: two's complement
+78. Numbers with a point, inside
+79. From logic gates to an adder
+80. A tiny CPU of our own
+81. An assembler for the tiny CPU
+82. The real thing: an ARM64 instruction as 32 bits
+83. Laying out the output: columns, digits, hex
+84. The screens of an app: `<ui>`
+85. An apk without the Android tools: `apkj`
+86. Looking at part of an array: Span
+87. Real text: reading UTF-8 and the library <font>
+88. Light, shadow and glow: how colours mix
+89. Keys from one secret: HKDF and the tool jmaip
 
 ## Lesson 1. Hello, world
 
@@ -1183,7 +1212,7 @@ The code of `scale` that the compiler made:
 scale:
 mul x0, x0, x1
 asr x0, x0, #2
-L8491:
+L9018:
 ret
 // 3 instructions
 ```
@@ -2247,6 +2276,7 @@ To write and build on the phone: `coderin hello.jk` (Ctrl-S saves, Ctrl-Q quits)
 
 ## Lesson 61. The libraries of the phone: `-dyn` and `<native>`
 
+
 A normal J2K program is *static*: it is one file that talks to the kernel with system calls and needs nothing else. The graphics chip, however, is reached through the libraries of the phone (`libvulkan.so`, `libEGL.so`, `libGLESv3.so`, `libOpenCL.so`). To use them the program must be *dynamic*: the loader of Android starts it and gives it `libdl.so` and `libc.so`. You ask for that with one option:
 
 ```
@@ -2281,6 +2311,7 @@ How it works, in short: the library reads `/proc/self/maps`, finds where `libdl.
 
 ## Lesson 62. OpenGL ES: the first picture, drawn by the chip
 
+
 `<opengl3>` makes an *off-screen* OpenGL ES context (a surface the size you ask, not shown on the screen) on the real driver, then every call is the same as in the OpenGL ES documentation, spelled the J2K way (`glClearColor` is `gl.clear_color`).
 
 ```jk
@@ -2306,6 +2337,7 @@ int main() {
 It prints `255 128 0` (the numbers of the orange). `read_pixels` returns the bytes red, green, blue, alpha of each pixel, starting with the bottom row (OpenGL counts up from the bottom). To show a picture on the screen of the Jaric app, send its pixels with the `gfx` messages (the library `<gamej>` shows how), or use the library `<gpu>`, which sends *commands* to the app and lets the app draw on the screen.
 
 ## Lesson 63. A triangle and a shader
+
 
 The chip runs small programs called *shaders*, written in GLSL (a language like C). A *vertex shader* places each corner of a triangle; a *fragment shader* gives each pixel its colour. `gl.program(vertex, fragment)` compiles both and links them; it gives 0 and fills `gl.log` when a shader has a mistake (the message of the driver tells the line).
 
@@ -2340,6 +2372,7 @@ It prints `255 0`: orange inside, black outside. `Floats` is a block of memory o
 
 ## Lesson 64. The chip as a calculator: compute shaders
 
+
 OpenGL ES 3.1 can run a shader that draws nothing and only *computes*. You give it a block of numbers, tell how many groups of threads to start, and the chip runs the same small program on every number at once (hundreds at the same time). `gl.compute(source, data, groups_x, groups_y, groups_z)` does all the steps and gives the changed numbers back.
 
 ```jk
@@ -2365,6 +2398,7 @@ It prints `1.000000 11.000000 31.000000`. The chip is not faster for a single nu
 
 ## Lesson 65. Vulkan: asking the chip
 
+
 Vulkan is the modern interface: more to write, more control, less work for the driver. `<vulkan>` is the first step: it makes an *instance*, finds the chip and tells what it can do. The other steps (device, queue, buffers, pipelines) are built in the same way: a structure in memory, a function found by name, `Native::call`.
 
 ```jk
@@ -2384,6 +2418,7 @@ int main() {
 On the author's phone: `Mali-G76, Vulkan 1.1.97`, 7460 MB, one queue family that can compute. Build it with `jcmp -dyn`. A Vulkan structure is a block of bytes with the fields at fixed places (the specification gives the offsets): `Native::poke32(address + offset, value)` writes a field; look at the source of `<vulkan>` (`jcmp -showlib vulkan`) to see how `VkApplicationInfo` and `VkInstanceCreateInfo` are filled.
 
 ## Lesson 66. Games: Jaric Engine
+
 
 `makej init -game` makes a project with a small game and five lessons (`makej play1` .. `play5`). The library `<gamej>` is the engine: the loop is yours (`while game.running()`), the engine gives the keys and touches, the time of a turn (`g.dt`), drawing (`clear rect circle line text art`), collision (`Game::overlap`) and sound. In a terminal it draws with half blocks; in the Jaric app it draws on a surface; `makej apk` makes it an Android app, `makej pack` a `.jc` package.
 
@@ -2410,6 +2445,7 @@ int main() {
 For the chip itself use `<gpu>` in the app (triangles, pictures, tints: one batch of commands per picture) or `<opengl3>` / `<vulkan>` in a dynamic program. The plan of the engine (layers, a scene system like Godot's, the API like MonoGame's) is in the documents of the Jaric project.
 
 ## Lesson 67. Talking to the web: `<web>`
+
 
 Most services of the net speak HTTP. `#import <web>` is a client: one call, the answer has a **status** (200 is good, 404 not found ...), the **headers** and the **body**. A status of 400 or more is *not* an error of the program (the body usually explains it); only a connection that fails is an `Error`.
 
@@ -2462,6 +2498,7 @@ int main() {
 
 ## Lesson 68. A bot that answers: `<telegram>` and `<discord>`
 
+
 A bot is a program that has an account on a chat service. You make the bot in the service (Telegram: the chat with BotFather; Discord: the developer portal), you get a **token** (a long secret text: keep it out of your files and out of git; read it from an environment variable or a file that only you can read), and the program talks to the service with `<web>` underneath.
 
 ```jk
@@ -2509,6 +2546,7 @@ int main() {
 Rules of good bots: answer only to people (`by_bot` of a Discord message tells), do not ask too fast (HTTP 429 means wait), never print the token, and test with a bot of your own on a chat of your own before you invite it anywhere.
 
 ## Lesson 69. Live news: WebSocket and the Discord Gateway
+
 
 Asking again and again ("polling") wastes time. A **WebSocket** is a connection that stays open: the server sends a message the moment it has one. `<websocket>` makes one: `Ws::connect("wss://host/path", "")` gives a `WebSocket`; `send_text`, `recv` (waits for the next whole message) and `recv_wait(ms)` (waits at most `ms` milliseconds: kind 0 when nothing came).
 
@@ -2562,6 +2600,7 @@ int main() {
 
 ## Lesson 70. Numbers that learn: tensors and gradients
 
+
 A neural network is a pile of multiplications whose numbers are adjusted until the answers are right. `<neuron>` gives the pieces. A **`Tensor32`** is a table of 32-bit floats (rows x columns). A **`Graph`** records the calculation, so that it can go backwards and tell how every number should change (a **gradient**).
 
 The smallest learning program: find `w` and `b` so that `y = w x + b` fits points that lie on `y = 2x + 1`.
@@ -2601,6 +2640,7 @@ The words: **loss** = how wrong the answers are (smaller is better); **learning 
 **Try:** change 300 to 30 steps and watch `w` stop short; change the points to `y = -3x + 4`.
 
 ## Lesson 71. Teaching a network: layers, batches and AdamW
+
 
 One neuron fits a line. To learn a curve or to tell classes apart you need layers with a bend between them. A **`Linear`** layer is `x @ w + b`; between layers put `tanh` (or `relu`) or the layers collapse into one line. The classic test is XOR, which no single line can do.
 
@@ -2646,6 +2686,7 @@ For many examples use **mini-batches**: `shuffled(n, seed)` gives a mixed order 
 
 ## Lesson 72. A language model that you train on the phone
 
+
 A language model reads text and learns which letter (or word) comes next. `Gpt` of `<neuron>` is a small GPT: embeddings, blocks with attention (every place looks at the places before it) and a layer that scores the next token. It works **byte by byte**, so Thai, English and code need no tokenizer.
 
 ```jk
@@ -2679,6 +2720,7 @@ A model trained on a phone has thousands to a few million numbers and reads mega
 
 ## Lesson 73. Running models that others made: GGUF and `<llama>`
 
+
 Big models are trained elsewhere and shared as **GGUF** files (the format of llama.cpp). `<gguf>` reads them (the header, the words, the tables of numbers) and `<llama>` runs the Llama family on the CPU: RMS norm, rotary positions, grouped-query attention, a gated feed-forward and a cache that remembers the earlier tokens. The weights are usually **quantised** (Q8_0, Q4_0: a byte or four bits per weight with a scale for every 32 weights): the file is 4-8 times smaller and, kept as bytes in memory, a product moves 4 times less memory (the phone's memory bandwidth is the limit, not its multiplications). The product uses the int8 dot product of the chip (`i8x16`, lesson 74).
 
 ```jk
@@ -2701,6 +2743,7 @@ int main() {
 The temperature decides how daring the choice is (0 = always the most likely token); `top-k` keeps the k best, `top-p` the best ones that together hold p of the chance; the same seed gives the same text. For one token at a time use `m.step(token)` (it gives the scores of the next token) and `m.sample(scores, temp, top_k, top_p)`. The same from the shell: `neuron llama MODEL.gguf "start"` and `neuron bench MODEL.gguf` (tokens per second). On a Kirin 990 the 15 M model writes about 120 tokens a second; a model of 500 M numbers needs a quarter of a gigabyte per token to be read, so a few tokens a second is the wall until the memory gets faster.
 
 ## Lesson 74. Fast code: what the language costs and how to ask for speed
+
 
 Measure before you change. `bench/lang.jk` of the repository times the small costs on your phone. What it showed on a Kirin 990 (one core):
 
@@ -2741,6 +2784,7 @@ int main() {
 
 ## Lesson 75. Programs and libraries from the net: `jc`
 
+
 `jc` brings things to the phone. Four kinds, one command each:
 
 ```text
@@ -2758,6 +2802,7 @@ To share your own tool: a folder with the program, `build.sh`, `test.sh`, `READM
 # Part 4: from the numbers to the machine
 
 ## Lesson 76. Counting in base 2 and base 16
+
 
 A computer has only two digits, 0 and 1, because a wire is on or off. A number in **base 2** is written with them: `1011` means 1x8 + 0x4 + 1x2 + 1x1 = 11. Each place is worth twice the place on its right: 1, 2, 4, 8, 16, 32, 64, 128 ... A place is a **bit**; eight bits are a **byte** (0 to 255). **Base 16** (hex) has sixteen digits, `0-9` and `a-f`, and one hex digit is exactly four bits, which is why people read bytes in hex: `0xB0` is `1011 0000`.
 
@@ -2805,6 +2850,7 @@ int main() {
 
 ## Lesson 77. Negative numbers: two's complement
 
+
 How are negative numbers made of bits? The CPU uses **two's complement**: for 8 bits, the number -1 is `11111111`, -2 is `11111110`, ... -128 is `10000000`. The highest bit is the sign (1 = negative) and it is worth -128 instead of +128. The rule to negate: **flip every bit and add one**, so that `x + (-x)` is all zeros plus a carry that falls off the end. Then the same adder circuit adds positive and negative numbers, and subtraction needs no new part.
 
 ```jk
@@ -2841,6 +2887,7 @@ An `int` of J2K has 64 bits, so its smallest number is -2^63 and its largest 2^6
 **Try:** what are 100 + 100 in an i8, 0 - 1 in a u8? Make the answer by hand with bits first.
 
 ## Lesson 78. Numbers with a point, inside
+
 
 A `double` is 64 bits in three parts (**IEEE 754**): 1 bit of sign, 11 bits of exponent, 52 bits of fraction. The value is `(-1)^sign x 1.fraction x 2^(exponent - 1023)`. A `float` has 1 + 8 + 23 bits. So the numbers that a float can hold are not evenly spread: there are as many between 1 and 2 as between 1024 and 2048. And a number like 0.1 has no exact form in base 2 (as 1/3 has none in base 10), which is why `0.1 + 0.2` is not exactly `0.3`.
 
@@ -2883,6 +2930,7 @@ Compare numbers that are measured with a small margin (`abs(a - b) < 0.000001`),
 **Try:** show the bits of 3.0 and work out the sign, exponent and fraction by hand; find the smallest `x` for which `1.0 + x == 1.0` (start with 1.0 and halve it).
 
 ## Lesson 79. From logic gates to an adder
+
 
 A CPU is made of **gates**: AND, OR, XOR, NOT. With them you can add. Adding two bits `a + b` gives a sum bit and a carry bit: the sum is `a xor b` and the carry is `a and b` (a **half adder**). With a carry coming in too, it is a **full adder**, and eight of them in a row, each passing its carry to the next, add two bytes (a **ripple adder**). This is what the `add` instruction is, in silicon.
 
@@ -2933,6 +2981,7 @@ The real CPU does the eight (or 64) places at once with a clever **carry-lookahe
 **Try:** build a subtractor from `add8` (negate with the rule of lesson 77: flip and add one); build a 4-bit comparator with gates only.
 
 ## Lesson 80. A tiny CPU of our own
+
 
 What does a processor do? It repeats three steps forever: **fetch** the next instruction from memory at the place of the **program counter**, **decode** it (which operation, which registers), **execute** it. Here is a whole CPU in a few lines: four registers, a memory of bytes, and seven instructions that are one byte for the operation and one or two bytes for the numbers. It is a **virtual machine**; a real chip is the same story with more instructions and more speed.
 
@@ -2990,6 +3039,7 @@ Every program is just numbers in memory; the CPU does not know which bytes are c
 **Try:** add an instruction `7 r s` that multiplies; write a program with it that computes 5 x 4 x 3; add a memory instruction `load r a` / `store r a`.
 
 ## Lesson 81. An assembler for the tiny CPU
+
 
 Numbers are hard for people, so an **assembler** turns text like `add r0, r1` into the numbers (**machine code**). It reads a line, looks up the word (the **mnemonic**), reads the operands and writes the bytes. Labels (names of places) are resolved in a second pass because a jump may go forward. Here is a small one for the machine of lesson 80.
 
@@ -3062,6 +3112,7 @@ The real assembler of J2K is the same in kind (`jcmp/jc_asm.j`), only the instru
 
 ## Lesson 82. The real thing: an ARM64 instruction as 32 bits
 
+
 Every instruction of the ARM64 CPU of the phone is exactly **32 bits**, cut into fields. `add x1, x1, x2` (64-bit register add) is:
 
 ```
@@ -3116,6 +3167,7 @@ Look at the machine code that the compiler makes for your own function with `jcm
 
 ## Lesson 83. Laying out the output: columns, digits, hex
 
+
 `jout <<` prints a value as it is. For tables, money and addresses you want it laid out: so many digits, a column of fixed width, a number in base 16. There is no format string (`%5.2f`) in J2K and no new syntax: the layout is done by ordinary functions, and you put them inside the stream.
 
 | function | gives | example |
@@ -3160,6 +3212,7 @@ ratio 0.667   hex beef   bits 100101
 
 ## Lesson 84. The screens of an app: `<ui>`
 
+
 An Android app made with `makej init -apk` draws every frame itself with OpenGL ES. `<ui>` (install with `jc lib install ui`) gives it buttons, labels, switches and sliders. It works in *immediate mode*: each frame you call the widgets from the top down; a widget draws itself and **tells you what happened**, so there is nothing to keep in step with your data.
 
 ```text
@@ -3183,6 +3236,7 @@ A button clicks when the finger goes down **and up** inside its box (a user who 
 
 ## Lesson 85. An apk without the Android tools: `apkj`
 
+
 An apk is a zip file with five kinds of part: a binary `AndroidManifest.xml`, a (nearly empty) `resources.arsc`, a `classes.dex` (the small Java part that starts your native library), your `libgame.so`, and a signature. The usual tools (`aapt2`, `ecj`, `d8`, `zipalign`, `apksigner`, Java) are heavy on a phone. `apkj` is a tool written in J2K that makes all of it itself, and the signature too (ECDSA P-256 with its own certificate):
 
 ```text
@@ -3193,6 +3247,222 @@ apkj build manifest.toml MyApp.apk lib/arm64-v8a/libgame.so=_out/libgame.so asse
 `makej apk` calls it for you when the Android tools are missing (or with `MAKEJ_APKJ=1`) for an app with `render = "gl"` and no `icon.png`. The check is made with the tools that already exist: `apksigner verify MyApp.apk` says `Verifies`, `aapt2 dump badging MyApp.apk` shows the name and the version, and `unzip -t` finds no error. If a tool is missing, `makej` says what to install (`jc install apkj` or the packages) instead of failing with a long message.
 
 **Try:** make the manifest with `apkj manifest manifest.toml AndroidManifest.xml` and open the result with `aapt2 dump xmltree MyApp.apk --file AndroidManifest.xml` (after `apkj build`); change `version` in `manifest.toml` and watch `versionCode` follow (`major * 10000 + minor * 100 + patch`).
+
+## Lesson 86. Looking at part of an array: Span
+
+Sometimes a function should work on a part of an array: the middle, the last ten, one row of a table. Copying that part wastes time and memory. A **Span** is a view: it points into the array and remembers where it starts and how long it is. `a[2..6]` makes a Span of the elements 2, 3, 4 and 5 (the end is not included, like `for i in 2..6`). The Span does not copy anything: writing through it changes the array.
+
+```jk
+#import <stdlib>
+
+using stdlib;
+// the sum of a part of an array, without copying it
+int total(Span<int> s) {
+    int t = 0;
+    for i in 0..s.len { t += s.get(i); }
+    return t;
+}
+
+void main() {
+    int[] a = arr(10);
+    for i in 0..10 { a.push(i * i); }          // 0 1 4 9 16 25 36 49 64 81
+
+    Span<int> mid = a[2..6];                   // the elements 2, 3, 4, 5: a view, not a copy
+    jout << mid.len << " elements, the first is " << mid.get(0) << "\n";
+    jout << "sum of the middle: " << total(mid) << "\n";
+
+    mid.set(0, 100);                           // writes through to the array
+    jout << "a[2] is now " << a[2] << "\n";
+
+    Span<int> inner = mid.sub(1, 3);           // a view of a view: the elements 3 and 4 of the array
+    jout << "inner: " << inner.get(0) << " " << inner.get(1) << "\n";
+}
+
+```
+
+Output:
+
+```
+4 elements, the first is 4
+sum of the middle: 54
+a[2] is now 100
+inner: 9 16
+```
+
+A Span has `len`, `get(i)`, `set(i, v)` and `sub(from, to)` (a view of a view). An index outside the Span is an error that you can `catch` ("span index out of range"), not a silent read of other memory. `to_array()` makes a real copy when you need one. Pass a Span to a function whenever it only needs to look at a range: the function works for the whole array, a part of it, or a part of a part.
+
+**Try:** write `int biggest(Span<int> s)` and call it on the first half and on the second half of an array.
+
+## Lesson 87. Real text: reading UTF-8 and the library <font>
+
+A text is bytes. The letters of English take one byte each, but a Thai letter takes three (UTF-8), so a text of 9 letters can be 21 bytes long. A font library must read the bytes and build the number of every character (its code point) before it can ask the font for the shape. The program below does that by hand.
+
+```jk
+#import <stdlib>
+using stdlib;
+
+// a text is bytes (UTF-8): a Thai letter is three bytes. This is how a font library reads it: byte by byte, building the number of each character.
+int next_char(String s, int i, int^ len) {
+    int c = s[i] & 255;
+    if c < 128 { len^ = 1; return c; }
+    if c >= 0xe0 { len^ = 3; return ((c & 15) << 12) | ((s[i + 1] & 63) << 6) | (s[i + 2] & 63); }
+    len^ = 2;
+    return ((c & 31) << 6) | (s[i + 1] & 63);
+}
+
+int main() {
+    String s = "Hi สวัสดี";
+    jout << "bytes: " << s.len << "\n";
+    int i = 0;
+    int letters = 0;
+    while i < s.len {
+        int n = 1;
+        int cp = next_char(s, i, @n);
+        jout << "U+" << padl(tohex(cp), 4) << " ";
+        letters += 1;
+        i += n;
+    }
+    jout << "\nletters: " << letters << "\n";
+    return 0;
+}
+
+```
+
+Output:
+
+```
+bytes: 21
+U+  48 U+  69 U+  20 U+ e2a U+ e27 U+ e31 U+ e2a U+ e14 U+ e35 
+letters: 9
+```
+
+`<font>` (install with `jc lib install font`) does the rest: it opens a TrueType file (the phone has them in `/system/fonts`), finds the glyph of each code point in the table `cmap`, reads its outline from `glyf`, and fills the outline into pixels with smooth edges. The shape of a letter is made once and kept as a small picture, then drawn like any picture.
+
+```jk-no
+Font f;
+f.open("/system/fonts/Roboto-Regular.ttf");
+f.add("/system/fonts/NotoSansThai-Regular.ttf");   // for what the first font lacks
+f.cache("cache");                                   // where the pictures of the letters are kept
+double right = f.draw(canvas, 20.0, 40.0, "Hello สวัสดี", 24.0, 0xffffffff);
+```
+
+Thai needs a little more than letters in a row: the marks (a vowel or a tone mark over a letter) have no width of their own and sit over the letter before them; when a tone mark comes over a vowel it is lifted. The library does this. `<ui>` takes a font with `u.font(@f, 26.0)` and then draws every word of its buttons and lists with it.
+
+**Try:** change the text to your name and print its length in bytes and in letters.
+
+## Lesson 88. Light, shadow and glow: how colours mix
+
+A colour on the screen is `0xAARRGGBB`: alpha, red, green, blue, each 0 to 255. Drawing a colour with some alpha over another mixes them channel by channel: `result = top * alpha + under * (1 - alpha)`. A shadow, a glow and the smooth edge of a letter are all this one rule, repeated.
+
+```jk
+#import <stdlib>
+using stdlib;
+
+// a colour is 0xAARRGGBB. Drawing a colour with some alpha over another one mixes them channel by channel: this is what a screen does for every
+// dot of a shadow, a glow or the edge of a letter.
+int channel(int c, int shift) { return (c >> shift) & 255; }
+
+int blend(int top, int under) {
+    int a = channel(top, 24);
+    int r = (channel(top, 16) * a + channel(under, 16) * (255 - a)) / 255;
+    int g = (channel(top, 8) * a + channel(under, 8) * (255 - a)) / 255;
+    int b = (channel(top, 0) * a + channel(under, 0) * (255 - a)) / 255;
+    return 0xff000000 | (r << 16) | (g << 8) | b;
+}
+
+int main() {
+    int blue = 0xff0000ff;
+    int half_red = 0x80ff0000;
+    jout << "half red over blue: " << tohex(blend(half_red, blue)) << "\n";
+    jout << "a quarter of white over black: " << tohex(blend(0x40ffffff, 0xff000000)) << "\n";
+    // a glow is many circles with a little alpha on top of each other: the centre gets the sum
+    int glow = 0xff000000;
+    for k in 0..8 { glow = blend(0x20ffffff, glow); }
+    jout << "eight layers of a faint white: " << tohex(glow) << "\n";
+    return 0;
+}
+
+```
+
+Output:
+
+```
+half red over blue: ff80007f
+a quarter of white over black: ff404040
+eight layers of a faint white: ffa4a4a4
+```
+
+`<ui>` 0.2.0 uses exactly this: a soft shadow is a few bigger and bigger rounded boxes with a little alpha; a glow is circles on top of each other; the light under your finger is a glow at the place of the touch. `<softcanvas>` is a canvas that draws into memory with the same rule, so you can run a screen without a screen and look at the picture (`save_ppm`) or test the pixels:
+
+```jk-no
+SoftCanvas sc;  sc.make(400, 800);
+Ui u;  u.start();  u.theme(0);                // 0 midnight, 1 aurora, 2 sunset, 3 light, 4 neon
+u.begin(@sc, 400.0, 800.0);
+u.title("My App");  u.button("Start");  u.tabs("Home|Search|Me", @tab);
+u.end();
+sc.save_ppm("screen.ppm");
+```
+
+The tab bar has a pill that slides to the chosen tab and stretches a little while it moves: each frame the pill moves a part of the way to where it should be (`pos += (want - pos) * dt * 11`), which is how almost every smooth movement in a UI is made.
+
+**Try:** blend `0x80ffffff` over each of the five theme background colours and see which is brightest.
+
+## Lesson 89. Keys from one secret: HKDF and the tool jmaip
+
+One secret can make as many keys as you need, one for each purpose, so that a leak of one key does not open the others. This is HKDF (RFC 5869): extract a strong key from the secret, then expand it with a label for each purpose.
+
+```jk
+#import <stdlib>
+using stdlib;
+
+// a key made from a secret: HKDF turns one secret into as many keys as you need, one for each purpose. (jmaip does this for every file and passkey.)
+int main() {
+    char secret[32];
+    for i in 0..32 { secret[i] = (char)(i * 7 + 1); }
+    char salt[4];
+    salt[0] = 'j'; salt[1] = 'm'; salt[2] = 'a'; salt[3] = 'i';
+    char prk[32];
+    Crypto::hkdf_extract(256, (char^)@salt, 4, (char^)@secret, 32, (char^)@prk);
+    char info_a[8];
+    info_a[0] = 'f'; info_a[1] = 'i'; info_a[2] = 'l'; info_a[3] = 'e';
+    char info_b[8];
+    info_b[0] = 'n'; info_b[1] = 'o'; info_b[2] = 't'; info_b[3] = 'e';
+    char ka[16];
+    char kb[16];
+    Crypto::hkdf_expand(256, (char^)@prk, 32, (char^)@info_a, 4, (char^)@ka, 16);
+    Crypto::hkdf_expand(256, (char^)@prk, 32, (char^)@info_b, 4, (char^)@kb, 16);
+    String ha = "";
+    String hb = "";
+    for i in 0..4 { ha = ha + padl(tohex(ka[i] & 255), 2); hb = hb + padl(tohex(kb[i] & 255), 2); }
+    jout << "key for files: " << ha << "...\n";
+    jout << "key for notes: " << hb << "...\n";
+    jout << "different: " << (ha != hb) << "\n";
+    return 0;
+}
+
+```
+
+Output:
+
+```
+key for files: a7f54c14...
+key for notes: 4b5db8cb...
+different: true
+```
+
+The tool **jmaip** (`jc install jmaip`) is built on this. It keeps a vault locked by a passphrase, makes **passkeys** (P-256 keys that sign a challenge, like the keys of WebAuthn), and encrypts files with a key that comes from a passkey, so only the one who has the passkey can open them:
+
+```jk-no
+jmaip init                                  # the vault (a passphrase)
+jmaip key new phone                         # a passkey; prints its public key
+jmaip key sign phone "login:7f3a"           # the signature of a challenge
+jmaip enc -k phone notes.txt                # notes.txt.jmaip, sealed with AES-256-GCM
+jmaip dec notes.txt.jmaip                   # the passkey is found from the file
+```
+
+The key for a file is `HKDF(signature of a fixed text by the passkey, random salt)`, so a changed file or a wrong key is refused, never half-opened. Remember the limit: a passkey that is a file is only as safe as the files and the passphrase; the face or fingerprint of the phone comes later, as the thing that releases the vault key.
+
+**Try:** make a third key with the label `"backup"` and check that it differs from the other two.
 
 ## Where next
 

@@ -3697,6 +3697,489 @@ bool pt_pushpop() {
     return changed;
 }
 
+
+// ---- loop-invariant motion (S3): in a rotated loop (the head is "  .align 16 / Lnnn:" and one jump goes back to it) a null check
+// `cmp xN, 0 / b.eq P` and a load `ldr xK, [xN, #imm]` (or `ldr dK`) at the start of the body move to the room that regs_post
+// left before the ".align" when xN does not change in the loop, the loop makes no call and no store, and nobody jumps into the
+// middle of the loop. The loop is entered only by the fall through, so the moved lines run once before the first pass and
+// the register holds the same value as the pass would have loaded.
+
+// does the parsed line (slot s) end the straight run (a branch) ?
+bool pt_is_branch(int s) {
+    int m = s * 16;
+    if pt_m[m] == 'b' && (pt_m[m + 1] == 0 || pt_m[m + 1] == '.') { return true; }
+    return pt_mn(s, "cbz") || pt_mn(s, "cbnz") || pt_mn(s, "tbz") || pt_mn(s, "tbnz") || pt_mn(s, "br") || pt_mn(s, "ret");
+}
+
+// a line that may change memory or leave the function
+bool pt_is_storeish(int s) {
+    int m = s * 16;
+    // a store of an array element `str xV, [xBase, xIndex, lsl #k]` writes the data of an array, never a header or a frame cell
+    if (pt_mn(s, "str") || pt_mn(s, "strb") || pt_mn(s, "strh")) && pt_no[s] == 2 {
+        int o = (s * 4 + 1) * 40;
+        int i = 0;
+        while pt_o[o + i] != 0 && pt_o[o + i] != ',' { i += 1; }
+        if pt_o[o + i] == ',' && pt_o[o + i + 1] == ' ' && (pt_o[o + i + 2] == 'x' || pt_o[o + i + 2] == 'w') { return false; }
+    }
+    if pt_mn(s, "bl") || pt_mn(s, "blr") || pt_mn(s, "svc") || pt_mn(s, "dmb") || pt_mn(s, "dsb") || pt_mn(s, "isb") || pt_mn(s, "swp") { return true; }
+    if pt_m[m] == 's' && pt_m[m + 1] == 't' { return true; }
+    if pt_m[m] == 'l' && pt_m[m + 1] == 'd' && (pt_m[m + 2] == 'x' || pt_m[m + 2] == 'a') { return true; }
+    if pt_m[m] == 'c' && pt_m[m + 1] == 'a' && pt_m[m + 2] == 's' { return true; }
+    return false;
+}
+
+// does the parsed line (slot s) write the register r (0..30 x, 32..63 d)?
+bool pt_wr(int s, int r) {
+    if pt_is_branch(s) || pt_mn(s, "cmp") || pt_mn(s, "cmn") || pt_mn(s, "tst") || pt_mn(s, "fcmp") || pt_mn(s, "fcmpe") || pt_mn(s, "prfm") { return false; }
+    int m0 = s * 16;
+    bool isst = pt_m[m0] == 's' && pt_m[m0 + 1] == 't';        // str, strb, strh, stp, stur ...: the first operand is read, not written
+    if !isst && pt_no[s] >= 1 && pt_rd(s, 0, r) { return true; }
+    if pt_mn(s, "ldp") && pt_no[s] >= 2 && pt_rd(s, 1, r) { return true; }
+    if pt_no[s] >= 3 && r < 32 {
+        int o = (s * 4 + 1) * 40;
+        if pt_o[o] == '[' && pt_has_reg(s, 1, r) { return true; }       // a base register that is written back
+    }
+    int k = 0;
+    while k < pt_no[s] {
+        int o2 = (s * 4 + k) * 40;
+        int e = 0;
+        while pt_o[o2 + e] != 0 { e += 1; }
+        if e > 0 && pt_o[o2 + e - 1] == '!' && r < 32 && pt_has_reg(s, k, r) { return true; }
+        k += 1;
+    }
+    return false;
+}
+
+// does the parsed line (slot s) mention the register r in any operand?
+bool pt_mentions(int s, int r) {
+    int k = 0;
+    while k < pt_no[s] {
+        if pt_rd(s, k, r) { return true; }
+        k += 1;
+    }
+    return false;
+}
+
+bool pt_flag_setter(int s) {
+    return pt_mn(s, "cmp") || pt_mn(s, "cmn") || pt_mn(s, "tst") || pt_mn(s, "fcmp") || pt_mn(s, "fcmpe") || pt_mn(s, "subs") || pt_mn(s, "adds") || pt_mn(s, "ands") || pt_mn(s, "bics") || pt_mn(s, "negs");
+}
+
+bool pt_flag_reader(int s) {
+    int m = s * 16;
+    if pt_m[m] == 'b' && pt_m[m + 1] == '.' { return true; }
+    return pt_mn(s, "csel") || pt_mn(s, "csinc") || pt_mn(s, "csinv") || pt_mn(s, "csneg") || pt_mn(s, "cset") || pt_mn(s, "csetm") || pt_mn(s, "cinc") || pt_mn(s, "cinv") || pt_mn(s, "cneg") || pt_mn(s, "fcsel") || pt_mn(s, "adc") || pt_mn(s, "adcs") || pt_mn(s, "sbc") || pt_mn(s, "sbcs") || pt_mn(s, "ccmp") || pt_mn(s, "ccmn");
+}
+
+// from the line `from` on, the flags are set before anybody reads them (inside the loop body, up to the line jj)
+bool pt_flags_free(int from, int jj) {
+    int q = from;
+    while q >= 0 && q <= jj {
+        if !pt_parse(2, q) { return false; }
+        if pt_flag_setter(2) { return true; }
+        if pt_flag_reader(2) || pt_is_branch(2) { return false; }
+        q = pt_next(q);
+    }
+    return false;
+}
+
+// the number n of the label operand "Ln" that is the last operand of the parsed line (slot s), or -1
+int pt_target_num(int s) {
+    if pt_no[s] < 1 { return 0 - 1; }
+    int o = (s * 4 + pt_no[s] - 1) * 40;
+    if pt_o[o] != 'L' { return 0 - 1; }
+    int i = 1;
+    int v = 0;
+    if pt_o[o + i] < '0' || pt_o[o + i] > '9' { return 0 - 1; }
+    while pt_o[o + i] >= '0' && pt_o[o + i] <= '9' {
+        v = v * 10 + (pt_o[o + i] - '0');
+        i += 1;
+    }
+    if pt_o[o + i] != 0 { return 0 - 1; }
+    return v;
+}
+
+// the register number of the base of the operand "[xN, #imm]" or "[xN]" (slot s, operand k), or -1
+int pt_base_reg(int s, int k) {
+    int o = (s * 4 + k) * 40;
+    if pt_o[o] != '[' || pt_o[o + 1] != 'x' { return 0 - 1; }
+    int i = 2;
+    int v = 0;
+    if pt_o[o + i] < '0' || pt_o[o + i] > '9' { return 0 - 1; }
+    while pt_o[o + i] >= '0' && pt_o[o + i] <= '9' {
+        v = v * 10 + (pt_o[o + i] - '0');
+        i += 1;
+    }
+    if pt_o[o + i] == ']' && pt_o[o + i + 1] == 0 { return v; }
+    if pt_o[o + i] == ',' && pt_o[o + i + 1] == ' ' && pt_o[o + i + 2] == '#' {
+        int j = o + i + 3;
+        if pt_o[j] == '-' { j += 1; }
+        if pt_o[j] < '0' || pt_o[j] > '9' { return 0 - 1; }
+        while pt_o[j] >= '0' && pt_o[j] <= '9' { j += 1; }
+        if pt_o[j] == ']' && pt_o[j + 1] == 0 { return v; }
+    }
+    return 0 - 1;
+}
+
+// the register number (0..30 x, 32..63 d or s) of operand k of slot s when it is a plain register, or -1
+int pt_reg_of(int s, int k) {
+    int o = (s * 4 + k) * 40;
+    char c = pt_o[o];
+    if (c != 'x' && c != 'd' && c != 's') || pt_o[o + 1] < '0' || pt_o[o + 1] > '9' { return 0 - 1; }
+    int i = 1;
+    int v = 0;
+    while pt_o[o + i] >= '0' && pt_o[o + i] <= '9' {
+        v = v * 10 + (pt_o[o + i] - '0');
+        i += 1;
+    }
+    if pt_o[o + i] != 0 || v > 31 { return 0 - 1; }
+    if c == 'x' { return v; }
+    return 32 + v;
+}
+
+// is the operand k of slot s "[xN]" or "[xN, #0]"?
+bool pt_zero_off(int s, int k) {
+    int o = (s * 4 + k) * 40;
+    if pt_o[o] != '[' || pt_o[o + 1] != 'x' { return false; }
+    int i = 2;
+    while pt_o[o + i] >= '0' && pt_o[o + i] <= '9' { i += 1; }
+    if pt_o[o + i] == ']' && pt_o[o + i + 1] == 0 { return true; }
+    return pt_o[o + i] == ',' && pt_o[o + i + 1] == ' ' && pt_o[o + i + 2] == '#' && pt_o[o + i + 3] == '0' && pt_o[o + i + 4] == ']' && pt_o[o + i + 5] == 0;
+}
+
+// the register F that the lines lab..jj do not mention and that nobody needs at the head of the loop, or -1
+// (floats: s16..s23 are used; whole numbers: x1..x15 but not x8)
+int pt_free_reg(int lab, int jj, bool fl) {
+    int f = 1;
+    if fl { f = 48; }
+    int top = 15;
+    if fl { top = 55; }
+    while f <= top {
+        if fl || (f != 8 && f != 16 && f != 17) {
+            bool used = false;
+            int w = pt_next(lab);
+            while w >= 0 && w <= jj {
+                if pt_parse(3, w) && pt_mentions(3, f) { used = true; break; }
+                w = pt_next(w);
+            }
+            if !used && pt_dead(lab, f, 60) { return f; }
+        }
+        f += 1;
+    }
+    return 0 - 1;
+}
+
+// the register rk is written at q and written again later in a straight run: the first value gets the register f
+// (the lines q .. the next write, the next write itself only when it does not read rk)
+bool pt_rename_run(int q, int jj, int rk, int f) {
+    int w = q;
+    int last = 0 - 1;
+    while w >= 0 && w <= jj {
+        if !pt_parse(2, w) { return false; }
+        if pt_is_branch(2) { return false; }
+        if w != q && pt_wr(2, rk) {
+            // the next write: its sources must not read rk
+            int k = 1;
+            while k < pt_no[2] { if pt_rd(2, k, rk) { return false; } k += 1; }
+            last = w;
+            break;
+        }
+        w = pt_next(w);
+    }
+    if last < 0 { return false; }
+    // no w-form of the register in the run (whole numbers)
+    w = q;
+    while rk < 32 && w < last {
+        if pt_txt[w * 64] != 0 && pt_parse(2, w) {
+            int k2 = 0;
+            while k2 < pt_no[2] {
+                int o = (2 * 4 + k2) * 40;
+                int c = 0;
+                while pt_o[o + c] != 0 {
+                    if pt_o[o + c] == 'w' && (c == 0 || pt_o[o + c - 1] < 'a' || pt_o[o + c - 1] > 'z') && pt_o[o + c + 1] >= '0' && pt_o[o + c + 1] <= '9' {
+                        int v = 0;
+                        int c3 = c + 1;
+                        while pt_o[o + c3] >= '0' && pt_o[o + c3] <= '9' { v = v * 10 + (pt_o[o + c3] - '0'); c3 += 1; }
+                        if v == rk { return false; }
+                    }
+                    c += 1;
+                }
+                k2 += 1;
+            }
+        }
+        w += 1;
+    }
+    int pass = 0;
+    while pass < 3 {
+        char rep[8];
+        char letter = 'x';
+        int fr = f;
+        int rr = rk;
+        if rk >= 32 {
+            if pass == 0 { letter = 's'; }
+            if pass == 1 { letter = 'd'; }
+            if pass == 2 { pass = 3; break; }
+            fr = f - 32;
+            rr = rk - 32;
+        }
+        rep[0] = letter;
+        int rl = 1;
+        if fr >= 10 { rep[1] = (char)('0' + fr / 10); rl = 2; }
+        rep[rl] = (char)('0' + fr % 10);
+        rep[rl + 1] = 0;
+        pt_sub_prefix = letter;
+        w = q;
+        while w < last {
+            if pt_txt[w * 64] != 0 && pt_parse(2, w) {
+                pt_subst(2, rr, (char^)@rep, false);
+                pt_set(w, (char^)@pt_line);
+            }
+            w += 1;
+        }
+        pass += 1;
+        if rk < 32 { break; }
+    }
+    return true;
+}
+
+int pt_hl[8];
+bool pt_hoist_loop(int a, int lab, int jj, int used) {
+    // the body: no call, no store (a store of an array element is allowed); which registers are written
+    int bad = 0;                      // registers that are written by something else than `add xA, xB, xC (, lsl #k)`
+    int q = pt_next(lab);
+    while q >= 0 && q <= jj {
+        if pt_parse(0, q) {
+            bool addreg = pt_mn(0, "add") && pt_no[0] >= 3 && (pt_o[(0 * 4 + 2) * 40] == 'x' || pt_o[(0 * 4 + 2) * 40] == 'w') && pt_isreg(0, 0);
+            int r = 0;
+            while r < 31 {
+                if pt_wr(0, r) && !(addreg && pt_reg_of(0, 0) == r) { bad = bad | (1 << r); }
+                r += 1;
+            }
+        }
+        q = pt_next(q);
+    }
+    int gm = 0;                       // registers that hold an element address made by an `add` in this pass
+    q = pt_next(lab);
+    while q >= 0 && q <= jj {
+        if pt_parse(0, q) {
+            if pt_mn(0, "add") && pt_no[0] >= 3 && (pt_o[(0 * 4 + 2) * 40] == 'x' || pt_o[(0 * 4 + 2) * 40] == 'w') && pt_isreg(0, 0) {
+                int ra = pt_reg_of(0, 0);
+                if ra >= 0 && ra < 31 && ((bad >> ra) & 1) == 0 { gm = gm | (1 << ra); }
+            } else if pt_is_storeish(0) {
+                bool elem = false;
+                if (pt_mn(0, "str") || pt_mn(0, "strb") || pt_mn(0, "strh")) && pt_no[0] == 2 {
+                    int rb0 = pt_base_reg(0, 1);
+                    bool zero = pt_zero_off(0, 1);
+                    if rb0 >= 0 && rb0 < 31 && ((gm >> rb0) & 1) == 1 && zero { elem = true; }
+                }
+                if !elem { return false; }
+            }
+        }
+        q = pt_next(q);
+    }
+    // nobody outside jumps into the middle of the loop
+    int z = 0;
+    while z < pt_n {
+        if (z < lab || z > jj) && pt_parse(0, z) && pt_is_branch(0) {
+            int tn = pt_target_num(0);
+            if tn >= 0 {
+                int tl = pt_label_at(tn);
+                if tl > lab && tl <= jj { return false; }
+            }
+        }
+        z += 1;
+    }
+    int hn = 0;
+    q = pt_next(lab);
+    while q >= 0 && q <= jj && hn < 8 - used {
+        if !pt_parse(0, q) { break; }
+        if pt_is_branch(0) { break; }
+        if (pt_mn(0, "cmp") && pt_no[0] == 2 && pt_isreg(0, 0) && (pt_op(0, 1, "0") || pt_op(0, 1, "#0"))) {
+            int rn = pt_reg_of(0, 0);
+            int q2 = pt_next(q);
+            bool okp = false;
+            if q2 >= 0 && q2 <= jj && hn + 2 <= 8 - used && pt_parse(1, q2) && pt_mn(1, "b.eq") && pt_target_num(1) >= 0 && rn != 28 && rn != 29 {
+                int tl2 = pt_label_at(pt_target_num(1));
+                if tl2 < lab || tl2 > jj {
+                    // rn is not written in the body
+                    bool inv = true;
+                    int w = pt_next(lab);
+                    while w >= 0 && w <= jj {
+                        if pt_parse(2, w) && pt_wr(2, rn) { inv = false; break; }
+                        w = pt_next(w);
+                    }
+                    if inv && pt_flags_free(pt_next(q2), jj) { okp = true; }
+                }
+            }
+            if !okp { break; }
+            pt_hl[hn] = q;
+            pt_hl[hn + 1] = q2;
+            hn += 2;
+            q = pt_next(q2);
+            continue;
+        }
+        bool isldr = pt_mn(0, "ldr") && pt_no[0] == 2;
+        bool isconst = pt_no[0] == 2 && (pt_mn(0, "fmovsi") || (pt_mn(0, "mov") && pt_isnum(0, 1)));
+        if isldr || isconst {
+            int rk = pt_reg_of(0, 0);
+            int rb = 99;                  // a constant has no base register
+            if isldr { rb = pt_base_reg(0, 1); }
+            if isconst && ((pt_mn(0, "fmovsi") && rk < 32) || (pt_mn(0, "mov") && rk >= 32)) { rk = 0 - 1; }
+            if rk >= 0 && rb >= 0 && rb != 28 && rb != 31 && rk != rb {
+                bool inv2 = true;
+                int nwr = 0;
+                int nrd = 0;
+                int w2 = pt_next(lab);
+                while w2 >= 0 && w2 <= jj {
+                    if pt_parse(2, w2) {
+                        if pt_wr(2, rb) { inv2 = false; break; }
+                        if pt_wr(2, rk) { nwr += 1; }
+                        else if w2 < q && pt_mentions(2, rk) { nrd += 1; }
+                        if w2 < q && pt_wr(2, rk) { nrd += 1; }
+                    }
+                    w2 = pt_next(w2);
+                }
+                if inv2 && nwr >= 2 && nrd == 0 {
+                    int ff = pt_free_reg(lab, jj, rk >= 32);
+                    if ff >= 0 && pt_rename_run(q, jj, rk, ff) {
+                        pt_parse(0, q);
+                        nwr = 1;
+                    }
+                }
+                if inv2 && nwr == 1 && nrd == 0 {
+                    pt_hl[hn] = q;
+                    hn += 1;
+                    pt_parse(0, q);
+                }
+            }
+        }
+        q = pt_next(q);
+    }
+    if hn == 0 { return false; }
+    // move the lines into the room before the ".align"
+    int at = a - 8 + used;
+    int hi = 0;
+    while hi < hn {
+        int src = pt_hl[hi] * 64;
+        int c = 0;
+        while pt_txt[src + c] != 0 {
+            pt_txt[(at + hi) * 64 + c] = pt_txt[src + c];
+            c += 1;
+        }
+        pt_txt[(at + hi) * 64 + c] = 0;
+        pt_txt[src] = 0;
+        hi += 1;
+    }
+    return true;
+}
+
+bool pt_hoist() {
+    if opt_hoist == 0 { return false; }
+    bool any = false;
+    int a = 8;
+    while a < pt_n {
+        if pt_txt[a * 64] == '.' && pt_txt[a * 64 + 1] == 'a' && pt_txt[a * 64 + 6] == ' ' && pt_txt[a * 64 + 7] == '1' && pt_txt[a * 64 + 8] == '6' && pt_txt[a * 64 + 9] == 0 {
+            bool room = true;
+            int used = 0;
+            while used < 8 && pt_txt[(a - 8 + used) * 64] != 0 { used += 1; }
+            int e = used;
+            while e < 8 { if pt_txt[(a - 8 + e) * 64] != 0 { room = false; } e += 1; }
+            if used >= 8 { room = false; }
+            int lab = pt_next(a);
+            if room && lab >= 0 && pt_txt[lab * 64] == 'L' {
+                int v = 0;
+                int k = 1;
+                while pt_txt[lab * 64 + k] >= '0' && pt_txt[lab * 64 + k] <= '9' {
+                    v = v * 10 + (pt_txt[lab * 64 + k] - '0');
+                    k += 1;
+                }
+                if pt_txt[lab * 64 + k] == ':' && k > 1 {
+                    int refs = 0;
+                    int jj = 0 - 1;
+                    int z = 0;
+                    while z < pt_n {
+                        if pt_parse(0, z) && pt_target_num(0) == v {
+                            refs += 1;
+                            if pt_is_branch(0) { jj = z; } else { refs += 5; }
+                        }
+                        z += 1;
+                    }
+                    if refs == 1 && jj > lab {
+                        if pt_hoist_loop(a, lab, jj, used) { any = true; }
+                    }
+                }
+            }
+        }
+        a += 1;
+    }
+    return any;
+}
+
+// add xA, xB, xI (, lsl #k) ... str vS, [xA, #0]   ->   str vS, [xB, xI (, lsl #k)]   when xA is not needed after the store
+bool pt_addstr(int i) {
+    if !pt_parse(0, i) || !pt_mn(0, "add") || pt_no[0] < 3 || pt_no[0] > 4 { return false; }
+    int ra = pt_regno(0, 0, 'x');
+    int rb = pt_regno(0, 1, 'x');
+    int ri = pt_regno(0, 2, 'x');
+    if ra < 0 || rb < 0 || ri < 0 || ra == rb || ra == ri { return false; }
+    int sh = 0;
+    if pt_no[0] == 4 {
+        int o3 = (0 * 4 + 3) * 40;
+        if !(pt_o[o3] == 'l' && pt_o[o3 + 1] == 's' && pt_o[o3 + 2] == 'l' && pt_o[o3 + 3] == ' ' && pt_o[o3 + 4] == '#' && pt_o[o3 + 5] >= '0' && pt_o[o3 + 5] <= '3' && pt_o[o3 + 6] == 0) { return false; }
+        sh = pt_o[o3 + 5] - '0';
+    }
+    int j = pt_next(i);
+    int steps = 0;
+    while j >= 0 && steps < 8 {
+        if !pt_parse(1, j) { return false; }
+        if pt_is_branch(1) || pt_mn(1, "bl") || pt_mn(1, "blr") { return false; }
+        if (pt_mn(1, "str") || pt_mn(1, "strb") || pt_mn(1, "strh")) && pt_no[1] == 2 && pt_zero_off(1, 1) && pt_base_reg(1, 1) == ra && !pt_rd(1, 0, ra) {
+            int rv = pt_reg_of(1, 0);
+            if rv < 0 { return false; }
+            int need = 0;
+            if pt_mn(1, "str") { need = 2; if pt_o[(1 * 4 + 0) * 40] == 'd' || pt_o[(1 * 4 + 0) * 40] == 'x' { need = 3; } }
+            if pt_mn(1, "strh") { need = 1; }
+            if pt_mn(1, "strb") { need = 0; }
+            if need != sh { return false; }
+            if !pt_dead(pt_next(j), ra, 40) { return false; }
+            // build the new store
+            int n = 0;
+            char^ mn = "str";
+            if pt_mn(1, "strb") { mn = "strb"; }
+            if pt_mn(1, "strh") { mn = "strh"; }
+            int c = 0;
+            while mn[c] != 0 { pt_line[n] = mn[c]; n += 1; c += 1; }
+            pt_line[n] = ' '; n += 1;
+            int o0 = (1 * 4 + 0) * 40;
+            c = 0;
+            while pt_o[o0 + c] != 0 { pt_line[n] = pt_o[o0 + c]; n += 1; c += 1; }
+            pt_line[n] = ','; n += 1; pt_line[n] = ' '; n += 1; pt_line[n] = '['; n += 1;
+            int o1 = (0 * 4 + 1) * 40;
+            c = 0;
+            while pt_o[o1 + c] != 0 { pt_line[n] = pt_o[o1 + c]; n += 1; c += 1; }
+            pt_line[n] = ','; n += 1; pt_line[n] = ' '; n += 1;
+            int o2 = (0 * 4 + 2) * 40;
+            c = 0;
+            while pt_o[o2 + c] != 0 { pt_line[n] = pt_o[o2 + c]; n += 1; c += 1; }
+            if pt_no[0] == 4 {
+                pt_line[n] = ','; n += 1; pt_line[n] = ' '; n += 1;
+                int o3b = (0 * 4 + 3) * 40;
+                c = 0;
+                while pt_o[o3b + c] != 0 { pt_line[n] = pt_o[o3b + c]; n += 1; c += 1; }
+            }
+            pt_line[n] = ']'; n += 1;
+            pt_line[n] = 0;
+            pt_set(j, (char^)@pt_line);
+            pt_set(i, "");
+            return true;
+        }
+        // anything in between must not change xB or xI, nor touch xA
+        if pt_wr(1, rb) || pt_wr(1, ri) || pt_mentions(1, ra) { return false; }
+        j = pt_next(j);
+        steps += 1;
+    }
+    return false;
+}
+
 // shorten the function that was just written to regs_buf[start ..]
 void regs_post(int start) {
     // the lines, and the labels
@@ -3710,6 +4193,14 @@ void regs_post(int start) {
         if e - p > 62 || n >= 65535 {
             fits = false;
         } else {
+            if opt_hoist != 0 && e - p == 9 && regs_buf[p] == '.' && regs_buf[p + 1] == 'a' && regs_buf[p + 7] == '1' && regs_buf[p + 8] == '6' && n < 65000 {
+                int pd = 0;
+                while pd < 8 {
+                    pt_txt[n * 64] = 0;
+                    n += 1;
+                    pd += 1;
+                }
+            }
             int c = 0;
             while p + c < e {
                 pt_txt[n * 64 + c] = regs_buf[p + c];
@@ -3738,17 +4229,22 @@ void regs_post(int start) {
     pt_pushpop();
     int changed = 1;
     int rounds = 0;
-    while changed == 1 && rounds < 8 {
+    int hoisted = 0;
+    while changed == 1 && rounds < 12 {
         changed = 0;
         if pt_mirror() { changed = 1; }
         int i = 0;
         while i < pt_n {
             if pt_txt[i * 64] != 0 {
-                if pt_rules(i) { changed = 1; }
+                if pt_rules(i) { changed = 1; } else if pt_addstr(i) { changed = 1; }
             }
             i += 1;
         }
         rounds += 1;
+        if changed == 0 && hoisted < 5 {
+            hoisted += 1;
+            if pt_hoist() { changed = 1; }
+        }
     }
     regs_len = start;
     int i2 = 0;

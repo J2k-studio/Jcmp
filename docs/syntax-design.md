@@ -2321,7 +2321,7 @@ The owner chose option C for formatted output: **no `joutf`/`jinf` keywords and 
 
 
 ## 108. Owner's answers on the open language questions, 2026-11-03 (recorded by the assistant; the forms are the ones proposed in 67, 97, 101-107 and design 25)
-1. **Slices:** accepted: option B first (a library type `Span<T>`, no compiler change), the sugar `a[1..5]` can come later. Name (`Span` or `Slice`): not yet chosen.
+1. **Slices:** accepted: option B first (a library type `Span<T>`, no compiler change), the sugar `a[1..5]` can come later. Name: **`Span<T>`** (owner, 2026-11-03: "เอาspan").
 2. **`comptime` vs `init`:** accepted: keep `init {}`; `comptime` is added later.
 4. **Tests:** accepted: `test "name" { ... }` blocks, run by a test runner (`jc test` / `makej test`). The exact form is built after the runner exists.
 5. **volatile / device reads:** accepted: `@keep` stays the way to say it (a word `volatile` may be added later as a name for it).
