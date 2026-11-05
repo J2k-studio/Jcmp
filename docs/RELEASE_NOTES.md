@@ -1,6 +1,8 @@
-# J2K / Jcmp 1.2.15.0
+# J2K / Jcmp 1.2.16.0
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
+
+**1.2.16.0:** array checks hoisted out of counted loops (heap-array matmul 2.5 times faster).
 
 **1.2.15.0:** unroll-and-jam for global and heap arrays (matmul -25 %), float copy folding (mandel -11 %), new learning book.
 

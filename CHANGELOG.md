@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.2.16.0 (2026-11-05)
+* **Added (speed):** the null checks and the data-pointer loads of arrays are hoisted out of innermost counted loops into a guarded preheader (a zero-trip loop with a null array still does not panic; a null array in a loop that runs still panics with the same message); a matmul over `double[]` heap arrays (n = 500) runs 2.5 times faster. `-irdbg 1125899906842624` turns it off. Test t549_arr_hoist.
+* **Fixed:** none in this release.
+
 ## 1.2.15.0 (2026-11-05)
 * **Added (speed):** unroll-and-jam now covers global arrays and heap arrays (`double[] a = arr(n)`); matmul with global arrays is 25 % faster.
 * **Added (speed):** a float copy before a constant load is folded (`fmovi` counts as a write); mandel -11 %.

@@ -8076,3 +8076,253 @@ void op_ssr() {
         q += 1;
     }
 }
+
+// ---------------------------------------------------------------------------------------------- the data pointer of heap arrays
+// In an innermost counted loop without calls, whose blocks are one straight chain from the body back to the header, every access
+// `a[i]` loads the handle from its frame cell, checks it for null and loads the data pointer `[handle + 16]`. When nothing in the loop
+// writes the cell of the handle (or the data field of any header), the checks and the loads move in front of the loop: a new block
+// runs the test of the loop once, and only when the loop runs at least once the handles are checked (in the order of the first turn,
+// to the same trap blocks) and the data pointers are kept in new frame cells. A loop that runs zero times never checks anything.
+// `-irdbg 1125899906842624` switches it off.
+#define AH_MAXH 12
+#define AH_MAXC 64
+int ah_cell[AH_MAXH];            // the frame cell of the handle
+int ah_trap[AH_MAXH];            // the trap block of its check
+int ah_ncell[AH_MAXH];           // the new cell for the data pointer
+int ah_n;
+int ah_cv[IR_MAXV];              // vreg -> the handle cell whose value it holds (while scanning)
+int ah_cs[IR_MAXV];
+int ah_stamp;
+int ah_br[AH_MAXC];              // the checks to turn into jumps
+int ah_nbr;
+int ah_ld[AH_MAXC];              // the data loads to turn into loads of the new cell, and the hoist index
+int ah_li[AH_MAXC];
+int ah_nld;
+int ah_chain[UJ_MAXB];
+int ah_total;
+
+int ah_get(int v) {
+    if v <= 0 || v >= IR_MAXV || ah_cs[v] != ah_stamp { return 0 - 1000000; }
+    return ah_cv[v];
+}
+
+void ah_set(int v, int c) {
+    if v <= 0 || v >= IR_MAXV { return; }
+    ah_cs[v] = ah_stamp;
+    ah_cv[v] = c;
+}
+
+int ah_npred(int t) {
+    int n = 0;
+    int b = 0;
+    while b < ir_nb {
+        if op_po[b] >= 0 {
+            int k = 0;
+            while k < 2 {
+                if op_succ(b, k) == t { n += 1; }
+                k += 1;
+            }
+        }
+        b += 1;
+    }
+    return n;
+}
+
+// does an instruction of the chain write the 8 bytes at this frame offset?
+bool ah_written(int nch, int off) {
+    int c = 0;
+    while c < nch {
+        int b = ah_chain[c];
+        int j = ir_bs[b];
+        while j < ir_be[b] {
+            int op = ir_op[j];
+            if op == IR_STORE {
+                if ir_a[j] == 30 {
+                    if ir_k[j] < off + 8 && off < ir_k[j] + 16 { return true; }
+                } else if ir_k[j] == 16 { return true; }
+            }
+            if op == IR_ATOMIC || op == IR_RAW || op == IR_ADDR_SLOT || op == IR_LCALL || op == IR_CALL || op == IR_CALLIND || op == IR_SYSCALL { return true; }
+            j += 1;
+        }
+        c += 1;
+    }
+    return false;
+}
+
+bool ah_loop(int q) {
+    int h = cl_head[q];
+    int l = cl_lidx[q];
+    if cl_inner[q] != 1 || cl_calls[q] != 0 { return false; }
+    int th = ir_be[h] - 1;
+    if ir_op[th] != IR_BR { return false; }
+    // the header: only reads of cells, then the test
+    int j0 = ir_bs[h];
+    while j0 < th {
+        int o0 = ir_op[j0];
+        if o0 != IR_LOAD && o0 != IR_CONST && o0 != IR_NOP && o0 != IR_COPY { return false; }
+        if o0 == IR_LOAD && (ir_a[j0] != 30 || ir_w[j0] != 8) { return false; }
+        j0 += 1;
+    }
+    op_mark_loop(l);
+    int stamp = op_stamp;
+    // the loop is the header and the chain
+    int nch = uj_walk(cl_body[q], h, stamp, @ah_chain);
+    if nch <= 0 { return false; }
+    int inloop = nch + 1;
+    if cl_nblk[q] != inloop { return false; }
+    int c = 0;
+    ah_n = 0;
+    ah_nbr = 0;
+    ah_nld = 0;
+    ah_stamp += 1;
+    while c < nch {
+        int b = ah_chain[c];
+        if c > 0 && ah_npred(b) != 1 { ah_stamp += 1; }
+        int j = ir_bs[b];
+        int e = ir_be[b] - 1;
+        while j < e {
+            int op = ir_op[j];
+            int d = ir_d[j];
+            if op == IR_NOP || op == IR_STORE { j += 1; continue; }
+            if op == IR_LOAD && ir_a[j] != 30 && ah_get(ir_a[j]) >= 0 && ir_k[j] == 16 && ir_w[j] == 8 {
+                int cell = ah_get(ir_a[j]);
+                int hi = 0;
+                while hi < ah_n && ah_cell[hi] != cell { hi += 1; }
+                if hi < ah_n && ah_nld < AH_MAXC {
+                    ah_ld[ah_nld] = j;
+                    ah_li[ah_nld] = hi;
+                    ah_nld += 1;
+                }
+                ah_set(d, 0 - 1000000);
+            } else if d > 0 && ir_vcls[d] == 0 {
+                int nc = 0 - 1000000;
+                if op == IR_LOAD && ir_a[j] == 30 && ir_w[j] == 8 && ir_k[j] >= 0 {
+                    int sl = vn_slot(j);
+                    if sl >= 0 && sl < 8192 && !ah_written(nch, ir_k[j]) { nc = ir_k[j]; }
+                } else if op == IR_COPY {
+                    nc = ah_get(ir_a[j]);
+                }
+                ah_set(d, nc);
+            } else if d > 0 {
+                ah_set(d, 0 - 1000000);
+            }
+            j += 1;
+        }
+        int tt = ir_be[b] - 1;
+        if ir_op[tt] == IR_BR && ir_k[tt] == IR_NE && ir_bi[tt] == 1 && ir_b[tt] == 0 && ah_get(ir_a[tt]) >= 0 {
+            int cell2 = ah_get(ir_a[tt]);
+            int hi2 = 0;
+            while hi2 < ah_n && ah_cell[hi2] != cell2 { hi2 += 1; }
+            if hi2 == ah_n && ah_n < AH_MAXH {
+                ah_cell[ah_n] = cell2;
+                ah_trap[ah_n] = ir_t2[tt];
+                ah_n += 1;
+            }
+            if hi2 < ah_n && ah_nbr < AH_MAXC {
+                ah_br[ah_nbr] = tt;
+                ah_nbr += 1;
+            }
+        }
+        c += 1;
+    }
+    if ah_n == 0 || ah_nld == 0 || ah_nbr == 0 { return false; }
+    // an access of a cell is only changed when the check of that cell was seen before it, and the check is only removed when the
+    // data pointer is used: every hoisted cell must have at least one data load
+    int cellbase = 0 - (op_maxq() + 8);
+    int u = 0;
+    while u < ah_n { ah_ncell[u] = cellbase - 8 * u; u += 1; }
+    u = 0;
+    while u < ah_nld {
+        int x = ah_ld[u];
+        ir_a[x] = 30;
+        ir_b[x] = 0;
+        ir_bi[x] = 0;
+        ir_k[x] = ah_ncell[ah_li[u]];
+        ir_w[x] = 8;
+        u += 1;
+    }
+    u = 0;
+    while u < ah_nbr {
+        int br = ah_br[u];
+        ir_op[br] = IR_JMP;
+        ir_a[br] = 0;
+        ir_b[br] = 0;
+        ir_bi[br] = 0;
+        ir_k[br] = 0;
+        ir_t2[br] = 0 - 1;
+        u += 1;
+    }
+    int nb0 = ir_nb;
+    // the blocks: P (the test), E (first check), C0 .. Cn-1
+    int pb = ir_new_block(0 - 1);
+    ir_set_block(pb);
+    int jh = ir_bs[h];
+    while jh < th {
+        int ox = ir_op[jh];
+        if ox != IR_NOP {
+            int ni = ir_add(ox, ir_d[jh], ir_a[jh], ir_b[jh], ir_bi[jh], ir_k[jh]);
+            ir_w[ni] = ir_w[jh];
+        }
+        jh += 1;
+    }
+    int pbr = ir_add(IR_BR, 0, ir_a[th], ir_b[th], ir_bi[th], ir_k[th]);
+    int body = cl_body[q];
+    int eb = ir_new_block(0 - 1);
+    if ir_t1[th] == body { ir_t1[pbr] = eb; ir_t2[pbr] = ir_t2[th]; }
+    else { ir_t1[pbr] = ir_t1[th]; ir_t2[pbr] = eb; }
+    ir_set_block(eb);
+    int hv = ir_vreg(0);
+    int lh = ir_add(IR_LOAD, hv, 30, 0, 0, 0);
+    ir_w[lh] = 8;
+    ir_k[lh] = ah_cell[0];
+    int bk = ir_add(IR_BR, 0, hv, 0, 1, IR_NE);
+    ir_t2[bk] = ah_trap[0];
+    u = 0;
+    while u < ah_n {
+        int cb = ir_new_block(0 - 1);
+        ir_t1[bk] = cb;
+        ir_set_block(cb);
+        int dv = ir_vreg(0);
+        int ld = ir_add(IR_LOAD, dv, hv, 0, 0, 16);
+        ir_w[ld] = 8;
+        int st = ir_add(IR_STORE, 0, 30, dv, 0, ah_ncell[u]);
+        ir_w[st] = 8;
+        if u + 1 < ah_n {
+            hv = ir_vreg(0);
+            int lh2 = ir_add(IR_LOAD, hv, 30, 0, 0, 0);
+            ir_w[lh2] = 8;
+            ir_k[lh2] = ah_cell[u + 1];
+            bk = ir_add(IR_BR, 0, hv, 0, 1, IR_NE);
+            ir_t2[bk] = ah_trap[u + 1];
+        } else {
+            int jp = ir_add(IR_JMP, 0, 0, 0, 0, 0);
+            ir_t1[jp] = h;
+        }
+        u += 1;
+    }
+    // every edge into the header from outside the loop goes to the new test
+    int b2 = 0;
+    while b2 < nb0 {
+        if op_po[b2] >= 0 && op_mark[b2] != stamp {
+            int tb2 = ir_be[b2] - 1;
+            int top = ir_op[tb2];
+            if (top == IR_JMP || top == IR_BR || top == IR_FBR) && ir_t1[tb2] == h { ir_t1[tb2] = pb; }
+            if (top == IR_BR || top == IR_FBR) && ir_t2[tb2] == h { ir_t2[tb2] = pb; }
+        }
+        b2 += 1;
+    }
+    ah_total += 1;
+    ss_total += 1;
+    return true;
+}
+
+void op_arrhoist() {
+    if opt_debug == 1 || (ir_opt & 1125899906842624) != 0 { return; }
+    op_counted_loops();
+    int n = cl_n;
+    int q = 0;
+    while q < n {
+        if cl_inner[q] == 1 && cl_calls[q] == 0 { ah_loop(q); }
+        q += 1;
+    }
+}

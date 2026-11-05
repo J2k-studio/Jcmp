@@ -2339,6 +2339,7 @@ void ir_pipeline(char^ name_) {
                 op_vectorize();
                 rp_stage(4);
                 if (ir_opt & 1073741824) != 0 { op_ssr(); }
+                op_arrhoist();
                 rp_stage(5);
                 if vz_count != vz0 || ss_total != ss0 {
                     // the addresses of the vector body were computed once for each access: value numbering and cleaning again
