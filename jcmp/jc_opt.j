@@ -7796,6 +7796,29 @@ int ss_kbase[SS_MAXK];           // 29 the global area, 30 the frame, 1000 + k: 
 int ss_koff[SS_MAXK];
 int ss_kcell[SS_MAXK];
 int ss_nk;
+// affine keys (kind 6): the address is  stride * i + sum(coef * [slot]) + off,  the stride a number (ss_kac) or a number times a plain slot
+int ss_kk[SS_MAXK];              // 0 the old keys (f, base, off), 6 an affine key
+int ss_khas[SS_MAXK];            // 1: the stride is ss_kac * [slot ss_kas]
+int ss_kas[SS_MAXK];
+int ss_kac[SS_MAXK];
+int ss_kn[SS_MAXK];
+int ss_kt[72];
+int ss_kc[72];
+int ss_kcell2[SS_MAXK];          // the step of the pointer when the stride is a slot
+// the affine values of the vregs of the block being scanned: entries 0, 1 and 2 are temporaries
+#define SS_MAXA 512
+int ssa_has[SS_MAXA];
+int ssa_as[SS_MAXA];
+int ssa_ac[SS_MAXA];
+int ssa_n[SS_MAXA];
+int ssa_t[1536];
+int ssa_c[1536];
+int ssa_off[SS_MAXA];
+int ssa_np;
+int ss_wo[256];                  // the frame cells (below the slots) that the loop writes
+int ss_nwo;
+int ss_inner;                    // the loop is an innermost loop (the affine forms and the cells are only used there)
+int ss_noinv;                    // 1: the cells cannot be told to be invariant
 int ss_pj[SS_MAXP];              // the instructions to become `load pointer`, and their keys
 int ss_pk[SS_MAXP];
 int ss_np;
@@ -7828,10 +7851,11 @@ void ss_set(int v, int kind, int f, int base, int off) {
 int ss_key(int f, int base, int off) {
     int u = 0;
     while u < ss_nk {
-        if ss_kf[u] == f && ss_kbase[u] == base && ss_koff[u] == off { return u; }
+        if ss_kk[u] == 0 && ss_kf[u] == f && ss_kbase[u] == base && ss_koff[u] == off { return u; }
         u += 1;
     }
     if ss_nk >= SS_MAXK { return 0 - 1; }
+    ss_kk[ss_nk] = 0;
     ss_kf[ss_nk] = f;
     ss_kbase[ss_nk] = base;
     ss_koff[ss_nk] = off;
@@ -7839,9 +7863,205 @@ int ss_key(int f, int base, int off) {
     return ss_nk - 1;
 }
 
+void ss_acopy(int a, int r) {
+    ssa_has[r] = ssa_has[a];
+    ssa_as[r] = ssa_as[a];
+    ssa_ac[r] = ssa_ac[a];
+    ssa_n[r] = ssa_n[a];
+    ssa_off[r] = ssa_off[a];
+    int t = 0;
+    while t < 3 {
+        ssa_t[r * 3 + t] = ssa_t[a * 3 + t];
+        ssa_c[r * 3 + t] = ssa_c[a * 3 + t];
+        t += 1;
+    }
+}
+
+// the value of a vreg as an affine form in entry e
+bool ss_toaff(int v, int e) {
+    int k = ss_get(v);
+    ssa_has[e] = 0;
+    ssa_as[e] = 0;
+    ssa_ac[e] = 0;
+    ssa_n[e] = 0;
+    ssa_off[e] = 0;
+    if k == 1 { ssa_ac[e] = 1; return true; }
+    if k == 2 { ssa_ac[e] = ss_f[v]; return true; }
+    if k == 3 { ssa_off[e] = ss_off[v]; return true; }
+    if k == 4 && ss_base[v] >= 1000 {
+        ssa_n[e] = 1;
+        ssa_t[e * 3] = ss_base[v] - 1000;
+        ssa_c[e * 3] = 1;
+        ssa_off[e] = ss_off[v];
+        return true;
+    }
+    if k == 9 {
+        ssa_n[e] = 1;
+        ssa_t[e * 3] = ss_off[v];
+        ssa_c[e * 3] = 1;
+        return true;
+    }
+    if k == 6 { ss_acopy(ss_f[v], e); return true; }
+    return false;
+}
+
+bool ss_aadd(int a, int b) {
+    int r = 2;
+    if ssa_has[a] != 0 && ssa_has[b] != 0 {
+        if ssa_as[a] != ssa_as[b] { return false; }
+        ssa_has[r] = 1;
+        ssa_as[r] = ssa_as[a];
+        ssa_ac[r] = ssa_ac[a] + ssa_ac[b];
+    } else if ssa_has[a] != 0 {
+        if ssa_ac[b] != 0 { return false; }
+        ssa_has[r] = 1;
+        ssa_as[r] = ssa_as[a];
+        ssa_ac[r] = ssa_ac[a];
+    } else if ssa_has[b] != 0 {
+        if ssa_ac[a] != 0 { return false; }
+        ssa_has[r] = 1;
+        ssa_as[r] = ssa_as[b];
+        ssa_ac[r] = ssa_ac[b];
+    } else {
+        ssa_has[r] = 0;
+        ssa_as[r] = 0;
+        ssa_ac[r] = ssa_ac[a] + ssa_ac[b];
+    }
+    ssa_off[r] = ssa_off[a] + ssa_off[b];
+    int n = 0;
+    while n < ssa_n[a] {
+        ssa_t[r * 3 + n] = ssa_t[a * 3 + n];
+        ssa_c[r * 3 + n] = ssa_c[a * 3 + n];
+        n += 1;
+    }
+    int u = 0;
+    while u < ssa_n[b] {
+        int f = 0;
+        int w = 0;
+        while w < n {
+            if ssa_t[r * 3 + w] == ssa_t[b * 3 + u] { ssa_c[r * 3 + w] += ssa_c[b * 3 + u]; f = 1; }
+            w += 1;
+        }
+        if f == 0 {
+            if n >= 3 { return false; }
+            ssa_t[r * 3 + n] = ssa_t[b * 3 + u];
+            ssa_c[r * 3 + n] = ssa_c[b * 3 + u];
+            n += 1;
+        }
+        u += 1;
+    }
+    ssa_n[r] = n;
+    return true;
+}
+
+bool ss_abig(int x) {
+    return x > 1073741824 || x < 0 - 1073741824;
+}
+
+// entry e times a number, into entry 2
+bool ss_ascale(int e, int m) {
+    if m > 4096 || m < 0 - 4096 { return false; }
+    int r = 2;
+    ss_acopy(e, r);
+    ssa_ac[r] = ssa_ac[e] * m;
+    ssa_off[r] = ssa_off[e] * m;
+    bool bad = ss_abig(ssa_ac[r]) || ss_abig(ssa_off[r]);
+    int t = 0;
+    while t < ssa_n[e] {
+        ssa_c[r * 3 + t] = ssa_c[e * 3 + t] * m;
+        if ss_abig(ssa_c[r * 3 + t]) { bad = true; }
+        t += 1;
+    }
+    return !bad;
+}
+
+// (a number times the counter) times a plain slot, into entry 2
+bool ss_amulvar(int a, int b) {
+    if ssa_has[a] != 0 || ssa_ac[a] == 0 || ssa_n[a] != 0 || ssa_off[a] != 0 { return false; }
+    if ssa_has[b] != 0 || ssa_ac[b] != 0 || ssa_n[b] != 1 || ssa_off[b] != 0 { return false; }
+    int c = ssa_ac[a] * ssa_c[b * 3];
+    if ss_abig(c) { return false; }
+    ssa_has[2] = 1;
+    ssa_as[2] = ssa_t[b * 3];
+    ssa_ac[2] = c;
+    ssa_n[2] = 0;
+    ssa_off[2] = 0;
+    return true;
+}
+
+// the frame cell at a negative offset is the same at every turn
+bool ss_cellinv(int off) {
+    if ss_noinv != 0 { return false; }
+    int i = 0;
+    while i < ss_nwo {
+        if ss_wo[i] < off + 8 && off < ss_wo[i] + 16 { return false; }
+        i += 1;
+    }
+    return true;
+}
+
+int ss_key6(int e) {
+    int u = 0;
+    while u < ss_nk {
+        if ss_kk[u] == 6 && ss_khas[u] == ssa_has[e] && ss_kas[u] == ssa_as[e] && ss_kac[u] == ssa_ac[e] && ss_kn[u] == ssa_n[e] && ss_koff[u] == ssa_off[e] {
+            bool same = true;
+            int t = 0;
+            while t < ssa_n[e] {
+                if ss_kt[u * 3 + t] != ssa_t[e * 3 + t] || ss_kc[u * 3 + t] != ssa_c[e * 3 + t] { same = false; }
+                t += 1;
+            }
+            if same { return u; }
+        }
+        u += 1;
+    }
+    if ss_nk >= SS_MAXK { return 0 - 1; }
+    u = ss_nk;
+    ss_kk[u] = 6;
+    ss_khas[u] = ssa_has[e];
+    ss_kas[u] = ssa_as[e];
+    ss_kac[u] = ssa_ac[e];
+    ss_kf[u] = ssa_ac[e];
+    ss_kn[u] = ssa_n[e];
+    ss_koff[u] = ssa_off[e];
+    ss_kbase[u] = 0;
+    int t2 = 0;
+    while t2 < ssa_n[e] {
+        ss_kt[u * 3 + t2] = ssa_t[e * 3 + t2];
+        ss_kc[u * 3 + t2] = ssa_c[e * 3 + t2];
+        t2 += 1;
+    }
+    ss_nk += 1;
+    return u;
+}
+
+// a vreg that holds c * reg
+int ss_mulc(int reg, int c) {
+    if c == 1 { return reg; }
+    int m = ir_vreg(0);
+    if c > 0 && (c & (c - 1)) == 0 {
+        int sh = 0;
+        while (1 << sh) != c { sh += 1; }
+        ir_add(IR_SHL, m, reg, sh, 1, 0);
+    } else {
+        int cf = ir_vreg(0);
+        ir_add(IR_CONST, cf, 0, 0, 0, c);
+        ir_add(IR_MUL, m, reg, cf, 0, 0);
+    }
+    return m;
+}
+
+int ss_term(int slot, int c) {
+    int t = ir_vreg(0);
+    int l = ir_add(IR_LOAD, t, 30, 0, 0, 0);
+    ir_w[l] = 8;
+    ir_k[l] = slot;
+    return ss_mulc(t, c);
+}
+
 // scan one block of the loop; the producers that an access uses are collected
 void ss_block(int b, int islot) {
     ss_stamp += 1;
+    ssa_np = 3;
     int j = ir_bs[b];
     while j < ir_be[b] - 1 {
         int op = ir_op[j];
@@ -7853,9 +8073,11 @@ void ss_block(int b, int islot) {
             continue;
         }
         // a use of a changed address: the instruction that made it needs the pointer
-        if (op == IR_LOAD || op == IR_STORE) && ir_a[j] > 0 && ss_get(ir_a[j]) == 5 && ss_prodv[ir_a[j]] >= 0 && ss_np < SS_MAXP {
+        if (op == IR_LOAD || op == IR_STORE) && ir_a[j] > 0 && (ss_get(ir_a[j]) == 5 || ss_get(ir_a[j]) == 6) && ss_prodv[ir_a[j]] >= 0 && ss_np < SS_MAXP {
             int pr = ss_prodv[ir_a[j]];
-            int k = ss_key(ss_f[ir_a[j]], ss_base[ir_a[j]], ss_off[ir_a[j]]);
+            int k = 0 - 1;
+            if ss_get(ir_a[j]) == 6 { k = ss_key6(ss_f[ir_a[j]]); }
+            else { k = ss_key(ss_f[ir_a[j]], ss_base[ir_a[j]], ss_off[ir_a[j]]); }
             bool known = false;
             int u = 0;
             while u < ss_np { if ss_pj[u] == pr { known = true; } u += 1; }
@@ -7877,7 +8099,9 @@ void ss_block(int b, int islot) {
         int no = 0;
         int a = ir_a[j];
         int ka = ss_get(a);
-        if op == IR_LOAD && ir_w[j] == 8 && a == 30 {
+        if op == IR_LOAD && ir_w[j] == 8 && a == 30 && ir_k[j] < 0 {
+            if ss_inner == 1 && ss_cellinv(ir_k[j]) { nk = 9; no = ir_k[j]; }
+        } else if op == IR_LOAD && ir_w[j] == 8 && a == 30 {
             int sl = vn_slot(j);
             if sl == islot { nk = 1; nf = 1; }
             else if sl >= 0 && sl < 8192 && ss_lst[sl] == 0 && op_plain[sl] == 1 { nk = 4; nb = 1000 + sl * 8; }
@@ -7918,8 +8142,34 @@ void ss_block(int b, int islot) {
             else if xa == 30 && kxb == 2 { nk = 5; nf = ss_f[xb]; nb = 30; no = 0; }
             else if xb == 30 && kxa == 2 { nk = 5; nf = ss_f[xa]; nb = 30; no = 0; }
         }
+        if nk == 0 && ss_inner == 1 && (ir_opt & 2305843009213693952) == 0 {
+            bool ok = false;
+            if op == IR_ADD || op == IR_MUL {
+                if ka != 0 && ss_toaff(a, 0) {
+                    if ir_bi[j] == 1 {
+                        ssa_has[1] = 0; ssa_as[1] = 0; ssa_ac[1] = 0; ssa_n[1] = 0; ssa_off[1] = ir_b[j];
+                        ok = true;
+                    } else if ss_toaff(ir_b[j], 1) { ok = true; }
+                }
+                if ok {
+                    if op == IR_ADD { ok = ss_aadd(0, 1); }
+                    else if ssa_n[1] == 0 && ssa_has[1] == 0 && ssa_ac[1] == 0 { ok = ss_ascale(0, ssa_off[1]); }
+                    else if ssa_n[0] == 0 && ssa_has[0] == 0 && ssa_ac[0] == 0 { ok = ss_ascale(1, ssa_off[0]); }
+                    else { ok = ss_amulvar(0, 1) || ss_amulvar(1, 0); }
+                }
+            } else if op == IR_SHL && ir_bi[j] == 1 && ka != 0 && ir_b[j] >= 0 && ir_b[j] <= 12 && ss_toaff(a, 0) {
+                ok = ss_ascale(0, 1 << ir_b[j]);
+            }
+            if ok && ssa_np < SS_MAXA {
+                ss_acopy(2, ssa_np);
+                nk = 6;
+                nf = ssa_np;
+                ssa_np += 1;
+            }
+        }
         ss_set(d, nk, nf, nb, no);
         if nk == 5 { ss_prodv[d] = j; }
+        if nk == 6 && (ssa_has[nf] != 0 || ssa_ac[nf] != 0) { ss_prodv[d] = j; }
         j += 1;
     }
 }
@@ -7944,11 +8194,19 @@ bool ss_loop(int q) {
     // the slots that the loop writes
     int zi = 0;
     while zi < 16384 { ss_lst[zi] = 0; zi += 1; }
+    ss_nwo = 0;
+    ss_noinv = 0;
+    ss_inner = cl_inner[q];
     int b = 0;
     while b < ss_nb0 {
         if op_po[b] >= 0 && op_mark[b] == stamp {
             int j = ir_bs[b];
             while j < ir_be[b] {
+                int jo = ir_op[j];
+                if jo == IR_ATOMIC || jo == IR_RAW || jo == IR_ADDR_SLOT { ss_noinv = 1; }
+                if jo == IR_STORE && ir_a[j] == 30 && ir_k[j] < 0 {
+                    if ss_nwo < 256 { ss_wo[ss_nwo] = ir_k[j]; ss_nwo += 1; } else { ss_noinv = 1; }
+                }
                 if ir_op[j] == IR_STORE && ir_a[j] == 30 {
                     int s2 = vn_slot(j);
                     if s2 >= 0 && s2 < 16384 { ss_lst[s2] = 1; }
@@ -7967,12 +8225,43 @@ bool ss_loop(int q) {
         if op_po[b] >= 0 && op_mark[b] == stamp && b != h { ss_block(b, islot); }
         b += 1;
     }
+    // memory cells that move on cost a load and a store for each turn: many pointers with a stride from a slot do not pay (the loop of a
+    // matmul that makes two columns at a time is slower), so at most one such key and two affine keys are kept
+    int nv6 = 0;
+    int na6 = 0;
+    int ku = 0;
+    while ku < ss_nk {
+        if ss_kk[ku] == 6 {
+            na6 += 1;
+            if ss_khas[ku] != 0 { nv6 += 1; }
+        }
+        ku += 1;
+    }
+    if nv6 > 1 || na6 > 2 {
+        int wp = 0;
+        int rp = 0;
+        while rp < ss_np {
+            if ss_kk[ss_pk[rp]] != 6 {
+                ss_pj[wp] = ss_pj[rp];
+                ss_pk[wp] = ss_pk[rp];
+                wp += 1;
+            }
+            rp += 1;
+        }
+        ss_np = wp;
+        ku = 0;
+        while ku < ss_nk {
+            if ss_kk[ku] == 6 { ss_kk[ku] = 99; }
+            ku += 1;
+        }
+    }
     if ss_np == 0 { return false; }
     // cells
     int cellbase = 0 - (op_maxq() + 8);
     int u = 0;
     while u < ss_nk {
         ss_kcell[u] = cellbase - 8 * u;
+        ss_kcell2[u] = cellbase - 8 * (ss_nk + u);
         u += 1;
     }
     // the instructions become loads of the pointers
@@ -7996,6 +8285,60 @@ bool ss_loop(int q) {
         int li = ir_add(IR_LOAD, ti, 30, 0, 0, 0);
         ir_w[li] = 8;
         ir_k[li] = vz_slot_off(islot);
+        if ss_kk[u] == 99 { u += 1; continue; }
+        if ss_kk[u] == 6 {
+            // every value is used by the next instruction or the one after it (the register pass does not keep a value alive over more),
+            // the sum is built in the cell of the pointer
+            int cellp = ss_kcell[u];
+            if ss_khas[u] != 0 {
+                int sv = ss_term(ss_kas[u], ss_kac[u]);
+                int dl = ss_mulc(sv, cl_step[q]);
+                int sd = ir_add(IR_STORE, 0, 30, dl, 0, ss_kcell2[u]);
+                ir_w[sd] = 8;
+                int sv2 = ss_term(ss_kas[u], ss_kac[u]);
+                int ti6 = ir_vreg(0);
+                int li6 = ir_add(IR_LOAD, ti6, 30, 0, 0, 0);
+                ir_w[li6] = 8;
+                ir_k[li6] = vz_slot_off(islot);
+                int cv = ir_vreg(0);
+                ir_add(IR_MUL, cv, ti6, sv2, 0, 0);
+                int s6 = ir_add(IR_STORE, 0, 30, cv, 0, cellp);
+                ir_w[s6] = 8;
+            } else {
+                int ti7 = ir_vreg(0);
+                int li7 = ir_add(IR_LOAD, ti7, 30, 0, 0, 0);
+                ir_w[li7] = 8;
+                ir_k[li7] = vz_slot_off(islot);
+                int cv7 = ss_mulc(ti7, ss_kac[u]);
+                int s7 = ir_add(IR_STORE, 0, 30, cv7, 0, cellp);
+                ir_w[s7] = 8;
+            }
+            int w6 = 0;
+            while w6 < ss_kn[u] {
+                int tv = ss_term(ss_kt[u * 3 + w6], ss_kc[u * 3 + w6]);
+                int ov = ir_vreg(0);
+                int lo = ir_add(IR_LOAD, ov, 30, 0, 0, 0);
+                ir_w[lo] = 8;
+                ir_k[lo] = cellp;
+                int nv = ir_vreg(0);
+                ir_add(IR_ADD, nv, ov, tv, 0, 0);
+                int s8 = ir_add(IR_STORE, 0, 30, nv, 0, cellp);
+                ir_w[s8] = 8;
+                w6 += 1;
+            }
+            if ss_koff[u] != 0 {
+                int ov2 = ir_vreg(0);
+                int lo2 = ir_add(IR_LOAD, ov2, 30, 0, 0, 0);
+                ir_w[lo2] = 8;
+                ir_k[lo2] = cellp;
+                int nv2 = ir_vreg(0);
+                ir_add(IR_ADD, nv2, ov2, ss_koff[u], 1, 0);
+                int s9 = ir_add(IR_STORE, 0, 30, nv2, 0, cellp);
+                ir_w[s9] = 8;
+            }
+            u += 1;
+            continue;
+        }
         int cur = ti;
         if ss_kf[u] != 1 {
             int tm = ir_vreg(0);
@@ -8037,12 +8380,21 @@ bool ss_loop(int q) {
     ir_set_block(inc);
     u = 0;
     while u < ss_nk {
+        if ss_kk[u] == 99 { u += 1; continue; }
         int pc = ir_vreg(0);
         int lc = ir_add(IR_LOAD, pc, 30, 0, 0, 0);
         ir_w[lc] = 8;
         ir_k[lc] = ss_kcell[u];
         int pn = ir_vreg(0);
-        ir_add(IR_ADD, pn, pc, ss_kf[u] * cl_step[q], 1, 0);
+        if ss_kk[u] == 6 && ss_khas[u] != 0 {
+            int dv = ir_vreg(0);
+            int ldv = ir_add(IR_LOAD, dv, 30, 0, 0, 0);
+            ir_w[ldv] = 8;
+            ir_k[ldv] = ss_kcell2[u];
+            ir_add(IR_ADD, pn, pc, dv, 0, 0);
+        } else {
+            ir_add(IR_ADD, pn, pc, ss_kf[u] * cl_step[q], 1, 0);
+        }
         int sc = ir_add(IR_STORE, 0, 30, pn, 0, ss_kcell[u]);
         ir_w[sc] = 8;
         u += 1;
@@ -8083,7 +8435,8 @@ void op_ssr() {
 // writes the cell of the handle (or the data field of any header), the checks and the loads move in front of the loop: a new block
 // runs the test of the loop once, and only when the loop runs at least once the handles are checked (in the order of the first turn,
 // to the same trap blocks) and the data pointers are kept in new frame cells. A loop that runs zero times never checks anything.
-// `-irdbg 1125899906842624` switches it off.
+// `-irdbg 1125899906842624` switches it off, 144115188075855872 stops the hoist of handles without a check, 72057594037927936 limits it to a
+// loop that is one straight chain of blocks (the body may have an `if`: a block that runs at every turn decides what is hoisted).
 #define AH_MAXH 12
 #define AH_MAXC 64
 int ah_cell[AH_MAXH];            // the frame cell of the handle
@@ -8128,7 +8481,29 @@ int ah_npred(int t) {
     return n;
 }
 
-// does an instruction of the chain write the 8 bytes at this frame offset?
+int ah_tmpc[UJ_MAXB];
+int ah_lastpred;
+int ah_nall;                     // the blocks of the loop (without the header), in reverse post order
+int ah_prevb;
+
+int ah_npred1(int t) {
+    int n = 0;
+    ah_lastpred = 0 - 1;
+    int b = 0;
+    while b < ir_nb {
+        if op_po[b] >= 0 {
+            int k = 0;
+            while k < 2 {
+                if op_succ(b, k) == t { n += 1; ah_lastpred = b; }
+                k += 1;
+            }
+        }
+        b += 1;
+    }
+    return n;
+}
+
+// does an instruction of the loop write the 8 bytes at this frame offset?
 bool ah_written(int nch, int off) {
     int c = 0;
     while c < nch {
@@ -8149,6 +8524,114 @@ bool ah_written(int nch, int off) {
     return false;
 }
 
+bool ah_istrap(int b) {
+    int j = ir_bs[b];
+    while j < ir_be[b] {
+        if ir_op[j] == IR_TRAP { return true; }
+        j += 1;
+    }
+    return false;
+}
+
+// is the handle in this frame cell checked for null somewhere in the function (a branch to a trap block)? Then it is an array handle,
+// and its data field at 16 can be read in front of a loop where the check in the loop was dropped; a field of a struct at 16 would not do
+int ah_ck[64];
+int ah_nck;
+
+bool ah_incheck(int cell) {
+    int i = 0;
+    while i < ah_nck {
+        if ah_ck[i] == cell { return true; }
+        i += 1;
+    }
+    return false;
+}
+
+void ah_collect_checked() {
+    ah_nck = 0;
+    int b = 0;
+    while b < ir_nb {
+        if op_po[b] >= 0 {
+            ah_stamp += 1;
+            int j = ir_bs[b];
+            while j < ir_be[b] {
+                int op = ir_op[j];
+                int d = ir_d[j];
+                if op == IR_BR && ir_k[j] == IR_NE && ir_bi[j] == 1 && ir_b[j] == 0 && ah_get(ir_a[j]) >= 0 && ir_t2[j] >= 0 && ah_nck < 64 && ah_istrap(ir_t2[j]) {
+                    if !ah_incheck(ah_get(ir_a[j])) { ah_ck[ah_nck] = ah_get(ir_a[j]); ah_nck += 1; }
+                }
+                if d > 0 && d < IR_MAXV {
+                    if op == IR_LOAD && ir_a[j] == 30 && ir_w[j] == 8 && ir_k[j] >= 0 { ah_set(d, ir_k[j]); }
+                    else if op == IR_COPY { ah_set(d, ah_get(ir_a[j])); }
+                    else { ah_set(d, 0 - 1000000); }
+                }
+                j += 1;
+            }
+        }
+        b += 1;
+    }
+}
+
+int ah_cellidx(int cell) {
+    int hi = 0;
+    while hi < ah_n && ah_cell[hi] != cell { hi += 1; }
+    return hi;
+}
+
+// a block that runs at every turn (spine = 1) decides which handles are hoisted: from its checks, and from the data loads of handles
+// that no check guards any more (the check was dropped because the handle is known not to be null); the other blocks (inside an `if`)
+// only use what the spine gave
+void ah_scan(int b, int nch, int spine) {
+    int j = ir_bs[b];
+    int e = ir_be[b] - 1;
+    while j < e {
+        int op = ir_op[j];
+        int d = ir_d[j];
+        if op == IR_NOP || op == IR_STORE { j += 1; continue; }
+        if op == IR_LOAD && ir_a[j] != 30 && ah_get(ir_a[j]) >= 0 && ir_k[j] == 16 && ir_w[j] == 8 {
+            int cell = ah_get(ir_a[j]);
+            int hi = ah_cellidx(cell);
+            if hi == ah_n && spine == 1 && ah_n < AH_MAXH && (ir_opt & 144115188075855872) == 0 && ah_incheck(cell) {
+                ah_cell[ah_n] = cell;
+                ah_trap[ah_n] = 0 - 1;
+                ah_n += 1;
+            }
+            if hi < ah_n && ah_nld < AH_MAXC {
+                ah_ld[ah_nld] = j;
+                ah_li[ah_nld] = hi;
+                ah_nld += 1;
+            }
+            ah_set(d, 0 - 1000000);
+        } else if d > 0 && ir_vcls[d] == 0 {
+            int nc = 0 - 1000000;
+            if op == IR_LOAD && ir_a[j] == 30 && ir_w[j] == 8 && ir_k[j] >= 0 {
+                int sl = vn_slot(j);
+                if sl >= 0 && sl < 8192 && !ah_written(nch, ir_k[j]) { nc = ir_k[j]; }
+            } else if op == IR_COPY {
+                nc = ah_get(ir_a[j]);
+            }
+            ah_set(d, nc);
+        } else if d > 0 {
+            ah_set(d, 0 - 1000000);
+        }
+        j += 1;
+    }
+    int tt = ir_be[b] - 1;
+    if ir_op[tt] == IR_BR && ir_k[tt] == IR_NE && ir_bi[tt] == 1 && ir_b[tt] == 0 && ah_get(ir_a[tt]) >= 0 {
+        int cell2 = ah_get(ir_a[tt]);
+        int hi2 = ah_cellidx(cell2);
+        if hi2 == ah_n && spine == 1 && ah_n < AH_MAXH {
+            ah_cell[ah_n] = cell2;
+            ah_trap[ah_n] = ir_t2[tt];
+            ah_n += 1;
+        }
+        if hi2 < ah_n && ah_nbr < AH_MAXC {
+            ah_br[ah_nbr] = tt;
+            ah_nbr += 1;
+        }
+    }
+}
+
 bool ah_loop(int q) {
     int h = cl_head[q];
     int l = cl_lidx[q];
@@ -8165,67 +8648,56 @@ bool ah_loop(int q) {
     }
     op_mark_loop(l);
     int stamp = op_stamp;
-    // the loop is the header and the chain
-    int nch = uj_walk(cl_body[q], h, stamp, @ah_chain);
-    if nch <= 0 { return false; }
-    int inloop = nch + 1;
-    if cl_nblk[q] != inloop { return false; }
-    int c = 0;
+    // the blocks of the loop in reverse post order; nothing leaves the loop but the test of the header and the traps
+    int nch = 0;
+    int r = 0;
+    while r < op_nrpo {
+        int rb = op_rpo[r];
+        if op_mark[rb] == stamp && rb != h {
+            if nch >= UJ_MAXB { return false; }
+            ah_chain[nch] = rb;
+            nch += 1;
+            int k = 0;
+            while k < 2 {
+                int sx = op_succ(rb, k);
+                if sx >= 0 && op_mark[sx] != stamp && !ah_istrap(sx) { return false; }
+                k += 1;
+            }
+        }
+        r += 1;
+    }
+    if nch <= 0 || nch > 40 { return false; }
+    if (ir_opt & 72057594037927936) != 0 {
+        // -irdbg 72057594037927936: only a loop whose blocks are one straight chain
+        int nwalk = uj_walk(cl_body[q], h, stamp, @ah_tmpc);
+        if nwalk <= 0 || cl_nblk[q] != nwalk + 1 { return false; }
+    }
+    int stb = cl_stb[q];
     ah_n = 0;
     ah_nbr = 0;
     ah_nld = 0;
-    ah_stamp += 1;
-    while c < nch {
-        int b = ah_chain[c];
-        if c > 0 && ah_npred(b) != 1 { ah_stamp += 1; }
-        int j = ir_bs[b];
-        int e = ir_be[b] - 1;
-        while j < e {
-            int op = ir_op[j];
-            int d = ir_d[j];
-            if op == IR_NOP || op == IR_STORE { j += 1; continue; }
-            if op == IR_LOAD && ir_a[j] != 30 && ah_get(ir_a[j]) >= 0 && ir_k[j] == 16 && ir_w[j] == 8 {
-                int cell = ah_get(ir_a[j]);
-                int hi = 0;
-                while hi < ah_n && ah_cell[hi] != cell { hi += 1; }
-                if hi < ah_n && ah_nld < AH_MAXC {
-                    ah_ld[ah_nld] = j;
-                    ah_li[ah_nld] = hi;
-                    ah_nld += 1;
-                }
-                ah_set(d, 0 - 1000000);
-            } else if d > 0 && ir_vcls[d] == 0 {
-                int nc = 0 - 1000000;
-                if op == IR_LOAD && ir_a[j] == 30 && ir_w[j] == 8 && ir_k[j] >= 0 {
-                    int sl = vn_slot(j);
-                    if sl >= 0 && sl < 8192 && !ah_written(nch, ir_k[j]) { nc = ir_k[j]; }
-                } else if op == IR_COPY {
-                    nc = ah_get(ir_a[j]);
-                }
-                ah_set(d, nc);
-            } else if d > 0 {
-                ah_set(d, 0 - 1000000);
+    ah_collect_checked();
+    int pass = 0;
+    while pass < 2 {
+        int c = 0;
+        ah_stamp += 1;
+        ah_prevb = 0 - 1;
+        while c < nch {
+            int b = ah_chain[c];
+            bool sp = op_dom(b, stb);
+            if (pass == 0 && sp) || (pass == 1 && !sp) {
+                int np = ah_npred1(b);
+                if np != 1 || ah_lastpred != ah_prevb { ah_stamp += 1; }
+                int spn = 0;
+                if pass == 0 { spn = 1; }
+                ah_scan(b, nch, spn);
+                ah_prevb = b;
             }
-            j += 1;
+            c += 1;
         }
-        int tt = ir_be[b] - 1;
-        if ir_op[tt] == IR_BR && ir_k[tt] == IR_NE && ir_bi[tt] == 1 && ir_b[tt] == 0 && ah_get(ir_a[tt]) >= 0 {
-            int cell2 = ah_get(ir_a[tt]);
-            int hi2 = 0;
-            while hi2 < ah_n && ah_cell[hi2] != cell2 { hi2 += 1; }
-            if hi2 == ah_n && ah_n < AH_MAXH {
-                ah_cell[ah_n] = cell2;
-                ah_trap[ah_n] = ir_t2[tt];
-                ah_n += 1;
-            }
-            if hi2 < ah_n && ah_nbr < AH_MAXC {
-                ah_br[ah_nbr] = tt;
-                ah_nbr += 1;
-            }
-        }
-        c += 1;
+        pass += 1;
     }
-    if ah_n == 0 || ah_nld == 0 || ah_nbr == 0 { return false; }
+    if ah_n == 0 || ah_nld == 0 { return false; }
     // an access of a cell is only changed when the check of that cell was seen before it, and the check is only removed when the
     // data pointer is used: every hoisted cell must have at least one data load
     int cellbase = 0 - (op_maxq() + 8);
@@ -8271,35 +8743,28 @@ bool ah_loop(int q) {
     if ir_t1[th] == body { ir_t1[pbr] = eb; ir_t2[pbr] = ir_t2[th]; }
     else { ir_t1[pbr] = ir_t1[th]; ir_t2[pbr] = eb; }
     ir_set_block(eb);
-    int hv = ir_vreg(0);
-    int lh = ir_add(IR_LOAD, hv, 30, 0, 0, 0);
-    ir_w[lh] = 8;
-    ir_k[lh] = ah_cell[0];
-    int bk = ir_add(IR_BR, 0, hv, 0, 1, IR_NE);
-    ir_t2[bk] = ah_trap[0];
     u = 0;
     while u < ah_n {
-        int cb = ir_new_block(0 - 1);
-        ir_t1[bk] = cb;
-        ir_set_block(cb);
+        int hv = ir_vreg(0);
+        int lh = ir_add(IR_LOAD, hv, 30, 0, 0, 0);
+        ir_w[lh] = 8;
+        ir_k[lh] = ah_cell[u];
+        if ah_trap[u] >= 0 {
+            int bk = ir_add(IR_BR, 0, hv, 0, 1, IR_NE);
+            ir_t2[bk] = ah_trap[u];
+            int cb = ir_new_block(0 - 1);
+            ir_t1[bk] = cb;
+            ir_set_block(cb);
+        }
         int dv = ir_vreg(0);
         int ld = ir_add(IR_LOAD, dv, hv, 0, 0, 16);
         ir_w[ld] = 8;
         int st = ir_add(IR_STORE, 0, 30, dv, 0, ah_ncell[u]);
         ir_w[st] = 8;
-        if u + 1 < ah_n {
-            hv = ir_vreg(0);
-            int lh2 = ir_add(IR_LOAD, hv, 30, 0, 0, 0);
-            ir_w[lh2] = 8;
-            ir_k[lh2] = ah_cell[u + 1];
-            bk = ir_add(IR_BR, 0, hv, 0, 1, IR_NE);
-            ir_t2[bk] = ah_trap[u + 1];
-        } else {
-            int jp = ir_add(IR_JMP, 0, 0, 0, 0, 0);
-            ir_t1[jp] = h;
-        }
         u += 1;
     }
+    int jp = ir_add(IR_JMP, 0, 0, 0, 0, 0);
+    ir_t1[jp] = h;
     // every edge into the header from outside the loop goes to the new test
     int b2 = 0;
     while b2 < nb0 {

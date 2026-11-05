@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.2.17.0 (2026-11-05)
+* **Added (speed):** strength reduction accepts a loop-invariant variable stride (`b[k*n+j]`, `(i*n+k)*8 + data`); the hoist of array checks also covers loops with an `if` inside and handles whose null check was already dropped (only if the handle is null-checked somewhere in the function). Switches: `-irdbg 2305843009213693952` (variable stride), `72057594037927936` (straight chains only), `144115188075855872` (no unchecked case). Tests t593, t594. No measurable speed change on the benchmarks (the pointer cells stay in memory under register pressure); this is groundwork.
+* **Fixed:** none in this release.
+
 ## 1.2.16.0 (2026-11-05)
 * **Added (speed):** the null checks and the data-pointer loads of arrays are hoisted out of innermost counted loops into a guarded preheader (a zero-trip loop with a null array still does not panic; a null array in a loop that runs still panics with the same message); a matmul over `double[]` heap arrays (n = 500) runs 2.5 times faster. `-irdbg 1125899906842624` turns it off. Test t549_arr_hoist.
 * **Fixed:** none in this release.
