@@ -806,13 +806,14 @@ struct __Arr {
     static void^ make(int esize, int cap) {
         int c = cap;
         if c < 4 { c = 4; }
-        int^ h = (int^)Mem::alloc(32 + c * esize);
-        if (int)h == 0 { __panic("out of memory"); }
+        int hv = (int)Mem::alloc(32 + c * esize);         // a plain number, not a pointer variable: no cleanup record for it
+        if hv == 0 { __panic("out of memory"); }
+        int^ h = (int^)hv;
         h[0] = 0;
         h[1] = c;
-        h[2] = (int)h + 32;
+        h[2] = hv + 32;
         h[3] = esize;
-        return (void^)h;
+        return (void^)hv;
     }
     // room for at least `need` elements
     static void grow(int^ h, int need) {

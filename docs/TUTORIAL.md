@@ -102,6 +102,67 @@ For the complete list of features see [LANGUAGE.md](LANGUAGE.md); for the comman
 87. Real text: reading UTF-8 and the library <font>
 88. Light, shadow and glow: how colours mix
 89. Keys from one secret: HKDF and the tool jmaip
+90. Fast loops: how to write code the compiler can vectorise
+91. Why loops over arrays are fast
+92. Measuring time with Time::mono_ns
+93. float and double, and float[] arrays
+94. SIMD types: f32x4 load and store
+95. f32x4 operators and .sum()
+96. axpy with f32x4: y = y + a * x
+97. Matrix product, the plain way (ijk)
+98. Why ijk is slower: a chain of adds, and two accumulators
+99. Four accumulators by hand
+100. Vector across j: four columns of C at once
+101. A 4x8 register block
+102. Threads: the #multithread loop
+103. Bounds checks and the -d switch
+104. The switches -novec, -nofma, -nopeep, -noir
+105. Reading the assembly of a loop
+106. Integer sums with i32x4
+107. Avoiding allocation in a hot loop
+108. Struct of arrays and array of structs
+109. Cache: row-major order, i-k-j against i-j-k
+110. Comparing with C fairly
+111. What a neural network is
+112. A tensor
+113. Matrix multiply
+114. A linear layer
+115. Activation functions
+116. The loss: mean squared error
+117. The gradient, checked two ways
+118. Gradient descent: one weight
+119. Two weights: a line
+120. XOR with a small network
+121. Backpropagation on the graph
+122. Mini-batches and shuffling
+123. Softmax and cross-entropy
+124. The learning rate
+125. Starting weights
+126. Embeddings
+127. A tiny character model
+128. Saving and loading weights
+129. Inference: using a trained network
+130. Why matmul is the speed
+131. A program of several files
+132. A test for your own function
+133. Errors in a program that reads input
+134. Command-line arguments
+135. Reading a text file line by line
+136. Writing a CSV report
+137. JSON in and out
+138. A small state machine
+139. A tokenizer for arithmetic
+140. A calculator with recursive descent
+141. A heap from scratch
+142. Word frequency with a hash map
+143. Sorting with your own comparison
+144. A room graph for a text adventure
+145. A game loop without graphics
+146. A bank account with methods and checks
+147. A generic stack: Stack<T>
+148. defer: cleanup when a function fails
+149. A build file of makej, read as text
+150. Reading a compiler error
 
 ## Lesson 1. Hello, world
 
@@ -1212,7 +1273,7 @@ The code of `scale` that the compiler made:
 scale:
 mul x0, x0, x1
 asr x0, x0, #2
-L9018:
+L9017:
 ret
 // 3 instructions
 ```
@@ -3463,6 +3524,3146 @@ jmaip dec notes.txt.jmaip                   # the passkey is found from the file
 The key for a file is `HKDF(signature of a fixed text by the passkey, random salt)`, so a changed file or a wrong key is refused, never half-opened. Remember the limit: a passkey that is a file is only as safe as the files and the passphrase; the face or fingerprint of the phone comes later, as the thing that releases the vault key.
 
 **Try:** make a third key with the label `"backup"` and check that it differs from the other two.
+
+## Lesson 90. Fast loops: how to write code the compiler can vectorise
+
+A loop that does the same thing to every element of an array can run four floats (or two doubles) at a time with NEON. The compiler does this by itself when it can see that the loop is simple. The matrix product in the **row form** is the classic case: the inner loop adds `av * b[bk + j]` to `c[ci + j]` for each `j`, and no turn depends on the one before.
+
+```jk
+#import <stdlib>
+using stdlib;
+
+// C = A * B for small matrices, written in the "row update" form: the inner loop adds a row of B, times one number, to a row of C.
+int main() {
+    int n = 4;
+    float[] a = arr(n * n);
+    float[] b = arr(n * n);
+    float[] c = arr(n * n);
+    for i in 0..n * n { a.push((float)(i % 5)); b.push((float)(i % 3)); c.push(0.0); }
+    for i in 0..n {
+        for k in 0..n {
+            float av = a[i * n + k];
+            int ci = i * n;
+            int bk = k * n;
+            int j = 0;
+            while j < n { c[ci + j] = c[ci + j] + av * b[bk + j]; j += 1; }
+        }
+    }
+    for i in 0..n {
+        for j in 0..n { jout << c[i * n + j] << " "; }
+        jout << "\n";
+    }
+    return 0;
+}
+
+```
+
+Output:
+
+```
+5.000000 5.000000 8.000000 5.000000 
+2.000000 6.000000 13.000000 2.000000 
+4.000000 12.000000 8.000000 4.000000 
+11.000000 8.000000 8.000000 11.000000 
+```
+
+Three habits help the compiler: (1) keep the row offsets in plain local `int` variables (`ci`, `bk`) and add the counter `j` to them; (2) read the number that does not change (`av`) into a local before the loop; (3) do not call functions inside the loop. If two rows could overlap in memory, the compiler tests it at run time and uses the plain loop in that case, so the result is always the same as without vectors (`-novec` shows it).
+
+The plain form `s = s + a[i*n+k] * b[k*n+j]` (a dot product) has a chain: each turn needs the sum of the one before. That is slower today (about 1.6x to 2.5x of C on the phone); for big training loops use `<neuron>` (`matmul_fast`).
+
+**Try:** compile with and without `-novec` and compare the output.
+
+## Lesson 91. Why loops over arrays are fast
+
+An array is one block of memory whose elements sit next to each other. The processor reads memory in pieces of 64 bytes (a cache line),
+so one read brings the next several numbers with it. A loop that goes straight through the array in order uses every piece it reads.
+That is why this kind of loop is fast, and why much of the speed in this part comes from keeping data in order.
+
+```jk
+#import <stdlib>
+using stdlib;
+
+int main() {
+    int[] a = arr(1000);
+    for i in 0..1000 { a.push(i % 7); }
+    int total = 0;
+    for i in 0..a.len { total += a[i]; }      // the elements are read in memory order
+    jout << "sum: " << total << "\n";
+    return 0;
+}
+```
+
+Output:
+
+```
+sum: 2997
+```
+
+The program adds the numbers one by one in memory order. Nothing in it is clever: the speed comes from the order of the reads.
+
+**Try:** change `i % 7` to `i % 100` and check the sum before you run it.
+
+## Lesson 92. Measuring time with Time::mono_ns
+
+To know how long code takes, read the clock before and after it. `Time::mono_ns()` gives nanoseconds from a clock that only goes
+forward (it does not jump back when the time is set). The times change on every run, so this program prints only things that never change:
+a checksum of the result and a line that shows the clock went forward. Repeat the work several times and keep the best (smallest) time.
+
+```jk
+#import <stdlib>
+using stdlib;
+
+int work(int[] a) {
+    int s = 0;
+    for i in 0..a.len { s += a[i] * 3; }
+    return s;
+}
+
+int main() {
+    int[] a = arr(100000);
+    for i in 0..100000 { a.push(i % 10); }
+    int best = 0;
+    int check = 0;
+    for run in 0..5 {
+        int t0 = Time::mono_ns();
+        check = work(a);
+        int dt = Time::mono_ns() - t0;
+        if run == 0 || dt < best { best = dt; }
+    }
+    int t_end = Time::mono_ns();
+    if t_end >= 0 { jout << "ok: the clock went forward\n"; }
+    jout << "checksum: " << check << "\n";
+    return 0;
+}
+```
+
+Output:
+
+```
+ok: the clock went forward
+checksum: 1350000
+```
+
+One run is noisy: other programs, the cache and the clock itself change the number. The best of several runs is the usual honest figure.
+This program does not print the time, so its output is the same every time you run it.
+
+**Try:** run the work 10 times instead of 5 and check that the checksum does not change.
+
+## Lesson 93. float and double, and float[] arrays
+
+`float` is a 32-bit decimal number and `double` is 64-bit. A `float[]` takes half the memory of a `double[]` of the same length:
+twice as many numbers fit in each cache line, and four fit in one NEON register (one `f32x4`). Use `float` when its precision is enough
+(most graphics and neural network work); use `double` when a sum must be exact to many digits. Converting between them needs an explicit cast.
+
+```jk
+#import <stdlib>
+using stdlib;
+
+int main() {
+    float[] f = arr(4000);
+    double[] d = arr(4000);
+    for i in 0..4000 {
+        f.push((float)i * 0.5);
+        d.push((double)i * 0.5);
+    }
+    double sf = 0.0;
+    double sd = 0.0;
+    for i in 0..4000 {
+        sf += (double)f[i];
+        sd += d[i];
+    }
+    jout << "float bytes: " << sizeof(float) << ", double bytes: " << sizeof(double) << "\n";
+    jout << "sums: " << sf << " " << sd << "\n";
+    return 0;
+}
+```
+
+Output:
+
+```
+float bytes: 4, double bytes: 8
+sums: 3999000.000000 3999000.000000
+```
+
+Both sums are right here because the numbers are halves and small. With values like 0.1 the `float` sum drifts from the `double` sum after
+many additions; that is why the choice of type is a real decision.
+
+**Try:** change `0.5` to `0.1` in both places and compare the two sums.
+
+## Lesson 94. SIMD types: f32x4 load and store
+
+`#import <simd>` gives vector types. `f32x4` holds four `float` numbers in one 128-bit NEON register; its parts are `x y z w`.
+`f32x4::load(p, i)` reads four floats starting at element `i` of the array that `p` points to, and `v.store(p, i)` writes them back.
+The index counts elements, not bytes. A loop of load, work and store handles four elements per turn.
+
+```jk
+#import <stdlib>
+#import <simd>
+using stdlib;
+
+int main() {
+    float a[8] = {1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0};
+    float c[8];
+    f32x4 v = f32x4::load(@a[0], 4);       // a[4] a[5] a[6] a[7]
+    v.store(@c[0], 0);                     // into c[0] c[1] c[2] c[3]
+    f32x4 w = f32x4::load(@a[0], 0);       // a[0] .. a[3]
+    w.store(@c[4], 0);                     // into c[4] .. c[7]
+    for i in 0..8 { jout << c[i] << " "; }
+    jout << "\n";
+    return 0;
+}
+```
+
+Output:
+
+```
+5.000000 6.000000 7.000000 8.000000 1.000000 2.000000 3.000000 4.000000 
+```
+
+The first four numbers of `c` are the last four of `a`, and the last four are the first four of `a`.
+
+**Try:** load from index 2 instead of 4 and predict every number of `c` before you run it.
+
+## Lesson 95. f32x4 operators and .sum()
+
+The operators `+ - * /` work on all four lanes at once: one instruction does four additions. A plain number on one side is
+used for every lane. `.sum()`, `.min()` and `.max()` give one number from the four lanes; they turn a vector result into a single answer.
+
+```jk
+#import <stdlib>
+using stdlib;
+
+#import <simd>
+
+int main() {
+    f32x4 x = {1.0, 2.0, 3.0, 4.0};
+    f32x4 y = {0.5, 0.5, 2.0, 2.0};
+    f32x4 z = x * y + x;                   // four lanes at once: 1.5 3 9 12
+    jout << z.x << " " << z.y << " " << z.z << " " << z.w << "\n";
+    f32x4 h = z / 2.0 - 1.0;               // the number is used for every lane
+    jout << h.x << " " << h.w << "\n";
+    jout << "sum " << z.sum() << "  min " << z.min() << "  max " << z.max() << "\n";
+    return 0;
+}
+```
+
+Output:
+
+```
+1.500000 3.000000 9.000000 12.000000
+-0.250000 5.000000
+sum 25.500000  min 1.500000  max 12.000000
+```
+
+The lanes of `z` are 1.5, 3, 9 and 12, so `z.sum()` is 25.5, the smallest is 1.5 and the largest is 12.
+
+**Try:** compute `z.sum()` by hand from the first line and check it.
+
+## Lesson 96. axpy with f32x4: y = y + a * x
+
+This is one of the most common loops in linear algebra and in training: `y = y + a * x` (the BLAS name is axpy). For each element
+there is one multiply and one add. The number `a` is put in a vector with `{a, a, a, a}`, then `x` and `y` are read four at a time.
+In this simple form the length `n` must be a multiple of 4. Lesson 90 showed the row form of a matrix product; this is the same idea by itself.
+
+```jk
+#import <stdlib>
+#import <simd>
+using stdlib;
+
+// y = y + a * x for n numbers; n must be a multiple of 4 in this simple form
+void axpy(float a, float^ x, float^ y, int n) {
+    f32x4 av = {a, a, a, a};
+    int i = 0;
+    while i < n {
+        f32x4 xv = f32x4::load(x, i);
+        f32x4 yv = f32x4::load(y, i);
+        yv = yv + av * xv;
+        yv.store(y, i);
+        i += 4;
+    }
+}
+
+int main() {
+    float x[8];
+    float y[8];
+    for i in 0..8 {
+        x[i] = (float)i;
+        y[i] = 1.0;
+    }
+    axpy(0.5, @x[0], @y[0], 8);
+    for i in 0..8 { jout << y[i] << " "; }
+    jout << "\n";
+    return 0;
+}
+```
+
+Output:
+
+```
+1.000000 1.500000 2.000000 2.500000 3.000000 3.500000 4.000000 4.500000 
+```
+
+Each element is `1 + 0.5 * i`, so the line is 1, 1.5, 2 ... 4.5.
+
+**Try:** call `axpy` a second time with `a` equal to 2.0 and predict the new line.
+
+## Lesson 97. Matrix product, the plain way (ijk)
+
+`C = A * B` is most often written as three loops: for each row `i` of C and each column `j`, the dot product of row `i` of A and
+column `j` of B. The sum `s` is one dot product. It is easy to read and it is the form in most textbooks. The example is 4x4: `A[i][k] = i + k`
+and `B[k][j] = k - j`, each stored in one flat array with the index `i*n + k`.
+
+```jk
+#import <stdlib>
+using stdlib;
+
+// C = A * B for 4x4, the plain way: C[i][j] is the dot product of row i of A and column j of B
+int main() {
+    int n = 4;
+    float[] a = arr(16);
+    float[] b = arr(16);
+    float[] c = arr(16);
+    for i in 0..n {
+        for k in 0..n { a.push((float)(i + k)); }
+    }
+    for k in 0..n {
+        for j in 0..n { b.push((float)(k - j)); }
+    }
+    for i in 0..n {
+        for j in 0..n {
+            float s = 0.0;
+            for k in 0..n { s = s + a[i * n + k] * b[k * n + j]; }
+            c.push(s);
+        }
+    }
+    for i in 0..n {
+        for j in 0..n { jout << c[i * n + j] << " "; }
+        jout << "\n";
+    }
+    return 0;
+}
+```
+
+Output:
+
+```
+14.000000 8.000000 2.000000 -4.000000 
+20.000000 10.000000 0.000000 -10.000000 
+26.000000 12.000000 -2.000000 -16.000000 
+32.000000 14.000000 -4.000000 -22.000000 
+```
+
+The inner loop over `k` is a chain: each `s = s + ...` needs the result of the one before. Lesson 98 explains why that limits the speed.
+
+**Try:** work out the first number of row 0 by hand (it is the dot product of row 0 of A and column 0 of B) and check it.
+
+## Lesson 98. Why ijk is slower: a chain of adds, and two accumulators
+
+The processor can do several additions at the same time, but a chain `s = s + x` must wait for the previous `s` each time, so one long
+chain runs at the speed of one add after another. The fix is to **jam** the loop: keep two sums that do not depend on each other, `s0` for the
+even terms and `s1` for the odd ones, and add them at the end. The answer is the same and the two chains run side by side.
+Adding floats in a different order can change the last digit, so this example uses whole numbers.
+
+```jk
+#import <stdlib>
+using stdlib;
+
+// one chain: every add waits for the one before it
+float dot_one(float[] a, float[] b, int n) {
+    float s = 0.0;
+    for i in 0..n { s = s + a[i] * b[i]; }
+    return s;
+}
+
+// two chains: s0 and s1 do not wait for each other; they are added at the end
+float dot_two(float[] a, float[] b, int n) {
+    float s0 = 0.0;
+    float s1 = 0.0;
+    int i = 0;
+    while i + 2 <= n {
+        s0 = s0 + a[i] * b[i];
+        s1 = s1 + a[i + 1] * b[i + 1];
+        i += 2;
+    }
+    return s0 + s1;
+}
+
+int main() {
+    float[] a = arr(8);
+    float[] b = arr(8);
+    for i in 0..8 {
+        a.push((float)(i + 1));
+        b.push((float)(i % 3));
+    }
+    jout << "one chain: " << dot_one(a, b, 8) << "\n";
+    jout << "two chains: " << dot_two(a, b, 8) << "\n";
+    return 0;
+}
+```
+
+Output:
+
+```
+one chain: 33.000000
+two chains: 33.000000
+```
+
+Both lines print the same sum. Four chains (lesson 99) usually do better still, because the processor can run four adds at once.
+
+**Try:** write `dot_three` with three chains and check that it prints the same sum.
+
+## Lesson 99. Four accumulators by hand
+
+Four chains `s0 .. s3` take the elements `i`, `i+1`, `i+2` and `i+3`. The loop steps by four; the elements left over (when `n` is not a
+multiple of 4) are added after it. This is the same trick as a vector with four lanes: four chains that run at once.
+
+```jk
+#import <stdlib>
+using stdlib;
+
+// four chains: s0 .. s3 take the elements i .. i+3; the loop steps by 4 and the tail is added at the end
+float dot_four(float[] a, float[] b, int n) {
+    float s0 = 0.0;
+    float s1 = 0.0;
+    float s2 = 0.0;
+    float s3 = 0.0;
+    int i = 0;
+    while i + 4 <= n {
+        s0 = s0 + a[i] * b[i];
+        s1 = s1 + a[i + 1] * b[i + 1];
+        s2 = s2 + a[i + 2] * b[i + 2];
+        s3 = s3 + a[i + 3] * b[i + 3];
+        i += 4;
+    }
+    float s = s0 + s1 + s2 + s3;
+    while i < n {
+        s = s + a[i] * b[i];
+        i += 1;
+    }
+    return s;
+}
+
+int main() {
+    float[] a = arr(18);
+    float[] b = arr(18);
+    for i in 0..18 {
+        a.push((float)(i + 1));
+        b.push((float)(i % 4));
+    }
+    float plain = 0.0;
+    for i in 0..18 { plain = plain + a[i] * b[i]; }
+    jout << "plain: " << plain << "\n";
+    jout << "four chains: " << dot_four(a, b, 18) << "\n";
+    return 0;
+}
+```
+
+Output:
+
+```
+plain: 242.000000
+four chains: 242.000000
+```
+
+Both lines are the same sum. The `while` loop at the end handles the two leftover elements (18 is not a multiple of 4).
+
+**Try:** change every 18 to 16 (the arrays and the loops) and check that the tail loop then does nothing.
+
+## Lesson 100. Vector across j: four columns of C at once
+
+Instead of one dot product at a time, a vector can hold four columns: `cv` holds `C[i][j..j+3]`. For each `k`, the number `A[i][k]`
+is put in every lane (a broadcast, `{x, x, x, x}`), the row `B[k][0..3]` is loaded as one vector, and `cv = cv + av * bv`. The four lanes are four
+separate sums, so four chains run side by side, and the loads read memory in order. The example uses the same data as lesson 97.
+
+```jk
+#import <stdlib>
+#import <simd>
+using stdlib;
+
+// C = A * B for 4x4, four columns of C at a time: cv holds the row i of C
+int main() {
+    int n = 4;
+    float a[16];
+    float b[16];
+    float c[16];
+    for i in 0..n {
+        for k in 0..n { a[i * n + k] = (float)(i + k); }
+    }
+    for k in 0..n {
+        for j in 0..n { b[k * n + j] = (float)(k - j); }
+    }
+    for i in 0..n {
+        f32x4 cv = {0.0, 0.0, 0.0, 0.0};
+        for k in 0..n {
+            float x = a[i * n + k];                 // A[i][k]
+            f32x4 av = {x, x, x, x};                // broadcast to every lane
+            f32x4 bv = f32x4::load(@b[0], k * n);   // B[k][0..3]
+            cv = cv + av * bv;
+        }
+        cv.store(@c[0], i * n);
+    }
+    for i in 0..16 {
+        jout << c[i] << " ";
+        if i % 4 == 3 { jout << "\n"; }
+    }
+    return 0;
+}
+```
+
+Output:
+
+```
+14.000000 8.000000 2.000000 -4.000000 
+20.000000 10.000000 0.000000 -10.000000 
+26.000000 12.000000 -2.000000 -16.000000 
+32.000000 14.000000 -4.000000 -22.000000 
+```
+
+The four lines are the same four lines lesson 97 printed.
+
+**Try:** change `n` to 8 and the arrays to 64 numbers, and count how many times the inner loop runs.
+
+## Lesson 101. A 4x8 register block
+
+A register block is a small piece of C that stays in registers while the loop over `k` runs. Here C is 4 rows by 8 columns, kept as
+eight `f32x4` values: two for each row (columns 0..3 and 4..7). Each `k` loads two vectors of `B` (row `k`, eight numbers), and for each row
+broadcasts `A[i][k]` and adds into that row's two vectors. C is not written to memory until the end. The example uses K = 3 and small numbers,
+so you can check the output by hand.
+
+```jk
+#import <stdlib>
+#import <simd>
+using stdlib;
+
+// A is 4x3, B is 3x8, C is 4x8 (K = 3). The eight vectors of C stay in registers during the loop over k.
+int main() {
+    float a[12];
+    float b[24];
+    for i in 0..4 {
+        for k in 0..3 { a[i * 3 + k] = (float)(i + k + 1); }
+    }
+    for k in 0..3 {
+        for j in 0..8 { b[k * 8 + j] = (float)(k + j); }
+    }
+    f32x4 z = {0.0, 0.0, 0.0, 0.0};
+    f32x4 c00 = z;  f32x4 c01 = z;
+    f32x4 c10 = z;  f32x4 c11 = z;
+    f32x4 c20 = z;  f32x4 c21 = z;
+    f32x4 c30 = z;  f32x4 c31 = z;
+    for k in 0..3 {
+        f32x4 b_lo = f32x4::load(@b[0], k * 8);       // B[k][0..3]
+        f32x4 b_hi = f32x4::load(@b[0], k * 8 + 4);   // B[k][4..7]
+        float x0 = a[k];
+        float x1 = a[3 + k];
+        float x2 = a[6 + k];
+        float x3 = a[9 + k];
+        f32x4 a0 = {x0, x0, x0, x0};
+        f32x4 a1 = {x1, x1, x1, x1};
+        f32x4 a2 = {x2, x2, x2, x2};
+        f32x4 a3 = {x3, x3, x3, x3};
+        c00 = c00 + a0 * b_lo;  c01 = c01 + a0 * b_hi;
+        c10 = c10 + a1 * b_lo;  c11 = c11 + a1 * b_hi;
+        c20 = c20 + a2 * b_lo;  c21 = c21 + a2 * b_hi;
+        c30 = c30 + a3 * b_lo;  c31 = c31 + a3 * b_hi;
+    }
+    float out[32];
+    c00.store(@out[0], 0);   c01.store(@out[0], 4);
+    c10.store(@out[0], 8);   c11.store(@out[0], 12);
+    c20.store(@out[0], 16);  c21.store(@out[0], 20);
+    c30.store(@out[0], 24);  c31.store(@out[0], 28);
+    for i in 0..4 {
+        for j in 0..8 { jout << out[i * 8 + j] << " "; }
+        jout << "\n";
+    }
+    return 0;
+}
+```
+
+Output:
+
+```
+8.000000 14.000000 20.000000 26.000000 32.000000 38.000000 44.000000 50.000000 
+11.000000 20.000000 29.000000 38.000000 47.000000 56.000000 65.000000 74.000000 
+14.000000 26.000000 38.000000 50.000000 62.000000 74.000000 86.000000 98.000000 
+17.000000 32.000000 47.000000 62.000000 77.000000 92.000000 107.000000 122.000000 
+```
+
+Row 0 is `A[0][k]` times row `k` of B, added over `k = 0, 1, 2`. For column 0 that is 1*0 + 2*1 + 3*2 = 8.
+
+**Try:** change `K` to 2 (use only `k` 0 and 1) and check the first number of row 0 by hand.
+
+## Lesson 102. Threads: the #multithread loop
+
+`#multithread` on the line before a `for` loop shares the iterations among the cores (at most 16 parts). Each iteration must be
+independent of the others, and the body may not use `break`, `return` or another `#multithread`. The loop ends when every part has finished,
+so the output is always the same.
+
+```jk
+#import <stdlib>
+using stdlib;
+
+int squares[1000];
+
+void main() {
+    int offset = 5;
+    #multithread
+    for i in 0..1000 {                  // the iterations are shared among the machine's cores
+        squares[i] = i * i + offset;    // every iteration writes its own element
+    }
+    jout << squares[999] << "\n";
+}
+```
+
+Output:
+
+```
+998006
+```
+
+Every iteration writes only its own element, so the parts never touch the same memory. A loop that adds into one shared total needs a
+`Mutex` (see LANGUAGE.md) or a sum for each part.
+
+**Try:** change `offset` to 7 and predict the output before you run it.
+
+## Lesson 103. Bounds checks and the -d switch
+
+`a[i]` is checked against the length only when you build with `-d`: `jcmp prog.jk -d -o prog`. A bad index then stops the program with
+`runtime error: index out of bounds, array size is N` and exit code 134. A normal build does not check, so a wrong index reads other memory.
+Use `-d` while you test. The check costs a compare in each loop, so the release build leaves it out. A loop over `0..a.len` never goes out of
+range, and that is the form to write first.
+
+```jk
+#import <stdlib>
+using stdlib;
+
+int main() {
+    int[] a = arr(10);
+    for i in 0..10 { a.push(i * 3); }
+    int total = 0;
+    for i in 0..a.len { total += a[i]; }      // i always stays inside 0 .. a.len - 1
+    jout << "total " << total << "\n";
+    return 0;
+}
+```
+
+Output:
+
+```
+total 135
+```
+
+Build it with `-d` as well: `jcmp bounds.jk -d -o bounds`. The output is the same, because this program never goes out of range.
+
+**Try:** change the loop to `for i in 0..11` with `-d` and read the error message.
+
+## Lesson 104. The switches -novec, -nofma, -nopeep, -noir
+
+Four switches turn off one optimisation each, so you can find which one is wrong: `-novec` (no NEON vector loops), `-nofma`
+(keep the two roundings of `a*b + c`), `-nopeep` (no rewrites of the final assembler text) and `-noir` (skip the optimiser on the
+intermediate form). If the output changes when you add one of them, the fault is in that part. This program prints the same with every switch,
+because its numbers are exact.
+
+```jk
+#import <stdlib>
+using stdlib;
+
+int main() {
+    double[] x = arr(8);
+    double[] y = arr(8);
+    for i in 0..8 {
+        x.push(0.5 * (double)i);
+        y.push(2.0 * (double)i);
+    }
+    double s = 0.0;
+    for i in 0..8 { s = s + x[i] * y[i] + 1.0; }   // a * b + c: with FMA this is one rounding
+    jout << "sum " << s << "\n";
+    return 0;
+}
+```
+
+Output:
+
+```
+sum 148.000000
+```
+
+Try it yourself: `jcmp switches.jk -o fast` and `jcmp switches.jk -novec -noir -o plain`, run both and compare. Use one switch at a time
+when you look for a bug.
+
+**Try:** add `-nofma` to the command and check that the output is still `sum 148.000000`.
+
+## Lesson 105. Reading the assembly of a loop
+
+`--emit-asm file` writes the assembler text the compiler made, so you can see what your loop turned into. Write the command with the
+file name you want: `jcmp total.jk -o total --emit-asm total.jasm`. `-show NAME` writes only one function and how many instructions it has
+(ARM64), so it is good for a small function such as `total` below. Read the loop body only, not the whole file: the loop is the part
+that counts for speed.
+
+```jk
+#import <stdlib>
+using stdlib;
+
+// a small function with one loop: a good thing to look at with -show total or --emit-asm
+double total(double[] v) {
+    double s = 0.0;
+    for i in 0..v.len { s = s + v[i] * 2.0; }
+    return s;
+}
+
+int main() {
+    double[] v = arr(16);
+    for i in 0..16 { v.push((double)i); }
+    jout << total(v) << "\n";
+    return 0;
+}
+```
+
+Output:
+
+```
+240.000000
+```
+
+The output is `240.000000`: twice the sum of 0 to 15.
+
+**Try:** run `jcmp total.jk -show total` and see how many instructions the function has. Then change `* 2.0` to `* 3.0` and count again.
+
+## Lesson 106. Integer sums with i32x4
+
+Integers have the same shape: `i32[]` holds 32-bit numbers, and `i32x4` adds four of them in one instruction. A sum over an integer array
+is a loop of loads and adds, as with floats, and the four lanes are added at the end with `.sum()`. An integer sum is exact, so the vector sum gives
+the same number as the plain sum whatever the order of the additions.
+
+```jk
+#import <stdlib>
+#import <simd>
+using stdlib;
+
+int main() {
+    i32[] a = arr(1000);
+    for i in 0..1000 { a.push((i32)(i * 3 % 17)); }
+    i32 plain = 0;
+    for i in 0..a.len { plain += a[i]; }
+    i32x4 acc = {0, 0, 0, 0};
+    int i = 0;
+    while i < a.len {
+        acc += i32x4::load(@a[0], i);      // four numbers per turn
+        i += 4;
+    }
+    jout << "plain " << plain << "\n";
+    jout << "vector " << acc.sum() << "\n";
+    return 0;
+}
+```
+
+Output:
+
+```
+plain 7991
+vector 7991
+```
+
+Both lines print the same total. The array length 1000 is a multiple of 4, so the vector loop needs no tail.
+
+**Try:** change `1000` to `999` and work out what the last vector load would read past the end; then write the tail loop of lesson 99 instead.
+
+## Lesson 107. Avoiding allocation in a hot loop
+
+An `arr`, an `alloc` or a `String` built with `+` inside a loop asks the heap for memory on every round. That is slower than the
+arithmetic around it, and a `String` built with `+` copies its text each time. Allocate once before the loop and reuse the memory.
+The program below makes its buffer once and writes into it a hundred thousand times.
+
+```jk
+#import <stdlib>
+using stdlib;
+
+int main() {
+    int[] buf = arr(8);
+    for i in 0..8 { buf.push(0); }        // allocated once, before the loop
+    int total = 0;
+    for round in 0..100000 {
+        for j in 0..8 { buf[j] = round + j; }   // the same memory every round
+        total += buf[7] - buf[0];
+    }
+    jout << total << "\n";
+    return 0;
+}
+```
+
+Output:
+
+```
+700000
+```
+
+Each round adds 7 (the last element minus the first), so the total is 700000.
+
+**Try:** move the `arr(8)` and the pushes inside the outer loop, and time both versions with `Time::mono_ns` (lesson 92).
+
+## Lesson 108. Struct of arrays and array of structs
+
+An array of structs (AoS) keeps `x` and `y` of one point next to each other. A struct of arrays (SoA) keeps all the `x` values in one
+array and all the `y` values in another. A loop that uses only `x` reads far less memory with SoA, because the `y` values are never loaded.
+Both programs below give the same sum of `x`.
+
+```jk
+#import <stdlib>
+using stdlib;
+
+struct Point { double x; double y; }
+
+// array of structs: the x and y of one point are next to each other
+double sum_x_aos(Point[] ps) {
+    double s = 0.0;
+    for i in 0..ps.len { s = s + ps[i].x; }
+    return s;
+}
+
+// struct of arrays: all the x values are in one array
+double sum_x_soa(double[] xs) {
+    double s = 0.0;
+    for i in 0..xs.len { s = s + xs[i]; }
+    return s;
+}
+
+int main() {
+    Point[] ps = arr(1000);
+    double[] xs = arr(1000);
+    double[] ys = arr(1000);
+    for i in 0..1000 {
+        Point p = {(double)i * 0.5, (double)i};
+        ps.push(p);
+        xs.push((double)i * 0.5);
+        ys.push((double)i);
+    }
+    jout << "aos " << sum_x_aos(ps) << "\n";
+    jout << "soa " << sum_x_soa(xs) << "\n";
+    jout << "count of y " << ys.len << "\n";
+    return 0;
+}
+```
+
+Output:
+
+```
+aos 249750.000000
+soa 249750.000000
+count of y 1000
+```
+
+Both sums are the same. The loop over `x` in the SoA version touches only the `xs` array; in the AoS version the same loop skips over every `y`.
+
+**Try:** add a `sum_y_soa` function and check that the sum of `ys` is 499500.
+
+## Lesson 109. Cache: row-major order, i-k-j against i-j-k
+
+A matrix sits in memory row by row (row-major): `a[i*n + j]`. Going along a row reads neighbours, which is kind to the cache; going
+down a column jumps `n` numbers each time. In `C = A * B` the order of the three loops decides which matrix is read along its rows. The order
+i-k-j walks along rows of `B` and `C`; the order i-j-k walks down a column of `B`. Both programs below make the same matrix, so only the speed
+differs (on a matrix this small both fit in the cache, so the gap can be small; the order is the point).
+
+```jk
+#import <stdlib>
+using stdlib;
+
+int main() {
+    int n = 64;
+    double[] a = arr(n * n);
+    double[] b = arr(n * n);
+    double[] c1 = arr(n * n);
+    double[] c2 = arr(n * n);
+    for i in 0..n * n {
+        a.push((double)(i % 7));
+        b.push((double)(i % 5));
+        c1.push(0.0);
+        c2.push(0.0);
+    }
+    // i-j-k: the inner loop walks down a column of B (a jump of n numbers each time)
+    for i in 0..n {
+        for j in 0..n {
+            for k in 0..n { c1[i * n + j] = c1[i * n + j] + a[i * n + k] * b[k * n + j]; }
+        }
+    }
+    // i-k-j: the inner loop walks along a row of B and a row of C
+    for i in 0..n {
+        for k in 0..n {
+            for j in 0..n { c2[i * n + j] = c2[i * n + j] + a[i * n + k] * b[k * n + j]; }
+        }
+    }
+    bool same = true;
+    for i in 0..n * n {
+        if c1[i] != c2[i] { same = false; }
+    }
+    jout << "same matrix: " << same << "\n";
+    return 0;
+}
+```
+
+Output:
+
+```
+same matrix: true
+```
+
+The matrices are equal, so the loop order does not change the answer. Only the order in which the memory is read does.
+
+**Try:** change `n` to 128 and compare the times of the two loops with `Time::mono_ns` (lesson 92). Do not print the times in a test you want to repeat.
+
+## Lesson 110. Comparing with C fairly
+
+To say that J2K is faster or slower than C, compare the same algorithm, the same data and the same settings. Run the two versions in
+turns (A, B, A, B ...) so that heat and other work hit both alike; keep the best of N runs; and check that both give the same answer before you
+compare any time. This program shows the shape of such a test: two versions of one kernel, run in turns, the answers compared, and no time printed.
+
+```jk
+#import <stdlib>
+using stdlib;
+
+// kernel A: one chain of adds
+double kernel_a(double[] v) {
+    double s = 0.0;
+    for i in 0..v.len { s = s + v[i]; }
+    return s;
+}
+
+// kernel B: four chains of adds, the same answer
+double kernel_b(double[] v) {
+    double s0 = 0.0;
+    double s1 = 0.0;
+    double s2 = 0.0;
+    double s3 = 0.0;
+    int n = v.len;
+    int i = 0;
+    while i + 4 <= n {
+        s0 = s0 + v[i];
+        s1 = s1 + v[i + 1];
+        s2 = s2 + v[i + 2];
+        s3 = s3 + v[i + 3];
+        i += 4;
+    }
+    double s = s0 + s1 + s2 + s3;
+    while i < n {
+        s = s + v[i];
+        i += 1;
+    }
+    return s;
+}
+
+int main() {
+    double[] v = arr(100000);
+    for i in 0..100000 { v.push((double)(i % 9)); }
+    int best_a = 0;
+    int best_b = 0;
+    double ra = 0.0;
+    double rb = 0.0;
+    for round in 0..7 {
+        // A and B take turns, so the load of the machine hits both alike
+        int t0 = Time::mono_ns();
+        ra = kernel_a(v);
+        int t1 = Time::mono_ns();
+        rb = kernel_b(v);
+        int t2 = Time::mono_ns();
+        int da = t1 - t0;
+        int db = t2 - t1;
+        if round == 0 || da < best_a { best_a = da; }
+        if round == 0 || db < best_b { best_b = db; }
+    }
+    jout << "same answer: " << (ra == rb) << "\n";
+    jout << "done\n";
+    return 0;
+}
+```
+
+Output:
+
+```
+same answer: true
+done
+```
+
+The timings are kept in `best_a` and `best_b` but not printed, so the output never changes. To report them, print them in your own
+benchmark, next to the same kernel written in C with the same data, and say which compiler and which flags you used.
+
+**Try:** add a third kernel and run it in the same turns; the answer must match too.
+
+## Lesson 111. What a neural network is
+
+A neural network is many small units. Each unit is a weighted sum of its inputs, passed through a function. One unit, written by hand with doubles, is the whole idea: `out = relu(w1 * x1 + w2 * x2 + b)`.
+
+```jk
+#import <stdlib>
+#import <math>
+using stdlib;
+// one neuron: it weighs its inputs, adds a bias, and passes the sum through an activation (here relu)
+double relu(double x) {
+    if x > 0.0 { return x; }
+    return 0.0;
+}
+void main() {
+    double x1 = 2.0;
+    double x2 = 1.0;
+    double w1 = 0.5;
+    double w2 = -1.0;
+    double b = 0.2;
+    double z = w1 * x1 + w2 * x2 + b;
+    jout << "sum    = " << z << "\n";
+    jout << "output = " << relu(z) << "\n";
+    jout << "negative sum -> " << relu(-0.5) << "\n";
+}
+
+```
+
+Output:
+
+```
+sum    = 0.200000
+output = 0.200000
+negative sum -> 0.000000
+```
+
+The weights `w1`, `w2` and the bias `b` are the numbers that training changes. Here the sum is positive, so relu keeps it. A negative sum becomes 0.
+
+**Try:** change `x2` to 3.0 and predict the output before you run it.
+
+## Lesson 112. A tensor
+
+A `Tensor` is a table of numbers with `rows` and `cols`. The numbers are doubles, stored row by row in the field `d`. `Tensor::zeros(r, c)` makes a table filled with 0.0, and `set` and `get` write and read a place by its row and column.
+
+```jk
+#import <stdlib>
+#import <neuron>
+using stdlib;
+// a Tensor is a table of rows x cols doubles; zeros makes one filled with 0.0
+void main() {
+    Tensor t = Tensor::zeros(2, 3);
+    t.set(0, 1, 5.0);
+    t.set(1, 2, -1.5);
+    jout << "shape " << t.rows << " x " << t.cols << "\n";
+    jout << "get(0, 1) = " << t.get(0, 1) << "\n";
+    jout << "get(1, 2) = " << t.get(1, 2) << "\n";
+    for r in 0..t.rows {
+        for c in 0..t.cols { jout << t.get(r, c) << " "; }
+        jout << "\n";
+    }
+}
+
+```
+
+Output:
+
+```
+shape 2 x 3
+get(0, 1) = 5.000000
+get(1, 2) = -1.500000
+0.000000 5.000000 0.000000 
+0.000000 0.000000 -1.500000 
+```
+
+The place (r, c) is `d[r * cols + c]`. `set` changes the table in place. The operations such as `matmul`, `add` and `relu` do not change their input: they return a new Tensor.
+
+**Try:** print `t.d[1 * 3 + 2]` and check that it equals `t.get(1, 2)`.
+
+## Lesson 113. Matrix multiply
+
+In a matrix product, element (i, j) of the result is the sum over k of `A[i][k] * B[k][j]`. `a.matmul(b)` is the plain loop. `a.matmul_fast(b)` uses float32 and dot products, with four threads when the table is big. A small table takes the plain loop, so the two agree. The columns of A must equal the rows of B.
+
+```jk
+#import <stdlib>
+#import <math>
+#import <neuron>
+using stdlib;
+// C = A x B with the plain loop (matmul) and the fast way (matmul_fast)
+void show(Tensor c) {
+    for r in 0..c.rows {
+        for k in 0..c.cols { jout << c.get(r, k) << " "; }
+        jout << "\n";
+    }
+}
+void main() {
+    Tensor a = Tensor::zeros(2, 3);
+    Tensor b = Tensor::zeros(3, 2);
+    for i in 0..6 {
+        a.d[i] = (double)(i + 1);
+        b.d[i] = (double)(i % 4);
+    }
+    show(a.matmul(b));
+    // a big table: the fast way gives the same numbers, up to float32 rounding
+    Tensor p = Tensor::zeros(40, 70);
+    Tensor q = Tensor::zeros(70, 50);
+    for i in 0..40 * 70 { p.d[i] = (double)(i % 11) * 0.125 - 0.5; }
+    for i in 0..70 * 50 { q.d[i] = (double)(i % 7) * 0.25 - 0.75; }
+    Tensor slow = p.matmul(q);
+    Tensor fast = p.matmul_fast(q);
+    double worst = 0.0;
+    for i in 0..slow.rows * slow.cols {
+        double diff = Math::abs(slow.d[i] - fast.d[i]);
+        if diff > worst { worst = diff; }
+    }
+    jout << "shape " << fast.rows << " x " << fast.cols << ", same: " << (worst < 0.001) << "\n";
+}
+
+```
+
+Output:
+
+```
+4.000000 10.000000 
+10.000000 25.000000 
+shape 40 x 50, same: true
+```
+
+Row 0 of the result is row 0 of A times B: 1 * 0 + 2 * 2 + 3 * 0 = 4 for the first element. The big table is checked against the plain loop.
+
+**Try:** print `fast.rows` and `fast.cols` before the check and confirm they are 40 and 50.
+
+## Lesson 114. A linear layer
+
+A layer of neurons is `y = x @ w + b`: a row of inputs times the weight table, plus the bias. `Dense::make(inputs, outputs, seed)` makes the weights from a seed, so the same seed gives the same weights. `forward` also remembers its input, which training needs later.
+
+```jk
+#import <stdlib>
+#import <math>
+#import <neuron>
+using stdlib;
+// a linear layer: y = x @ w + b. The same sum is computed here by hand, and the two agree.
+void main() {
+    Dense layer = Dense::make(3, 2, 7);
+    Tensor x = Tensor::zeros(1, 3);
+    x.set(0, 0, 1.0);
+    x.set(0, 1, -2.0);
+    x.set(0, 2, 0.5);
+    Tensor y = layer.forward(x);
+    jout << "y has " << y.rows << " row and " << y.cols << " columns\n";
+    bool same = true;
+    for j in 0..2 {
+        double s = layer.b.get(0, j);
+        for i in 0..3 { s += x.get(0, i) * layer.w.get(i, j); }
+        jout << "y[" << j << "] = " << y.get(0, j) << "  by hand " << s << "\n";
+        if Math::abs(s - y.get(0, j)) > 0.000001 { same = false; }
+    }
+    jout << "same: " << same << "\n";
+}
+
+```
+
+Output:
+
+```
+y has 1 row and 2 columns
+y[0] = 0.615230  by hand 0.615230
+y[1] = -0.542970  by hand -0.542970
+same: true
+```
+
+A linear layer does nothing more than this: a weighted sum for each output, plus its bias. Training changes `w` and `b`.
+
+**Try:** change the layer to `Dense::make(3, 4, 7)` and predict the shape of `y` before you run it.
+
+## Lesson 115. Activation functions
+
+Without an activation function, a stack of layers is one layer, because a sum of sums is still a sum. The activation bends the output: `relu(x)` is max(0, x), `tanh` goes from -1 to 1, and `sigmoid` goes from 0 to 1. First by hand on doubles, then the same functions on a graph of `Tensor32` values with `g.relu`, `g.tanh` and `g.sigmoid`.
+
+```jk
+#import <stdlib>
+#import <math>
+#import <neuron>
+using stdlib;
+// activation functions: by hand on doubles, then the same on a graph of float32 values
+double relu(double x) {
+    if x > 0.0 { return x; }
+    return 0.0;
+}
+double sigmoid(double x) { return 1.0 / (1.0 + Math::exp(-x)); }
+void main() {
+    double[] xs = arr(4);
+    xs.push(-2.0); xs.push(-0.5); xs.push(0.0); xs.push(1.5);
+    for i in 0..4 {
+        double x = xs[i];
+        jout << "x " << x << "  relu " << relu(x) << "  tanh " << Math::tanh(x) << "  sigmoid " << sigmoid(x) << "\n";
+    }
+    Graph g = Graph::make();
+    int a = g.input(Tensor32::from_list(1, 4, xs));
+    int r = g.relu(a);
+    int t = g.tanh(a);
+    int s = g.sigmoid(a);
+    jout << "graph relu " << g.value(r).d[0] << " " << g.value(r).d[3] << "\n";
+    jout << "graph tanh " << g.value(t).d[0] << " " << g.value(t).d[3] << "\n";
+    jout << "graph sigmoid " << g.value(s).d[2] << "\n";
+}
+
+```
+
+Output:
+
+```
+x -2.000000  relu 0.000000  tanh -0.964028  sigmoid 0.119203
+x -0.500000  relu 0.000000  tanh -0.462117  sigmoid 0.377541
+x 0.000000  relu 0.000000  tanh 0.000000  sigmoid 0.500000
+x 1.500000  relu 1.500000  tanh 0.905148  sigmoid 0.817574
+graph relu 0.000000 1.500000
+graph tanh -0.964028 0.905148
+graph sigmoid 0.500000
+```
+
+The graph computes the same curves in float32, so the last digits can differ a little from the doubles.
+
+**Try:** print `sigmoid(0.0)` and check that it is 0.5.
+
+## Lesson 116. The loss: mean squared error
+
+The loss tells how wrong the output is. Mean squared error takes each error, squares it and averages. Squaring makes a big error count much more than a small one, and a negative error does not cancel a positive one.
+
+```jk
+#import <stdlib>
+#import <neuron>
+using stdlib;
+// the loss by hand, then the same with the graph's mse node
+void main() {
+    double[] out = arr(3);
+    out.push(0.8); out.push(0.2); out.push(0.6);
+    double[] want = arr(3);
+    want.push(1.0); want.push(0.0); want.push(1.0);
+    double s = 0.0;
+    for i in 0..3 {
+        double e = out[i] - want[i];
+        s += e * e;
+        jout << "error " << i << ": " << e << "\n";
+    }
+    jout << "mse by hand = " << s / 3.0 << "\n";
+    Graph g = Graph::make();
+    int o = g.input(Tensor32::from_list(3, 1, out));
+    int l = g.mse(o, Tensor32::from_list(3, 1, want));
+    jout << "mse of the graph = " << g.value(l).d[0] << "\n";
+}
+
+```
+
+Output:
+
+```
+error 0: -0.200000
+error 1: 0.200000
+error 2: -0.400000
+mse by hand = 0.080000
+mse of the graph = 0.080000
+```
+
+The graph's `mse(output, target)` returns a node; `g.value(node).d[0]` reads its number. The two results agree.
+
+**Try:** change the second output `0.2` to `0.5` and compute the new loss by hand before you run it.
+
+## Lesson 117. The gradient, checked two ways
+
+Training needs the slope of the loss: how much it changes when one weight changes. For `f(w) = (2w - 6)^2` the slope is `2 * (2w - 6) * 2`. A numerical check moves `w` a tiny step each way and divides the change by the step. The graph's `backward` must give the same number.
+
+```jk
+#import <stdlib>
+#import <math>
+#import <neuron>
+using stdlib;
+// f(w) = (2w - 6)^2: the slope by hand, the slope by a numerical check, and the slope from the graph
+double f(double w) {
+    double e = 2.0 * w - 6.0;
+    return e * e;
+}
+void main() {
+    double w = 1.0;
+    double h = 0.001;
+    double exact = 2.0 * (2.0 * w - 6.0) * 2.0;
+    double numeric = (f(w + h) - f(w - h)) / (2.0 * h);
+    jout << "f(1) = " << f(w) << "\n";
+    jout << "slope by hand = " << exact << "\n";
+    jout << "slope numeric = " << numeric << "\n";
+    jout << "they agree: " << (Math::abs(exact - numeric) < 0.0001) << "\n";
+    Graph g = Graph::make();
+    double[] wv = arr(1);
+    wv.push(w);
+    double[] xv = arr(1);
+    xv.push(2.0);
+    double[] yv = arr(1);
+    yv.push(6.0);
+    int wn = g.param(Tensor32::from_list(1, 1, wv));
+    g.mark();
+    int x = g.input(Tensor32::from_list(1, 1, xv));
+    int l = g.mse(g.matmul(x, wn), Tensor32::from_list(1, 1, yv));
+    g.backward(l);
+    jout << "slope from the graph = " << g.gradient(wn).d[0] << "\n";
+}
+
+```
+
+Output:
+
+```
+f(1) = 16.000000
+slope by hand = -16.000000
+slope numeric = -16.000000
+they agree: true
+slope from the graph = -16.000000
+```
+
+At `w = 1` the loss is 16 and the slope is -16: making `w` bigger lowers the loss. This is the check the library uses for every operation.
+
+**Try:** use `w = 3.0`; the slope there is 0, the lowest point of the loss.
+
+## Lesson 118. Gradient descent: one weight
+
+Gradient descent moves the weight a little against its slope, again and again. The rate (0.05 here) sets how big each move is. The data is `y = 2x` at x = 1, 2, 3, so the right weight is 2.
+
+```jk
+#import <stdlib>
+using stdlib;
+// fit one weight: y = 2x on x = 1, 2, 3. The loss is the mean of (w*x - y)^2.
+void main() {
+    double[] xs = arr(3);
+    xs.push(1.0); xs.push(2.0); xs.push(3.0);
+    double[] ys = arr(3);
+    ys.push(2.0); ys.push(4.0); ys.push(6.0);
+    double w = 0.0;
+    double rate = 0.05;
+    for step in 0..60 {
+        double g = 0.0;
+        double loss = 0.0;
+        for i in 0..3 {
+            double e = w * xs[i] - ys[i];
+            loss += e * e;
+            g += 2.0 * e * xs[i];
+        }
+        if step % 10 == 0 { jout << "step " << step << "  w = " << w << "  loss = " << loss / 3.0 << "\n"; }
+        w = w - rate * g / 3.0;
+    }
+    jout << "w after 60 steps = " << w << "\n";
+}
+
+```
+
+Output:
+
+```
+step 0  w = 0.000000  loss = 18.666667
+step 10  w = 1.996276  loss = 0.000065
+step 20  w = 1.999993  loss = 0.000000
+step 30  w = 2.000000  loss = 0.000000
+step 40  w = 2.000000  loss = 0.000000
+step 50  w = 2.000000  loss = 0.000000
+w after 60 steps = 2.000000
+```
+
+Each step uses the slope from the data, so the weight moves towards 2 and the loss falls. The rate must be small enough; the learning-rate lesson shows what happens when it is too big.
+
+**Try:** change the data to `y = 3x` and find the weight it reaches.
+
+## Lesson 119. Two weights: a line
+
+A line needs two weights: `y = w * x + b`. The same descent moves both, each by its own average slope over the data points. The data is `y = 3x + 1`, so the answer is w = 3 and b = 1.
+
+```jk
+#import <stdlib>
+using stdlib;
+// the line y = 3x + 1 on five points: w is the slope, b the bias, both moved by their average slope
+void main() {
+    double[] xs = arr(5);
+    double[] ys = arr(5);
+    for i in 0..5 {
+        xs.push((double)i);
+        ys.push(3.0 * (double)i + 1.0);
+    }
+    double w = 0.0;
+    double b = 0.0;
+    double rate = 0.02;
+    for step in 0..1500 {
+        double gw = 0.0;
+        double gb = 0.0;
+        double loss = 0.0;
+        for i in 0..5 {
+            double e = w * xs[i] + b - ys[i];
+            loss += e * e;
+            gw += 2.0 * e * xs[i];
+            gb += 2.0 * e;
+        }
+        if step % 500 == 0 { jout << "step " << step << "  loss " << loss / 5.0 << "\n"; }
+        w = w - rate * gw / 5.0;
+        b = b - rate * gb / 5.0;
+    }
+    jout << "w = " << w << "  b = " << b << "\n";
+}
+
+```
+
+Output:
+
+```
+step 0  loss 67.000000
+step 500  loss 0.000000
+step 1000  loss 0.000000
+w = 3.000000  b = 1.000000
+```
+
+The loss goes to almost 0 because the data lies exactly on a line.
+
+**Try:** add the point x = 5, y = 20 (off the line) to the data and see how w and b move.
+
+## Lesson 120. XOR with a small network
+
+XOR is 1 when exactly one of two inputs is 1. A single straight line cannot separate its answers, but a hidden layer of tanh units can. This is the classic small network. The seeds are fixed, so every run is the same, and the loss falls step by step.
+
+```jk
+#import <stdlib>
+#import <neuron>
+using stdlib;
+// XOR: two layers (6 tanh units, then a sigmoid) learn it. The seeds are fixed.
+void main() {
+    Graph g = Graph::make();
+    Linear l1 = g.linear(2, 6, 1);
+    Linear l2 = g.linear(6, 1, 2);
+    g.mark();
+    double[] xv = arr(8);
+    xv.push(0.0); xv.push(0.0); xv.push(0.0); xv.push(1.0);
+    xv.push(1.0); xv.push(0.0); xv.push(1.0); xv.push(1.0);
+    double[] yv = arr(4);
+    yv.push(0.0); yv.push(1.0); yv.push(1.0); yv.push(0.0);
+    Tensor32 xs = Tensor32::from_list(4, 2, xv);
+    Tensor32 ys = Tensor32::from_list(4, 1, yv);
+    for step in 0..3000 {
+        int h = g.tanh(g.apply(l1, g.input(xs)));
+        int o = g.sigmoid(g.apply(l2, h));
+        int l = g.mse(o, ys);
+        if step % 1000 == 0 { jout << "step " << step << "  loss " << g.value(l).d[0] << "\n"; }
+        g.backward(l);
+        g.sgd(0.5);
+        g.clear();
+    }
+    int h = g.tanh(g.apply(l1, g.input(xs)));
+    Tensor32 out = g.value(g.sigmoid(g.apply(l2, h)));
+    for i in 0..4 {
+        jout << (int)(xs.get(i, 0)) << " xor " << (int)(xs.get(i, 1)) << " -> " << (int)(out.d[i] + 0.5) << "  (exact " << out.d[i] << ")\n";
+    }
+}
+
+```
+
+Output:
+
+```
+step 0  loss 0.277362
+step 1000  loss 0.001553
+step 2000  loss 0.000650
+0 xor 0 -> 0  (exact 0.010549)
+0 xor 1 -> 1  (exact 0.976775)
+1 xor 0 -> 1  (exact 0.980717)
+1 xor 1 -> 0  (exact 0.024364)
+```
+
+The outputs are rounded to 0 or 1; the exact value is shown too. If a seed does not reach the answers, change the seed (the last argument of `linear`).
+
+**Try:** make the hidden layer 2 units (`g.linear(2, 2, 1)`, `g.linear(2, 1, 2)`) and see whether it still learns.
+
+## Lesson 121. Backpropagation on the graph
+
+Backpropagation is the chain rule run backwards over the graph. Each node knows its operation (`op`) and its parents (`pa`, `pb`). `backward(loss)` starts with gradient 1 at the loss and passes it to the parents. Here the graph is input, param, matmul, relu and mse, and the gradient of the weight is checked by hand.
+
+```jk
+#import <stdlib>
+#import <neuron>
+using stdlib;
+// the operation of a node, by its number (the OP_ functions of <neuron>)
+String op_name(int op) {
+    if op == OP_INPUT() { return "input"; }
+    if op == OP_PARAM() { return "param"; }
+    if op == OP_MATMUL() { return "matmul"; }
+    if op == OP_RELU() { return "relu"; }
+    if op == OP_MSE() { return "mse"; }
+    return "other";
+}
+void main() {
+    Graph g = Graph::make();
+    double[] wv = arr(2);
+    wv.push(0.5); wv.push(1.0);
+    double[] xv = arr(2);
+    xv.push(1.0); xv.push(2.0);
+    double[] tv = arr(1);
+    tv.push(1.0);
+    int w = g.param(Tensor32::from_list(2, 1, wv));
+    g.mark();
+    int x = g.input(Tensor32::from_list(1, 2, xv));
+    int h = g.relu(g.matmul(x, w));
+    int loss = g.mse(h, Tensor32::from_list(1, 1, tv));
+    for i in 0..g.count { jout << "node " << i << " " << op_name(g.op[i]) << "\n"; }
+    g.backward(loss);
+    Tensor32 gw = g.gradient(w);
+    jout << "loss " << g.value(loss).d[0] << "\n";
+    jout << "gradient of w: " << gw.d[0] << " " << gw.d[1] << "\n";
+}
+
+```
+
+Output:
+
+```
+node 0 param
+node 1 input
+node 2 matmul
+node 3 relu
+node 4 mse
+loss 2.250000
+gradient of w: 3.000000 6.000000
+```
+
+The chain rule gives the weight's gradient as `2 * (2.5 - 1.0) * x`, which is `(3, 6)`. `backward` walks the nodes in reverse order, from the loss back to the inputs. A matmul passes `dy * B^T` to A and `A^T * dy` to B. The number of an operation is the value of its `OP_` function.
+
+**Try:** change the weights to `(0.5, -1.0)` and predict the gradient before running: relu blocks it, so the answer is `(0, 0)`.
+
+## Lesson 122. Mini-batches and shuffling
+
+Training on all rows at once is slow for big data, so a mini-batch uses a few rows at a time. Shuffling the rows each epoch makes the batches differ. `shuffled(n, seed)` gives a random order of 0 to n-1 from a fixed seed, so the same seed always gives the same order. An epoch is one pass over all the rows.
+
+```jk
+#import <stdlib>
+#import <neuron>
+using stdlib;
+// eight points of y = 2x + 1; each epoch shuffles the rows and trains on two mini-batches of four
+void main() {
+    Tensor32 xs = Tensor32::zeros(8, 1);
+    Tensor32 ys = Tensor32::zeros(8, 1);
+    for i in 0..8 {
+        xs.set(i, 0, (double)i / 4.0);
+        ys.set(i, 0, 2.0 * (double)i / 4.0 + 1.0);
+    }
+    Graph g = Graph::make();
+    Linear lin = g.linear(1, 1, 3);
+    g.mark();
+    for epoch in 0..3 {
+        int[] perm = shuffled(8, epoch + 1);
+        jout << "epoch " << epoch << " order:";
+        for i in 0..8 { jout << " " << perm[i]; }
+        jout << "\n";
+        for bt in 0..2 {
+            int[] idx = arr(4);
+            for q in 0..4 { idx.push(perm[bt * 4 + q]); }
+            int o = g.apply(lin, g.input(xs.gather(idx)));
+            int l = g.mse(o, ys.gather(idx));
+            g.backward(l);
+            g.sgd(0.5);
+            g.clear();
+        }
+        int full = g.apply(lin, g.input(xs));
+        int whole = g.mse(full, ys);
+        jout << "  loss on all rows " << g.value(whole).d[0] << "\n";
+        g.clear();
+    }
+}
+
+```
+
+Output:
+
+```
+epoch 0 order: 6 1 4 5 0 7 2 3
+  loss on all rows 12.326004
+epoch 1 order: 1 3 5 6 4 2 7 0
+  loss on all rows 8.866676
+epoch 2 order: 2 4 0 7 6 1 3 5
+  loss on all rows 6.333731
+```
+
+Each epoch the order is new, so the batches are new. The loss on all rows goes down from epoch to epoch.
+
+**Try:** compare `shuffled(8, 9)` with the order of seed 1 and check that they differ.
+
+## Lesson 123. Softmax and cross-entropy
+
+For classification the output is one score per class. `softmax` turns each row of scores into probabilities that add up to 1. Cross-entropy is the loss for that: `-log(probability of the right class)`, averaged over the rows. It is small when the right class has a big probability.
+
+```jk
+#import <stdlib>
+#import <math>
+#import <neuron>
+using stdlib;
+// three samples, three classes: row r holds the scores of the classes 0, 1, 2; the right class of row r is r
+void main() {
+    double[] v = arr(9);
+    v.push(2.0); v.push(0.5); v.push(-1.0);
+    v.push(0.1); v.push(0.3); v.push(0.2);
+    v.push(1.0); v.push(0.0); v.push(2.5);
+    Tensor s = Tensor::zeros(3, 3);
+    for i in 0..9 { s.d[i] = v[i]; }
+    Tensor p = s.softmax();
+    for r in 0..3 {
+        double sum = 0.0;
+        jout << "probabilities " << r << ":";
+        for c in 0..3 {
+            jout << " " << p.get(r, c);
+            sum += p.get(r, c);
+        }
+        jout << "  sum " << sum << "\n";
+    }
+    int[] right = arr(3);
+    right.push(0); right.push(1); right.push(2);
+    double hand = 0.0;
+    for r in 0..3 { hand = hand - Math::log(p.get(r, right[r])); }
+    jout << "cross-entropy by hand " << hand / 3.0 << "\n";
+    Graph g = Graph::make();
+    int a = g.input(Tensor32::from_list(3, 3, v));
+    int l = g.softmax_ce(a, right);
+    jout << "cross-entropy by the library " << g.value(l).d[0] << "\n";
+}
+
+```
+
+Output:
+
+```
+probabilities 0: 0.785597 0.175290 0.039113  sum 1.000000
+probabilities 1: 0.300610 0.367165 0.332225  sum 1.000000
+probabilities 2: 0.170953 0.062890 0.766157  sum 1.000000
+cross-entropy by hand 0.503207
+cross-entropy by the library 0.503207
+```
+
+`softmax_ce` does both steps (softmax, then the log) in one node, and gives the same number as the hand calculation.
+
+**Try:** make the right class of row 0 the class 2 (`right[0] = 2`) and watch the loss grow, because the score of class 2 in that row is the lowest.
+
+## Lesson 124. The learning rate
+
+The learning rate is the size of each step. Too small and training is slow. Too big and each step overshoots the bottom, so the weight swings wider and wider. Here the line `y = 2x` is trained with two rates: 0.2 converges, 0.22 diverges.
+
+```jk
+#import <stdlib>
+#import <math>
+using stdlib;
+// y = 2x on x = 1, 2, 3: train w with one rate for 60 steps and return it
+double train(double rate) {
+    double[] xs = arr(3);
+    xs.push(1.0); xs.push(2.0); xs.push(3.0);
+    double[] ys = arr(3);
+    ys.push(2.0); ys.push(4.0); ys.push(6.0);
+    double w = 0.0;
+    for step in 0..60 {
+        double g = 0.0;
+        for i in 0..3 { g += 2.0 * (w * xs[i] - ys[i]) * xs[i]; }
+        w = w - rate * g / 3.0;
+    }
+    return w;
+}
+void main() {
+    double small = train(0.2);
+    double big = train(0.22);
+    jout << "rate 0.2:  w = " << small << "  converged: " << (Math::abs(small - 2.0) < 0.01) << "\n";
+    jout << "rate 0.22: w = " << big << "  converged: " << (Math::abs(big - 2.0) < 0.01) << "\n";
+}
+
+```
+
+Output:
+
+```
+rate 0.2:  w = 1.999627  converged: true
+rate 0.22: w = -43.183479  converged: false
+```
+
+For this data the rate must stay below about 0.214: the curvature of the loss is (2/3) * (1 + 4 + 9) = 9.33, and each step multiplies the error by `1 - rate * 9.33`. That factor has size 1 at rate 0.214. Pick the largest rate that still converges, with some room to spare.
+
+**Try:** try 0.21 and 0.1 and see which converges fastest.
+
+## Lesson 125. Starting weights
+
+The starting weights matter. If they are all zero, every neuron learns the same thing. Random weights break that tie, but they must stay small: `Dense::make` draws each weight from -1 to 1 times `sqrt(2 / inputs)`, so a neuron with more inputs gets smaller weights. A seed makes the random numbers the same on every run.
+
+```jk
+#import <stdlib>
+#import <math>
+#import <neuron>
+using stdlib;
+// the starting weights: the same seed gives the same weights; the size is limited by sqrt(2 / inputs)
+void main() {
+    Dense a = Dense::make(4, 3, 5);
+    Dense b = Dense::make(4, 3, 5);
+    Dense c = Dense::make(4, 3, 6);
+    double limit = Math::sqrt(2.0 / 4.0);
+    bool inside = true;
+    bool same = true;
+    bool other = false;
+    for i in 0..12 {
+        if Math::abs(a.w.d[i]) > limit { inside = false; }
+        if a.w.d[i] != b.w.d[i] { same = false; }
+        if a.w.d[i] != c.w.d[i] { other = true; }
+    }
+    jout << "limit sqrt(2/4) = " << limit << "\n";
+    jout << "first weights of seed 5:";
+    for i in 0..4 { jout << " " << a.w.d[i]; }
+    jout << "\n";
+    jout << "all inside the limit: " << inside << "\n";
+    jout << "same seed, same weights: " << same << "\n";
+    jout << "other seed, other weights: " << other << "\n";
+}
+
+```
+
+Output:
+
+```
+limit sqrt(2/4) = 0.707107
+first weights of seed 5: 0.287792 0.613769 0.699329 0.046669
+all inside the limit: true
+same seed, same weights: true
+other seed, other weights: true
+```
+
+Every weight of the layer is inside the limit. Two layers with the same seed are equal, and a different seed gives different numbers.
+
+**Try:** make a layer with 16 inputs and print its limit, `sqrt(2 / 16)`, before you run it.
+
+## Lesson 126. Embeddings
+
+A word cannot go into a layer as text, so each word gets a number (an id), and the embedding table has one row for each id. `g.embed(table, ids)` copies the rows of the given ids: a sentence of three words gives a table of three rows. The rows are learned like any other weight. Here the vocabulary has six words.
+
+```jk
+#import <stdlib>
+#import <neuron>
+using stdlib;
+// six words; each word is one row of the table (4 numbers); the id of a word is its row number
+void main() {
+    String[] words = arr(6);
+    words.push("cat"); words.push("sat"); words.push("on");
+    words.push("the"); words.push("mat"); words.push("dog");
+    Graph g = Graph::make();
+    int table = g.param(Tensor32::random(6, 4, 3, 0.5));
+    g.mark();
+    int[] ids = arr(3);
+    ids.push(3); ids.push(5); ids.push(1);
+    int e = g.embed(table, ids);
+    Tensor32 rows = g.value(e);
+    jout << "rows " << rows.rows() << " columns " << rows.cols() << "\n";
+    for i in 0..3 {
+        jout << words[ids[i]] << ":";
+        for k in 0..4 { jout << " " << rows.get(i, k); }
+        jout << "\n";
+    }
+    bool same = true;
+    for k in 0..4 {
+        if rows.get(1, k) != g.value(table).get(5, k) { same = false; }
+    }
+    jout << "the row of dog is row 5 of the table: " << same << "\n";
+}
+
+```
+
+Output:
+
+```
+rows 3 columns 4
+the: -0.383500 0.475000 -0.476500 -0.438000
+dog: -0.187500 -0.385000 0.183500 -0.170000
+sat: -0.179500 0.159000 -0.048500 -0.114000
+the row of dog is row 5 of the table: true
+```
+
+The sentence is the ids 3, 5, 1: the, dog, sat. The lookup copies the rows, and the gradient of the lookup goes back into the same rows during training.
+
+**Try:** change the sentence to `ids` 0, 1, 4 (cat, sat, mat) and check the first row again.
+
+## Lesson 127. A tiny character model
+
+A character model reads bytes. Given the last 8 bytes, it guesses the next byte at every place. `Gpt` in `<neuron>` is that model at a small size: an embedding, attention, a GELU layer, and AdamW for training. Here a short text that repeats teaches it the pattern, and the loss goes down.
+
+```jk
+#import <stdlib>
+#import <neuron>
+using stdlib;
+// a tiny character model: it reads 8 bytes and guesses the next one at every place. The text repeats, so the loss falls.
+Gpt m;
+void main() {
+    String text = "abcabcabcabcabcabcabcabc";
+    int[] data = Gpt::bytes(text);
+    m = Gpt::make(256, 8, 16, 2, 1, 1);
+    int[] starts = arr(4);
+    starts.push(0); starts.push(4); starts.push(8); starts.push(12);
+    for step in 0..60 {
+        double loss = m.step(data, starts, 0.01, 0.0, 1.0);
+        if step % 15 == 0 { jout << "step " << step << "  loss " << loss << "\n"; }
+    }
+    jout << "loss at the end " << m.loss_on(data, starts) << "\n";
+}
+
+```
+
+Output:
+
+```
+step 0  loss 6.085010
+step 15  loss 0.248414
+step 30  loss 0.010925
+step 45  loss 0.002814
+loss at the end 0.001733
+```
+
+Each number shown is the mean loss of the batch, measured before that step's update. The last line is measured after training, with no learning.
+
+**Try:** use another short pattern, such as `"xyxyxyxyxyxyxyxyxyxyxyxy"`, and compare how fast the loss falls.
+
+## Lesson 128. Saving and loading weights
+
+A trained network is useful only if it can be kept. `save(path)` writes the weights as text (the layer sizes and the numbers), and `Network::load(path)` reads them back. The loaded network gives the same answers as the one that was saved.
+
+```jk
+#import <stdlib>
+#import <neuron>
+using stdlib;
+// train a network on XOR, save its weights to a file, load them back and compare the answers
+void main() {
+    Tensor x = Tensor::zeros(4, 2);
+    Tensor y = Tensor::zeros(4, 1);
+    x.set(1, 1, 1.0); x.set(2, 0, 1.0); x.set(3, 0, 1.0); x.set(3, 1, 1.0);
+    y.set(1, 0, 1.0); y.set(2, 0, 1.0);
+    Network n = Network::make();
+    n.add(2, 8);
+    n.add(8, 1);
+    n.fit(x, y, 4000, 0.1);
+    bool saved = n.save("tut_net.jw");
+    Network m = Network::load("tut_net.jw");
+    Tensor a = n.predict(x);
+    Tensor b = m.predict(x);
+    double worst = 0.0;
+    for i in 0..4 {
+        double d = Math::abs(a.d[i] - b.d[i]);
+        if d > worst { worst = d; }
+    }
+    jout << "saved: " << saved << "\n";
+    jout << "loaded answers equal: " << (worst < 0.000001) << "\n";
+    Fs::remove("tut_net.jw");
+}
+
+```
+
+Output:
+
+```
+saved: true
+loaded answers equal: true
+```
+
+The file is plain text, so you can read and copy it. The program removes its file at the end.
+
+**Try:** print `n.text()` before saving and find the first line, `neuron-jw 1`.
+
+## Lesson 129. Inference: using a trained network
+
+Inference is using a trained network: only the forward pass runs. `predict` does not learn, so the weights do not change, however many times it is called. This is what a finished program does with a loaded network.
+
+```jk
+#import <stdlib>
+#import <neuron>
+using stdlib;
+// inference: a trained network answers; predict runs only the forward pass
+void main() {
+    Tensor x = Tensor::zeros(4, 2);
+    Tensor y = Tensor::zeros(4, 1);
+    x.set(1, 1, 1.0); x.set(2, 0, 1.0); x.set(3, 0, 1.0); x.set(3, 1, 1.0);
+    y.set(1, 0, 1.0); y.set(2, 0, 1.0);
+    Network n = Network::make();
+    n.add(2, 8);
+    n.add(8, 1);
+    n.fit(x, y, 4000, 0.1);
+    String before = n.text();
+    Tensor answer = n.predict(x);
+    for i in 0..4 {
+        jout << "(" << x.get(i, 0) << ", " << x.get(i, 1) << ") -> " << (int)(answer.d[i] + 0.5) << "\n";
+    }
+    Tensor one = Tensor::zeros(1, 2);
+    one.set(0, 0, 1.0);
+    jout << "(1, 0) -> " << (int)(n.predict(one).d[0] + 0.5) << "\n";
+    for k in 0..100 { n.predict(x); }
+    jout << "weights unchanged after 100 calls: " << (n.text() == before) << "\n";
+}
+
+```
+
+Output:
+
+```
+(0.000000, 0.000000) -> 0
+(0.000000, 1.000000) -> 1
+(1.000000, 0.000000) -> 1
+(1.000000, 1.000000) -> 0
+(1, 0) -> 1
+weights unchanged after 100 calls: true
+```
+
+The answers are rounded to 0 or 1. The last check compares the text of all the weights before and after 100 calls to `predict`.
+
+**Try:** predict the answer for `(0, 0)` and for `(1, 1)` and compare them with the table above.
+
+## Lesson 130. Why matmul is the speed
+
+Most of the time of training goes into matrix products: every layer does three of them in a step (the forward pass, the gradient of the input, and the gradient of the weights). `matmul_fast` makes each product faster: the numbers are float32, each dot product uses four-wide vectors in two accumulators, and the rows are shared by four threads. This program checks the fast table against the plain one. It prints no timing, because timings change from phone to phone.
+
+```jk
+#import <stdlib>
+#import <math>
+#import <neuron>
+using stdlib;
+// one matrix product of 64 x 64 by 64 x 64: 262144 multiply-adds. The fast way must give the same table.
+void main() {
+    Tensor a = Tensor::zeros(64, 64);
+    Tensor b = Tensor::zeros(64, 64);
+    for i in 0..64 * 64 {
+        a.d[i] = (double)(i % 9) * 0.1 - 0.4;
+        b.d[i] = (double)(i % 5) * 0.2 - 0.4;
+    }
+    Tensor slow = a.matmul(b);
+    Tensor fast = a.matmul_fast(b);
+    double worst = 0.0;
+    double sum = 0.0;
+    for i in 0..64 * 64 {
+        double diff = Math::abs(slow.d[i] - fast.d[i]);
+        if diff > worst { worst = diff; }
+        sum += fast.d[i];
+    }
+    jout << "multiply-adds: " << 64 * 64 * 64 << "\n";
+    jout << "same table: " << (worst < 0.001) << "\n";
+    jout << "sum of the table: " << sum << "\n";
+}
+
+```
+
+Output:
+
+```
+multiply-adds: 262144
+same table: true
+sum of the table: 0.020048
+```
+
+A micro-kernel is the innermost piece of a matrix product: a small block of results (for example 4 rows by 8 columns) is kept in vector registers while the loop over the shared dimension runs, so that the numbers are loaded once and reused. A 4x8 kernel of this kind is an experiment of the compiler's own work and is not in `<neuron>` yet; the `matmul_fast` above is the one you can use today.
+
+**Try:** change 64 to 128 in the sizes and check that the table is still the same (the work grows eight times).
+
+## Lesson 131. A program of several files
+
+A big program is split into files. Each file that ends in `.j` has one idea (a shape, a report, a parser) and no `main`; the file with `main` (`.jk`) imports them. A file is read once, even when two files import it. Here `report.j` uses `geometry.j`, and `main.jk` uses both.
+
+`geometry.j`:
+
+```jk
+// geometry.j -- a component: a point and the distance between two points. No main here.
+struct Point {
+    int x;
+    int y;
+}
+
+int manhattan(Point a, Point b) {
+    int dx = a.x - b.x;
+    int dy = a.y - b.y;
+    if dx < 0 { dx = -dx; }
+    if dy < 0 { dy = -dy; }
+    return dx + dy;
+}
+```
+
+`ec_multi_files.jk`:
+
+`report.j`:
+
+```jk
+#import <stdlib>
+using stdlib;
+
+#import "geometry"
+
+// report.j -- a component that uses geometry.j
+void print_distance(Point a, Point b) {
+    jout << "distance " << manhattan(a, b) << "\n";
+}
+```
+
+`ec_multi_files.jk`:
+
+```jk
+#import <stdlib>
+using stdlib;
+
+#import "geometry"
+#import "report"
+
+void main() {
+    Point home = {0, 0};
+    Point shop = {3, -4};
+    print_distance(home, shop);
+    jout << "same again: " << manhattan(shop, home) << "\n";
+}
+```
+
+Output:
+
+```
+distance 7
+same again: 7
+```
+
+Compile only the main file: `jcmp main.jk -o main`. The compiler finds `report.j` and `geometry.j` next to it. Keep the names of the files the same as the names you import.
+
+**Try:** add a function `int chebyshev(Point a, Point b)` to `geometry.j` (the larger of the two differences) and print it from `main.jk`.
+
+## Lesson 132. A test for your own function
+
+A test checks one result: it calls your function with a known input and compares the answer with the answer you expect. Here is a tiny test runner in J2K: each check prints `PASS` or `FAIL`, and the last line counts them. You can keep the runner in its own `.j` file and use it in every program.
+
+```jk
+#import <stdlib>
+using stdlib;
+
+int passed = 0;
+int failed = 0;
+
+// the function under test
+int clamp(int x, int lo, int hi) {
+    if x < lo { return lo; }
+    if x > hi { return hi; }
+    return x;
+}
+
+void check_int(String name, int got, int want) {
+    if got == want {
+        passed += 1;
+        jout << "PASS " << name << "\n";
+    } else {
+        failed += 1;
+        jout << "FAIL " << name << ": got " << got << ", want " << want << "\n";
+    }
+}
+
+void main() {
+    check_int("below the range", clamp(-5, 0, 10), 0);
+    check_int("inside the range", clamp(7, 0, 10), 7);
+    check_int("above the range", clamp(99, 0, 10), 10);
+    check_int("the edge", clamp(10, 0, 10), 10);
+    jout << passed << " passed, " << failed << " failed\n";
+}
+```
+
+Output:
+
+```
+PASS below the range
+PASS inside the range
+PASS above the range
+PASS the edge
+4 passed, 0 failed
+```
+
+Output of the test runner: a `FAIL` line tells you the name, what the function gave and what you expected. Keep one `check` per behaviour, with a name that says it.
+
+**Try:** change one expected value to a wrong number and see the `FAIL` line and the count.
+
+## Lesson 133. Errors in a program that reads input
+
+Input can be wrong, and a wrong input is not a bug in the program. A function that can fail returns a `Result<int, Error>`: either `Ok` with the value or `Err` with a message. The program reads words from the input, prints the result of each one, and keeps going when one is bad. The input is `12 x -3 7y 40`.
+
+```jk
+#import <stdlib>
+using stdlib;
+
+// a whole number from text: an optional minus sign, then digits only
+Result<int, Error> parse_int(char^ s) {
+    int i = 0;
+    bool negative = false;
+    if s[0] == '-' {
+        negative = true;
+        i = 1;
+    }
+    if s[i] == 0 {
+        return Result<int, Error>::Err(Error::make(ErrorKind::Invalid, "empty number"));
+    }
+    int value = 0;
+    while s[i] != 0 {
+        if s[i] < '0' || s[i] > '9' {
+            return Result<int, Error>::Err(Error::make(ErrorKind::Invalid, "not a number"));
+        }
+        value = value * 10 + (s[i] - '0');
+        i += 1;
+    }
+    if negative { value = -value; }
+    return Result<int, Error>::Ok(value);
+}
+
+void main() {
+    char w[32];
+    int total = 0;
+    int bad = 0;
+    try {
+        while true {
+            jin >> w;
+            Result<int, Error> r = parse_int(@w);
+            switch r {
+                Result::Ok(v): {
+                    total += v;
+                    jout << w << " is " << v << "\n";
+                }
+                Result::Err(e): {
+                    bad += 1;
+                    jout << w << " is wrong: " << e.message << "\n";
+                }
+            }
+        }
+    } catch (e) {
+        // the input is over
+    }
+    jout << "total " << total << ", " << bad << " wrong\n";
+}
+```
+
+Input: `12 x -3 7y 40`
+
+Output:
+
+```
+12 is 12
+x is wrong: not a number
+-3 is -3
+7y is wrong: not a number
+40 is 40
+total 49, 2 wrong
+```
+
+`Error` has a `kind` (what sort of failure) and a `message`. The program decides what a failure means: here it counts it and goes on. The other choice is to stop at once, with `unwrap()`, which panics on an `Err`. `Option<T>` is the same idea for a value that may be missing, such as `Env::get(name)`.
+
+**Try:** make the program stop at the first wrong word instead of counting it.
+
+## Lesson 134. Command-line arguments
+
+`Env::args()` gives the words that were typed after the program's name, as a list of Strings. Element 0 is the name of the program itself. A program that needs arguments checks how many it got and prints a usage line when they are missing.
+
+```jk
+#import <stdlib>
+using stdlib;
+
+// usage: sum NUMBER NUMBER
+void main() {
+    String[] a = Env::args();
+    jout << "arguments given: " << (a.len - 1) << "\n";
+    if a.len != 3 {
+        jout << "usage: sum NUMBER NUMBER\n";
+        return;
+    }
+    int x = a[1].to_int();
+    int y = a[2].to_int();
+    jout << x << " + " << y << " = " << x + y << "\n";
+}
+```
+
+Output:
+
+```
+arguments given: 0
+usage: sum NUMBER NUMBER
+```
+
+Run it as `./sum 20 22`: the output is `20 + 22 = 42`. Without the two numbers it prints the usage line instead. `to_int()` reads the number from the text. The arguments are always Strings: a number in them has to be converted.
+
+**Try:** print every argument in a loop from index 1 to `a.len - 1`.
+
+## Lesson 135. Reading a text file line by line
+
+`Fs::write_text` writes a file and `Fs::read_lines` gives its lines as a list of Strings. The program below writes a small file in the current folder, reads it back line by line, counts the words of each line, and removes the file. A word is a run of letters between spaces.
+
+```jk
+#import <stdlib>
+using stdlib;
+
+// the number of words in one line: a word starts where a letter follows a space
+int count_words(String line) {
+    int n = 0;
+    bool inside = false;
+    for i in 0..line.len {
+        if line[i] == ' ' {
+            inside = false;
+        } else if !inside {
+            inside = true;
+            n += 1;
+        }
+    }
+    return n;
+}
+
+void main() {
+    String path = "lines_demo.txt";
+    Fs::write_text(path, "the first line\nthe second line has more words\n\nlast\n").unwrap();
+    String[] lines = Fs::read_lines(path).unwrap();
+    int words = 0;
+    for i in 0..lines.len {
+        int n = count_words(lines[i]);
+        words += n;
+        jout << "line " << (i + 1) << ": " << n << " words\n";
+    }
+    jout << lines.len << " lines, " << words << " words\n";
+    Fs::remove(path);
+}
+```
+
+Output:
+
+```
+line 1: 3 words
+line 2: 6 words
+line 3: 0 words
+line 4: 1 words
+4 lines, 10 words
+```
+
+The empty line between the two parts has 0 words. The file is in the current folder and is removed at the end, so the program leaves nothing behind. Use `Path::join` when a name has folders in it.
+
+**Try:** also count the characters of the file (the sum of `lines[i].len`, plus one for each line break).
+
+## Lesson 136. Writing a CSV report
+
+A CSV file is a table in text: one line per row, the fields separated by commas. `Csv::join_line` builds a line from the fields and puts quotes around a field that has a comma in it. The program makes a small sales report, writes it as CSV, reads it back, and prints it as a table with aligned columns.
+
+```jk
+#import <stdlib>
+using stdlib;
+
+struct Sale {
+    String item;
+    int qty;
+    double price;
+}
+
+Sale make_sale(String item, int qty, double price) {
+    Sale s;
+    s.item = item;
+    s.qty = qty;
+    s.price = price;
+    return s;
+}
+
+void main() {
+    Sale[] sales = arr(3);
+    sales.push(make_sale("pen, blue", 3, 1.5));
+    sales.push(make_sale("notebook", 2, 2.25));
+    sales.push(make_sale("ink", 10, 0.4));
+
+    String path = "sales_demo.csv";
+    String text = "item,qty,price,total\n";
+    for i in 0..sales.len {
+        String[] f = arr(4);
+        f.push(sales[i].item);
+        f.push(Fmt::fixed((double)sales[i].qty, 0));
+        f.push(Fmt::fixed(sales[i].price, 2));
+        f.push(Fmt::fixed((double)sales[i].qty * sales[i].price, 2));
+        text = text + Csv::join_line(f) + "\n";
+    }
+    Fs::write_text(path, text).unwrap();
+
+    // read it back and print it as a table
+    String[] lines = Fs::read_lines(path).unwrap();
+    for i in 0..lines.len {
+        String[] f = Csv::split_line(lines[i]);
+        jout << Fmt::pad_right(f[0], 12, ' ') << Fmt::pad_left(f[1], 4, ' ') << Fmt::pad_left(f[2], 8, ' ') << Fmt::pad_left(f[3], 8, ' ') << "\n";
+    }
+    Fs::remove(path);
+}
+```
+
+Output:
+
+```
+item         qty   price   total
+pen, blue      3    1.50    4.50
+notebook       2    2.25    4.50
+ink           10    0.40    4.00
+```
+
+Everything in the table came from the file. `Csv::join_line` put quotes around `pen, blue` because it has a comma; `Csv::split_line` took the quotes off again. `Fmt::fixed(x, 2)` always writes two decimals, which is what a money column needs.
+
+**Try:** add a row with a price of 12.5 and check that the total column still lines up.
+
+## Lesson 137. JSON in and out
+
+A program often gets JSON and answers with JSON. `Json::parse` reads the text into a document; you walk it with node numbers, add up what you need, and write the answer as JSON with `Json::quote` (a text) and `Json::num_text` (a number). The input here is a list of orders, and the answer is a JSON object with the total of the paid orders.
+
+```jk
+#import <stdlib>
+using stdlib;
+
+void main() {
+    String text = "[{\"item\": \"tea\", \"price\": 2.5, \"paid\": true}, {\"item\": \"cake\", \"price\": 3.25, \"paid\": false}, {\"item\": \"jam\", \"price\": 4, \"paid\": true}]";
+    JsonDoc doc = Json::parse(text).unwrap();
+    int root = doc.root();
+    double paid_total = 0.0;
+    int unpaid = 0;
+    for i in 0..doc.len(root) {
+        int order = doc.at(root, i);
+        double price = doc.number(doc.get(order, "price"));
+        if doc.boolean(doc.get(order, "paid")) {
+            paid_total += price;
+            jout << "paid: " << Json::quote(doc.text(doc.get(order, "item"))) << "\n";
+        } else {
+            unpaid += 1;
+        }
+    }
+    String answer = "{\"paid_total\": " + Json::num_text(paid_total) + ", \"unpaid\": " + Json::num_text((double)unpaid) + "}";
+    jout << answer << "\n";
+    JsonDoc back = Json::parse(answer).unwrap();
+    jout << "read back: " << back.number(back.get(back.root(), "paid_total")) << "\n";
+}
+```
+
+Output:
+
+```
+paid: "tea"
+paid: "jam"
+{"paid_total": 6.5, "unpaid": 1}
+read back: 6.500000
+```
+
+`Json::parse` gives a `Result`, so a broken text does not crash the program. The answer is plain text, so it can be sent to another program or saved. Reading it back with `Json::parse` is a good test that the answer is valid JSON.
+
+**Try:** add a fourth order with `"paid": true` and a price of 1.25, and check that `paid_total` becomes 7.75.
+
+## Lesson 138. A small state machine
+
+A state machine is a program that is always in one state, and each event moves it to the next one. An `enum class` with data is a good way to write the states: `Paying(int cents)` remembers how much has been paid. This vending machine costs 25 cents. Coins are 5, 10, 20 and so on; the event 0 is "nothing put in".
+
+```jk
+#import <stdlib>
+using stdlib;
+
+enum class Vend {
+    Idle,
+    Paying(int cents),
+    Change(int back)
+}
+
+// the next state from the current one and an event (a coin in cents; 0 = nothing put in)
+Vend step(Vend s, int coin) {
+    switch s {
+        Vend::Idle: {
+            if coin > 0 { return Vend::Paying(coin); }
+            return Vend::Idle;
+        }
+        Vend::Paying(c): {
+            int sum = c + coin;
+            if sum >= 25 { return Vend::Change(sum - 25); }
+            return Vend::Paying(sum);
+        }
+        Vend::Change(b): {
+            return Vend::Idle;
+        }
+    }
+    return s;
+}
+
+void show(Vend s) {
+    switch s {
+        Vend::Idle: jout << "idle\n";
+        Vend::Paying(c): jout << "paying, " << c << " cents so far\n";
+        Vend::Change(b): jout << "give back " << b << " cents\n";
+    }
+}
+
+void main() {
+    Vend s = Vend::Idle;
+    int events[5];
+    events[0] = 10;
+    events[1] = 10;
+    events[2] = 10;
+    events[3] = 0;
+    events[4] = 0;
+    for i in 0..5 {
+        s = step(s, events[i]);
+        show(s);
+    }
+}
+```
+
+Output:
+
+```
+paying, 10 cents so far
+paying, 20 cents so far
+give back 5 cents
+idle
+idle
+```
+
+Each state is a value of the enum, so it can be copied and passed around, and `switch` makes sure every state is handled. The machine has no hidden variables: all that it knows is in the value `s`.
+
+**Try:** add a state `Broken` that the machine goes to on a coin of 100 or more, and handle it in `show`.
+
+## Lesson 139. A tokenizer for arithmetic
+
+Before a program can understand `(12 + 3) * 4`, it cuts the text into tokens: numbers, operators and brackets. This is the tokenizer. It walks the text with an index, skips spaces, and builds one number from a run of digits. The tokens are an `enum class` with data, kept in a list.
+
+```jk
+#import <stdlib>
+using stdlib;
+
+enum class Token {
+    Num(int value),
+    Op(char sign),
+    Open,
+    Close
+}
+
+Token[] tokenize(String s) {
+    Token[] out = arr(8);
+    int i = 0;
+    while i < s.len {
+        char c = s[i];
+        if c == ' ' {
+            i += 1;
+        } else if c >= '0' && c <= '9' {
+            int v = 0;
+            while i < s.len && s[i] >= '0' && s[i] <= '9' {
+                v = v * 10 + (s[i] - '0');
+                i += 1;
+            }
+            out.push(Token::Num(v));
+        } else if c == '(' {
+            out.push(Token::Open);
+            i += 1;
+        } else if c == ')' {
+            out.push(Token::Close);
+            i += 1;
+        } else {
+            out.push(Token::Op(c));
+            i += 1;
+        }
+    }
+    return out;
+}
+
+void main() {
+    Token[] toks = tokenize("(12 + 3) * 4");
+    for i in 0..toks.len {
+        switch toks[i] {
+            Token::Num(v): jout << "number " << v << "\n";
+            Token::Op(c): jout << "operator " << c << "\n";
+            Token::Open: jout << "open bracket\n";
+            Token::Close: jout << "close bracket\n";
+        }
+    }
+}
+```
+
+Output:
+
+```
+open bracket
+number 12
+operator +
+number 3
+close bracket
+operator *
+number 4
+```
+
+The tokenizer does not check that the tokens make sense: `12 12` gives two numbers in a row, which is the parser's job (lesson 140, the calculator, does that). A character that is not known is kept as an `Op`, so the parser can report it.
+
+**Try:** make a `Token::Name(String)` for letters, so that `x + 1` is also tokenized.
+
+## Lesson 140. A calculator with recursive descent
+
+A recursive-descent parser has one function for each level of the grammar: `expr` (plus and minus), `term` (times and divide) and `factor` (a number or a bracket). Each function reads the tokens it needs and calls the next level. A bracket calls `expr` again, which is why it is recursive. The tokenizer is in its own file, `tokens.j`, from lesson 139, and this program imports it.
+
+`tokens.j`:
+
+```jk
+#import <stdlib>
+using stdlib;
+
+// tokens.j -- the tokenizer of the lesson before (no main here)
+enum class Token {
+    Num(int value),
+    Op(char sign),
+    Open,
+    Close
+}
+
+Token[] tokenize(String s) {
+    Token[] out = arr(8);
+    int i = 0;
+    while i < s.len {
+        char c = s[i];
+        if c == ' ' {
+            i += 1;
+        } else if c >= '0' && c <= '9' {
+            int v = 0;
+            while i < s.len && s[i] >= '0' && s[i] <= '9' {
+                v = v * 10 + (s[i] - '0');
+                i += 1;
+            }
+            out.push(Token::Num(v));
+        } else if c == '(' {
+            out.push(Token::Open);
+            i += 1;
+        } else if c == ')' {
+            out.push(Token::Close);
+            i += 1;
+        } else {
+            out.push(Token::Op(c));
+            i += 1;
+        }
+    }
+    return out;
+}
+```
+
+`ec_calculator.jk`:
+
+```jk
+#import <stdlib>
+using stdlib;
+
+#import "tokens"
+
+Token[] toks;
+int pos = 0;
+
+// the token at the position, or an operator that matches nothing when the list is over
+char peek_op() {
+    if pos >= toks.len { return '#'; }
+    switch toks[pos] {
+        Token::Op(c): return c;
+        _: return '#';
+    }
+    return '#';
+}
+
+int factor() {
+    if pos >= toks.len { return 0; }
+    Token t = toks[pos];
+    pos += 1;
+    switch t {
+        Token::Num(v): return v;
+        Token::Open: {
+            int v = expr();
+            pos += 1;          // skip the close bracket
+            return v;
+        }
+        _: return 0;
+    }
+    return 0;
+}
+
+int term() {
+    int v = factor();
+    while peek_op() == '*' || peek_op() == '/' {
+        char op = peek_op();
+        pos += 1;
+        int r = factor();
+        if op == '*' { v = v * r; } else { v = v / r; }
+    }
+    return v;
+}
+
+int expr() {
+    int v = term();
+    while peek_op() == '+' || peek_op() == '-' {
+        char op = peek_op();
+        pos += 1;
+        int r = term();
+        if op == '+' { v = v + r; } else { v = v - r; }
+    }
+    return v;
+}
+
+int calc(String s) {
+    toks = tokenize(s);
+    pos = 0;
+    return expr();
+}
+
+void main() {
+    String[] sums = arr(4);
+    sums.push("2 + 3 * (4 - 1)");
+    sums.push("(10 - 4) / 2");
+    sums.push("7 - 2 - 1");
+    sums.push("100 / 7 / 2");
+    for i in 0..sums.len {
+        jout << sums[i] << " = " << calc(sums[i]) << "\n";
+    }
+}
+```
+
+Output:
+
+```
+2 + 3 * (4 - 1) = 11
+(10 - 4) / 2 = 3
+7 - 2 - 1 = 4
+100 / 7 / 2 = 7
+```
+
+`7 - 2 - 1` is 4 and not 6: the loop in `expr` takes the operators from the left, one after another, as arithmetic does. The brackets in `factor` are what makes the grammar recursive: `expr` calls `factor`, which calls `expr`. The functions can be written in any order, because a function may be used before it is written.
+
+**Try:** add a unary minus (`-5 + 2`) to `factor`.
+
+## Lesson 141. A heap from scratch
+
+A heap is a tree stored in a list: the smallest value is always at index 0. `push` adds a value at the end and moves it up while it is smaller than its parent; `pop` takes index 0 and moves the last value up to its place and down again. Pushing numbers and popping them all gives them in order: that is heap sort.
+
+```jk
+#import <stdlib>
+using stdlib;
+
+struct MinHeap {
+    int[] a;
+
+    void push(self, int x) {
+        self.a.push(x);
+        int i = self.a.len - 1;
+        while i > 0 {
+            int parent = (i - 1) / 2;
+            if self.a[i] >= self.a[parent] { break; }
+            int t = self.a[i];
+            self.a[i] = self.a[parent];
+            self.a[parent] = t;
+            i = parent;
+        }
+    }
+
+    int pop(self) {
+        int top = self.a[0];
+        int last = self.a.len - 1;
+        self.a[0] = self.a[last];
+        self.a.pop();
+        int i = 0;
+        while true {
+            int l = 2 * i + 1;
+            int r = l + 1;
+            int m = i;
+            if l < self.a.len && self.a[l] < self.a[m] { m = l; }
+            if r < self.a.len && self.a[r] < self.a[m] { m = r; }
+            if m == i { break; }
+            int t = self.a[i];
+            self.a[i] = self.a[m];
+            self.a[m] = t;
+            i = m;
+        }
+        return top;
+    }
+}
+
+void main() {
+    MinHeap h;
+    h.a = arr(8);
+    int input[7];
+    input[0] = 5; input[1] = 3; input[2] = 8; input[3] = 1;
+    input[4] = 9; input[5] = 2; input[6] = 7;
+    for i in 0..7 { h.push(input[i]); }
+    jout << "smallest first: ";
+    while h.a.len > 0 {
+        jout << h.pop() << " ";
+    }
+    jout << "\n";
+}
+```
+
+Output:
+
+```
+smallest first: 1 2 3 5 7 8 9 
+```
+
+The heap is a struct with a method for each step, and the list it keeps is an ordinary `int[]`. The standard library has a `Heap<T>` as well (`std/collections.j`); writing one yourself shows what it does. A priority queue, such as the next task to run, is a heap of (priority, task) pairs.
+
+**Try:** make it a max-heap by changing the two comparisons.
+
+## Lesson 142. Word frequency with a hash map
+
+`Map<K, V>` is the hash table of the standard library: `put` stores a value under a key, `get` reads it, `has` asks whether a key is there. To count words, a Map gives the count of each word: a word that is not there yet starts at 1, and the others get one more. `keys_list()` gives the words, which are sorted to print them in a fixed order.
+
+```jk
+#import <stdlib>
+using stdlib;
+
+void main() {
+    String[] words = arr(16);
+    words.push("the"); words.push("cat"); words.push("and"); words.push("the");
+    words.push("dog"); words.push("and"); words.push("the"); words.push("bird");
+
+    Map<String, int> count;
+    for i in 0..words.len {
+        String w = words[i];
+        if count.has(w) {
+            count.put(w, count.get(w) + 1);
+        } else {
+            count.put(w, 1);
+        }
+    }
+
+    String[] keys = count.keys_list();
+    keys.sort();
+    for i in 0..keys.len {
+        jout << keys[i] << " " << count.get(keys[i]) << "\n";
+    }
+    jout << "distinct words: " << count.len << "\n";
+}
+```
+
+Output:
+
+```
+and 2
+bird 1
+cat 1
+dog 1
+the 3
+distinct words: 5
+```
+
+`get` on a key that is not there throws `key not found`, so a program asks `has` first, as above. The table grows by itself when it gets full. Sorting the keys gives the same output every time, even though the hash table itself has no fixed order.
+
+**Try:** count the words of a sentence that you type in: put the words in an array from a file, as in lesson 135, instead.
+
+## Lesson 143. Sorting with your own comparison
+
+`sort_by<T>(list, less)` sorts with a comparison that you give: `less(x, y)` is true when `x` must come before `y`. The comparison can be a named function or a lambda (a function without a name, written where it is used). The sort is stable: items that compare equal keep their order.
+
+```jk
+#import <stdlib>
+using stdlib;
+
+// a named comparison: the bigger number first
+bool bigger_first(int x, int y) { return x > y; }
+
+void main() {
+    int[] nums = arr(8);
+    nums.push(5); nums.push(12); nums.push(7); nums.push(30); nums.push(2);
+
+    sort_by<int>(nums, bigger_first);
+    for i in 0..nums.len { jout << nums[i] << " "; }
+    jout << "\n";
+
+    // a lambda: order by the last digit (equal digits keep their order)
+    sort_by<int>(nums, bool(int x, int y) { return x % 10 < y % 10; });
+    for i in 0..nums.len { jout << nums[i] << " "; }
+    jout << "\n";
+
+    // a lambda for decimals: by the distance from zero
+    double[] ds = arr(3);
+    ds.push(-2.5); ds.push(1.0); ds.push(-4.0);
+    sort_by<double>(ds, bool(double x, double y) { return x * x < y * y; });
+    for i in 0..ds.len { jout << ds[i] << " "; }
+    jout << "\n";
+}
+```
+
+Output:
+
+```
+30 12 7 5 2 
+30 12 2 5 7 
+1.000000 -2.500000 -4.000000 
+```
+
+The second sort orders the numbers by their last digit: 30 (0) comes first, then 12 and 2 (both end in 2). 12 was before 2 in the list, and the sort is stable, so 12 stays before 2. The decimals are ordered by their square, so -2.5 and 1.0 come before -4.0.
+
+**Try:** sort the numbers from the smallest to the biggest distance from 10 with a lambda.
+
+## Lesson 144. A room graph for a text adventure
+
+A text adventure is a graph: each room has an exit to the north, east, south and west, and an exit leads to another room or nowhere. Here a room is a struct, the rooms are a list, and an exit is the index of the other room, with `-1` for a wall. A list of moves walks the player through the rooms.
+
+```jk
+#import <stdlib>
+using stdlib;
+
+struct Room {
+    String name;
+    int north;
+    int east;
+    int south;
+    int west;
+}
+
+// the index of the room in direction d (n e s w), or -1 for a wall
+int exit_of(Room r, char d) {
+    if d == 'n' { return r.north; }
+    if d == 'e' { return r.east; }
+    if d == 's' { return r.south; }
+    if d == 'w' { return r.west; }
+    return -1;
+}
+
+Room make_room(String name, int north, int east, int south, int west) {
+    Room r;
+    r.name = name;
+    r.north = north;
+    r.east = east;
+    r.south = south;
+    r.west = west;
+    return r;
+}
+
+void main() {
+    Room[] rooms = arr(3);
+    Room hall = make_room("Hall", 1, -1, -1, -1);
+    Room kitchen = make_room("Kitchen", -1, 2, 0, -1);
+    Room garden = make_room("Garden", -1, -1, -1, 1);
+    rooms.push(hall);
+    rooms.push(kitchen);
+    rooms.push(garden);
+
+    String path = "nessw";
+    int here = 0;
+    jout << "start in " << rooms[here].name << "\n";
+    for i in 0..path.len {
+        char d = path[i];
+        int next = exit_of(rooms[here], d);
+        if next < 0 {
+            jout << "a wall to the " << d << "\n";
+        } else {
+            here = next;
+            jout << "go " << d << " to " << rooms[here].name << "\n";
+        }
+    }
+    jout << "you are in the " << rooms[here].name << "\n";
+}
+```
+
+Output:
+
+```
+start in Hall
+go n to Kitchen
+go e to Garden
+a wall to the s
+a wall to the s
+go w to Kitchen
+you are in the Kitchen
+```
+
+The rooms are data, and the walk is a loop: a new room or a new path needs no new code. Each room is a value, so `rooms[here]` reads it and `rooms[here].name` its name. The list of rooms could come from a file of JSON (lesson 137) in a bigger game.
+
+**Try:** add a room `Cellar` below the kitchen and walk down into it.
+
+## Lesson 145. A game loop without graphics
+
+A game does the same thing again and again: update the world, then draw it. The update must not look at the clock, or the game plays differently on every machine. Instead it advances by a fixed step, `dt`, and the same number of steps always gives the same result. Here a ball falls and bounces once on the floor; the loop prints the height every 20 steps.
+
+```jk
+#import <stdlib>
+using stdlib;
+
+void main() {
+    double dt = 1.0 / 60.0;     // a fixed step: 60 steps for each second, every time
+    double gravity = -9.8;      // metres per second squared
+    double height = 5.0;
+    double speed = 0.0;
+    bool bounced = false;
+
+    for step in 0..300 {
+        speed += gravity * dt;
+        height += speed * dt;
+        if height <= 0.0 {
+            height = 0.0;
+            if !bounced {
+                speed = -speed * 0.6;
+                bounced = true;
+                jout << "bounce at step " << step << "\n";
+            } else {
+                speed = 0.0;
+            }
+        }
+        if step % 20 == 0 {
+            jout << "step " << step << " height " << Fmt::fixed(height, 2) << "\n";
+        }
+    }
+    jout << "final height " << Fmt::fixed(height, 2) << "\n";
+}
+```
+
+Output:
+
+```
+step 0 height 5.00
+step 20 height 4.37
+step 40 height 2.66
+bounce at step 60
+step 60 height 0.00
+step 80 height 1.42
+step 100 height 1.75
+step 120 height 1.00
+step 140 height 0.00
+step 160 height 0.00
+step 180 height 0.00
+step 200 height 0.00
+step 220 height 0.00
+step 240 height 0.00
+step 260 height 0.00
+step 280 height 0.00
+final height 0.00
+```
+
+Run the same program twice and you get the same numbers: nothing depends on the time it runs. A real game adds input and drawing to the loop, but the rule stays: the state changes only in the update, and `dt` is the same for every step.
+
+**Try:** change `dt` to `1.0 / 30.0` and see how the bounce moves to another step.
+
+## Lesson 146. A bank account with methods and checks
+
+A struct with methods keeps its data and the rules for changing it together. A bank account keeps the money in cents, a whole number: money as a `double` gets small rounding errors. Each method checks its input before it changes anything, and returns `true` or `false` so the caller knows what happened.
+
+```jk
+#import <stdlib>
+using stdlib;
+
+struct Account {
+    String owner;
+    int cents;
+
+    bool deposit(self, int amount) {
+        if amount <= 0 { return false; }
+        self.cents += amount;
+        return true;
+    }
+
+    bool withdraw(self, int amount) {
+        if amount <= 0 || amount > self.cents { return false; }
+        self.cents -= amount;
+        return true;
+    }
+
+    void show(self) {
+        jout << self.owner << ": " << Fmt::fixed((double)self.cents / 100.0, 2) << "\n";
+    }
+}
+
+void main() {
+    Account acc;
+    acc.owner = "Ann";
+    acc.cents = 0;
+    acc.deposit(5000);
+    acc.show();
+
+    if acc.withdraw(1250) {
+        jout << "took 12.50\n";
+    }
+    acc.show();
+
+    if !acc.withdraw(999999) {
+        jout << "refused: not enough money\n";
+    }
+    if !acc.deposit(-5) {
+        jout << "refused: the amount must be more than 0\n";
+    }
+    acc.show();
+}
+```
+
+Output:
+
+```
+Ann: 50.00
+took 12.50
+Ann: 37.50
+refused: not enough money
+refused: the amount must be more than 0
+Ann: 37.50
+```
+
+`withdraw` looks at the balance before it takes money out, so the balance can never go below 0 through this struct. The rule lives in one place: anyone who uses `Account` gets it for free. Keep the fields private to the struct when the program grows, and change them only through methods.
+
+**Try:** add a method `bool transfer(self, Account^ to, int amount)` that withdraws from one account and deposits into another.
+
+## Lesson 147. A generic stack: Stack<T>
+
+A stack takes the last item put in first out (like a pile of plates). `Stack<T>` works for any type `T`: write `Stack<int>` for numbers or `Stack<String>` for text, and the compiler makes the code for each one. `init` runs when a variable of the struct is created, so the list is ready at once.
+
+```jk
+#import <stdlib>
+using stdlib;
+
+struct Stack<T> {
+    T[] items;
+
+    void init(self) {
+        self.items = arr(4);
+    }
+
+    void push(self, T x) {
+        self.items.push(x);
+    }
+
+    bool empty(self) {
+        return self.items.len == 0;
+    }
+
+    // takes the top item off; throws when the stack is empty
+    T pop(self) {
+        if self.items.len == 0 { throw "the stack is empty"; }
+        return self.items.pop();
+    }
+}
+
+void main() {
+    Stack<int> nums;
+    for i in 1..4 { nums.push(i * i); }
+    while !nums.empty() {
+        jout << nums.pop() << " ";
+    }
+    jout << "\n";
+
+    Stack<int> more;
+    more.push(7);
+    more.push(8);
+    jout << more.pop() << " then " << more.pop() << "\n";
+}
+```
+
+Output:
+
+```
+9 4 1 
+8 then 7
+```
+
+`Stack<int>` in both places is the same copy of the code: the compiler makes it once and reuses it. The last value pushed comes out first. `empty()` is asked before `pop()`, because `pop` throws on an empty stack.
+
+**Try:** make a `Stack<double>` and push two decimals.
+
+## Lesson 148. defer: cleanup when a function fails
+
+A function that makes a temporary file must remove it, even when something goes wrong half way. `defer` puts the removal right next to the creation, and it runs when the function ends: by `return`, or when an error (`throw`) leaves the function. The program below writes a file, fails on purpose, and the caller sees that the file was removed.
+
+```jk
+#import <stdlib>
+using stdlib;
+
+// writes a file, checks it, and removes the file on every way out
+int check_file(String path, String text) {
+    Fs::write_text(path, text).unwrap();
+    defer Fs::remove(path);
+    defer jout << "removed " << path << "\n";
+    String[] lines = Fs::read_lines(path).unwrap();
+    if lines.len == 0 { throw "the file is empty"; }
+    return lines.len;
+}
+
+void main() {
+    jout << check_file("defer_ok.txt", "a\nb\nc\n") << " lines\n";
+    try {
+        jout << check_file("defer_bad.txt", "") << " lines\n";
+    } catch (e) {
+        jout << "caught: " << e << "\n";
+    }
+    jout << "left behind: " << Fs::exists("defer_ok.txt") << Fs::exists("defer_bad.txt") << "\n";
+}
+```
+
+Output:
+
+```
+removed defer_ok.txt
+3 lines
+removed defer_bad.txt
+caught: the file is empty
+left behind: falsefalse
+```
+
+The two `defer` lines run in the reverse order: first the message, then the removal, in both calls. The file is gone before `main` looks at it. Without `defer` the removal would be the last line of the function, and the `throw` would skip it.
+
+**Try:** move the `defer` lines below the `throw` and see that the program now removes nothing when it fails.
+
+## Lesson 149. A build file of makej, read as text
+
+**makej** builds a project from a build file, a plain text file named `makej` (lesson 57). It has sections in square brackets: `[program.NAME]` for a program with its `main` file, `[step.NAME]` for a shell command with `needs` (what must be built first). The file is only text, so a program can read it like any other file. The program below writes a small build file, reads it line by line, lists its sections, and removes it.
+
+```jk
+#import <stdlib>
+using stdlib;
+
+void main() {
+    String path = "makej_demo";
+    String build = "[makej]\nout = \"_out\"\n\n[program.hello]\nmain = \"src/hello.jk\"\n\n[step.run]\nneeds = \"hello\"\nrun = \"_out/hello\"\n";
+    Fs::write_text(path, build).unwrap();
+
+    String[] lines = Fs::read_lines(path).unwrap();
+    int targets = 0;
+    int settings = 0;
+    for i in 0..lines.len {
+        String line = lines[i];
+        if line.len > 0 && line[0] == '[' {
+            targets += 1;
+            jout << "target " << line << "\n";
+        } else if line.len > 0 && line[0] != '#' {
+            settings += 1;
+        }
+    }
+    jout << targets << " sections, " << settings << " settings\n";
+    Fs::remove(path);
+}
+```
+
+Output:
+
+```
+target [makej]
+target [program.hello]
+target [step.run]
+3 sections, 4 settings
+```
+
+The real `makej` reads this file itself. A line that starts with `#` is a comment, and a section name shows what kind of target it is. Run `makej init` in a folder to make a start, and `makej -v` to see the commands it runs (lesson 57). The program above only shows that the file is plain text, and it could check the same things that makej checks.
+
+```jk-no
+[makej]
+out = "_out"
+
+[program.hello]
+main = "src/hello.jk"
+```
+
+**Try:** print only the `main = ...` lines and the name of the section above each one.
+
+## Lesson 150. Reading a compiler error
+
+When the compiler finds a problem it prints the place and the reason in one line: `file:line:col: error: message`, then the source line with a `^` under the spot. Read the first line first: the file, the line and the column tell you where to look. The message names the problem in words. The program below compiles; the message format is shown after it, from a real error.
+
+```jk
+#import <stdlib>
+using stdlib;
+
+// this program compiles; the message format is shown after it
+int average(int[] values) {
+    int total = 0;
+    for i in 0..values.len { total += values[i]; }
+    if values.len == 0 { return 0; }
+    return total / values.len;
+}
+
+void main() {
+    int[] marks = arr(3);
+    marks.push(70);
+    marks.push(85);
+    marks.push(91);
+    jout << "average " << average(marks) << "\n";
+}
+```
+
+Output:
+
+```
+average 82
+```
+
+Suppose the `}` at the end of the `for` line in `average` is missing. This is the real output of the compiler for that one change:
+
+```jk-no
+ec_read_errors.jk:12:6: error: a variable cannot be void
+ 12 | void main() {
+    |      ^
+  help: void is only for functions that give no value; use int, double, ... for a variable
+ec_read_errors.jk:19:1: error: the file ends inside a block: the '{' on line 5 is never closed
+  help: a '}' is missing; check the braces that follow that line
+```
+
+Read it in this order: (1) the file and the place, `12:6` is line 12, column 6; (2) the message, which says what is wrong; (3) the source line with the `^`, and the `help` line, which often says the fix. The first message points at `main`, but the cause is the `{` of `average` on line 5, which is never closed. So the message at the place where the compiler notices a problem is not always where the mistake is: read the `help` lines and the last message too. Fix one error, compile again, and the rest may disappear.
+
+**Try:** delete the `}` at the end of the `for` line in `average`, compile, and check that the message names the line of the function.
 
 ## Where next
 

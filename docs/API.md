@@ -246,6 +246,12 @@ struct Math {
     static int ipow(int x, int n);
 }
 
+// the smaller, the larger, the absolute value and the limited value of numbers of one type (int, double, float ...): min(3, 5), max(2.5, 1.5), abs(-4), clamp(x, 0, 10)
+T min<T>(T a, T b);
+T max<T>(T a, T b);
+T abs<T>(T a);
+T clamp<T>(T x, T lo, T hi);
+
 // Num: conversions between numbers and text.
 // text to numbers, as a Result (String.to_int() / to_double() throw instead)
 struct Num {

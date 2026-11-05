@@ -1864,6 +1864,7 @@ void as_instruction() {
     if as_mn_is("fnmadd") { as_h_fp4(0x1F600000); return; }
     if as_mn_is("fnmsub") { as_h_fp4(0x1F608000); return; }
     if as_mn_is("fsub") { as_h_fp3(0x1E603800, 0x1E203800); return; }
+    if as_mn_is("fmla") { as_h_vec3(0x4E60CC00, 0x4E20CC00); return; }
     if as_mn_is("fmul") { as_h_fp3(0x1E600800, 0x1E200800); return; }
     if as_mn_is("fdiv") { as_h_fp3(0x1E601800, 0x1E201800); return; }
     if as_mn_is("fneg") { as_h_fp2(0x1E614000, 0x1E214000); return; }

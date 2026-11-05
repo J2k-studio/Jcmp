@@ -1,4 +1,5 @@
-// neuron 0.7.1 -- tensors and small neural networks that train on the phone.   #import <neuron>   (needs jcmp 1.1.0.0; license: MPL-2.0)
+// neuron 0.7.2 -- tensors and small neural networks that train on the phone.   #import <neuron>   (needs jcmp 1.1.0.0; license: MPL-2.0)
+// 0.7.2: matmul_fast and Tensor32.matmul use the micro-kernel product nt_gemm (4 x 8 pieces, fmla, packed strips and panels; the order of the sums is fixed, see nt_gemm)
 // 0.2.0: Tensor::matmul_fast(o): float32 + NEON dot products + threads for big tables (see the fast way below)
 //   Gpt m = Gpt::make(256, 64, 64, 4, 2, 1);   m.step(data, starts, lr, decay, clip);   m.write(prompt, n, temp, topk, seed)      // 0.7.0: a GPT that trains on the phone (bottom of this file)
 //   Tensor a = Tensor::zeros(2, 3);   a.set(0, 1, 5.0);   Tensor c = a.matmul(b);   Tensor p = c.relu().softmax();
@@ -81,6 +82,114 @@ void mm_rows(void^ arg) {
     }
 }
 
+// ---- the micro-kernel product (neuron 0.3.0): C (m x n) = A (m x k) x B (k x n), float32, row-major, C is written (not added to).
+// A is packed in strips of 4 rows (strip ip, step kk: the 4 numbers a[4 ip + r][kk] are next to each other), B in panels of 8 columns (panel jp, step kk: the 8 numbers
+// b[kk][8 jp + c] are next to each other). The kernel keeps a 4 x 8 piece of C in 8 vector registers; one step of k is 2 loads of B, 4 numbers of A and 8 `fmla`.
+// THE ORDER OF THE SUMS (fixed, the same for every piece of C and for every number of threads): c[i][j] = fma(a[i][k-1], b[k-1][j], ... fma(a[i][1], b[1][j],
+// fma(a[i][0], b[0][j], 0)) ...), one fused multiply-add for each kk in increasing order. The edge pieces use the same kernel on zero-padded strips and panels.
+float^ gm_a;                     // packed A: (m + 3) / 4 strips of k * 4 numbers
+float^ gm_b;                     // packed B: (n + 7) / 8 panels of k * 8 numbers
+float^ gm_c;
+int gm_m;
+int gm_n;
+int gm_k;
+int^ gm_range;                   // [2 * t] first strip and [2 * t + 1] end strip of the thread t
+
+// the piece: c[r * ldc + j] = the sums over kk of a[kk * 4 + r] * b[kk * 8 + j], r < 4, j < 8 (a function of its own with no calls: every vector stays in a register)
+void nt_kern48(float^ ap, float^ bp, float^ c, int k, int ldc) {
+    f32x4 c00 = {0.0, 0.0, 0.0, 0.0}; f32x4 c01 = {0.0, 0.0, 0.0, 0.0};
+    f32x4 c10 = {0.0, 0.0, 0.0, 0.0}; f32x4 c11 = {0.0, 0.0, 0.0, 0.0};
+    f32x4 c20 = {0.0, 0.0, 0.0, 0.0}; f32x4 c21 = {0.0, 0.0, 0.0, 0.0};
+    f32x4 c30 = {0.0, 0.0, 0.0, 0.0}; f32x4 c31 = {0.0, 0.0, 0.0, 0.0};
+    int ai = 0;
+    int bi = 0;
+    for kk in 0..k {
+        f32x4 b0 = f32x4::load(bp, bi);
+        f32x4 b1 = f32x4::load(bp, bi + 4);
+        float a0 = ap[ai];
+        float a1 = ap[ai + 1];
+        float a2 = ap[ai + 2];
+        float a3 = ap[ai + 3];
+        c00 = c00 + b0 * a0; c01 = c01 + b1 * a0;
+        c10 = c10 + b0 * a1; c11 = c11 + b1 * a1;
+        c20 = c20 + b0 * a2; c21 = c21 + b1 * a2;
+        c30 = c30 + b0 * a3; c31 = c31 + b1 * a3;
+        ai += 4;
+        bi += 8;
+    }
+    c00.store(c, 0); c01.store(c, 4);
+    c10.store(c, ldc); c11.store(c, ldc + 4);
+    c20.store(c, 2 * ldc); c21.store(c, 2 * ldc + 4);
+    c30.store(c, 3 * ldc); c31.store(c, 3 * ldc + 4);
+}
+
+// the strips [gm_range[2 id], gm_range[2 id + 1]) of C; the panel is the outer loop, so that one panel of B (k * 32 bytes) stays in the cache while the strips go by
+void nt_gemm_rows(void^ arg) {
+    int id = (int)arg;
+    int m = gm_m;
+    int n = gm_n;
+    int k = gm_k;
+    float tmp[32];
+    int np = (n + 7) / 8;
+    for jp in 0..np {
+        int nr = n - jp * 8;
+        if nr > 8 { nr = 8; }
+        for ip in gm_range[2 * id]..gm_range[2 * id + 1] {
+            int mr = m - ip * 4;
+            if mr > 4 { mr = 4; }
+            if mr == 4 && nr == 8 {
+                nt_kern48(@gm_a[ip * k * 4], @gm_b[jp * k * 8], @gm_c[ip * 4 * n + jp * 8], k, n);
+            } else {
+                nt_kern48(@gm_a[ip * k * 4], @gm_b[jp * k * 8], @tmp[0], k, 8);
+                for r in 0..mr { for j in 0..nr { gm_c[(ip * 4 + r) * n + jp * 8 + j] = tmp[r * 8 + j]; } }
+            }
+        }
+    }
+}
+
+// c = a x b (c is written); threads = 1 .. 8 (the strips of 4 rows are shared among them)
+void nt_gemm(float^ a, float^ b, float^ c, int m, int k, int n, int threads) {
+    if m <= 0 || n <= 0 { return; }
+    int ns = (m + 3) / 4;
+    int np = (n + 7) / 8;
+    int sa = ns * k * 16 + 64;
+    int sb = np * k * 32 + 64;
+    float^ pa = (float^)Sys::mmap(sa);                    // zeroed pages from the system: the padding of the strips and panels is already 0
+    float^ pb = (float^)Sys::mmap(sb);
+    for ip in 0..ns {
+        for kk in 0..k {
+            for r in 0..4 {
+                int row = ip * 4 + r;
+                if row < m { pa[(ip * k + kk) * 4 + r] = a[row * k + kk]; }
+            }
+        }
+    }
+    for jp in 0..np {
+        for kk in 0..k {
+            for cc in 0..8 {
+                int col = jp * 8 + cc;
+                if col < n { pb[(jp * k + kk) * 8 + cc] = b[kk * n + col]; }
+            }
+        }
+    }
+    if threads < 1 { threads = 1; }
+    if threads > 8 { threads = 8; }
+    if threads > ns { threads = ns; }
+    gm_a = pa; gm_b = pb; gm_c = c; gm_m = m; gm_n = n; gm_k = k;
+    int^ rng = (int^)Sys::mmap(4096);
+    gm_range = rng;
+    for t in 0..threads { rng[2 * t] = ns * t / threads; rng[2 * t + 1] = ns * (t + 1) / threads; }
+    if threads == 1 { nt_gemm_rows((void^)0); }
+    else {
+        Thread[] ts = arr(8);
+        for t in 0..threads { ts.push(create(nt_gemm_rows, (void^)t)); }
+        for t in 0..threads { ts[t].join(); }
+    }
+    Sys::munmap((void^)rng, 4096);
+    Sys::munmap((void^)pa, sa);
+    Sys::munmap((void^)pb, sb);
+}
+
 struct Tensor {
     int rows;
     int cols;
@@ -113,32 +222,21 @@ struct Tensor {
         int k = self.cols;
         int n = o.cols;
         if m * k * n < 32768 { return self.matmul(o); }                // small: the plain loop is cheaper than the packing
-        int kp = (k + 7) / 8 * 8;
-        int sa = m * kp * 4 + 64;                                        // the buffers come from the system (mmap, zeroed): the compiler does not track them as owners
-        int sb = n * kp * 4 + 64;
+        int sa = m * k * 4 + 64;                                         // the buffers come from the system (mmap, zeroed): the compiler does not track them as owners
+        int sb = k * n * 4 + 64;
         int sc = m * n * 4 + 64;
         float^ pa = (float^)Sys::mmap(sa);
-        float^ pbt = (float^)Sys::mmap(sb);
+        float^ pb = (float^)Sys::mmap(sb);
         float^ pc = (float^)Sys::mmap(sc);
-        for i in 0..m { for kk in 0..kp { pa[i * kp + kk] = 0.0; if kk < k { pa[i * kp + kk] = (float)self.d[i * k + kk]; } } }
-        for jj in 0..n { for kk in 0..kp { pbt[jj * kp + kk] = 0.0; if kk < k { pbt[jj * kp + kk] = (float)o.d[kk * n + jj]; } } }
+        for i in 0..m * k { pa[i] = (float)self.d[i]; }
+        for i in 0..k * n { pb[i] = (float)o.d[i]; }
         int threads = 4;
         if m < 16 { threads = 1; }
-        mm_a = pa; mm_bt = pbt; mm_c = pc; mm_kp = kp; mm_n = n;
-        int^ rng = (int^)Sys::mmap(4096);
-        mm_range = rng;
-        for t in 0..threads { rng[2 * t] = m * t / threads; rng[2 * t + 1] = m * (t + 1) / threads; }
-        if threads == 1 { mm_rows((void^)0); }
-        else {
-            Thread[] ts = arr(4);
-            for t in 0..threads { ts.push(create(mm_rows, (void^)t)); }
-            for t in 0..threads { ts[t].join(); }
-        }
-        Sys::munmap((void^)rng, 4096);
+        nt_gemm(pa, pb, pc, m, k, n, threads);
         Tensor r = Tensor::zeros(m, n);
         for i in 0..m * n { r.d[i] = (double)pc[i]; }
         Sys::munmap((void^)pa, sa);
-        Sys::munmap((void^)pbt, sb);
+        Sys::munmap((void^)pb, sb);
         Sys::munmap((void^)pc, sc);
         return r;
     }
@@ -505,32 +603,9 @@ struct Tensor32 {
             }
             return r;
         }
-        int kp = (k + 7) / 8 * 8;
-        int sa = m * kp * 4 + 64;
-        int sb = n * kp * 4 + 64;
-        int sc = m * n * 4 + 64;
-        float^ pa = (float^)Sys::mmap(sa);
-        float^ pbt = (float^)Sys::mmap(sb);
-        float^ pc = (float^)Sys::mmap(sc);
-        for i in 0..m { for kk in 0..k { pa[i * kp + kk] = self.d[i * k + kk]; } }
-        for jj in 0..n { for kk in 0..k { pbt[jj * kp + kk] = o.d[kk * n + jj]; } }
         int threads = 4;
         if m < 16 { threads = 1; }
-        mm_a = pa; mm_bt = pbt; mm_c = pc; mm_kp = kp; mm_n = n;
-        int^ rng = (int^)Sys::mmap(4096);
-        mm_range = rng;
-        for t in 0..threads { rng[2 * t] = m * t / threads; rng[2 * t + 1] = m * (t + 1) / threads; }
-        if threads == 1 { mm_rows((void^)0); }
-        else {
-            Thread[] ts = arr(4);
-            for t in 0..threads { ts.push(create(mm_rows, (void^)t)); }
-            for t in 0..threads { ts[t].join(); }
-        }
-        Sys::munmap((void^)rng, 4096);
-        for i in 0..m * n { r.d[i] = pc[i]; }
-        Sys::munmap((void^)pa, sa);
-        Sys::munmap((void^)pbt, sb);
-        Sys::munmap((void^)pc, sc);
+        nt_gemm(@self.d[0], @o.d[0], @r.d[0], m, k, n, threads);
         return r;
     }
 }

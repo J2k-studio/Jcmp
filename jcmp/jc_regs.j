@@ -1303,14 +1303,14 @@ bool pt_has_dreg(int s, int k, int dn) {
     int o = (s * 4 + k) * 40;
     int i = 0;
     while pt_o[o + i] != 0 {
-        if (pt_o[o + i] == 'd' || pt_o[o + i] == 's') && (i == 0 || (pt_o[o + i - 1] < 'a' || pt_o[o + i - 1] > 'z')) && pt_o[o + i + 1] >= '0' && pt_o[o + i + 1] <= '9' {
+        if (pt_o[o + i] == 'd' || pt_o[o + i] == 's' || pt_o[o + i] == 'v' || pt_o[o + i] == 'q') && (i == 0 || (pt_o[o + i - 1] < 'a' || pt_o[o + i - 1] > 'z')) && pt_o[o + i + 1] >= '0' && pt_o[o + i + 1] <= '9' {
             int j = i + 1;
             int v = 0;
             while pt_o[o + j] >= '0' && pt_o[o + j] <= '9' {
                 v = v * 10 + (pt_o[o + j] - '0');
                 j += 1;
             }
-            if v == dn && (pt_o[o + j] == 0 || pt_o[o + j] == ',' || pt_o[o + j] == ']' || pt_o[o + j] == ' ') { return true; }
+            if v == dn && (pt_o[o + j] == 0 || pt_o[o + j] == ',' || pt_o[o + j] == ']' || pt_o[o + j] == ' ' || pt_o[o + j] == '.') { return true; }
         }
         i += 1;
     }
@@ -1324,8 +1324,21 @@ bool pt_rd(int s, int k, int r) {
 }
 
 // the mnemonics whose first operand is only written
+// the offset N of the second operand "[x29, #N]" of the line in slot s (a plain frame cell), or -1 when it has another form
+int pt_frame_off(int s) {
+    if pt_no[s] < 2 { return 0 - 1; }
+    int o = (s * 4 + 1) * 40;
+    if pt_o[o] != '[' || pt_o[o + 1] != 'x' || pt_o[o + 2] != '2' || pt_o[o + 3] != '9' || pt_o[o + 4] != ',' || pt_o[o + 5] != ' ' || pt_o[o + 6] != '#' { return 0 - 1; }
+    int k = o + 7;
+    if pt_o[k] < '0' || pt_o[k] > '9' { return 0 - 1; }
+    int v = 0;
+    while pt_o[k] >= '0' && pt_o[k] <= '9' { v = v * 10 + (pt_o[k] - '0'); k += 1; }
+    if pt_o[k] != ']' || pt_o[k + 1] != 0 { return 0 - 1; }
+    return v;
+}
+
 bool pt_writes_first(int s) {
-    return pt_mn(s, "mov") || pt_mn(s, "ldr") || pt_mn(s, "ldrb") || pt_mn(s, "ldrh") || pt_mn(s, "ldrsw") || pt_mn(s, "ldrsb") || pt_mn(s, "ldrsh") || pt_mn(s, "add") || pt_mn(s, "sub") || pt_mn(s, "mul") || pt_mn(s, "sdiv") || pt_mn(s, "udiv") || pt_mn(s, "and") || pt_mn(s, "orr") || pt_mn(s, "eor") || pt_mn(s, "lsl") || pt_mn(s, "lsr") || pt_mn(s, "asr") || pt_mn(s, "ror") || pt_mn(s, "ror32") || pt_mn(s, "neg") || pt_mn(s, "mvn") || pt_mn(s, "cset") || pt_mn(s, "smulh") || pt_mn(s, "umulh") || pt_mn(s, "msub") || pt_mn(s, "madd") || pt_mn(s, "sxtw") || pt_mn(s, "uxtb") || pt_mn(s, "uxth") || pt_mn(s, "sxtb") || pt_mn(s, "sxth") || pt_mn(s, "adr") || pt_mn(s, "fmov") || pt_mn(s, "fcvtzs") || pt_mn(s, "scvtf") || pt_mn(s, "ucvtf") || pt_mn(s, "fadd") || pt_mn(s, "fsub") || pt_mn(s, "fmul") || pt_mn(s, "fdiv") || pt_mn(s, "fsqrt") || pt_mn(s, "fneg") || pt_mn(s, "fabs") || pt_mn(s, "fcvt") || pt_mn(s, "frintm") || pt_mn(s, "frintp") || pt_mn(s, "frintz");
+    return pt_mn(s, "mov") || pt_mn(s, "ldr") || pt_mn(s, "ldrb") || pt_mn(s, "ldrh") || pt_mn(s, "ldrsw") || pt_mn(s, "ldrsb") || pt_mn(s, "ldrsh") || pt_mn(s, "add") || pt_mn(s, "sub") || pt_mn(s, "mul") || pt_mn(s, "sdiv") || pt_mn(s, "udiv") || pt_mn(s, "and") || pt_mn(s, "orr") || pt_mn(s, "eor") || pt_mn(s, "lsl") || pt_mn(s, "lsr") || pt_mn(s, "asr") || pt_mn(s, "ror") || pt_mn(s, "ror32") || pt_mn(s, "neg") || pt_mn(s, "mvn") || pt_mn(s, "cset") || pt_mn(s, "smulh") || pt_mn(s, "umulh") || pt_mn(s, "msub") || pt_mn(s, "madd") || pt_mn(s, "sxtw") || pt_mn(s, "uxtb") || pt_mn(s, "uxth") || pt_mn(s, "sxtb") || pt_mn(s, "sxth") || pt_mn(s, "adr") || pt_mn(s, "fmov") || pt_mn(s, "fcvtzs") || pt_mn(s, "scvtf") || pt_mn(s, "ucvtf") || pt_mn(s, "fadd") || pt_mn(s, "fsub") || pt_mn(s, "fmul") || pt_mn(s, "fdiv") || pt_mn(s, "fsqrt") || pt_mn(s, "fneg") || pt_mn(s, "fabs") || pt_mn(s, "dup") || pt_mn(s, "fcvt") || pt_mn(s, "frintm") || pt_mn(s, "frintp") || pt_mn(s, "frintz");
 }
 
 // the line index of the label L<n> in this function, or -1
@@ -1431,7 +1444,7 @@ bool pt_dead(int idx, int r, int budget) {
             k += 1;
         }
         if reads { return false; }
-        if first_only && pt_no[3] > 0 && (pt_isreg(3, 0) || pt_regno(3, 0, 'd') >= 0 || pt_regno(3, 0, 's') >= 0 || pt_regno(3, 0, 'w') >= 0) && pt_rd(3, 0, r) {
+        if first_only && pt_no[3] > 0 && (pt_isreg(3, 0) || pt_regno(3, 0, 'd') >= 0 || pt_regno(3, 0, 's') >= 0 || pt_regno(3, 0, 'w') >= 0 || pt_regno(3, 0, 'q') >= 0 || pt_vreg(3, 0) >= 0) && pt_rd(3, 0, r) {
             return true;                                      // msub / madd read their other operands too: that was looked at above
         }
         idx += 1;
@@ -1624,6 +1637,22 @@ int pt_subst(int s, int r, char^ rep, bool dest_first) {
 }
 
 // the number N of the operand (s, k) when it is written <prefix>N, else -1
+// a vector operand "v27.4s" / "v3.2d": the number of the register (else -1); pt_varr is 1 for .4s, 2 for .2d, 0 for another arrangement
+int pt_varr;
+int pt_vreg(int s, int k) {
+    int o = (s * 4 + k) * 40;
+    pt_varr = 0;
+    if k >= pt_no[s] || pt_o[o] != 'v' { return 0 - 1; }
+    int i = 1;
+    if pt_o[o + i] < '0' || pt_o[o + i] > '9' { return 0 - 1; }
+    int v = 0;
+    while pt_o[o + i] >= '0' && pt_o[o + i] <= '9' { v = v * 10 + (pt_o[o + i] - '0'); i += 1; }
+    if pt_o[o + i] != '.' { return 0 - 1; }
+    if pt_o[o + i + 1] == '4' && pt_o[o + i + 2] == 's' && pt_o[o + i + 3] == 0 { pt_varr = 1; }
+    else if pt_o[o + i + 1] == '2' && pt_o[o + i + 2] == 'd' && pt_o[o + i + 3] == 0 { pt_varr = 2; }
+    return v;
+}
+
 int pt_regno(int s, int k, char prefix) {
     int o = (s * 4 + k) * 40;
     if k >= pt_no[s] || pt_o[o] != prefix { return 0 - 1; }
@@ -2168,6 +2197,68 @@ bool pt_rules(int i) {
             sl[q] = 0;
             pt_set(i, "");
             pt_set(j, @sl);
+            return true;
+        }
+    }
+    // dup vX.A, wN / <one line that writes neither vX nor wN> / dup vX.A, wN (the same text)  ->  the second dup is dropped
+    if pt_mn(0, "dup") && pt_no[0] == 2 && pt_vreg(0, 0) >= 0 {
+        int dx = pt_vreg(0, 0);
+        int j2 = pt_next(j);
+        bool dsame = j2 >= 0 && j2 < pt_n;
+        if dsame {
+            int dc = 0;
+            while dc < 64 && dsame {
+                if pt_txt[i * 64 + dc] != pt_txt[j2 * 64 + dc] { dsame = false; }
+                if pt_txt[i * 64 + dc] == 0 { break; }
+                dc += 1;
+            }
+        }
+        if dsame && (pt_mn(1, "fmla") || pt_mn(1, "fadd") || pt_mn(1, "fmul") || pt_mn(1, "fsub")) && pt_no[1] == 3 && pt_vreg(1, 0) >= 0 && pt_vreg(1, 0) != dx {
+            pt_set(j2, "");
+            pt_parse(0, i);
+            pt_parse(1, j);
+            return true;
+        }
+        pt_parse(0, i);
+        pt_parse(1, j);
+    }
+    // vector multiply-add:  fmul vT.A, vX.A, vY.A / fadd vD.A, vD.A, vT.A (or vT, vD) with vT not needed afterwards  ->  fmla vD.A, vX.A, vY.A
+    // (the multiply is dropped, so vX and vY are untouched; fmla reads the old vD, vX and vY). Not in a function with the line ;NOFMA.
+    if opt_fma == 1 && rg_nofma_fn == 0 && pt_mn(0, "fmul") && pt_no[0] == 3 && pt_mn(1, "fadd") && pt_no[1] == 3 {
+        int vt = pt_vreg(0, 0);
+        int vta = pt_varr;
+        int vx = pt_vreg(0, 1);
+        int vxa = pt_varr;
+        int vy = pt_vreg(0, 2);
+        int vya = pt_varr;
+        int vd = pt_vreg(1, 0);
+        int vda = pt_varr;
+        int v1 = pt_vreg(1, 1);
+        int v1a = pt_varr;
+        int v2 = pt_vreg(1, 2);
+        int v2a = pt_varr;
+        if vta != 0 && vt >= 0 && vx >= 0 && vy >= 0 && vd >= 0 && v1 >= 0 && v2 >= 0 && vxa == vta && vya == vta && vda == vta && v1a == vta && v2a == vta && vd != vt
+            && ((v1 == vd && v2 == vt) || (v2 == vd && v1 == vt)) && pt_dead(pt_next(j), 32 + vt, 40) {
+            char vl[48];
+            int vq = 0;
+            vl[0] = 'f'; vl[1] = 'm'; vl[2] = 'l'; vl[3] = 'a'; vl[4] = ' '; vq = 5;
+            int vparts[3];
+            vparts[0] = vd; vparts[1] = vx; vparts[2] = vy;
+            int vpi = 0;
+            while vpi < 3 {
+                vl[vq] = 'v'; vq += 1;
+                int vr = vparts[vpi];
+                if vr >= 10 { vl[vq] = '0' + vr / 10; vq += 1; }
+                vl[vq] = '0' + vr % 10; vq += 1;
+                vl[vq] = '.'; vq += 1;
+                if vta == 1 { vl[vq] = '4'; vl[vq + 1] = 's'; } else { vl[vq] = '2'; vl[vq + 1] = 'd'; }
+                vq += 2;
+                if vpi < 2 { vl[vq] = ','; vl[vq + 1] = ' '; vq += 2; }
+                vpi += 1;
+            }
+            vl[vq] = 0;
+            pt_set(i, "");
+            pt_set(j, @vl);
             return true;
         }
     }
@@ -2863,6 +2954,91 @@ bool pt_rules(int i) {
             pt_parse(1, j);
         }
     }
+    // str xA|dA, [x29, #N] / (up to 8 lines: no label, no branch, no call; no store that may touch the cell; nothing that writes the register)
+    // / ldr xB|dB, [x29, #N]   ->   the load becomes a register move (mov / fmov), or goes when it is the same register: a number kept in a
+    // stack cell by the front end (a vec3 temporary) is read again from the register that wrote it
+    if pt_mn(0, "str") && pt_no[0] == 2 && opt_icopy == 1 && (pt_regno(0, 0, 'x') >= 0 || pt_regno(0, 0, 'd') >= 0) {
+        int fcell = pt_frame_off(0);
+        int fsrc_x = pt_regno(0, 0, 'x');
+        int fsrc_d = pt_regno(0, 0, 'd');
+        if fcell >= 0 && fsrc_x < 29 {
+            int fat = j;
+            int fsteps = 0;
+            int ffound = 0 - 1;
+            while fat >= 0 && fsteps < 8 && ffound < 0 {
+                if !pt_parse(2, fat) { break; }
+                bool fbad = false;
+                if pt_mn(2, "ldr") && pt_no[2] == 2 && pt_frame_off(2) == fcell && (pt_regno(2, 0, 'x') >= 0 || pt_regno(2, 0, 'd') >= 0) {
+                    ffound = fat;
+                    break;
+                }
+                if pt_mn(2, "str") || pt_mn(2, "strw") || pt_mn(2, "strb") || pt_mn(2, "strh") {
+                    // a store: only to another place of the frame
+                    int so = pt_frame_off(2);
+                    if so < 0 || (so < fcell + 8 && so + 8 > fcell) { fbad = true; }
+                } else if pt_mn(2, "ldr") || pt_mn(2, "ldrb") || pt_mn(2, "ldrh") || pt_mn(2, "ldrsw") || pt_mn(2, "cmp") || pt_mn(2, "fcmp") {
+                    // reads (a plain write of the first operand is checked below)
+                } else if !pt_writes_first(2) || pt_mn(2, "adr") {
+                    fbad = true;
+                }
+                if !fbad && pt_writes_first(2) && pt_no[2] >= 1 {
+                    if fsrc_x >= 0 && pt_regno(2, 0, 'x') == fsrc_x { fbad = true; }
+                    if fsrc_x >= 0 && pt_regno(2, 0, 'w') == fsrc_x { fbad = true; }
+                    if fsrc_d >= 0 && pt_regno(2, 0, 'd') == fsrc_d { fbad = true; }
+                    if fsrc_d >= 0 && pt_regno(2, 0, 's') == fsrc_d { fbad = true; }
+                }
+                if fbad { break; }
+                fat = pt_next(fat);
+                fsteps += 1;
+            }
+            if ffound >= 0 {
+                int ld_x = pt_regno(2, 0, 'x');
+                int ld_d = pt_regno(2, 0, 'd');
+                if ld_x < 29 {
+                    char fm[32];
+                    int fq = 0;
+                    bool same = (fsrc_x >= 0 && ld_x == fsrc_x) || (fsrc_d >= 0 && ld_d == fsrc_d);
+                    if same {
+                        pt_set(ffound, "");
+                        return true;
+                    }
+                    if fsrc_x >= 0 && ld_x >= 0 { fm[0] = 'm'; fm[1] = 'o'; fm[2] = 'v'; fq = 3; }
+                    else { fm[0] = 'f'; fm[1] = 'm'; fm[2] = 'o'; fm[3] = 'v'; fq = 4; }
+                    fm[fq] = ' '; fq += 1;
+                    int fparts[2];
+                    char fcls[2];
+                    if ld_x >= 0 { fparts[0] = ld_x; fcls[0] = 'x'; } else { fparts[0] = ld_d; fcls[0] = 'd'; }
+                    if fsrc_x >= 0 { fparts[1] = fsrc_x; fcls[1] = 'x'; } else { fparts[1] = fsrc_d; fcls[1] = 'd'; }
+                    int fp = 0;
+                    while fp < 2 {
+                        fm[fq] = fcls[fp]; fq += 1;
+                        if fparts[fp] >= 10 { fm[fq] = '0' + fparts[fp] / 10; fq += 1; }
+                        fm[fq] = '0' + fparts[fp] % 10; fq += 1;
+                        if fp == 0 { fm[fq] = ','; fm[fq + 1] = ' '; fq += 2; }
+                        fp += 1;
+                    }
+                    fm[fq] = 0;
+                    pt_set(ffound, @fm);
+                    return true;
+                }
+            }
+            pt_parse(0, i);
+            pt_parse(1, j);
+        }
+    }
+    // add xD, x29, #N (the address of a cell) that nobody reads before xD is written again: gone (the front end makes it for a copy that
+    // the later passes took out)
+    if pt_mn(0, "add") && pt_no[0] == 3 && pt_regno(0, 0, 'x') >= 0 && pt_regno(0, 0, 'x') < 29 && opt_icopy == 1 {
+        int ao1 = (0 * 4 + 1) * 40;
+        if pt_o[ao1] == 'x' && pt_o[ao1 + 1] == '2' && pt_o[ao1 + 2] == '9' && pt_o[ao1 + 3] == 0 && pt_o[(0 * 4 + 2) * 40] == '#' {
+            if pt_dead(j, pt_regno(0, 0, 'x'), 40) {
+                pt_set(i, "");
+                return true;
+            }
+            pt_parse(0, i);
+            pt_parse(1, j);
+        }
+    }
     // str xA, [x29, #N] / ldr xB, [x29, #N]   ->   str xA, [x29, #N] / mov xB, xA      (the value just stored is in the register; the store stays)
     if pt_mn(0, "str") && pt_mn(1, "ldr") && pt_no[0] == 2 && pt_no[1] == 2 && pt_regno(0, 0, 'x') >= 0 && pt_regno(1, 0, 'x') >= 0 && opt_icopy == 1 {
         int sa = pt_regno(0, 0, 'x');
@@ -3195,6 +3371,20 @@ bool pt_rules(int i) {
             // the line in between must not write the base register of the load, nor read or write the float register that gets the value
             int sk2 = pt_regno(2, 0, 's');
             bool mid_ok = bn2 >= 0 && !(pt_regno(1, 0, 'x') == bn2) && sk2 >= 0 && pt_regno(1, 0, 's') != sk2 && pt_regno(1, 1, 's') != sk2 && (pt_no[1] < 3 || pt_regno(1, 2, 's') != sk2) && pt_regno(1, 0, 'd') != sk2 && pt_regno(1, 1, 'd') != sk2;
+            // the index register of [xB, xI, lsl #n] counts too: the line in between must not write it either
+            int midreg = pt_regno(1, 0, 'x');
+            if mid_ok && midreg >= 0 {
+                int sc = ob2;
+                while pt_o[sc] != 0 {
+                    if pt_o[sc] == 'x' && pt_o[sc + 1] >= '0' && pt_o[sc + 1] <= '9' && (pt_o[sc - 1] == ' ' || pt_o[sc - 1] == '[' || pt_o[sc - 1] == ',') {
+                        int rn = 0;
+                        int sd = sc + 1;
+                        while pt_o[sd] >= '0' && pt_o[sd] <= '9' { rn = rn * 10 + (pt_o[sd] - '0'); sd += 1; }
+                        if rn == midreg { mid_ok = false; }
+                    }
+                    sc += 1;
+                }
+            }
             if mid_ok && pt_mn(2, "fmov") && pt_no[2] == 2 && pt_regno(2, 1, 'w') == nreg2 && pt_dead(pt_next(k6), nreg2, 40) {
                 char lb2[64];
                 int ln2 = 0;

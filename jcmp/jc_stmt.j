@@ -181,6 +181,7 @@ void parse_type() {
     if tok_kind == T_IDENT && tok_is("String") && find_struct(@tok_text) < 0 {
         // String: a dynamic array of char marked with the type id 70 (see is_str_dyn)
         next();
+        if tok_is("^") { die_help("String^ is not a type", "a String is already a handle to its text: write String s to pass one (the function borrows it), or char^ for raw bytes"); }
         ty_dyn = dyn_pack(2, 0, 70);
         if tok_is("[") {
             // String[] : an array of Strings (the array owns them)
@@ -297,6 +298,7 @@ void parse_type() {
         ty_width = 8;
         ty_ptr = 0;
         ty_void = 0;
+        ty_dyn = 0;                      // a parameter of type String / T[] left its array type here: the pointer is a plain scalar
     }
     if tok_is("[") {
         // T[] : a dynamic array of T (the elements are T, or T^ ...)
@@ -609,6 +611,11 @@ void parse_brace(int s, int base) {
         } else {
             parse_expr();
             if fldcode[fi] == 6 && ex_ty == 92 { lit_to_f32(0); }           // a decimal literal for a float field
+            if flddyn[fi] != 0 && is_str_dyn(flddyn[fi]) {
+                // a String field: a text becomes a String of its own (as in `r.name = "Hall"`); a String variable is copied
+                if ex_w == 9 { rt_call("__Str__from"); }
+                else if ex_ty == 80 && rv_valid == 1 { rt_call("__Str__clone"); }
+            }
             emit_line("ldr x3, [sp, #0]");
             ins_n("add x3, x3, #", base + fldoff[fi]);
             emit_line("mov x1, x0");
@@ -2489,6 +2496,7 @@ void parse_defer() {
 
 void parse_statement_inner() {
     sg_statement();                      // alloc[..] free[..] grow[..] become their usual form
+    if tok_is("else") { die_help("else has no if before it", "an else follows the closing brace of an if (on the same line or the next one); look for a missing or an extra } above"); }
     if tok_is("defer") && in_func_stmt_ok() {
         parse_defer();
         return;

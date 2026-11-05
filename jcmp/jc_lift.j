@@ -2195,15 +2195,40 @@ void ir_passes_basic() {
     }
     if (ir_opt & 4096) != 0 { op_copy_inline(); }
     if (ir_opt & 128) != 0 { op_thread(); }
-    if (ir_opt & 32768) != 0 { op_sroa(); }
+    op_merge_blocks();
+    if (ir_opt & 32768) != 0 {
+        int dt0 = dt_changes;
+        op_dead_temps();
+        if dt_changes != dt0 && (ir_opt & 4) != 0 { op_clean_run(); }
+        op_sroa();
+        // the loads through the addresses are loads of the frame now: the stores of the addresses into the cells have no reader
+        int dt1 = dt_changes;
+        op_dead_temps();
+        if dt_changes != dt1 {
+            if (ir_opt & 4) != 0 { op_clean_run(); }
+            op_sroa();
+        }
+    }
     if (ir_opt & 8) != 0 { op_cse_run(); }
     if (ir_opt & 8) != 0 { op_cell_fwd(); }
     if (ir_opt & 8) != 0 { op_vfwd(); }
-    if (ir_opt & 8) != 0 { op_const_cells(); }
+    if (ir_opt & 8) != 0 {
+        // a cell that holds a number makes the next numbers known (a size, a class, an address): again until nothing changes
+        int ccr = 0;
+        while ccr < 5 {
+            int cc0 = cc_changes;
+            op_const_cells();
+            if cc_changes == cc0 { break; }
+            if (ir_opt & 4) != 0 { op_clean_run(); }
+            ccr += 1;
+        }
+    }
     if (ir_opt & 8) != 0 { op_dead_cells(); }
     if (ir_opt & 4) != 0 { op_clean_run(); }
     if (ir_opt & 32768) != 0 && (ir_opt & 16777216) == 0 && cf_changes != cf0 {
         // stack cells went away: struct temporaries that were passed through them may be plain words now
+        op_dead_temps();
+        if (ir_opt & 4) != 0 { op_clean_run(); }
         op_sroa();
         if (ir_opt & 8) != 0 { op_cse_run(); }
         if (ir_opt & 8) != 0 { op_dead_cells(); }
@@ -2327,6 +2352,16 @@ void ir_pipeline(char^ name_) {
                 }
             }
             if (ir_opt & 8388608) == 0 { op_licm_exprs(); }
+            // the cells of a block are kept in registers after the loops were looked at (a counter that is a copy is no counter for the vectoriser)
+            if (ir_opt & 8) != 0 {
+                int cp0 = cp_changes;
+                op_cell_promote();
+                if cp_changes != cp0 {
+                    op_dead_cells();
+                    if (ir_opt & 4) != 0 { op_clean_run(); }
+                }
+            }
+            if (ir_opt & 549755813888) != 0 { ir_print(); syscall(64, 2, @ir_pbuf, ir_plen); }      // -irdbg 549755813888: the IR after the cells were promoted
             rp_stage(6);
             if (ir_opt & 2) != 0 { op_ra_run(); }
             rp_stage(7);

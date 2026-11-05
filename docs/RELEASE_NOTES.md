@@ -1,6 +1,8 @@
-# J2K / Jcmp 1.2.13.0
+# J2K / Jcmp 1.2.14.0
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
+
+**1.2.14.0 (pre-release, in development):** vector `fmla` and a 4 x 8 register-blocked matrix kernel in `<neuron>` (14 GFLOPS on one thread, about 31 with four, the same as a C program with the same NEON kernel), vectorised loops over heap arrays and matrix indices, fixes for `String` fields in `{ }`, `sort_by<String>` and `String^`, and many new documents (a tutorial of 154 lessons, a beginner series, ten guides, a cheat sheet). The speed gate of 1.3.0 is not passed yet: see the CHANGELOG for what is not claimed.
 
 **1.2.13.0:** loops over arrays are shorter again (the null check and the load of the header of an array move before the loop, constants too: sums of arrays run about 1.8 times faster, a float update about 1.35 times, the outputs are the same), a function of your program that has the name of a newer library function (`pad`, `fmt`) is yours again, the library `<ui>` 0.2.0 with a modern look and a sliding pill tab bar, the libraries `<font>` (real text, Thai too) and `<softcanvas>`, and a tutorial of 89 lessons.
 

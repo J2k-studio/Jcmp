@@ -1314,7 +1314,7 @@ jcmp mylib.jk -l -o libmy.so
 * The library has its own global variables, its own heap and its own `String`s and arrays inside; they never cross its border yet.
 * The functions that are not marked `export` stay inside (and are not in the file if no exported function reaches them).
 * Try it from python: `ctypes.CDLL('./libmy.so').add(2, 3)` is 5.
-* Not yet: `jout` inside a library, ARM32, and a library that calls another library. The test `t502` in the repository loads a library the way a C program does.
+* `jout` works inside a library (an exported function can print). Not yet: ARM32 and a library that calls another library. The test `t502` in the repository loads a library the way a C program does.
 
 
 ## A root like an OS (JARIC_ROOT)

@@ -2722,7 +2722,7 @@ void lvalue_loop() {
             lv_nd = 1;
         } else if tok_is("^") {
             check_moved_use();
-            if lv_ptr == 0 || lv_kind == 1 { die_help("this value is not a pointer, so ^ cannot follow it", "only a pointer (int^ p) can be followed by ^ to reach the value it points to"); }
+            if lv_ptr == 0 || lv_kind == 1 { die_help("this value is not a pointer, so ^ cannot follow it", "only a pointer (int^ p) can be followed by ^ to reach the value it points to; the bitwise xor of two numbers is written  a xor b"); }
             if lv_ptr == 10 { die_help("a void^ cannot be dereferenced", "cast it to a typed pointer first"); }
             next();
             lv_fresh = 0;

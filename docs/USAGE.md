@@ -28,6 +28,9 @@ jcmp input.jk output                    (the second name is the program; if it e
 | `-show NAME`       | write the code of the function NAME as it is in the program (ARM64) and the number of its instructions, then stop (nothing else is written) |
 | `-l`               | make a shared library (`.so`) instead of a program: the functions written with `export` in front are its entry points. See "Shared libraries" in LANGUAGE.md |
 | `-dyn`             | make a *dynamic* executable: the loader of Android starts it with `libdl.so` and `libc.so`, so the program can load the libraries of the phone (`libvulkan.so`, `libEGL.so`, `libGLESv3.so` ...) with the library `<native>`. Tutorial lessons 61 to 66 |
+| `-novec`           | do not use NEON vector loops (the result must be the same; use it to check a fault in the optimiser) |
+| `-nopeep`          | switch off the small rewrites of the final assembler text (same use) |
+| `-noir`            | skip the optimiser that works on the intermediate form (same use) |
 | `-norot`           | do not move the test of a loop to the bottom (for looking for a fault) |
 | `-target arm32`    | write a 32-bit ARM program (ELF32) instead of an ARM64 one; `-target arm64` is the default. See "32-bit ARM" below |
 | `-d`               | debug build: array index checks. A bad index prints `runtime error: index out of bounds, array size is N` and the program exits with code 134 |

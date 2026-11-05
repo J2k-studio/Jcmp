@@ -1031,6 +1031,55 @@ bool classify_arg(char^ b, int s, int e, int idx) {
     while e > s && is_space(b[e - 1]) { e -= 1; }
     if s >= e { return false; }
     int c = b[s];
+    // an arithmetic expression: the type comes from its operands (the last operator outside brackets)
+    int depth = 0;
+    int opat = 0 - 1;
+    int q = s;
+    while q < e {
+        int lj = gen_skip_lit(b, q, e);
+        if lj != q { q = lj; continue; }
+        int ch = b[q];
+        if ch == '(' || ch == '[' { depth += 1; }
+        else if ch == ')' || ch == ']' { depth -= 1; }
+        else if depth == 0 && q > s && (ch == '+' || ch == '-' || ch == '*' || ch == '/' || ch == '%') {
+            int pv = q - 1;
+            while pv > s && is_space(b[pv]) { pv -= 1; }
+            int pc = b[pv];
+            bool expo = (pc == 'e' || pc == 'E') && pv > s && is_digit(b[pv - 1]) && is_digit(b[s]);
+            if !expo && pc != '+' && pc != '-' && pc != '*' && pc != '/' && pc != '%' && pc != '(' { opat = q; }
+        }
+        q += 1;
+    }
+    if opat > s {
+        if !classify_arg(b, s, opat, idx) { return false; }
+        if ia_class[idx] == 0 { return true; }
+        int lc = ia_class[idx];
+        if !classify_arg(b, opat + 1, e, idx) { return false; }
+        if ia_class[idx] != 0 { if lc > ia_class[idx] { ia_class[idx] = lc; } }
+        return true;
+    }
+    if is_letter(c) && b[e - 1] == ')' {
+        // a call of a generic function: its type is the type of its first argument
+        char cw[64];
+        int cwe = gen_word(b, s, e, @cw);
+        int cn = gen_blanks(b, cwe, e);
+        if cn < e && b[cn] == '(' && gen_find_tpl(@cw) >= 0 {
+            int ae = cn + 1;
+            int d2 = 0;
+            while ae < e - 1 {
+                int lj2 = gen_skip_lit(b, ae, e);
+                if lj2 != ae { ae = lj2; continue; }
+                if b[ae] == '(' || b[ae] == '[' { d2 += 1; }
+                else if b[ae] == ')' || b[ae] == ']' { d2 -= 1; }
+                else if b[ae] == ',' && d2 == 0 { break; }
+                ae += 1;
+            }
+            return classify_arg(b, cn + 1, ae, idx);
+        }
+    }
+    if c == '(' && b[e - 1] == ')' && gen_skip_lit(b, s, e) == s {
+        return classify_arg(b, s + 1, e - 1, idx);
+    }
     if is_digit(c) || (c == '-' && s + 1 < e && is_digit(b[s + 1])) {
         int k = s;
         if c == '-' { k += 1; }
@@ -1718,7 +1767,7 @@ bool de_has_free(char^ b, int s, int e) {
 // else the function returns at once with the Err / None (the error moves into the result of this function, which
 // must return a Result with the same E / an Option). Everything the function owns is freed on the way.
 void gen_try_op() {
-    if ex_ty < 100 { die("? needs a Result or an Option in front of it"); }
+    if ex_ty < 100 { die_help("? needs a Result or an Option in front of it", "J2K has no  a ? b : c  : write an if statement (or min / max / abs for a number); ? after a call passes on an error of a Result or an Option"); }
     int ssrc = ex_ty - 100;
     int dsrc = dv_find(@sname + ssrc * 64);
     int family = 0;
@@ -1726,7 +1775,7 @@ void gen_try_op() {
         if str_eq_n(@dv_name + dsrc * 64, "Result__", 8) { family = 1; }
         if str_eq_n(@dv_name + dsrc * 64, "Option__", 8) { family = 2; }
     }
-    if family == 0 { die("? needs a Result or an Option in front of it"); }
+    if family == 0 { die_help("? needs a Result or an Option in front of it", "J2K has no  a ? b : c  : write an if statement; ? after a call passes on an error of a Result or an Option"); }
     if last_call_struct == 0 { die("? is used on the result of a call (a variable that holds a Result is looked at with switch)"); }
     if cur_ret_tid < 100 { die("? can only be used in a function that returns a Result or an Option"); }
     int sdst = cur_ret_tid - 100;
