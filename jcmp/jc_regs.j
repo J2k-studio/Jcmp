@@ -1338,7 +1338,7 @@ int pt_frame_off(int s) {
 }
 
 bool pt_writes_first(int s) {
-    return pt_mn(s, "mov") || pt_mn(s, "ldr") || pt_mn(s, "ldrb") || pt_mn(s, "ldrh") || pt_mn(s, "ldrsw") || pt_mn(s, "ldrsb") || pt_mn(s, "ldrsh") || pt_mn(s, "add") || pt_mn(s, "sub") || pt_mn(s, "mul") || pt_mn(s, "sdiv") || pt_mn(s, "udiv") || pt_mn(s, "and") || pt_mn(s, "orr") || pt_mn(s, "eor") || pt_mn(s, "lsl") || pt_mn(s, "lsr") || pt_mn(s, "asr") || pt_mn(s, "ror") || pt_mn(s, "ror32") || pt_mn(s, "neg") || pt_mn(s, "mvn") || pt_mn(s, "cset") || pt_mn(s, "smulh") || pt_mn(s, "umulh") || pt_mn(s, "msub") || pt_mn(s, "madd") || pt_mn(s, "sxtw") || pt_mn(s, "uxtb") || pt_mn(s, "uxth") || pt_mn(s, "sxtb") || pt_mn(s, "sxth") || pt_mn(s, "adr") || pt_mn(s, "fmov") || pt_mn(s, "fcvtzs") || pt_mn(s, "scvtf") || pt_mn(s, "ucvtf") || pt_mn(s, "fadd") || pt_mn(s, "fsub") || pt_mn(s, "fmul") || pt_mn(s, "fdiv") || pt_mn(s, "fsqrt") || pt_mn(s, "fneg") || pt_mn(s, "fabs") || pt_mn(s, "dup") || pt_mn(s, "fcvt") || pt_mn(s, "frintm") || pt_mn(s, "frintp") || pt_mn(s, "frintz");
+    return pt_mn(s, "mov") || pt_mn(s, "ldr") || pt_mn(s, "ldrb") || pt_mn(s, "ldrh") || pt_mn(s, "ldrsw") || pt_mn(s, "ldrsb") || pt_mn(s, "ldrsh") || pt_mn(s, "add") || pt_mn(s, "sub") || pt_mn(s, "mul") || pt_mn(s, "sdiv") || pt_mn(s, "udiv") || pt_mn(s, "and") || pt_mn(s, "orr") || pt_mn(s, "eor") || pt_mn(s, "lsl") || pt_mn(s, "lsr") || pt_mn(s, "asr") || pt_mn(s, "ror") || pt_mn(s, "ror32") || pt_mn(s, "neg") || pt_mn(s, "mvn") || pt_mn(s, "cset") || pt_mn(s, "smulh") || pt_mn(s, "umulh") || pt_mn(s, "msub") || pt_mn(s, "madd") || pt_mn(s, "sxtw") || pt_mn(s, "uxtb") || pt_mn(s, "uxth") || pt_mn(s, "sxtb") || pt_mn(s, "sxth") || pt_mn(s, "adr") || pt_mn(s, "fmov") || pt_mn(s, "fmovi") || pt_mn(s, "fcvtzs") || pt_mn(s, "scvtf") || pt_mn(s, "ucvtf") || pt_mn(s, "fadd") || pt_mn(s, "fsub") || pt_mn(s, "fmul") || pt_mn(s, "fdiv") || pt_mn(s, "fsqrt") || pt_mn(s, "fneg") || pt_mn(s, "fabs") || pt_mn(s, "dup") || pt_mn(s, "fcvt") || pt_mn(s, "frintm") || pt_mn(s, "frintp") || pt_mn(s, "frintz");
 }
 
 // the line index of the label L<n> in this function, or -1
@@ -3202,6 +3202,34 @@ bool pt_rules(int i) {
             return true;
         }
     }
+    // mov xN, 0 / str|strb|strh|strw xN, [...]  (xN is not needed afterwards, not part of the address)  ->  str.. xzr, [...]
+    if pt_mn(0, "mov") && pt_no[0] == 2 && pt_regno(0, 0, 'x') >= 0 && pt_regno(0, 0, 'x') < 29 && pt_isnum(0, 1) && opt_icopy == 1
+        && (pt_mn(1, "str") || pt_mn(1, "strb") || pt_mn(1, "strh") || pt_mn(1, "strw")) && pt_no[1] == 2 && pt_regno(1, 0, 'x') == pt_regno(0, 0, 'x') {
+        int zr = pt_regno(0, 0, 'x');
+        int zo = (0 * 4 + 1) * 40;
+        int zc = 0;
+        if pt_o[zo] == '#' { zc = 1; }
+        if pt_o[zo + zc] == '0' && pt_o[zo + zc + 1] == 0 && !pt_rd(1, 1, zr) && pt_dead(pt_next(j), zr, 40) {
+            // the text of the store with xzr instead of xN
+            char zl[64];
+            int zb = j * 64;
+            int zq = 0;
+            while pt_txt[zb + zq] != ' ' && pt_txt[zb + zq] != 0 && zq < 20 { zl[zq] = pt_txt[zb + zq]; zq += 1; }
+            if pt_txt[zb + zq] == ' ' {
+                zl[zq] = ' '; zl[zq + 1] = 'x'; zl[zq + 2] = 'z'; zl[zq + 3] = 'r';
+                int zp = zq + 1;
+                int zk = zb + zq + 1;
+                zk += 1;                                              // the 'x'
+                while pt_txt[zk] >= '0' && pt_txt[zk] <= '9' { zk += 1; }
+                int zw = zq + 4;
+                while pt_txt[zk] != 0 && zw < 62 { zl[zw] = pt_txt[zk]; zw += 1; zk += 1; }
+                zl[zw] = 0;
+                pt_set(i, "");
+                pt_set(j, @zl);
+                return true;
+            }
+        }
+    }
     // lsl xA, xI, #k / (one independent line) / OP rt, [xA, xB]   ->   (the line) / OP rt, [xB, xI, lsl #k]      (the element address after the load of the data pointer)
     if pt_mn(0, "lsl") && pt_no[0] == 3 && pt_regno(0, 0, 'x') >= 0 && pt_regno(0, 1, 'x') >= 0 && pt_isnum(0, 2) && pt_no[1] >= 2 && opt_icopy == 1 {
         int la = pt_regno(0, 0, 'x');
@@ -4262,6 +4290,163 @@ bool pt_hoist_loop(int a, int lab, int jj, int used) {
     return true;
 }
 
+
+// a global array far from the base register: add xA, x28, xI (, lsl #k) / OP rt, [xA, #G]  with G above the range of the access
+// -> OP rt, [xF, xI (, lsl #k)] where xF = x28 + G is made once before the loop (two lines in the room before the ".align")
+int pt_far_size(int s) {
+    if pt_no[s] != 2 { return 0 - 1; }
+    if pt_mn(s, "ldr") || pt_mn(s, "str") {
+        if pt_regno(s, 0, 'x') >= 0 || pt_regno(s, 0, 'd') >= 0 { return 8; }
+        if pt_regno(s, 0, 's') >= 0 { return 4; }
+        return 0 - 1;
+    }
+    if pt_mn(s, "ldrb") || pt_mn(s, "strb") { return 1; }
+    if pt_mn(s, "ldrh") || pt_mn(s, "strh") { return 2; }
+    if pt_mn(s, "ldrw") || pt_mn(s, "strw") || pt_mn(s, "ldrsw") { return 4; }
+    return 0 - 1;
+}
+
+// the number after '#' in operand k of slot s ("[xA, #G]"), or -1
+int pt_far_off(int s, int k) {
+    int o = (s * 4 + k) * 40;
+    int i = 0;
+    while pt_o[o + i] != 0 && pt_o[o + i] != '#' { i += 1; }
+    if pt_o[o + i] != '#' { return 0 - 1; }
+    i += 1;
+    int v = 0;
+    int n = 0;
+    while pt_o[o + i] >= '0' && pt_o[o + i] <= '9' && n < 12 { v = v * 10 + (pt_o[o + i] - '0'); i += 1; n += 1; }
+    if n == 0 || pt_o[o + i] != ']' { return 0 - 1; }
+    return v;
+}
+
+bool pt_far_loop(int a, int lab, int jj) {
+    int used = 0;
+    while used < 8 && pt_txt[(a - 8 + used) * 64] != 0 { used += 1; }
+    if used > 6 { return false; }
+    // no call in the loop; nobody outside jumps into the middle of it
+    int q = pt_next(lab);
+    while q >= 0 && q <= jj {
+        if pt_parse(0, q) && (pt_mn(0, "bl") || pt_mn(0, "blr") || pt_mn(0, "svc")) { return false; }
+        q = pt_next(q);
+    }
+    int z = 0;
+    while z < pt_n {
+        if (z < lab || z > jj) && pt_parse(0, z) && pt_is_branch(0) {
+            int tn = pt_target_num(0);
+            if tn >= 0 {
+                int tl = pt_label_at(tn);
+                if tl > lab && tl <= jj { return false; }
+            }
+        }
+        z += 1;
+    }
+    bool any = false;
+    int rounds = 0;
+    while rounds < 2 && used <= 6 {
+        rounds += 1;
+        // the first far pair gives the offset G of this round
+        int gG = 0 - 1;
+        q = pt_next(lab);
+        while q >= 0 && q <= jj && gG < 0 {
+            int q2 = pt_next(q);
+            if q2 >= 0 && q2 <= jj && pt_parse(0, q) && pt_mn(0, "add") && (pt_no[0] == 3 || pt_no[0] == 4) && pt_parse(1, q2) {
+                int sz = pt_far_size(1);
+                int ga = pt_regno(0, 0, 'x');
+                int bb = pt_base_reg(1, 1);
+                int gv = pt_far_off(1, 1);
+                if sz > 0 && ga >= 0 && ga == bb && gv > 4095 * sz && gv % sz == 0 && gv < 2000000000 && pt_regno(1, 0, 'x') != ga { gG = gv; }
+            }
+            q = pt_next(q);
+        }
+        if gG < 0 { break; }
+        int ff = pt_free_reg(lab, jj, false);
+        if ff < 0 { break; }
+        int done = 0;
+        q = pt_next(lab);
+        while q >= 0 && q <= jj {
+            int q2 = pt_next(q);
+            if q2 >= 0 && q2 <= jj && pt_parse(0, q) && pt_mn(0, "add") && (pt_no[0] == 3 || pt_no[0] == 4) && pt_parse(1, q2) {
+                int sz = pt_far_size(1);
+                int ga = pt_regno(0, 0, 'x');
+                int bb = pt_base_reg(1, 1);
+                int gv = pt_far_off(1, 1);
+                if sz > 0 && ga >= 0 && ga == bb && gv == gG && pt_regno(1, 0, 'x') != ga {
+                    // the index and the shift of the add: add xA, x28, xI, lsl #k | add xA, x28, xI | add xA, xI, x28
+                    int ix = 0 - 1;
+                    int kk = 0;
+                    bool okf = false;
+                    if pt_regno(0, 1, 'x') == 28 && pt_regno(0, 2, 'x') >= 0 && pt_regno(0, 2, 'x') != 28 {
+                        ix = pt_regno(0, 2, 'x');
+                        okf = true;
+                        if pt_no[0] == 4 {
+                            int o3 = (0 * 4 + 3) * 40;
+                            if pt_o[o3] == 'l' && pt_o[o3 + 1] == 's' && pt_o[o3 + 2] == 'l' && pt_o[o3 + 3] == ' ' && pt_o[o3 + 4] == '#' && pt_o[o3 + 5] >= '0' && pt_o[o3 + 5] <= '4' && pt_o[o3 + 6] == 0 { kk = pt_o[o3 + 5] - '0'; } else { okf = false; }
+                        }
+                    } else if pt_no[0] == 3 && pt_regno(0, 2, 'x') == 28 && pt_regno(0, 1, 'x') >= 0 && pt_regno(0, 1, 'x') != 28 {
+                        ix = pt_regno(0, 1, 'x');
+                        okf = true;
+                    }
+                    int shl = 0;
+                    if sz == 2 { shl = 1; } else if sz == 4 { shl = 2; } else if sz == 8 { shl = 3; }
+                    if okf && ix >= 0 && ix != ga && ix < 29 && (kk == 0 || kk == shl) && pt_dead(pt_next(q2), ga, 40) {
+                        // OP rt, [xF, xI (, lsl #k)]
+                        char nl[64];
+                        int nq = 0;
+                        int m1 = 1 * 16;
+                        while pt_m[m1 + nq] != 0 && nq < 12 { nl[nq] = pt_m[m1 + nq]; nq += 1; }
+                        nl[nq] = ' '; nq += 1;
+                        int o0 = (1 * 4 + 0) * 40;
+                        int w0 = 0;
+                        while pt_o[o0 + w0] != 0 && w0 < 12 { nl[nq] = pt_o[o0 + w0]; nq += 1; w0 += 1; }
+                        nl[nq] = ','; nl[nq + 1] = ' '; nl[nq + 2] = '['; nl[nq + 3] = 'x'; nq += 4;
+                        if ff >= 10 { nl[nq] = '0' + ff / 10; nq += 1; }
+                        nl[nq] = '0' + ff % 10; nq += 1;
+                        nl[nq] = ','; nl[nq + 1] = ' '; nl[nq + 2] = 'x'; nq += 3;
+                        if ix >= 10 { nl[nq] = '0' + ix / 10; nq += 1; }
+                        nl[nq] = '0' + ix % 10; nq += 1;
+                        if kk > 0 { nl[nq] = ','; nl[nq + 1] = ' '; nl[nq + 2] = 'l'; nl[nq + 3] = 's'; nl[nq + 4] = 'l'; nl[nq + 5] = ' '; nl[nq + 6] = '#'; nl[nq + 7] = '0' + kk; nq += 8; }
+                        nl[nq] = ']'; nq += 1;
+                        nl[nq] = 0;
+                        pt_set(q, "");
+                        pt_set(q2, @nl);
+                        done += 1;
+                    }
+                }
+            }
+            q = pt_next(q);
+        }
+        if done == 0 { break; }
+        // the two lines that make xF
+        char h1[64];
+        char h2[64];
+        int hq = 0;
+        h1[0] = 'm'; h1[1] = 'o'; h1[2] = 'v'; h1[3] = ' '; h1[4] = 'x'; hq = 5;
+        if ff >= 10 { h1[hq] = '0' + ff / 10; hq += 1; }
+        h1[hq] = '0' + ff % 10; hq += 1;
+        h1[hq] = ','; h1[hq + 1] = ' '; hq += 2;
+        char dg[16];
+        int dn = 0;
+        int gt = gG;
+        while gt > 0 { dg[dn] = '0' + gt % 10; dn += 1; gt = gt / 10; }
+        while dn > 0 { dn -= 1; h1[hq] = dg[dn]; hq += 1; }
+        h1[hq] = 0;
+        int hp = 0;
+        h2[0] = 'a'; h2[1] = 'd'; h2[2] = 'd'; h2[3] = ' '; h2[4] = 'x'; hp = 5;
+        if ff >= 10 { h2[hp] = '0' + ff / 10; hp += 1; }
+        h2[hp] = '0' + ff % 10; hp += 1;
+        h2[hp] = ','; h2[hp + 1] = ' '; h2[hp + 2] = 'x'; hp += 3;
+        if ff >= 10 { h2[hp] = '0' + ff / 10; hp += 1; }
+        h2[hp] = '0' + ff % 10; hp += 1;
+        h2[hp] = ','; h2[hp + 1] = ' '; h2[hp + 2] = 'x'; h2[hp + 3] = '2'; h2[hp + 4] = '8'; h2[hp + 5] = 0;
+        pt_set(a - 8 + used, @h1);
+        pt_set(a - 8 + used + 1, @h2);
+        used += 2;
+        any = true;
+    }
+    return any;
+}
+
 bool pt_hoist() {
     if opt_hoist == 0 { return false; }
     bool any = false;
@@ -4295,6 +4480,7 @@ bool pt_hoist() {
                     }
                     if refs == 1 && jj > lab {
                         if pt_hoist_loop(a, lab, jj, used) { any = true; }
+                        if pt_far_loop(a, lab, jj) { any = true; }
                     }
                 }
             }

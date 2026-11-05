@@ -1,6 +1,8 @@
-# J2K / Jcmp 1.2.14.0
+# J2K / Jcmp 1.2.15.0
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
+
+**1.2.15.0:** unroll-and-jam for global and heap arrays (matmul -25 %), float copy folding (mandel -11 %), new learning book.
 
 **1.2.14.0 (pre-release, in development):** vector `fmla` and a 4 x 8 register-blocked matrix kernel in `<neuron>` (14 GFLOPS on one thread, about 31 with four, the same as a C program with the same NEON kernel), vectorised loops over heap arrays and matrix indices, fixes for `String` fields in `{ }`, `sort_by<String>` and `String^`, and many new documents (a tutorial of 154 lessons, a beginner series, ten guides, a cheat sheet). The speed gate of 1.3.0 is not passed yet: see the CHANGELOG for what is not claimed.
 

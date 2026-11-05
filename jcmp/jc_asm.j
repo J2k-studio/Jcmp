@@ -946,10 +946,18 @@ void as_h_mem(int op, int shift) {
     }
     int imm12 = imm >> shift;
     if imm12 > 4095 {
-        as_emit_mov_imm(17, imm);
-        as_put32(0x8B206000 | (17 << 16) | (rn << 5) | 17);
-        rn = 17;
-        imm12 = 0;
+        if imm >= 0 && (imm >> 12) <= 4095 && rt != 17 {
+            // an offset up to 16 MB (a global array far from the base): add x17, xN, #(offset / 4096), lsl #12 then the access with the low 12 bits
+            // (the offset is a multiple of the size, and 4096 is too, so the low part is still a multiple of the size)
+            as_put32(0x91400000 | ((imm >> 12) << 10) | (rn << 5) | 17);
+            rn = 17;
+            imm12 = (imm & 4095) >> shift;
+        } else {
+            as_emit_mov_imm(17, imm);
+            as_put32(0x8B206000 | (17 << 16) | (rn << 5) | 17);
+            rn = 17;
+            imm12 = 0;
+        }
     }
     as_put32((op << 16) | (imm12 << 10) | (rn << 5) | rt);
 }

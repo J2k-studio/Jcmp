@@ -163,6 +163,19 @@ For the complete list of features see [LANGUAGE.md](LANGUAGE.md); for the comman
 148. defer: cleanup when a function fails
 149. A build file of makej, read as text
 150. Reading a compiler error
+151. Where a name lives: scope
+152. A table of rows and columns
+153. Finding fast: binary search
+154. Debugging by looking
+155. Counting steps: Big-O
+156. A stack: last in, first out
+157. A queue in a ring buffer
+158. A search tree
+159. A graph and breadth-first search
+160. Dynamic programming
+161. A hash table from scratch
+162. Two sorts, counted
+163. Memory and the cache: why the order of loops matters
 
 ## Lesson 1. Hello, world
 
@@ -5432,7 +5445,7 @@ Output:
 ```
 multiply-adds: 262144
 same table: true
-sum of the table: 0.020048
+sum of the table: 0.020103
 ```
 
 A micro-kernel is the innermost piece of a matrix product: a small block of results (for example 4 rows by 8 columns) is kept in vector registers while the loop over the shared dimension runs, so that the numbers are loaded once and reused. A 4x8 kernel of this kind is an experiment of the compiler's own work and is not in `<neuron>` yet; the `matmul_fast` above is the one you can use today.
@@ -6664,6 +6677,678 @@ ec_read_errors.jk:19:1: error: the file ends inside a block: the '{' on line 5 i
 Read it in this order: (1) the file and the place, `12:6` is line 12, column 6; (2) the message, which says what is wrong; (3) the source line with the `^`, and the `help` line, which often says the fix. The first message points at `main`, but the cause is the `{` of `average` on line 5, which is never closed. So the message at the place where the compiler notices a problem is not always where the mistake is: read the `help` lines and the last message too. Fix one error, compile again, and the rest may disappear.
 
 **Try:** delete the `}` at the end of the `for` line in `average`, compile, and check that the message names the line of the function.
+
+## Lesson 151. Where a name lives: scope
+
+A variable exists from the line that makes it to the closing brace of the block it was made in. A variable made outside every function (a global) is visible everywhere. Inside a loop a new variable is made for every turn.
+
+```jk
+#import <stdlib>
+using stdlib;
+
+int total = 100;                 // a global: visible everywhere
+
+int twice(int x) {
+    int result = x * 2;          // a local: only inside twice
+    return result;
+}
+
+void main() {
+    int n = 5;
+    if n > 3 {
+        int inner = n + 1;       // lives only inside these braces
+        jout << "inner = " << inner << "\n";
+    }
+    for i in 0..3 {
+        int sq = i * i;          // a new sq for every turn
+        jout << "sq = " << sq << "\n";
+    }
+    jout << twice(n) << " " << total << "\n";
+}
+
+```
+
+Output:
+
+```
+inner = 6
+sq = 0
+sq = 1
+sq = 4
+10 100
+```
+
+Use a name outside its block and the compiler says it does not know it. Prefer locals: a global can be changed from anywhere, so it is hard to see who changed it.
+
+**Try:** print `inner` after the `if` block and read the error.
+
+## Lesson 152. A table of rows and columns
+
+A table with rows and columns can live in one array: the cell (row, col) is at `row * width + col`. This keeps all the numbers next to each other in memory, which is what the CPU likes.
+
+```jk
+#import <stdlib>
+using stdlib;
+
+// a 3 x 3 table kept in one array: the cell (row, col) is at row * 3 + col
+void main() {
+    int[] t = arr(9);
+    for r in 0..3 {
+        for c in 0..3 { t.push((r + 1) * (c + 1)); }
+    }
+    for r in 0..3 {
+        for c in 0..3 { jout << t[r * 3 + c] << " "; }
+        jout << "\n";
+    }
+    int diag = 0;
+    for k in 0..3 { diag += t[k * 3 + k]; }
+    jout << "diagonal sum = " << diag << "\n";
+}
+
+```
+
+Output:
+
+```
+1 2 3 
+2 4 6 
+3 6 9 
+diagonal sum = 14
+```
+
+This is the same layout the matrix product lessons use. Go through a table row by row (the inner loop over the column) and it is fast; go column by column and it is slower.
+
+**Try:** make it 4 x 4 and print the sum of the second row.
+
+## Lesson 153. Finding fast: binary search
+
+When an array is sorted, you do not have to look at every item. Look at the middle: if the item is smaller, the answer is in the left half, otherwise in the right half. Each step throws half away, so 1,000,000 items take about 20 steps.
+
+```jk
+#import <stdlib>
+using stdlib;
+
+// binary search in a sorted array: each step throws half of the rest away
+int find(int[] a, int x) {
+    int lo = 0;
+    int hi = a.len - 1;
+    while lo <= hi {
+        int mid = (lo + hi) / 2;
+        if a[mid] == x { return mid; }
+        if a[mid] < x { lo = mid + 1; } else { hi = mid - 1; }
+    }
+    return 0 - 1;
+}
+
+void main() {
+    int[] a = arr(8);
+    for i in 0..8 { a.push(i * 3); }
+    jout << find(a, 9) << " " << find(a, 10) << " " << find(a, 21) << "\n";
+}
+
+```
+
+Output:
+
+```
+3 -1 7
+```
+
+The function gives back the place, or -1 when the number is not there. It only works on a sorted array: on any other array the answer is wrong.
+
+**Try:** count how many steps the loop takes for 21 and for 10.
+
+## Lesson 154. Debugging by looking
+
+The simplest debugger is a print: write the values that matter and compare them with what you expected. Start with small inputs whose answer you can work out by hand.
+
+```jk
+#import <stdlib>
+using stdlib;
+
+// debugging by looking: print the values that matter, then compare with what you expected
+int collatz_steps(int n) {
+    int steps = 0;
+    while n != 1 {
+        if n % 2 == 0 { n = n / 2; } else { n = 3 * n + 1; }
+        steps += 1;
+    }
+    return steps;
+}
+
+void main() {
+    for n in 1..8 {
+        jout << "n = " << n << "  steps = " << collatz_steps(n) << "\n";
+    }
+}
+
+```
+
+Output:
+
+```
+n = 1  steps = 0
+n = 2  steps = 1
+n = 3  steps = 7
+n = 4  steps = 2
+n = 5  steps = 5
+n = 6  steps = 8
+n = 7  steps = 16
+```
+
+Here the steps for 3 are 7 (3, 10, 5, 16, 8, 4, 2, 1). If the output differs from your hand count, the bug is in the loop; if it matches, look at the caller. Compile with `-d` to stop at a bad array index.
+
+**Try:** print `n` inside the loop of `collatz_steps` for the start value 6.
+
+## Lesson 155. Counting steps: Big-O
+
+How long a program takes depends on how many steps it makes, and the number of steps depends on the size of the data. We do not time it: we count the steps. This program counts the steps of two ways to search: look at everything (linear) or halve the range each time (binary, for sorted data).
+
+```jk
+#import <stdlib>
+using stdlib;
+
+// Big-O by counting: how many steps does a search need as the data grows?
+int linear_steps(int n) { return n; }                 // look at every item in the worst case
+
+int binary_steps(int n) {
+    int lo = 0;
+    int hi = n - 1;
+    int steps = 0;
+    while lo <= hi {                                   // search for a value that is not there: the worst case
+        int mid = (lo + hi) / 2;
+        steps += 1;
+        hi = mid - 1;
+    }
+    return steps;
+}
+
+void main() {
+    jout << "n          linear    binary\n";
+    int n = 16;
+    for t in 0..5 {
+        jout << pad(str(n), 10) << " " << pad(str(linear_steps(n)), 9) << " " << binary_steps(n) << "\n";
+        n = n * 16;
+    }
+}
+
+```
+
+Output:
+
+```
+n          linear    binary
+16         16        4
+256        256       8
+4096       4096      12
+65536      65536     16
+1048576    1048576   20
+```
+
+When the data grows 16 times, linear search takes 16 times more steps (**O(n)**) but binary search only 4 more (**O(log n)**). A million items: 1,048,576 steps against 20. Big-O keeps only the shape of the growth: O(1), O(log n), O(n), O(n log n), O(n^2), O(2^n) are the names you will meet.
+
+**Try:** change the factor 16 to 2 and look at how the binary column grows by one each time.
+
+## Lesson 156. A stack: last in, first out
+
+A stack gives back the items in the opposite order: the last one in is the first one out (LIFO). It is how function calls work, how an undo button works, and the tool for checking brackets.
+
+```jk
+#import <stdlib>
+using stdlib;
+
+// a stack in an array: the last item in is the first one out (LIFO)
+struct Stack { int[] items; }
+
+void push(Stack s, int x) { s.items.push(x); }
+int pop(Stack s) {
+    int x = s.items[s.items.len - 1];
+    s.items.pop();
+    return x;
+}
+
+// are the brackets of a text balanced? ( [ { and the matching closers
+bool balanced(String t) {
+    Stack s;
+    s.items = arr(8);
+    for i in 0..t.len {
+        char c = t[i];
+        if c == '(' || c == '[' || c == '{' { push(s, (int)c); }
+        else if c == ')' || c == ']' || c == '}' {
+            if s.items.len == 0 { return false; }
+            int o = pop(s);
+            if c == ')' && o != (int)'(' { return false; }
+            if c == ']' && o != (int)'[' { return false; }
+            if c == '}' && o != (int)'{' { return false; }
+        }
+    }
+    return s.items.len == 0;
+}
+
+void main() {
+    jout << balanced("(a[b]c)") << " " << balanced("(a[b)]") << " " << balanced("((") << "\n";
+}
+
+```
+
+Output:
+
+```
+true false false
+```
+
+Push each opening bracket; for each closing bracket, pop and check that it matches. At the end the stack must be empty. Every step is O(1), the whole check O(n).
+
+**Try:** add the text `"([)]"` and say why it is not balanced.
+
+## Lesson 157. A queue in a ring buffer
+
+A queue gives the items back in the order they came: first in, first out (FIFO). A ring buffer keeps it in a fixed array: the start moves forward and wraps around at the end, so no item is ever moved.
+
+```jk
+#import <stdlib>
+using stdlib;
+
+// a queue in a ring buffer: first in, first out (FIFO); head and tail wrap around at the end of the array
+int[] buf;
+int head = 0;
+int count = 0;
+int cap = 4;
+
+bool enqueue(int x) {
+    if count == cap { return false; }
+    buf[(head + count) % cap] = x;
+    count += 1;
+    return true;
+}
+
+int dequeue() {
+    int x = buf[head];
+    head = (head + 1) % cap;
+    count -= 1;
+    return x;
+}
+
+void main() {
+    buf = arr(cap);
+    for i in 0..cap { buf.push(0); }
+    for i in 1..7 { jout << enqueue(i * 10) << " "; }       // the 5th and 6th do not fit
+    jout << "\n";
+    jout << dequeue() << " " << dequeue() << "\n";
+    jout << enqueue(99) << " " << enqueue(98) << "\n";       // the freed places are used again
+    while count > 0 { jout << dequeue() << " "; }
+    jout << "\n";
+}
+
+```
+
+Output:
+
+```
+true true true true false false 
+10 20
+true true
+30 40 99 98 
+```
+
+The place of the next free cell is `(head + count) % cap`: the `%` makes the position wrap. Keyboards, network cards and audio all use ring buffers. A full queue says no (`false`) instead of growing.
+
+**Try:** make `cap` 8 and fill it.
+
+## Lesson 158. A search tree
+
+A binary search tree keeps every smaller key on the left and every larger one on the right of a node. Search and insert go down one branch at a time: about log n steps when the tree is balanced.
+
+```jk
+#import <stdlib>
+using stdlib;
+
+// a binary search tree kept in arrays: node i has a key, a left child and a right child (-1: none)
+int[] key;
+int[] left;
+int[] right;
+
+int insert(int root, int k) {
+    key.push(k); left.push(0 - 1); right.push(0 - 1);
+    int id = key.len - 1;
+    if root < 0 { return id; }
+    int cur = root;
+    while true {
+        if k < key[cur] {
+            if left[cur] < 0 { left[cur] = id; break; }
+            cur = left[cur];
+        } else {
+            if right[cur] < 0 { right[cur] = id; break; }
+            cur = right[cur];
+        }
+    }
+    return root;
+}
+
+void inorder(int n) {                                    // left, node, right: the keys come out sorted
+    if n < 0 { return; }
+    inorder(left[n]);
+    jout << key[n] << " ";
+    inorder(right[n]);
+}
+
+int height(int n) {
+    if n < 0 { return 0; }
+    int a = height(left[n]);
+    int b = height(right[n]);
+    if a > b { return a + 1; }
+    return b + 1;
+}
+
+void main() {
+    key = arr(8); left = arr(8); right = arr(8);
+    int root = 0 - 1;
+    int[] data = arr(8);
+    data.push(50); data.push(30); data.push(70); data.push(20); data.push(40); data.push(60); data.push(80);
+    for i in 0..data.len { root = insert(root, data[i]); }
+    inorder(root);
+    jout << "\nheight " << height(root) << "\n";
+}
+
+```
+
+Output:
+
+```
+20 30 40 50 60 70 80 
+height 3
+```
+
+Here the nodes are kept in three arrays (`key`, `left`, `right`) and a child is an index: no pointers, and all the data is next to each other in memory. Reading the tree left, node, right gives the keys in order: that is a sort. The height 3 is the number of steps to the deepest key; a tree built from sorted input would be a line of height n.
+
+**Try:** insert the keys in the order 10, 20, 30, 40 and print the height.
+
+## Lesson 159. A graph and breadth-first search
+
+A graph is nodes joined by edges: roads, friends, links, dependencies. Breadth-first search (BFS) visits the nodes in the order of their distance from the start, using a queue, so the first time it reaches a node is by a shortest path.
+
+```jk
+#import <stdlib>
+using stdlib;
+
+// breadth-first search: the fewest steps from a start node to every other node of a graph
+// the graph is kept as lists: the neighbours of node v are nb[start[v] .. start[v+1])
+void main() {
+    int n = 6;
+    int[] start = arr(8);
+    int[] nb = arr(16);
+    // edges: 0-1 0-2 1-3 2-3 3-4 (node 5 is alone)
+    int[] ea = arr(8); int[] eb = arr(8);
+    ea.push(0); eb.push(1); ea.push(0); eb.push(2); ea.push(1); eb.push(3); ea.push(2); eb.push(3); ea.push(3); eb.push(4);
+    for v in 0..n {
+        start.push(nb.len);
+        for e in 0..ea.len {
+            if ea[e] == v { nb.push(eb[e]); }
+            if eb[e] == v { nb.push(ea[e]); }
+        }
+    }
+    start.push(nb.len);
+    int[] dist = arr(8);
+    for v in 0..n { dist.push(0 - 1); }
+    int[] queue = arr(8);
+    queue.push(0);
+    dist[0] = 0;
+    int qh = 0;
+    while qh < queue.len {
+        int v = queue[qh];
+        qh += 1;
+        for k in start[v]..start[v + 1] {
+            int w = nb[k];
+            if dist[w] < 0 { dist[w] = dist[v] + 1; queue.push(w); }
+        }
+    }
+    for v in 0..n { jout << "node " << v << ": " << dist[v] << "\n"; }
+}
+
+```
+
+Output:
+
+```
+node 0: 0
+node 1: 1
+node 2: 1
+node 3: 2
+node 4: 3
+node 5: -1
+```
+
+The graph is stored as lists (`start[v]` to `start[v+1]` tell where the neighbours of `v` are in `nb`), the layout used by big graph programs because it is compact. Node 5 has no edge: its distance stays -1, the sign of 'not reachable'. The work is O(nodes + edges).
+
+**Try:** add the edge 4-5 and run again.
+
+## Lesson 160. Dynamic programming
+
+Some problems are made of smaller copies of themselves that repeat. Dynamic programming (DP) solves each small case once, writes the answer in a table, and builds the big answer from the table.
+
+```jk
+#import <stdlib>
+using stdlib;
+
+// dynamic programming: the longest common subsequence of two texts; table[i][j] uses the answers for shorter texts
+int lcs(String a, String b) {
+    int w = b.len + 1;
+    int[] t = arr((a.len + 1) * w);
+    for i in 0..(a.len + 1) * w { t.push(0); }
+    for i in 1..a.len + 1 {
+        for j in 1..b.len + 1 {
+            if a[i - 1] == b[j - 1] { t[i * w + j] = t[(i - 1) * w + (j - 1)] + 1; }
+            else {
+                int up = t[(i - 1) * w + j];
+                int lf = t[i * w + (j - 1)];
+                if up > lf { t[i * w + j] = up; } else { t[i * w + j] = lf; }
+            }
+        }
+    }
+    return t[a.len * w + b.len];
+}
+
+// the fewest coins for an amount (coins 1, 5, 12): the answer for 15 is 3 coins of 5, not 12 + 1 + 1 + 1
+int coins(int amount) {
+    int[] best = arr(amount + 1);
+    best.push(0);
+    for x in 1..amount + 1 {
+        int m = 1000000;
+        if x >= 1 && best[x - 1] + 1 < m { m = best[x - 1] + 1; }
+        if x >= 5 && best[x - 5] + 1 < m { m = best[x - 5] + 1; }
+        if x >= 12 && best[x - 12] + 1 < m { m = best[x - 12] + 1; }
+        best.push(m);
+    }
+    return best[amount];
+}
+
+void main() {
+    jout << lcs("AGGTAB", "GXTXAYB") << " " << lcs("abc", "xyz") << "\n";
+    jout << coins(15) << " " << coins(11) << " " << coins(24) << "\n";
+}
+
+```
+
+Output:
+
+```
+4 0
+3 3 2
+```
+
+Two classic cases: the longest common subsequence of two texts (a table of `len(a) x len(b)` cells) and the fewest coins for an amount. The coin problem shows why a greedy choice fails: for 15, taking the biggest coin first (12 + 1 + 1 + 1) needs 4 coins, the table finds 3 (5 + 5 + 5). The table makes the work O(n x m) where the plain recursion would be exponential.
+
+**Try:** add a coin of 7 and look at the answer for 14.
+
+## Lesson 161. A hash table from scratch
+
+A hash table finds a value from its key in about one step: a function turns the key into a place in an array. Two keys can want the same place (a collision); open addressing then tries the next place.
+
+```jk
+#import <stdlib>
+using stdlib;
+
+// a hash table from scratch: open addressing (if the place is taken, try the next one)
+int cap = 16;
+int[] keys;
+int[] vals;
+bool[] used;
+int probes = 0;
+
+int h(int k) { return (k * 31 + 7) % cap; }
+
+void put(int k, int v) {
+    int i = h(k);
+    while used[i] && keys[i] != k { i = (i + 1) % cap; probes += 1; }
+    used[i] = true; keys[i] = k; vals[i] = v;
+}
+
+int get(int k) {
+    int i = h(k);
+    while used[i] {
+        if keys[i] == k { return vals[i]; }
+        i = (i + 1) % cap;
+    }
+    return 0 - 1;
+}
+
+void main() {
+    keys = arr(cap); vals = arr(cap); used = arr(cap);
+    for i in 0..cap { keys.push(0); vals.push(0); used.push(false); }
+    for i in 0..10 { put(i * 16 + 3, i * 100); }          // these keys all want the same place: collisions
+    jout << get(3) << " " << get(35) << " " << get(147) << " " << get(4) << "\n";
+    jout << "extra probes: " << probes << "\n";
+}
+
+```
+
+Output:
+
+```
+0 200 900 -1
+extra probes: 45
+```
+
+Ten keys that are all 16 apart land on the same place, so each one walks past the earlier ones: 45 extra probes. A good hash function spreads the keys; a table that is nearly full gets slow, so real tables grow when they are about 70 % full. The library `<collections>` has this ready (lesson 142).
+
+**Try:** change `cap` to 17 (a prime) and compare the number of probes.
+
+## Lesson 162. Two sorts, counted
+
+Sorting is the standard place to see Big-O at work. Insertion sort moves each item back into place and takes about n x n / 4 comparisons; merge sort splits, sorts the halves and merges, and takes about n x log2(n).
+
+```jk
+#import <stdlib>
+using stdlib;
+
+// two sorts, the same data: count the comparisons (insertion sort ~ n*n/4, merge sort ~ n*log2(n))
+int cmp_count = 0;
+
+void insertion(int[] a) {
+    for i in 1..a.len {
+        int x = a[i];
+        int j = i - 1;
+        while j >= 0 {
+            cmp_count += 1;
+            if a[j] <= x { break; }
+            a[j + 1] = a[j];
+            j -= 1;
+        }
+        a[j + 1] = x;
+    }
+}
+
+void merge_sort(int[] a, int[] tmp, int lo, int hi) {   // sorts a[lo .. hi)
+    if hi - lo < 2 { return; }
+    int mid = (lo + hi) / 2;
+    merge_sort(a, tmp, lo, mid);
+    merge_sort(a, tmp, mid, hi);
+    int i = lo;
+    int j = mid;
+    int k = lo;
+    while i < mid && j < hi {
+        cmp_count += 1;
+        if a[i] <= a[j] { tmp[k] = a[i]; i += 1; } else { tmp[k] = a[j]; j += 1; }
+        k += 1;
+    }
+    while i < mid { tmp[k] = a[i]; i += 1; k += 1; }
+    while j < hi { tmp[k] = a[j]; j += 1; k += 1; }
+    for q in lo..hi { a[q] = tmp[q]; }
+}
+
+int[] make(int n) {
+    int[] a = arr(n);
+    int seed = 12345;
+    for i in 0..n { seed = (seed * 1103515245 + 12345) % 2147483648; a.push(seed % 1000); }
+    return a;
+}
+
+void main() {
+    int n = 1000;
+    int[] a = make(n);
+    int[] b = make(n);
+    int[] tmp = arr(n);
+    tmp.resize(n);
+    insertion(a);
+    int c1 = cmp_count;
+    cmp_count = 0;
+    merge_sort(b, tmp, 0, n);
+    int c2 = cmp_count;
+    jout << "insertion sort: " << c1 << " comparisons\n";
+    jout << "merge sort:     " << c2 << " comparisons\n";
+    bool same = true;
+    for i in 0..n { if a[i] != b[i] { same = false; } }
+    jout << "same result: " << same << "\n";
+}
+
+```
+
+Output:
+
+```
+insertion sort: 242690 comparisons
+merge sort:     8670 comparisons
+same result: true
+```
+
+For 1000 numbers: 242,690 comparisons against 8,670, the same sorted result. At 1,000,000 numbers the first would need about 250 billion and the second about 20 million. For a few items insertion sort is faster (no recursion, no second array): this is why real libraries use both.
+
+**Try:** make `n` 100 and 10000 and watch how the two counts grow.
+
+## Lesson 163. Memory and the cache: why the order of loops matters
+
+The CPU is much faster than the memory. To hide the wait it reads memory in blocks of 64 bytes (cache lines) and keeps the recent blocks close. A program that uses all the numbers of a block before the next one runs several times faster than one that jumps.
+
+```jk
+#import <stdlib>
+using stdlib;
+
+// the same sum of a table, read by rows and by columns: one answer, but the CPU reads memory in blocks (cache lines),
+// so walking along a row uses every number of a block while walking down a column uses one number of each block
+void main() {
+    int n = 512;
+    float[] t = arr(n * n);
+    for i in 0..n * n { t.push((float)(i % 10)); }
+    float by_rows = 0.0;
+    for r in 0..n { for c in 0..n { by_rows += t[r * n + c]; } }
+    float by_cols = 0.0;
+    for c in 0..n { for r in 0..n { by_cols += t[r * n + c]; } }
+    jout << by_rows << " " << by_cols << " " << (by_rows == by_cols) << "\n";
+    jout << "bytes in a row: " << n * 4 << ", bytes between two numbers of a column: " << n * 4 << "\n";
+}
+
+```
+
+Output:
+
+```
+1179636.000000 1179636.000000 true
+bytes in a row: 2048, bytes between two numbers of a column: 2048
+```
+
+The two sums give the same answer (and the same bits here, because every number is a small whole value). The first walks along rows: 16 floats per block, all used. The second goes down a column: 2048 bytes between two numbers, so each block gives one number and is thrown away. Measured on this phone for the matrix product of 384 x 384 floats: the loop orders whose inner loop walks along a row (`ikj`, `kij`) took about 50 ms, the others 230 to 270 ms with the plain `ijk` form, and C is not different: the lesson is about the memory, not the language.
+
+**Try:** make `n` 1024 and keep the two loops; time them with `Time::mono_ns()` from lesson 92.
 
 ## Where next
 

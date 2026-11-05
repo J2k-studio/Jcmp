@@ -1,4 +1,5 @@
 # Guides
+* **Learning from zero:** [LEARN.md](LEARN.md) ([English](LEARN_EN.md)): one path from "what is a computer" to the deep subjects, with a 7-day start.
 
 Start with [TUTORIAL.md](TUTORIAL.md) (the lessons, in order). The guides below go deeper into one
 subject each. Every program in them was compiled and run; the text says where something was not run.

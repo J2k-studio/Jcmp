@@ -6195,6 +6195,9 @@ bool vz_scan(int q, int islot, int incl, int inch, bool emit) {
                         if ka == VZ_IDX8 && kb == VZ_INV { int tmp = ra; ra = rb; rb = tmp; int tk = ka; ka = kb; kb = tk; int td = dya; dya = dyb; dyb = td; int to = ofa; ofa = ofb; ofb = to; }
                         if ka == VZ_INV && kb == VZ_IDX8 && vz_base[ra] != 0 {
                             vz_kind[d] = VZ_ADDR; vz_base[d] = vz_base[ra]; vz_off[d] = vz_off[ra] + ofb; vz_dyn[d] = dyb;
+                        } else if ka == VZ_INV && kb == VZ_IDX8 && vz_base[ra] == 0 && vz_lslot[ra] >= 0 && (ir_opt & 36028797018963968) == 0 {
+                            // a pointer kept in a slot that the loop does not write (a parameter `float^ p`): the base 200000 + slot; the value of the slot is the data pointer
+                            vz_kind[d] = VZ_ADDR; vz_base[d] = 200000 + vz_lslot[ra]; vz_off[d] = vz_off[ra] + ofb; vz_dyn[d] = dyb;
                         } else { return vz_fail(5506); }
                     }
                 }
@@ -6874,11 +6877,16 @@ bool vz_make(int q, int l) {
                     int hh = ir_vreg(0);
                     int lh0 = ir_add(IR_LOAD, hh, 30, 0, 0, 0);
                     ir_w[lh0] = 8;
-                    ir_k[lh0] = vz_slot_off(vz_pk_base[hu] % 1000000 - 100000);
-                    int hd = ir_vreg(0);
-                    int lh1 = ir_add(IR_LOAD, hd, hh, 0, 0, 0);
-                    ir_w[lh1] = 8;
-                    ir_k[lh1] = 16;
+                    int hd = hh;
+                    if vz_pk_base[hu] % 1000000 >= 200000 {
+                        ir_k[lh0] = vz_slot_off(vz_pk_base[hu] % 1000000 - 200000);       // a pointer variable: the slot holds the data pointer itself
+                    } else {
+                        ir_k[lh0] = vz_slot_off(vz_pk_base[hu] % 1000000 - 100000);
+                        hd = ir_vreg(0);
+                        int lh1 = ir_add(IR_LOAD, hd, hh, 0, 0, 0);
+                        ir_w[lh1] = 8;
+                        ir_k[lh1] = 16;
+                    }
                     int shd = ir_add(IR_STORE, 0, 30, hd, 0, qcell - 8 * (17 + hu));
                     ir_w[shd] = 8;
                     vz_hpv[hu] = 1 + hu;                    // the cell qcell - 8 * (17 + hu) holds the pointer
@@ -7122,9 +7130,633 @@ bool vz_make(int q, int l) {
     return true;
 }
 
+// ---------------------------------------------------------------------------------------------- unroll-and-jam (design 31, L7)
+// A counted loop O (step 1, j < n) whose body is  PRE ; an inner counted loop I ; POST  runs two turns at once in front of the original
+// loop (which stays and does the rest). Each part is a straight chain of blocks (a null check may branch to a trap). The blocks, in order:
+//   G   the arrays that POST writes are not the arrays that the loop reads (the headers differ), else the original loop
+//   H2  if j + 1 < n go on, else the original header
+//   PRE of the turn j (the cells it writes are new cells), PRE of the turn j + 1 (the original cells, j + 1 in place of j)
+//   H3  the test of I (k < bound), the body of I for j, the body of I for j + 1 (the step of k is in the second one)
+//   POST of j, POST of j + 1, then j = j + 2 and back to H2
+// Every accumulator keeps its own order of operations, so the results are the same bits. The cells that the part writes must be written
+// before they are read in the same turn (a value that goes from one turn to the next stops the change), the start and the bound of I
+// must not depend on j, no call, and the stores of POST must go to arrays that nothing in the loop reads (tested at run time: the headers
+// of the arrays are different objects). `-irdbg 4503599627370496` switches it off, `-irdbg 9007199254740992` says why it did not fire.
+#define UJ_MAXB 48
+int uj_pre[UJ_MAXB];
+int uj_npre;
+int uj_inn[UJ_MAXB];
+int uj_ninn;
+int uj_post[UJ_MAXB];
+int uj_npost;
+int uj_m1[RN_MAXB];
+int uj_m2[RN_MAXB];
+int uj_wo[64];                   // the frame cells that the loop writes (offsets), and the new cells for the turn j
+int uj_wt[64];
+int uj_wseen[64];                // 1: stored before it was read in the order of the turn
+int uj_nw;
+int uj_f[2048];                  // all instructions of the parts in the order of the turn
+int uj_fs[2048];                 // the part of each (0 PRE, 1 H3, 2 I, 3 POST)
+int uj_nf;
+int uj_wkey[16];                 // the arrays that POST writes (keys), and the ones that are read
+int uj_nwk;
+int uj_rkey[16];
+int uj_nrk;
+int uj_jo;
+int uj_ko;
+int uj_done[32];
+int uj_ndone;
+int uj_count;                    // all functions
+
+bool uj_fail(int line) {
+    if ((ir_opt & 9007199254740992) != 0) {
+        write_err("uj gave up at jc_opt.j:");
+        write_err_int(line);
+        write_err(" fn=");
+        write_err(@ir_fname);
+        write_err("\n");
+    }
+    return false;
+}
+
+// the straight chain of blocks from start up to (not including) stop
+int uj_walk(int start, int stop, int stamp, int^ out) {
+    int n = 0;
+    int cur = start;
+    while cur != stop {
+        if cur < 0 || op_mark[cur] != stamp || n >= UJ_MAXB - 1 { return 0 - 1; }
+        out[n] = cur;
+        n += 1;
+        int tt = ir_be[cur] - 1;
+        int nxt = 0 - 1;
+        if ir_op[tt] == IR_JMP { nxt = ir_t1[tt]; }
+        else if ir_op[tt] == IR_BR && ir_bi[tt] == 1 && ir_b[tt] == 0 {
+            if ir_k[tt] == IR_NE && vz_is_nulltrap(ir_t2[tt]) { nxt = ir_t1[tt]; }
+            else if ir_k[tt] == IR_EQ && vz_is_nulltrap(ir_t1[tt]) { nxt = ir_t2[tt]; }
+            else { return 0 - 1; }
+        } else { return 0 - 1; }
+        cur = nxt;
+    }
+    return n;
+}
+
+// is the frame cell with this offset stored by an instruction of the nest? (a cell that is only read, such as the cell with the handle of an array, may stay)
+bool uj_stored(int off) {
+    int p = 0;
+    while p < uj_nf {
+        int x = uj_f[p];
+        if ir_op[x] == IR_STORE && ir_a[x] == 30 && ir_k[x] == off { return true; }
+        p += 1;
+    }
+    return false;
+}
+
+int uj_wfind(int off) {
+    int i = 0;
+    while i < uj_nw { if uj_wo[i] == off { return i; } i += 1; }
+    return 0 - 1;
+}
+
+// the last instruction before position p of the list (inside the same part) that writes the register r
+int uj_def(int p, int r) {
+    int s = uj_fs[p];
+    int q = p - 1;
+    while q >= 0 && uj_fs[q] == s {
+        int x = uj_f[q];
+        if ir_d[x] == r && ir_op[x] != IR_NOP && ir_op[x] != IR_STORE && ir_op[x] != IR_BR && ir_op[x] != IR_JMP { return q; }
+        q -= 1;
+    }
+    return 0 - 1;
+}
+
+// the cell that holds the array whose header is in the register r at position p (copies are followed): 1000000 * (29 or 30) + the offset
+// of the cell + 500000, or -1
+int uj_hdr(int p, int r) {
+    int hreg = r;
+    int at = p;
+    int guard = 0;
+    while guard < 6 {
+        int dh = uj_def(at, hreg);
+        if dh < 0 { return 0 - 1; }
+        int xh = uj_f[dh];
+        if ir_op[xh] == IR_COPY { hreg = ir_a[xh]; at = dh; guard += 1; continue; }
+        if ir_op[xh] == IR_LOAD && ir_w[xh] == 8 && ir_a[xh] == 30 {
+            // a reload of a frame cell: if this part stored the header there before, follow the stored register
+            int sq = dh - 1;
+            int found = 0 - 1;
+            while sq >= 0 && uj_fs[sq] == uj_fs[dh] && found < 0 {
+                int sx = uj_f[sq];
+                if ir_op[sx] == IR_STORE && ir_a[sx] == 30 && ir_k[sx] == ir_k[xh] { found = sq; }
+                sq -= 1;
+            }
+            if found >= 0 {
+                hreg = ir_b[uj_f[found]];
+                at = found;
+                guard += 1;
+                continue;
+            }
+            return 30 * 1000000 + ir_k[xh] + 500000;
+        }
+        if ir_op[xh] == IR_LOAD && ir_w[xh] == 8 && ir_a[xh] == 29 {
+            return ir_a[xh] * 1000000 + ir_k[xh] + 500000;
+        }
+        return 0 - 1;
+    }
+    return 0 - 1;
+}
+
+// the array object behind the register r (the data pointer of an array, used at position p): the data pointer is  load [header + 16]
+int uj_key_of_data(int p, int r) {
+    int d2 = uj_def(p, r);
+    if d2 < 0 { return 0 - 1; }
+    int x2 = uj_f[d2];
+    if ir_op[x2] != IR_LOAD || ir_w[x2] != 8 || ir_k[x2] != 16 { return 0 - 1; }
+    return uj_hdr(d2, ir_a[x2]);
+}
+
+int uj_key(int p) {
+    int x = uj_f[p];
+    int a = ir_a[x];
+    if a == 29 || a == 30 { return 0 - 1; }
+    int d1 = uj_def(p, a);
+    if d1 < 0 { return 0 - 1; }
+    int x1 = uj_f[d1];
+    int cg = 0;
+    while ir_op[x1] == IR_COPY && cg < 6 {
+        a = ir_a[x1];
+        d1 = uj_def(d1, a);
+        if d1 < 0 { return 0 - 1; }
+        x1 = uj_f[d1];
+        cg += 1;
+    }
+    if ir_op[x1] == IR_LOAD { return uj_key_of_data(d1 + 1, a); }
+    if ir_op[x1] != IR_ADD || ir_bi[x1] != 0 { return 0 - 1; }
+    // a global array: the address is (the index << 3) + the register of the global area (v29), the array is told by the displacement of the access.
+    // Like the vectoriser: two accesses with displacements that are 16 or more bytes apart are different arrays, the same displacement is the same array
+    // (two displacements closer than 16 are not told apart here: the key is the displacement rounded down to 16, and the scan of a part refuses a store and a load of one key)
+    if ir_a[x1] == 29 || ir_b[x1] == 29 { return 2000000000 + (ir_k[x] / 16) * 16; }
+    int k1 = uj_key_of_data(d1, ir_a[x1]);
+    if k1 >= 0 { return k1; }
+    return uj_key_of_data(d1, ir_b[x1]);
+}
+
+bool uj_scan(int qo, int qi) {
+    uj_nf = 0;
+    uj_nw = 0;
+    uj_nwk = 0;
+    uj_nrk = 0;
+    int seg = 0;
+    while seg < 4 {
+        int cnt = 0;
+        if seg == 0 { cnt = uj_npre; }
+        else if seg == 1 { cnt = 1; }
+        else if seg == 2 { cnt = uj_ninn; }
+        else { cnt = uj_npost; }
+        int c = 0;
+        while c < cnt {
+            int b = 0;
+            if seg == 0 { b = uj_pre[c]; }
+            else if seg == 1 { b = cl_head[qi]; }
+            else if seg == 2 { b = uj_inn[c]; }
+            else { b = uj_post[c]; }
+            int j = ir_bs[b];
+            while j < ir_be[b] {
+                if ir_op[j] != IR_NOP {
+                    if uj_nf >= 2000 { return uj_fail(1); }
+                    uj_f[uj_nf] = j;
+                    uj_fs[uj_nf] = seg;
+                    uj_nf += 1;
+                }
+                j += 1;
+            }
+            c += 1;
+        }
+        seg += 1;
+    }
+    int jo = uj_jo;
+    int ko = uj_ko;
+    int p = 0;
+    while p < uj_nf {
+        int x = uj_f[p];
+        int op = ir_op[x];
+        int seg2 = uj_fs[p];
+        if op == IR_CALL || op == IR_CALLIND || op == IR_SYSCALL { return uj_fail(2); }
+        if op == IR_BR || op == IR_JMP { p += 1; continue; }
+        if ir_d[x] >= 64 || ir_a[x] >= 64 || (ir_uses_b(op) && ir_bi[x] == 0 && ir_b[x] >= 64) { return uj_fail(3); }
+        if op == IR_LOAD && ir_a[x] == 30 {
+            int off = ir_k[x];
+            if ir_w[x] != 8 || off % 8 != 0 { return uj_fail(4); }
+            if off >= 0 && (off / 8 >= 8192 || op_plain[off / 8] != 1) { return uj_fail(5); }
+            if off != jo && off != ko {
+                int wi = uj_wfind(off);
+                if wi < 0 {
+                    if uj_nw >= 60 { return uj_fail(6); }
+                    uj_wo[uj_nw] = off;
+                    uj_wseen[uj_nw] = 0;
+                    uj_wt[uj_nw] = 0 - 1;                  // read first: if it is stored later, the value goes from turn to turn
+                    uj_nw += 1;
+                    wi = uj_nw - 1;
+                    uj_wseen[wi] = 2;                      // 2: read before any store
+                }
+            }
+        } else if op == IR_STORE && ir_a[x] == 30 {
+            int off2 = ir_k[x];
+            if ir_w[x] != 8 || off2 % 8 != 0 { return uj_fail(7); }
+            if off2 >= 0 && (off2 / 8 >= 8192 || op_plain[off2 / 8] != 1) { return uj_fail(8); }
+            if off2 == jo && x != cl_sti[qo] { return uj_fail(22); }
+            if off2 == ko && !(seg2 == 0 || x == cl_sti[qi]) { return uj_fail(23); }
+            if off2 != jo && off2 != ko {
+                int wj = uj_wfind(off2);
+                if wj < 0 {
+                    if uj_nw >= 60 { return uj_fail(9); }
+                    uj_wo[uj_nw] = off2;
+                    uj_wseen[uj_nw] = 1;
+                    uj_wt[uj_nw] = 0 - 1;
+                    uj_nw += 1;
+                } else if uj_wseen[wj] == 0 { uj_wseen[wj] = 1; }
+            }
+            if ir_b[x] >= 64 { return uj_fail(10); }
+        } else if op == IR_STORE {
+            if ir_a[x] == 29 { return uj_fail(11); }
+            if seg2 != 3 { return uj_fail(12); }
+            int ky = uj_key(p);
+            if ky < 0 { return uj_fail(13); }
+            int u = 0;
+            bool have = false;
+            while u < uj_nwk { if uj_wkey[u] == ky { have = true; } u += 1; }
+            if !have { if uj_nwk >= 8 { return uj_fail(14); } uj_wkey[uj_nwk] = ky; uj_nwk += 1; }
+        } else if op == IR_LOAD && ir_a[x] != 29 && ir_k[x] == 16 && ir_w[x] == 8 && uj_hdr(p, ir_a[x]) >= 0 {
+            // the data pointer of an array: it reads the header, which nothing in the loop writes
+        } else if op == IR_LOAD && ir_a[x] != 29 {
+            int ky2 = uj_key(p);
+            if ky2 < 0 { return uj_fail(15); }
+            int u2 = 0;
+            bool have2 = false;
+            while u2 < uj_nrk { if uj_rkey[u2] == ky2 { have2 = true; } u2 += 1; }
+            if !have2 { if uj_nrk >= 8 { return uj_fail(16); } uj_rkey[uj_nrk] = ky2; uj_nrk += 1; }
+        } else if ir_a[x] == 30 || (ir_uses_b(op) && ir_bi[x] == 0 && ir_b[x] == 30) {
+            return uj_fail(17);                    // the address of the frame is used for something else
+        }
+        p += 1;
+    }
+    // a cell that is read before it is stored in the turn (and stored somewhere in the loop) goes from one turn to the next
+    int w = 0;
+    while w < uj_nw {
+        if uj_wseen[w] == 2 {
+            // read first: allowed only when nothing stores it
+            int p2 = 0;
+            while p2 < uj_nf {
+                int x2 = uj_f[p2];
+                if ir_op[x2] == IR_STORE && ir_a[x2] == 30 && ir_k[x2] == uj_wo[w] { return uj_fail(18); }
+                p2 += 1;
+            }
+        }
+        w += 1;
+    }
+    // the cells that are only read keep their place; the ones that are stored get new cells
+    int base = op_maxq();
+    int nn = 0;
+    w = 0;
+    while w < uj_nw {
+        bool stored = false;
+        int p3 = 0;
+        while p3 < uj_nf {
+            int x3 = uj_f[p3];
+            if ir_op[x3] == IR_STORE && ir_a[x3] == 30 && ir_k[x3] == uj_wo[w] { stored = true; }
+            p3 += 1;
+        }
+        if stored { uj_wt[w] = 0 - (base + 8 + 8 * nn); nn += 1; }
+        else { uj_wt[w] = uj_wo[w]; }
+        w += 1;
+    }
+    // the arrays that are written are not read by the loop (the same cell would be the same array)
+    int a1 = 0;
+    while a1 < uj_nwk {
+        int a2 = 0;
+        while a2 < uj_nrk { if uj_wkey[a1] == uj_rkey[a2] { return uj_fail(19); } a2 += 1; }
+        // the cell with the array must not be written by the loop
+        int cellb = uj_wkey[a1] / 1000000;
+        int cello = uj_wkey[a1] % 1000000 - 500000;
+        if cellb == 30 && uj_stored(cello) { return uj_fail(20); }
+        a1 += 1;
+    }
+    int a3 = 0;
+    while a3 < uj_nrk {
+        int cb = uj_rkey[a3] / 1000000;
+        int co = uj_rkey[a3] % 1000000 - 500000;
+        if cb == 30 && uj_stored(co) { return uj_fail(21); }
+        a3 += 1;
+    }
+    return true;
+}
+
+// the block b copied as a new block (mode 1: the turn j, new cells; mode 2: the turn j + 1, the cells of the loop); the step of j is left out,
+// the step of k only when keepk is false
+int uj_copy_block(int b, int mode, bool keepk) {
+    int nb = ir_new_block(0 - 1);
+    ir_set_block(nb);
+    int j = ir_bs[b];
+    while j < ir_be[b] {
+        int op = ir_op[j];
+        if op == IR_NOP { j += 1; continue; }
+        if (op == IR_LOAD || op == IR_STORE) && ir_a[j] == 30 {
+            int off = ir_k[j];
+            if off == uj_jo {
+                if op == IR_STORE { j += 1; continue; }
+                int e = ir_add(op, ir_d[j], ir_a[j], ir_b[j], ir_bi[j], off);
+                ir_w[e] = ir_w[j];
+                if mode == 2 { ir_add(IR_ADD, ir_d[j], ir_d[j], 1, 1, 0); }
+                j += 1;
+                continue;
+            }
+            if off == uj_ko && op == IR_STORE && !keepk { j += 1; continue; }
+            if mode == 1 {
+                int wi = uj_wfind(off);
+                if wi >= 0 { off = uj_wt[wi]; }
+            }
+            int e2 = ir_add(op, ir_d[j], ir_a[j], ir_b[j], ir_bi[j], off);
+            ir_w[e2] = ir_w[j];
+            j += 1;
+            continue;
+        }
+        int e3 = ir_add(op, ir_d[j], ir_a[j], ir_b[j], ir_bi[j], ir_k[j]);
+        ir_w[e3] = ir_w[j];
+        ir_t1[e3] = ir_t1[j];
+        ir_t2[e3] = ir_t2[j];
+        j += 1;
+    }
+    return nb;
+}
+
+// a chain copied; the targets inside the chain are changed to the copies
+void uj_copy_chain(int^ list, int n, int^ map, int mode, bool keepk) {
+    int first = ir_nb;
+    int c = 0;
+    while c < n {
+        map[list[c]] = uj_copy_block(list[c], mode, keepk);
+        c += 1;
+    }
+    int nbk = first;
+    while nbk < ir_nb {
+        int tt = ir_be[nbk] - 1;
+        if ir_op[tt] == IR_JMP || ir_op[tt] == IR_BR {
+            if ir_t1[tt] >= 0 && ir_t1[tt] < RN_MAXB && map[ir_t1[tt]] >= 0 { ir_t1[tt] = map[ir_t1[tt]]; }
+            if ir_op[tt] == IR_BR && ir_t2[tt] >= 0 && ir_t2[tt] < RN_MAXB && map[ir_t2[tt]] >= 0 { ir_t2[tt] = map[ir_t2[tt]]; }
+        }
+        nbk += 1;
+    }
+}
+
+bool uj_make(int qo, int qi) {
+    int ho = cl_head[qo];
+    int hi = cl_head[qi];
+    int lo = 0;
+    while lo < op_nloops && op_lh[lo] != ho { lo += 1; }
+    if lo >= op_nloops { return uj_fail(30); }
+    op_mark_loop(lo);
+    int stamp = op_stamp;
+    if op_mark[hi] != stamp { return uj_fail(31); }
+    uj_npre = uj_walk(cl_body[qo], hi, stamp, @uj_pre);
+    uj_ninn = uj_walk(cl_body[qi], hi, stamp, @uj_inn);
+    uj_npost = uj_walk(cl_exit[qi], ho, stamp, @uj_post);
+    if uj_npre < 1 || uj_ninn < 1 || uj_npost < 1 { return uj_fail(32); }
+    // every block of the loop is in a part (or the header, or a block that reports a null)
+    int b = 0;
+    while b < ir_nb {
+        if op_po[b] >= 0 && op_mark[b] == stamp && b != ho && b != hi {
+            bool inpart = false;
+            int c = 0;
+            while c < uj_npre { if uj_pre[c] == b { inpart = true; } c += 1; }
+            c = 0;
+            while c < uj_ninn { if uj_inn[c] == b { inpart = true; } c += 1; }
+            c = 0;
+            while c < uj_npost { if uj_post[c] == b { inpart = true; } c += 1; }
+            if !inpart && !vz_is_nulltrap(b) { return uj_fail(33); }
+        }
+        b += 1;
+    }
+    // the steps are where the counted-loop analysis found them: the last block of POST (j) and of I (k)
+    if cl_stb[qo] != uj_post[uj_npost - 1] || cl_stb[qi] != uj_inn[uj_ninn - 1] { return uj_fail(34); }
+    uj_jo = vz_slot_off(cl_slot[qo]);
+    uj_ko = vz_slot_off(cl_slot[qi]);
+    // nothing is live in a register where a part starts
+    // (v2 .. v8 look live in every block that can reach a null report: the call of __panic reads all the argument registers)
+    int m28 = (1 << 28) - 2 - 508;          // x1 .. x27 without x2 .. x8; x28 holds the base of the globals and is live everywhere
+    if (op_li[uj_pre[0]] & m28) != 0 {
+        int lm = op_li[uj_pre[0]] & m28;
+        int lb = 0;
+        while ((lm >> lb) & 1) == 0 { lb += 1; }
+        return uj_fail(3500 + lb);              // 3500 + the number of the first register that is live
+    }
+    if (op_li[hi] & m28) != 0 { return uj_fail(352); }
+    if (op_li[uj_inn[0]] & m28) != 0 { return uj_fail(353); }
+    if (op_li[uj_post[0]] & m28) != 0 { return uj_fail(354); }
+    if (op_li[ho] & m28) != 0 { return uj_fail(355); }
+    if !uj_scan(qo, qi) { return false; }
+    // the start of I is a number; the bound of I and of O are not written by the loop
+    {
+        bool kinit = false;
+        int c2 = 0;
+        while c2 < uj_npre {
+            int bb = uj_pre[c2];
+            int jj = ir_bs[bb];
+            while jj < ir_be[bb] {
+                if ir_op[jj] == IR_STORE && ir_a[jj] == 30 && ir_k[jj] == uj_ko {
+                    int dd = rn_find_def(bb, jj, ir_b[jj]);
+                    if dd < 0 || ir_op[dd] != IR_CONST { return uj_fail(36); }
+                    kinit = true;
+                }
+                jj += 1;
+            }
+            c2 += 1;
+        }
+        if !kinit { return uj_fail(37); }
+        if cl_bkind[qi] == 1 {
+            // the bound of I is a cell. The loop may set it at the start of every turn (the copy of n that `for k in 0..n` makes), but only
+            // in PRE and only from a number or a cell that the loop does not write: then it does not depend on j
+            int bo = vz_slot_off(cl_bval[qi]);
+            if bo == uj_jo { return uj_fail(38); }
+            int p4 = 0;
+            while p4 < uj_nf {
+                int x4 = uj_f[p4];
+                if ir_op[x4] == IR_STORE && ir_a[x4] == 30 && ir_k[x4] == bo {
+                    if uj_fs[p4] != 0 { return uj_fail(39); }
+                    int dv = uj_def(p4, ir_b[x4]);
+                    if dv < 0 { return uj_fail(40); }
+                    int xv = uj_f[dv];
+                    if ir_op[xv] == IR_CONST { }
+                    else if ir_op[xv] == IR_LOAD && ir_a[xv] == 30 && ir_w[xv] == 8 && ir_k[xv] != uj_jo && ir_k[xv] != uj_ko {
+                        int wv = uj_wfind(ir_k[xv]);
+                        if wv >= 0 && uj_wt[wv] != ir_k[xv] { return uj_fail(41); }
+                    } else { return uj_fail(42); }
+                }
+                p4 += 1;
+            }
+        }
+    }
+    // ---- build
+    int nb0 = ir_nb;
+    {
+        int u = 0;
+        while u < RN_MAXB { uj_m1[u] = 0 - 1; uj_m2[u] = 0 - 1; u += 1; }
+    }
+    // G: one block for each pair (array written, array read)
+    int gfirst = 0 - 1;
+    int prevbr = 0 - 1;
+    int pa = 0;
+    while pa < uj_nwk {
+        int pb = 0;
+        while pb < uj_nrk {
+            if uj_wkey[pa] >= 2000000000 || uj_rkey[pb] >= 2000000000 { pb += 1; continue; }       // a global array has no cell with its pointer: its key tells it from the others
+            int gb = ir_new_block(0 - 1);
+            ir_set_block(gb);
+            if gfirst < 0 { gfirst = gb; }
+            if prevbr >= 0 { ir_t2[prevbr] = gb; }
+            int ta = ir_vreg(0);
+            int tb = ir_vreg(0);
+            int la = ir_add(IR_LOAD, ta, uj_wkey[pa] / 1000000, 0, 0, uj_wkey[pa] % 1000000 - 500000);
+            ir_w[la] = 8;
+            int lb = ir_add(IR_LOAD, tb, uj_rkey[pb] / 1000000, 0, 0, uj_rkey[pb] % 1000000 - 500000);
+            ir_w[lb] = 8;
+            prevbr = ir_add(IR_BR, 0, ta, tb, 0, IR_EQ);
+            ir_t1[prevbr] = ho;
+            pb += 1;
+        }
+        pa += 1;
+    }
+    // H2: j + 1 < n
+    int h2 = ir_new_block(0 - 1);
+    ir_set_block(h2);
+    if gfirst < 0 { gfirst = h2; }
+    if prevbr >= 0 { ir_t2[prevbr] = h2; }
+    int tj = ir_vreg(0);
+    int tj1 = ir_vreg(0);
+    int lj = ir_add(IR_LOAD, tj, 30, 0, 0, uj_jo);
+    ir_w[lj] = 8;
+    ir_add(IR_ADD, tj1, tj, 1, 1, 0);
+    int brh2 = 0 - 1;
+    if cl_bkind[qo] == 0 {
+        brh2 = ir_add(IR_BR, 0, tj1, cl_bval[qo], 1, cl_cc[qo]);
+    } else {
+        int tn = ir_vreg(0);
+        int ln = ir_add(IR_LOAD, tn, 30, 0, 0, vz_slot_off(cl_bval[qo]));
+        ir_w[ln] = 8;
+        brh2 = ir_add(IR_BR, 0, tj1, tn, 0, cl_cc[qo]);
+    }
+    ir_t2[brh2] = ho;
+    // PRE (two copies), H3, I (two copies), POST (two copies), the step
+    uj_copy_chain(@uj_pre, uj_npre, @uj_m1, 1, true);
+    int pre1 = uj_m1[uj_pre[0]];
+    int pre1_last = uj_m1[uj_pre[uj_npre - 1]];
+    uj_copy_chain(@uj_pre, uj_npre, @uj_m2, 2, true);
+    int pre2 = uj_m2[uj_pre[0]];
+    int pre2_last = uj_m2[uj_pre[uj_npre - 1]];
+    // H3: the header of I (the loads and the branch)
+    int h3 = uj_copy_block(hi, 2, true);
+    uj_copy_chain(@uj_inn, uj_ninn, @uj_m1, 1, false);
+    int in1 = uj_m1[uj_inn[0]];
+    int in1_last = uj_m1[uj_inn[uj_ninn - 1]];
+    uj_copy_chain(@uj_inn, uj_ninn, @uj_m2, 2, true);
+    int in2 = uj_m2[uj_inn[0]];
+    int in2_last = uj_m2[uj_inn[uj_ninn - 1]];
+    uj_copy_chain(@uj_post, uj_npost, @uj_m1, 1, true);
+    int po1 = uj_m1[uj_post[0]];
+    int po1_last = uj_m1[uj_post[uj_npost - 1]];
+    uj_copy_chain(@uj_post, uj_npost, @uj_m2, 2, true);
+    int po2 = uj_m2[uj_post[0]];
+    int po2_last = uj_m2[uj_post[uj_npost - 1]];
+    // the step: j = j + 2
+    int st = ir_new_block(0 - 1);
+    ir_set_block(st);
+    int sj = ir_vreg(0);
+    int sj2 = ir_vreg(0);
+    int slj = ir_add(IR_LOAD, sj, 30, 0, 0, uj_jo);
+    ir_w[slj] = 8;
+    ir_add(IR_ADD, sj2, sj, 2, 1, 0);
+    int ssj = ir_add(IR_STORE, 0, 30, sj2, 0, uj_jo);
+    ir_w[ssj] = 8;
+    int jst = ir_add(IR_JMP, 0, 0, 0, 0, 0);
+    ir_t1[jst] = h2;
+    // the wiring
+    ir_t1[brh2] = pre1;
+    ir_t1[ir_be[pre1_last] - 1] = pre2;
+    ir_t1[ir_be[pre2_last] - 1] = h3;
+    {
+        int th = ir_be[h3] - 1;
+        // the branch of H3: the body of I goes to the first copy, the exit to POST
+        if ir_t1[th] == cl_body[qi] { ir_t1[th] = in1; ir_t2[th] = po1; }
+        else { ir_t2[th] = in1; ir_t1[th] = po1; }
+    }
+    ir_t1[ir_be[in1_last] - 1] = in2;
+    ir_t1[ir_be[in2_last] - 1] = h3;
+    ir_t1[ir_be[po1_last] - 1] = po2;
+    ir_t1[ir_be[po2_last] - 1] = st;
+    // the jumps into the header from outside the loop go to G
+    op_mark_loop(lo);
+    int bb2 = 0;
+    while bb2 < nb0 {
+        if op_mark[bb2] != op_stamp && op_po[bb2] >= 0 {
+            int tb2 = ir_be[bb2] - 1;
+            int top = ir_op[tb2];
+            if (top == IR_JMP || top == IR_BR || top == IR_FBR) && ir_t1[tb2] == ho { ir_t1[tb2] = gfirst; }
+            if (top == IR_BR || top == IR_FBR) && ir_t2[tb2] == ho { ir_t2[tb2] = gfirst; }
+        }
+        bb2 += 1;
+    }
+    uj_count += 1;
+    if uj_ndone < 30 { uj_done[uj_ndone] = ho; uj_ndone += 1; }
+    if ((ir_opt & 9007199254740992) != 0) { write_err("uj fired in "); write_err(@ir_fname); write_err("\n"); }
+    return true;
+}
+
+void uj_run() {
+    uj_ndone = 0;
+    int rounds = 0;
+    while rounds < 4 {
+        rounds += 1;
+        op_counted_loops();
+        if cl_n < 2 { return; }
+        op_liveness();
+        bool fired = false;
+        int q = 0;
+        while q < cl_n && !fired {
+            bool done = false;
+            int d = 0;
+            while d < uj_ndone { if uj_done[d] == cl_head[q] { done = true; } d += 1; }
+            if !done && cl_inner[q] == 0 && cl_step[q] == 1 && (cl_cc[q] == IR_LT || cl_cc[q] == IR_ULT) {
+                int lo = 0;
+                while lo < op_nloops && op_lh[lo] != cl_head[q] { lo += 1; }
+                if lo < op_nloops {
+                    op_mark_loop(lo);
+                    int st = op_stamp;
+                    int ninner = 0;
+                    int qi = 0 - 1;
+                    int c = 0;
+                    while c < op_nloops {
+                        if op_lh[c] != cl_head[q] && op_mark[op_lh[c]] == st { ninner += 1; }
+                        c += 1;
+                    }
+                    int r = 0;
+                    while r < cl_n {
+                        if r != q && op_mark[cl_head[r]] == st && cl_inner[r] == 1 && cl_step[r] == 1 && (cl_cc[r] == IR_LT || cl_cc[r] == IR_ULT) { qi = r; }
+                        r += 1;
+                    }
+                    if ninner == 1 && qi >= 0 {
+                        if uj_make(q, qi) { fired = true; }
+                        else if uj_ndone < 30 { uj_done[uj_ndone] = cl_head[q]; uj_ndone += 1; }
+                    }
+                }
+            }
+            q += 1;
+        }
+        if !fired { return; }
+    }
+}
+
 void op_vectorize() {
     if opt_debug == 1 || opt_novec == 1 { return; }
     op_counted_loops();
+    if (ir_opt & 4503599627370496) == 0 && cl_n >= 2 { uj_run(); op_counted_loops(); }
     if (ir_opt & 4194304) != 0 { write_err("op_vectorize in "); write_err(@ir_fname); write_err(" counted loops "); write_err_int(cl_n); write_err("\n"); }
     if cl_n == 0 { return; }
     if (ir_opt & 8388608) != 0 { ir_print(); syscall(64, 2, @ir_pbuf, ir_plen); }

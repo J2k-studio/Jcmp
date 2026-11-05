@@ -31,6 +31,7 @@ else
 fi
 if cmp -s $O/jcmp3 bin/jcmp; then echo "bin/jcmp is up to date"; else echo "NOTE: bin/jcmp differs from what the sources build (cp $O/jcmp3 bin/jcmp to update)"; fi
 
+[ "${BOOT_FAST:-0}" = 1 ] && exit 0          # BOOT_FAST=1: stop here (the comparison with the seed below takes minutes; use it for trial builds)
 # the J2K compiler vs the assembly compiler on every test it understands (only if seed/ is present)
 if [ ! -x build/Jcmp ]; then echo "(no assembly seed here: comparison with it skipped)"; exit 0; fi
 # (the std library contains float code: assemble with the J2K assembler, which knows it)

@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.15.0 (2026-11-05)
+* **Added (speed):** unroll-and-jam now covers global arrays and heap arrays (`double[] a = arr(n)`); matmul with global arrays is 25 % faster.
+* **Added (speed):** a float copy before a constant load is folded (`fmovi` counts as a write); mandel -11 %.
+* **Added (documents):** `LEARN.md` / `LEARN_EN.md` (one path from zero) and `docs/book` (deep lessons: english, jcmp, machine, programs).
+* **Fixed:** the unroll-and-jam pass gave up when the handle cell of an array was only read in the loop.
+
 ## 1.2.14.0 (2026-11-05) -- pre-release, still in development (the speed gate of 1.3.0 is not passed yet)
 * **Added (speed):** the vectoriser works on heap arrays (`float[] x = arr(n)`) and on matrix indices (`c[ci + j] += av * b[bk + j]`, row offsets in locals), with a run-time overlap test; the scalar broadcast and the loads of the array header are hoisted out of the vector loop; blocks are merged and cells are promoted to registers inside a block (vec3 -16 %). Float update 5.2x -> 0.8x of C; GEMM row form 6.6x -> about 1.9x.
 * **Added (speed, vectors):** a vector multiply and add (`a + b * c`, one value used once) becomes one `fmla`; a repeated `dup` is dropped; the assembler knows `fmla`. With it, `<neuron>` 0.7.2 multiplies float32 tables with a 4 x 8 register-blocked kernel: 512 x 512 in 18.8 ms on one thread (14 GFLOPS), about 31 GFLOPS with four threads; a C program with the same NEON kernel runs 14.5 GFLOPS on the same phone. The last digit of a float result can differ from a program built with `-nofma` (one rounding instead of two).

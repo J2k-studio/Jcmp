@@ -163,6 +163,19 @@ jcmp hello.jk -o hello      # คอมไพล์
 148. defer: ทำความสะอาดเมื่อฟังก์ชันล้มเหลว
 149. ไฟล์สร้างโปรแกรมของ makej และการอ่านมันเป็นข้อความ
 150. อ่านข้อความผิดพลาดของคอมไพเลอร์
+151. ชื่ออยู่ได้ที่ไหน: ขอบเขตตัวแปร
+152. ตารางแถวและคอลัมน์
+153. ค้นหาให้เร็ว: binary search
+154. แก้บั๊กด้วยการดูค่า
+155. นับขั้นตอน: Big-O
+156. สแตก: เข้าทีหลัง ออกก่อน
+157. คิวแบบ ring buffer
+158. ต้นไม้ค้นหา
+159. กราฟและการค้นหาแบบกว้าง
+160. โปรแกรมมิงแบบไดนามิก
+161. ตารางแฮชแบบเขียนเอง
+162. เรียงสองแบบ นับการเปรียบเทียบ
+163. หน่วยความจำและแคช: ทำไมลำดับลูปจึงสำคัญ
 
 ## บทที่ 1. สวัสดีชาวโลก
 
@@ -5417,7 +5430,7 @@ void main() {
 ```
 multiply-adds: 262144
 same table: true
-sum of the table: 0.020048
+sum of the table: 0.020103
 ```
 
 micro-kernel คือส่วนในสุดของการคูณเมทริกซ์: บล็อกเล็กๆ ของผลลัพธ์ (เช่น 4 แถว คูณ 8 คอลัมน์) ถูกเก็บในรีจิสเตอร์เวกเตอร์ระหว่างที่ลูปตามมิติที่ใช้ร่วมทำงาน ตัวเลขจึงถูกโหลดครั้งเดียวแล้วใช้ซ้ำ เคอร์เนล 4x8 แบบนี้เป็นการทดลองในงานของคอมไพเลอร์เอง และยังไม่อยู่ใน `<neuron>` ส่วน `matmul_fast` ข้างบนคือตัวที่ใช้ได้วันนี้
@@ -6649,6 +6662,678 @@ ec_read_errors.jk:19:1: error: the file ends inside a block: the '{' on line 5 i
 อ่านตามลำดับนี้: (1) ไฟล์และตำแหน่ง `12:6` คือบรรทัด 12 คอลัมน์ 6 (2) ข้อความ บอกว่าอะไรผิด (3) บรรทัดของซอร์สที่มี `^` และบรรทัด `help` ซึ่งมักบอกวิธีแก้ ข้อความแรกชี้ไปที่ `main` แต่สาเหตุคือ `{` ของ `average` ที่บรรทัด 5 ซึ่งไม่ถูกปิด ดังนั้นตำแหน่งที่คอมไพเลอร์สังเกตเห็นปัญหาไม่จำเป็นต้องเป็นตำแหน่งของความผิดพลาด ให้อ่านบรรทัด `help` และข้อความสุดท้ายด้วย แก้ทีละจุด คอมไพล์ใหม่ ข้อความที่เหลืออาจหายไปเอง
 
 **ลองทำ:** ลบ `}` ท้ายบรรทัด `for` ในฟังก์ชัน `average` คอมไพล์ แล้วดูว่าข้อความระบุบรรทัดของฟังก์ชันหรือไม่
+
+## บทที่ 151. ชื่ออยู่ได้ที่ไหน: ขอบเขตตัวแปร
+
+ตัวแปรมีอยู่ตั้งแต่บรรทัดที่สร้างมันจนถึงปีกกาปิดของบล็อกที่สร้าง ตัวแปรที่สร้างนอกฟังก์ชันทั้งหมด (global) มองเห็นได้ทุกที่ ในลูปจะได้ตัวแปรใหม่ทุกรอบ
+
+```jk
+#import <stdlib>
+using stdlib;
+
+int total = 100;                 // a global: visible everywhere
+
+int twice(int x) {
+    int result = x * 2;          // a local: only inside twice
+    return result;
+}
+
+void main() {
+    int n = 5;
+    if n > 3 {
+        int inner = n + 1;       // lives only inside these braces
+        jout << "inner = " << inner << "\n";
+    }
+    for i in 0..3 {
+        int sq = i * i;          // a new sq for every turn
+        jout << "sq = " << sq << "\n";
+    }
+    jout << twice(n) << " " << total << "\n";
+}
+
+```
+
+ผลลัพธ์:
+
+```
+inner = 6
+sq = 0
+sq = 1
+sq = 4
+10 100
+```
+
+ถ้าใช้ชื่อนอกบล็อกของมัน คอมไพเลอร์จะบอกว่าไม่รู้จักชื่อนั้น ควรใช้ตัวแปรโลคัลเป็นหลัก เพราะ global ถูกแก้จากที่ไหนก็ได้ จึงตามยากว่าใครแก้
+
+**ลอง:** พิมพ์ `inner` หลังบล็อก `if` แล้วอ่านข้อความผิดพลาด
+
+## บทที่ 152. ตารางแถวและคอลัมน์
+
+ตารางที่มีแถวและคอลัมน์เก็บไว้ในอาร์เรย์เดียวได้: ช่อง (แถว, คอลัมน์) อยู่ที่ `แถว * ความกว้าง + คอลัมน์` วิธีนี้เก็บตัวเลขทั้งหมดติดกันในหน่วยความจำ ซึ่งซีพียูชอบ
+
+```jk
+#import <stdlib>
+using stdlib;
+
+// a 3 x 3 table kept in one array: the cell (row, col) is at row * 3 + col
+void main() {
+    int[] t = arr(9);
+    for r in 0..3 {
+        for c in 0..3 { t.push((r + 1) * (c + 1)); }
+    }
+    for r in 0..3 {
+        for c in 0..3 { jout << t[r * 3 + c] << " "; }
+        jout << "\n";
+    }
+    int diag = 0;
+    for k in 0..3 { diag += t[k * 3 + k]; }
+    jout << "diagonal sum = " << diag << "\n";
+}
+
+```
+
+ผลลัพธ์:
+
+```
+1 2 3 
+2 4 6 
+3 6 9 
+diagonal sum = 14
+```
+
+นี่คือรูปแบบเดียวกับบทผลคูณเมทริกซ์ อ่านตารางทีละแถว (ลูปในวิ่งตามคอลัมน์) จะเร็ว อ่านทีละคอลัมน์จะช้ากว่า
+
+**ลอง:** ทำเป็น 4 x 4 แล้วพิมพ์ผลรวมของแถวที่สอง
+
+## บทที่ 153. ค้นหาให้เร็ว: binary search
+
+เมื่ออาร์เรย์เรียงแล้ว ไม่ต้องดูทุกตัว ดูตัวกลาง ถ้าค่าที่หาน้อยกว่า คำตอบอยู่ครึ่งซ้าย ไม่เช่นนั้นอยู่ครึ่งขวา ทุกขั้นทิ้งไปครึ่งหนึ่ง จึงใช้แค่ราว 20 ขั้นสำหรับ 1,000,000 ตัว
+
+```jk
+#import <stdlib>
+using stdlib;
+
+// binary search in a sorted array: each step throws half of the rest away
+int find(int[] a, int x) {
+    int lo = 0;
+    int hi = a.len - 1;
+    while lo <= hi {
+        int mid = (lo + hi) / 2;
+        if a[mid] == x { return mid; }
+        if a[mid] < x { lo = mid + 1; } else { hi = mid - 1; }
+    }
+    return 0 - 1;
+}
+
+void main() {
+    int[] a = arr(8);
+    for i in 0..8 { a.push(i * 3); }
+    jout << find(a, 9) << " " << find(a, 10) << " " << find(a, 21) << "\n";
+}
+
+```
+
+ผลลัพธ์:
+
+```
+3 -1 7
+```
+
+ฟังก์ชันคืนตำแหน่ง หรือ -1 ถ้าไม่มีตัวเลขนั้น ใช้ได้กับอาร์เรย์ที่เรียงแล้วเท่านั้น ถ้าไม่เรียง คำตอบจะผิด
+
+**ลอง:** นับว่าลูปทำกี่ขั้นสำหรับ 21 และสำหรับ 10
+
+## บทที่ 154. แก้บั๊กด้วยการดูค่า
+
+ดีบักเกอร์ที่ง่ายที่สุดคือการพิมพ์: พิมพ์ค่าที่สำคัญแล้วเทียบกับที่คาดไว้ เริ่มจากอินพุตเล็กๆ ที่คำนวณคำตอบด้วยมือได้
+
+```jk
+#import <stdlib>
+using stdlib;
+
+// debugging by looking: print the values that matter, then compare with what you expected
+int collatz_steps(int n) {
+    int steps = 0;
+    while n != 1 {
+        if n % 2 == 0 { n = n / 2; } else { n = 3 * n + 1; }
+        steps += 1;
+    }
+    return steps;
+}
+
+void main() {
+    for n in 1..8 {
+        jout << "n = " << n << "  steps = " << collatz_steps(n) << "\n";
+    }
+}
+
+```
+
+ผลลัพธ์:
+
+```
+n = 1  steps = 0
+n = 2  steps = 1
+n = 3  steps = 7
+n = 4  steps = 2
+n = 5  steps = 5
+n = 6  steps = 8
+n = 7  steps = 16
+```
+
+ตรงนี้ขั้นตอนของ 3 คือ 7 ขั้น (3, 10, 5, 16, 8, 4, 2, 1) ถ้าผลลัพธ์ไม่ตรงกับที่นับด้วยมือ บั๊กอยู่ในลูป ถ้าตรง ให้ดูที่ผู้เรียก คอมไพล์ด้วย `-d` เพื่อหยุดเมื่อใช้ดัชนีอาร์เรย์ผิด
+
+**ลอง:** พิมพ์ `n` ในลูปของ `collatz_steps` สำหรับค่าเริ่มต้น 6
+
+## บทที่ 155. นับขั้นตอน: Big-O
+
+เวลาที่โปรแกรมใช้ขึ้นกับจำนวนขั้นตอน และจำนวนขั้นตอนขึ้นกับขนาดข้อมูล เราไม่จับเวลา แต่นับขั้นตอน โปรแกรมนี้นับขั้นตอนของการค้นหาสองแบบ: ดูทุกตัว (linear) หรือแบ่งช่วงครึ่งหนึ่งทุกรอบ (binary สำหรับข้อมูลที่เรียงแล้ว)
+
+```jk
+#import <stdlib>
+using stdlib;
+
+// Big-O by counting: how many steps does a search need as the data grows?
+int linear_steps(int n) { return n; }                 // look at every item in the worst case
+
+int binary_steps(int n) {
+    int lo = 0;
+    int hi = n - 1;
+    int steps = 0;
+    while lo <= hi {                                   // search for a value that is not there: the worst case
+        int mid = (lo + hi) / 2;
+        steps += 1;
+        hi = mid - 1;
+    }
+    return steps;
+}
+
+void main() {
+    jout << "n          linear    binary\n";
+    int n = 16;
+    for t in 0..5 {
+        jout << pad(str(n), 10) << " " << pad(str(linear_steps(n)), 9) << " " << binary_steps(n) << "\n";
+        n = n * 16;
+    }
+}
+
+```
+
+ผลลัพธ์:
+
+```
+n          linear    binary
+16         16        4
+256        256       8
+4096       4096      12
+65536      65536     16
+1048576    1048576   20
+```
+
+เมื่อข้อมูลโตขึ้น 16 เท่า linear ใช้ขั้นตอนมากขึ้น 16 เท่า (**O(n)**) แต่ binary เพิ่มแค่ 4 ขั้น (**O(log n)**) ข้อมูลล้านตัว: 1,048,576 ขั้นเทียบกับ 20 Big-O เก็บเฉพาะรูปร่างของการเติบโต: O(1), O(log n), O(n), O(n log n), O(n^2), O(2^n) คือชื่อที่จะเจอ
+
+**ลอง:** เปลี่ยนตัวคูณ 16 เป็น 2 แล้วดูคอลัมน์ binary เพิ่มทีละ 1
+
+## บทที่ 156. สแตก: เข้าทีหลัง ออกก่อน
+
+สแตกคืนของในลำดับตรงข้าม: ตัวที่เข้าทีหลังออกก่อน (LIFO) การเรียกฟังก์ชันทำงานแบบนี้ ปุ่ม undo ก็เช่นกัน และเป็นเครื่องมือตรวจวงเล็บ
+
+```jk
+#import <stdlib>
+using stdlib;
+
+// a stack in an array: the last item in is the first one out (LIFO)
+struct Stack { int[] items; }
+
+void push(Stack s, int x) { s.items.push(x); }
+int pop(Stack s) {
+    int x = s.items[s.items.len - 1];
+    s.items.pop();
+    return x;
+}
+
+// are the brackets of a text balanced? ( [ { and the matching closers
+bool balanced(String t) {
+    Stack s;
+    s.items = arr(8);
+    for i in 0..t.len {
+        char c = t[i];
+        if c == '(' || c == '[' || c == '{' { push(s, (int)c); }
+        else if c == ')' || c == ']' || c == '}' {
+            if s.items.len == 0 { return false; }
+            int o = pop(s);
+            if c == ')' && o != (int)'(' { return false; }
+            if c == ']' && o != (int)'[' { return false; }
+            if c == '}' && o != (int)'{' { return false; }
+        }
+    }
+    return s.items.len == 0;
+}
+
+void main() {
+    jout << balanced("(a[b]c)") << " " << balanced("(a[b)]") << " " << balanced("((") << "\n";
+}
+
+```
+
+ผลลัพธ์:
+
+```
+true false false
+```
+
+push วงเล็บเปิดทุกตัว เจอวงเล็บปิดให้ pop มาตรวจว่าคู่กัน สุดท้ายสแตกต้องว่าง ทุกขั้น O(1) ทั้งการตรวจ O(n)
+
+**ลอง:** เพิ่มข้อความ `"([)]"` แล้วอธิบายว่าทำไมไม่สมดุล
+
+## บทที่ 157. คิวแบบ ring buffer
+
+คิวคืนของตามลำดับที่เข้ามา: เข้าก่อนออกก่อน (FIFO) ring buffer เก็บในอาร์เรย์ขนาดคงที่: จุดเริ่มเลื่อนไปข้างหน้าแล้ววนกลับที่ปลายอาร์เรย์ จึงไม่ต้องย้ายข้อมูลเลย
+
+```jk
+#import <stdlib>
+using stdlib;
+
+// a queue in a ring buffer: first in, first out (FIFO); head and tail wrap around at the end of the array
+int[] buf;
+int head = 0;
+int count = 0;
+int cap = 4;
+
+bool enqueue(int x) {
+    if count == cap { return false; }
+    buf[(head + count) % cap] = x;
+    count += 1;
+    return true;
+}
+
+int dequeue() {
+    int x = buf[head];
+    head = (head + 1) % cap;
+    count -= 1;
+    return x;
+}
+
+void main() {
+    buf = arr(cap);
+    for i in 0..cap { buf.push(0); }
+    for i in 1..7 { jout << enqueue(i * 10) << " "; }       // the 5th and 6th do not fit
+    jout << "\n";
+    jout << dequeue() << " " << dequeue() << "\n";
+    jout << enqueue(99) << " " << enqueue(98) << "\n";       // the freed places are used again
+    while count > 0 { jout << dequeue() << " "; }
+    jout << "\n";
+}
+
+```
+
+ผลลัพธ์:
+
+```
+true true true true false false 
+10 20
+true true
+30 40 99 98 
+```
+
+ตำแหน่งช่องว่างถัดไปคือ `(head + count) % cap` เครื่องหมาย `%` ทำให้ตำแหน่งวนกลับ คีย์บอร์ด การ์ดเครือข่าย และเสียง ใช้ ring buffer ทั้งหมด คิวเต็มจะตอบ `false` แทนที่จะขยาย
+
+**ลอง:** ตั้ง `cap` เป็น 8 แล้วเติมให้เต็ม
+
+## บทที่ 158. ต้นไม้ค้นหา
+
+binary search tree เก็บคีย์ที่น้อยกว่าไว้ทางซ้าย และที่มากกว่าไว้ทางขวาของโหนด ค้นและเพิ่มลงไปทีละกิ่ง: ราว log n ขั้นเมื่อต้นไม้สมดุล
+
+```jk
+#import <stdlib>
+using stdlib;
+
+// a binary search tree kept in arrays: node i has a key, a left child and a right child (-1: none)
+int[] key;
+int[] left;
+int[] right;
+
+int insert(int root, int k) {
+    key.push(k); left.push(0 - 1); right.push(0 - 1);
+    int id = key.len - 1;
+    if root < 0 { return id; }
+    int cur = root;
+    while true {
+        if k < key[cur] {
+            if left[cur] < 0 { left[cur] = id; break; }
+            cur = left[cur];
+        } else {
+            if right[cur] < 0 { right[cur] = id; break; }
+            cur = right[cur];
+        }
+    }
+    return root;
+}
+
+void inorder(int n) {                                    // left, node, right: the keys come out sorted
+    if n < 0 { return; }
+    inorder(left[n]);
+    jout << key[n] << " ";
+    inorder(right[n]);
+}
+
+int height(int n) {
+    if n < 0 { return 0; }
+    int a = height(left[n]);
+    int b = height(right[n]);
+    if a > b { return a + 1; }
+    return b + 1;
+}
+
+void main() {
+    key = arr(8); left = arr(8); right = arr(8);
+    int root = 0 - 1;
+    int[] data = arr(8);
+    data.push(50); data.push(30); data.push(70); data.push(20); data.push(40); data.push(60); data.push(80);
+    for i in 0..data.len { root = insert(root, data[i]); }
+    inorder(root);
+    jout << "\nheight " << height(root) << "\n";
+}
+
+```
+
+ผลลัพธ์:
+
+```
+20 30 40 50 60 70 80 
+height 3
+```
+
+ที่นี่โหนดถูกเก็บในอาร์เรย์สามตัว (`key`, `left`, `right`) และลูกคือดัชนี: ไม่มี pointer และข้อมูลอยู่ติดกันในหน่วยความจำ การอ่านต้นไม้แบบ ซ้าย โหนด ขวา ให้คีย์เรียงลำดับ นั่นคือการเรียง ความสูง 3 คือจำนวนขั้นไปคีย์ที่ลึกที่สุด ต้นไม้ที่สร้างจากข้อมูลที่เรียงแล้วจะกลายเป็นเส้นตรงสูง n
+
+**ลอง:** ใส่คีย์ตามลำดับ 10, 20, 30, 40 แล้วพิมพ์ความสูง
+
+## บทที่ 159. กราฟและการค้นหาแบบกว้าง
+
+กราฟคือโหนดที่เชื่อมด้วยเส้น: ถนน เพื่อน ลิงก์ การพึ่งพา การค้นหาแบบกว้าง (BFS) เยี่ยมโหนดตามลำดับระยะจากจุดเริ่ม โดยใช้คิว ดังนั้นครั้งแรกที่ถึงโหนดคือเส้นทางที่สั้นที่สุด
+
+```jk
+#import <stdlib>
+using stdlib;
+
+// breadth-first search: the fewest steps from a start node to every other node of a graph
+// the graph is kept as lists: the neighbours of node v are nb[start[v] .. start[v+1])
+void main() {
+    int n = 6;
+    int[] start = arr(8);
+    int[] nb = arr(16);
+    // edges: 0-1 0-2 1-3 2-3 3-4 (node 5 is alone)
+    int[] ea = arr(8); int[] eb = arr(8);
+    ea.push(0); eb.push(1); ea.push(0); eb.push(2); ea.push(1); eb.push(3); ea.push(2); eb.push(3); ea.push(3); eb.push(4);
+    for v in 0..n {
+        start.push(nb.len);
+        for e in 0..ea.len {
+            if ea[e] == v { nb.push(eb[e]); }
+            if eb[e] == v { nb.push(ea[e]); }
+        }
+    }
+    start.push(nb.len);
+    int[] dist = arr(8);
+    for v in 0..n { dist.push(0 - 1); }
+    int[] queue = arr(8);
+    queue.push(0);
+    dist[0] = 0;
+    int qh = 0;
+    while qh < queue.len {
+        int v = queue[qh];
+        qh += 1;
+        for k in start[v]..start[v + 1] {
+            int w = nb[k];
+            if dist[w] < 0 { dist[w] = dist[v] + 1; queue.push(w); }
+        }
+    }
+    for v in 0..n { jout << "node " << v << ": " << dist[v] << "\n"; }
+}
+
+```
+
+ผลลัพธ์:
+
+```
+node 0: 0
+node 1: 1
+node 2: 1
+node 3: 2
+node 4: 3
+node 5: -1
+```
+
+กราฟเก็บเป็นลิสต์ (`start[v]` ถึง `start[v+1]` บอกว่าเพื่อนบ้านของ `v` อยู่ที่ใดใน `nb`) รูปแบบที่โปรแกรมกราฟใหญ่ใช้เพราะกะทัดรัด โหนด 5 ไม่มีเส้น ระยะจึงเป็น -1 แปลว่า 'ถึงไม่ได้' งานเป็น O(โหนด + เส้น)
+
+**ลอง:** เพิ่มเส้น 4-5 แล้วรันอีกครั้ง
+
+## บทที่ 160. โปรแกรมมิงแบบไดนามิก
+
+บางปัญหาประกอบด้วยปัญหาย่อยแบบเดียวกันที่ซ้ำกัน dynamic programming (DP) แก้แต่ละกรณีเล็กครั้งเดียว จดคำตอบไว้ในตาราง แล้วสร้างคำตอบใหญ่จากตาราง
+
+```jk
+#import <stdlib>
+using stdlib;
+
+// dynamic programming: the longest common subsequence of two texts; table[i][j] uses the answers for shorter texts
+int lcs(String a, String b) {
+    int w = b.len + 1;
+    int[] t = arr((a.len + 1) * w);
+    for i in 0..(a.len + 1) * w { t.push(0); }
+    for i in 1..a.len + 1 {
+        for j in 1..b.len + 1 {
+            if a[i - 1] == b[j - 1] { t[i * w + j] = t[(i - 1) * w + (j - 1)] + 1; }
+            else {
+                int up = t[(i - 1) * w + j];
+                int lf = t[i * w + (j - 1)];
+                if up > lf { t[i * w + j] = up; } else { t[i * w + j] = lf; }
+            }
+        }
+    }
+    return t[a.len * w + b.len];
+}
+
+// the fewest coins for an amount (coins 1, 5, 12): the answer for 15 is 3 coins of 5, not 12 + 1 + 1 + 1
+int coins(int amount) {
+    int[] best = arr(amount + 1);
+    best.push(0);
+    for x in 1..amount + 1 {
+        int m = 1000000;
+        if x >= 1 && best[x - 1] + 1 < m { m = best[x - 1] + 1; }
+        if x >= 5 && best[x - 5] + 1 < m { m = best[x - 5] + 1; }
+        if x >= 12 && best[x - 12] + 1 < m { m = best[x - 12] + 1; }
+        best.push(m);
+    }
+    return best[amount];
+}
+
+void main() {
+    jout << lcs("AGGTAB", "GXTXAYB") << " " << lcs("abc", "xyz") << "\n";
+    jout << coins(15) << " " << coins(11) << " " << coins(24) << "\n";
+}
+
+```
+
+ผลลัพธ์:
+
+```
+4 0
+3 3 2
+```
+
+สองตัวอย่างคลาสสิก: ลำดับย่อยร่วมที่ยาวที่สุดของสองข้อความ (ตาราง `len(a) x len(b)` ช่อง) และจำนวนเหรียญน้อยที่สุดสำหรับยอดเงิน ปัญหาเหรียญแสดงว่าทำไมการเลือกแบบโลภพลาด: ที่ 15 ถ้าหยิบเหรียญใหญ่สุดก่อน (12 + 1 + 1 + 1) ใช้ 4 เหรียญ แต่ตารางหาได้ 3 (5 + 5 + 5) ตารางทำให้งานเป็น O(n x m) แทนที่จะเป็นเอกซ์โปเนนเชียลแบบเรียกซ้ำตรงๆ
+
+**ลอง:** เพิ่มเหรียญ 7 แล้วดูคำตอบของ 14
+
+## บทที่ 161. ตารางแฮชแบบเขียนเอง
+
+ตารางแฮชหาค่าจากคีย์ได้ในราวหนึ่งขั้น: ฟังก์ชันแปลงคีย์เป็นตำแหน่งในอาร์เรย์ สองคีย์อาจต้องการตำแหน่งเดียวกัน (ชนกัน) open addressing จะลองตำแหน่งถัดไป
+
+```jk
+#import <stdlib>
+using stdlib;
+
+// a hash table from scratch: open addressing (if the place is taken, try the next one)
+int cap = 16;
+int[] keys;
+int[] vals;
+bool[] used;
+int probes = 0;
+
+int h(int k) { return (k * 31 + 7) % cap; }
+
+void put(int k, int v) {
+    int i = h(k);
+    while used[i] && keys[i] != k { i = (i + 1) % cap; probes += 1; }
+    used[i] = true; keys[i] = k; vals[i] = v;
+}
+
+int get(int k) {
+    int i = h(k);
+    while used[i] {
+        if keys[i] == k { return vals[i]; }
+        i = (i + 1) % cap;
+    }
+    return 0 - 1;
+}
+
+void main() {
+    keys = arr(cap); vals = arr(cap); used = arr(cap);
+    for i in 0..cap { keys.push(0); vals.push(0); used.push(false); }
+    for i in 0..10 { put(i * 16 + 3, i * 100); }          // these keys all want the same place: collisions
+    jout << get(3) << " " << get(35) << " " << get(147) << " " << get(4) << "\n";
+    jout << "extra probes: " << probes << "\n";
+}
+
+```
+
+ผลลัพธ์:
+
+```
+0 200 900 -1
+extra probes: 45
+```
+
+คีย์ 10 ตัวที่ห่างกัน 16 เท่ากัน ตกที่ตำแหน่งเดียวกัน แต่ละตัวจึงต้องเดินผ่านตัวก่อนหน้า: 45 ครั้งเพิ่ม ฟังก์ชันแฮชที่ดีกระจายคีย์ ตารางที่เกือบเต็มจะช้า ตารางจริงจึงขยายเมื่อเต็มราว 70 % ไลบรารี `<collections>` มีให้พร้อมใช้ (บทที่ 142)
+
+**ลอง:** เปลี่ยน `cap` เป็น 17 (จำนวนเฉพาะ) แล้วเทียบจำนวนครั้ง
+
+## บทที่ 162. เรียงสองแบบ นับการเปรียบเทียบ
+
+การเรียงคือที่มาตรฐานที่จะเห็น Big-O ทำงาน insertion sort ย้ายแต่ละตัวกลับเข้าที่ ใช้ราว n x n / 4 การเปรียบเทียบ merge sort แบ่ง เรียงครึ่งละส่วน แล้วผสาน ใช้ราว n x log2(n)
+
+```jk
+#import <stdlib>
+using stdlib;
+
+// two sorts, the same data: count the comparisons (insertion sort ~ n*n/4, merge sort ~ n*log2(n))
+int cmp_count = 0;
+
+void insertion(int[] a) {
+    for i in 1..a.len {
+        int x = a[i];
+        int j = i - 1;
+        while j >= 0 {
+            cmp_count += 1;
+            if a[j] <= x { break; }
+            a[j + 1] = a[j];
+            j -= 1;
+        }
+        a[j + 1] = x;
+    }
+}
+
+void merge_sort(int[] a, int[] tmp, int lo, int hi) {   // sorts a[lo .. hi)
+    if hi - lo < 2 { return; }
+    int mid = (lo + hi) / 2;
+    merge_sort(a, tmp, lo, mid);
+    merge_sort(a, tmp, mid, hi);
+    int i = lo;
+    int j = mid;
+    int k = lo;
+    while i < mid && j < hi {
+        cmp_count += 1;
+        if a[i] <= a[j] { tmp[k] = a[i]; i += 1; } else { tmp[k] = a[j]; j += 1; }
+        k += 1;
+    }
+    while i < mid { tmp[k] = a[i]; i += 1; k += 1; }
+    while j < hi { tmp[k] = a[j]; j += 1; k += 1; }
+    for q in lo..hi { a[q] = tmp[q]; }
+}
+
+int[] make(int n) {
+    int[] a = arr(n);
+    int seed = 12345;
+    for i in 0..n { seed = (seed * 1103515245 + 12345) % 2147483648; a.push(seed % 1000); }
+    return a;
+}
+
+void main() {
+    int n = 1000;
+    int[] a = make(n);
+    int[] b = make(n);
+    int[] tmp = arr(n);
+    tmp.resize(n);
+    insertion(a);
+    int c1 = cmp_count;
+    cmp_count = 0;
+    merge_sort(b, tmp, 0, n);
+    int c2 = cmp_count;
+    jout << "insertion sort: " << c1 << " comparisons\n";
+    jout << "merge sort:     " << c2 << " comparisons\n";
+    bool same = true;
+    for i in 0..n { if a[i] != b[i] { same = false; } }
+    jout << "same result: " << same << "\n";
+}
+
+```
+
+ผลลัพธ์:
+
+```
+insertion sort: 242690 comparisons
+merge sort:     8670 comparisons
+same result: true
+```
+
+สำหรับตัวเลข 1000 ตัว: 242,690 ครั้ง เทียบกับ 8,670 ครั้ง ได้ผลเรียงเหมือนกัน ที่ 1,000,000 ตัว ตัวแรกต้องราว 250 พันล้านครั้ง ตัวที่สองราว 20 ล้านครั้ง สำหรับข้อมูลน้อยๆ insertion sort เร็วกว่า (ไม่มีการเรียกซ้ำ ไม่มีอาร์เรย์ที่สอง) ไลบรารีจริงจึงใช้ทั้งสองแบบ
+
+**ลอง:** ตั้ง `n` เป็น 100 และ 10000 แล้วดูว่าสองตัวเลขโตอย่างไร
+
+## บทที่ 163. หน่วยความจำและแคช: ทำไมลำดับลูปจึงสำคัญ
+
+ซีพียูเร็วกว่าหน่วยความจำมาก เพื่อซ่อนการรอ มันอ่านหน่วยความจำเป็นก้อนละ 64 ไบต์ (cache line) และเก็บก้อนล่าสุดไว้ใกล้ๆ โปรแกรมที่ใช้ตัวเลขทั้งก้อนก่อนไปก้อนถัดไปเร็วกว่าโปรแกรมที่กระโดดหลายเท่า
+
+```jk
+#import <stdlib>
+using stdlib;
+
+// the same sum of a table, read by rows and by columns: one answer, but the CPU reads memory in blocks (cache lines),
+// so walking along a row uses every number of a block while walking down a column uses one number of each block
+void main() {
+    int n = 512;
+    float[] t = arr(n * n);
+    for i in 0..n * n { t.push((float)(i % 10)); }
+    float by_rows = 0.0;
+    for r in 0..n { for c in 0..n { by_rows += t[r * n + c]; } }
+    float by_cols = 0.0;
+    for c in 0..n { for r in 0..n { by_cols += t[r * n + c]; } }
+    jout << by_rows << " " << by_cols << " " << (by_rows == by_cols) << "\n";
+    jout << "bytes in a row: " << n * 4 << ", bytes between two numbers of a column: " << n * 4 << "\n";
+}
+
+```
+
+ผลลัพธ์:
+
+```
+1179636.000000 1179636.000000 true
+bytes in a row: 2048, bytes between two numbers of a column: 2048
+```
+
+ผลรวมสองแบบให้คำตอบเท่ากัน (และเท่ากันทุกบิตตรงนี้เพราะทุกตัวเลขเป็นจำนวนเต็มเล็ก) แบบแรกเดินตามแถว: 16 float ต่อก้อน ใช้ครบทุกตัว แบบที่สองลงตามคอลัมน์: ห่างกัน 2048 ไบต์ แต่ละก้อนให้ได้ตัวเลขเดียวแล้วถูกทิ้ง ที่วัดบนมือถือเครื่องนี้สำหรับผลคูณเมทริกซ์ 384 x 384 float: ลำดับลูปที่ลูปในเดินตามแถว (`ikj`, `kij`) ใช้ราว 50 มิลลิวินาที ลำดับอื่น 230 ถึง 270 มิลลิวินาที สำหรับ `ijk` ธรรมดา และ C ก็ไม่ต่างกัน: บทเรียนนี้เกี่ยวกับหน่วยความจำ ไม่ใช่ภาษา
+
+**ลอง:** ตั้ง `n` เป็น 1024 แล้วจับเวลาสองลูปด้วย `Time::mono_ns()` จากบทที่ 92
 
 ## ต่อไป
 
