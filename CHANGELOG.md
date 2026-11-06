@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.21.0 (2026-11-06)
+* **Added (speed):** `i % c` in a counted `for` loop (constant start >= 0, 2 <= c <= 4095, the body leaves `i` alone) keeps the remainder as a wrapping counter (`-irdbg 2305843009213693952` turns it off); the `loop` benchmark runs in 270 ms instead of 759 (gcc -O2: 190). Test t602.
+* **Added (speed):** a call reads only the argument registers of its callee in the lifter (`__flush` none, a known function its parameter count; `-irdbg 4611686018427387904` turns it off). Dead argument set-up and the stores of a dead struct temporary no longer stay alive; the game benchmark runs in 56 ms instead of 64 (gcc -O2: 44). Test t603.
+* **Fixed:** none in this release.
+
 ## 1.2.20.0 (2026-11-06)
 * **Fixed:** `Channel<T>::receive` / `try_receive` on a closed empty channel with a struct `T` crashed (1.2.19.0 used the cast `(T)0`, which copies from address 0 for a struct); the value is now all zero bytes. Test t600. The cast itself is noted in `docs/open-questions.md`.
 * **Added (speed):** strength reduction also recognises element addresses that value numbering keeps in a frame cell (`-irdbg 1152921504606846976` turns it off); the per-turn `mul` is gone from such inner loops. Test t601.

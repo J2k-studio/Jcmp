@@ -1222,6 +1222,17 @@ int lf_function(char^ name) {
             }
             int ce = ir_add(IR_CALL, lf_x(0), 0, 0, 0, ir_name_index(@fn));
             lf_set_call_args(ce);
+            // the registers that the callee does not read are no arguments (so a dead set-up of x2 .. x7 before the call is dead code):
+            // __flush reads none, a function reads its parameters, self and the hidden address of a struct result (-irdbg 4611686018427387904: all eight)
+            if x_target != 32 && (ir_opt & 4611686018427387904) == 0 {
+                int nac = 8;
+                if str_eq(@fn, "__flush") { nac = 0; }
+                else {
+                    int ffa = find_func(@fn);
+                    if ffa >= 0 && farr[ffa] == 0 && fnpar[ffa] + fself[ffa] + 1 < 8 { nac = fnpar[ffa] + fself[ffa] + 1; }
+                }
+                ir_ac[ce] = nac;
+            }
             if lf_noreturn(@fn) {
                 ir_add(IR_TRAP, 0, 0, 0, 0, 0);
                 fell = false;

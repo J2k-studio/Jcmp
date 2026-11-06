@@ -1,6 +1,8 @@
-# J2K / Jcmp 1.2.20.0
+# J2K / Jcmp 1.2.21.0
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
+
+**1.2.21.0:** wrapping counter for `i % c` (loop 759 -> 270 ms), call arity in the lifter (game 64 -> 56 ms).
 
 **1.2.20.0:** fix: Channel of a struct crashed on a closed empty channel (1.2.19.0 regression); strength reduction of frame-cell element addresses.
 

@@ -1670,6 +1670,15 @@ int gl_hastmp[AT_MAX];           // for an if / while: its condition makes new S
 int gl_depth;                    // the cells in use below the frame pointer
 int gl_off[1024];                // the unique number of a local -> its offset in the frame
 int gl_nslot;                    // the next offset to give
+int gl_wrc[AT_MAX];              // for loops: the constant c of a wrapping counter (i % c kept as r += 1; if r >= c { r = 0 }), 0: none
+int gl_wrs[AT_MAX];              // ... and the offset of its slot
+int gl_wr_vi[16];                // the loops being lowered that have one: the local of the counter, c, the slot
+int gl_wr_c[16];
+int gl_wr_sl[16];
+int gl_wr_n;
+int wr_c;                        // the scan of a loop body (wr_scan): the first i % c found, whether the body leaves i alone
+int wr_vi;
+bool wr_ok;
 int gl_bsl[AT_MAX];              // for loops: the offset of the hidden bound, by the node
 int gl_nz[8];                    // the local variables known to be not 0 here (after `while b != 0 {`); cleared at every join
 int gl_nzn;
@@ -3405,6 +3414,10 @@ void gl_expr(int n) {
             else { gl_farith(ao); }
             return;
         }
+        if ao == AO_MOD && gl_wr_n > 0 {
+            int ws = gl_wr_find(a, b);
+            if ws < 0 { gl_load(1, 30, ws); return; }
+        }
         if (ao == AO_DIV || ao == AO_MOD) && gl_const_div(b) {
             gl_expr(a);
             gl_divconst(at_val[b], ao == AO_MOD);
@@ -3585,11 +3598,83 @@ void gl_cout(int n) {
     }
 }
 
+// the scan of a loop body for the wrapping counter: only statements and expressions that are fully understood (anything else: no counter);
+// the body must not assign i, take its address, or have a nested loop over it
+void wr_chain(int s) {
+    while s != 0 && wr_ok {
+        wr_scan(s);
+        s = at_nx[s];
+    }
+}
+
+void wr_scan(int n) {
+    if n == 0 || !wr_ok { return; }
+    int k = at_kind[n];
+    if k == AK_NUM || k == AK_FNUM || k == AK_GVAR || k == AK_VAR || k == AK_BREAK || k == AK_CONT { return; }
+    if k == AK_BIN {
+        int a = at_a[n];
+        int b = at_b[n];
+        if at_val[n] == AO_MOD && at_kind[a] == AK_VAR && at_val[a] == wr_vi && at_kind[b] == AK_NUM && at_val[b] >= 2 && at_val[b] <= 4095 && wr_c == 0 {
+            wr_c = at_val[b];
+        }
+        wr_scan(a);
+        wr_scan(b);
+    } else if k == AK_NEG || k == AK_NOT || k == AK_CAST || k == AK_DEREF || k == AK_FIELD || k == AK_DECL || k == AK_EXPR || k == AK_RET {
+        wr_scan(at_a[n]);
+    } else if k == AK_ADDR {
+        if at_kind[at_a[n]] == AK_VAR && at_val[at_a[n]] == wr_vi { wr_ok = false; return; }
+        wr_scan(at_a[n]);
+    } else if k == AK_INDEX || k == AK_WHILE {
+        wr_scan(at_a[n]);
+        wr_scan(at_b[n]);
+    } else if k == AK_ASSIGN {
+        if at_kind[at_c[n]] == AK_VAR && at_val[at_c[n]] == wr_vi { wr_ok = false; return; }
+        wr_scan(at_c[n]);
+        wr_scan(at_a[n]);
+    } else if k == AK_INCDEC {
+        if at_val[n] == wr_vi { wr_ok = false; }
+    } else if k == AK_IF {
+        wr_scan(at_a[n]);
+        wr_scan(at_b[n]);
+        wr_scan(at_c[n]);
+    } else if k == AK_FOR {
+        if at_val[n] == wr_vi || at_b[n] == 0 { wr_ok = false; return; }
+        wr_scan(at_a[n]);
+        wr_scan(at_b[n]);
+        wr_scan(at_c[n]);
+    } else if k == AK_BLOCK {
+        wr_chain(at_a[n]);
+    } else if k == AK_CALL {
+        wr_chain(at_a[n]);
+    } else {
+        wr_ok = false;
+    }
+}
+
+// the offset of the cell that holds a % b when a wrapping counter has it (negative), else 1
+int gl_wr_find(int a, int b) {
+    if at_kind[a] != AK_VAR || at_kind[b] != AK_NUM { return 1; }
+    int j = gl_wr_n - 1;
+    while j >= 0 {
+        if at_val[a] == gl_wr_vi[j] && at_val[b] == gl_wr_c[j] { return gl_wr_sl[j]; }
+        j -= 1;
+    }
+    return 1;
+}
+
 void gl_for(int n) {
         int iv = gl_off[at_val[n]];
         int bv = gl_bsl[n];
+        int wc = gl_wrc[n];
         gl_expr(at_a[n]);
         gl_store(30, iv, 1);
+        if wc != 0 {
+            gl_ensure();
+            if gl_wr_n >= 16 { gl_failx(8); return; }
+            gl_wrs[n] = gl_cell(40 + gl_wr_n);          // a cell below the temporaries (the frame is the parser's; later passes move it to a register)
+            ir_add(IR_CONST, 1, 0, 0, 0, at_val[at_a[n]] % wc);
+            gl_store(30, gl_wrs[n], 1);
+        }
         gl_expr(at_b[n]);
         gl_store(30, bv, 1);
         int lc2 = gl_label();
@@ -3606,12 +3691,31 @@ void gl_for(int n) {
         gl_cnt[gl_loops] = ls;
         gl_looptry[gl_loops] = gl_trydepth;
         gl_loops += 1;
+        if wc != 0 {
+            gl_wr_vi[gl_wr_n] = at_val[n];
+            gl_wr_c[gl_wr_n] = wc;
+            gl_wr_sl[gl_wr_n] = gl_wrs[n];
+            gl_wr_n += 1;
+        }
         gl_stmt(at_c[n]);
+        if wc != 0 { gl_wr_n -= 1; }
         gl_loops -= 1;
         gl_place(ls);
         gl_load(1, 30, iv);
         ir_add(IR_ADD, 1, 1, 1, 1, 0);
         gl_store(30, iv, 1);
+        if wc != 0 {
+            int lw = gl_label();
+            int lk = gl_label();
+            gl_load(1, 30, gl_wrs[n]);
+            ir_add(IR_ADD, 1, 1, 1, 1, 0);
+            gl_store(30, gl_wrs[n], 1);
+            gl_br(IR_LT, 1, wc, 1, lk, lw);
+            gl_place(lw);
+            ir_add(IR_CONST, 1, 0, 0, 0, 0);
+            gl_store(30, gl_wrs[n], 1);
+            gl_place(lk);
+        }
         gl_jmp(lc2);
         gl_place(le3);
         return;
@@ -5193,6 +5297,16 @@ void gl_slots(int n) {
         gl_bsl[n] = gl_nslot;
         gl_hint_add(gl_nslot);
         gl_nslot += 8;
+        gl_wrc[n] = 0;
+        if (ir_opt & 2305843009213693952) == 0 && at_b[n] != 0 && at_kind[at_a[n]] == AK_NUM && at_val[at_a[n]] >= 0 {
+            wr_c = 0;
+            wr_vi = at_val[n];
+            wr_ok = true;
+            wr_scan(at_c[n]);
+            if wr_ok && wr_c != 0 {
+                gl_wrc[n] = wr_c;
+            }
+        }
         gl_slots(at_c[n]);
     } else if k == AK_IF {
         int ns0 = gl_nstemps;
@@ -5275,6 +5389,7 @@ int at_find(char^ name) {
 
 int ast_lower_body(int ti, char^ name) {
     gl_why = 0;
+    gl_wr_n = 0;
     gl_ismain = 0;
     if str_eq(name, "main") { gl_ismain = 1; }
     int fi = at_fidx[ti];
