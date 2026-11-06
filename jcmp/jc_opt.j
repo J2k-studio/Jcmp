@@ -1537,6 +1537,31 @@ bool vn_from(i64 v, i64 g, i64 depth) {
     return false;
 }
 
+// the value of (base + off) for the instruction i (an add or sub of a number) whose first operand is the value va that is itself base + ao; -1: no change
+i64 gv_reassoc(i64 i, i64 va) {
+    i64 off = vn_ao[va];
+    if ir_op[i] == IR_ADD { off += ir_b[i]; } else { off -= ir_b[i]; }
+    i64 bv = vn_ab[va];
+    if off == 0 { return bv; }
+    if off > 0 && off < 4096 {
+        i64 v = vn_find(IR_ADD, bv, off + 1000000, ir_k[i] * 4 + ir_w[i]);
+        if v < 0 {
+            v = vn_new(IR_ADD, bv, off + 1000000, ir_k[i] * 4 + ir_w[i]);
+            if v >= 0 { vn_enter(v); vn_def[v] = i; vn_ab[v] = bv; vn_ao[v] = off; }
+        }
+        return v;
+    }
+    if off < 0 && off > 0 - 4096 {
+        i64 v2 = vn_find(IR_SUB, bv, 0 - off + 1000000, ir_k[i] * 4 + ir_w[i]);
+        if v2 < 0 {
+            v2 = vn_new(IR_SUB, bv, 0 - off + 1000000, ir_k[i] * 4 + ir_w[i]);
+            if v2 >= 0 { vn_enter(v2); vn_def[v2] = i; vn_ab[v2] = bv; vn_ao[v2] = off; }
+        }
+        return v2;
+    }
+    return 0 - 1;
+}
+
 void vn_block(i64 b, i64 cont) {
     if cont == 0 {
         vn_n = 0;
@@ -1578,7 +1603,7 @@ void vn_block(i64 b, i64 cont) {
                     valuable = true;
                     if vn_ver_st[sl] != vn_hcur { vn_ver_st[sl] = vn_hcur; vn_ver[sl] = 0; vn_cellvn[sl] = 0 - 1; }
                     V = vn_find(1002, sl, vn_ver[sl], 0);
-                    if V < 0 { V = vn_new(1002, sl, vn_ver[sl], 0); vn_enter(V); }
+                    if V < 0 { V = vn_new(1002, sl, vn_ver[sl], 0); vn_enter(V); if V >= 0 { vn_def[V] = i; } }
                     if V >= 0 && vn_al[V] >= 0 { V = vn_al[V]; fwd = true; }
                 } else if ir_a[i] != 30 && ir_a[i] >= 1 && ir_vcls[d] == 0 && opt_nullchk == 1 && vn_reg(ir_a[i]) >= 0 {
                     // a load through a pointer: the same pointer in the same epoch gives the same value (the epoch changes at every call and at every store but the
@@ -1632,7 +1657,9 @@ void vn_block(i64 b, i64 cont) {
                     i64 ky = op;
                     if op == IR_BITS2F && vn_inv[va2] > 0 { V = vn_inv[va2]; }
                     else if op == IR_F2BITS && vn_inv[va2] > 0 { V = vn_inv[va2]; }
-                    else {
+                    else if (op == IR_ADD || op == IR_SUB) && ir_bi[i] == 1 && vn_ab[va2] >= 0 && (ir_opt & 8796093022208) == 0 && gv_reassoc(i, va2) >= 0 {
+                        V = gv_reassoc(i, va2);                  // (x + c1) - c2 is x + (c1 - c2): the same value as x when they cancel
+                    } else {
                         V = vn_find(ky, xa, xb, kk * 4 + ir_w[i] * 1);
                         if V < 0 {
                             V = vn_new(ky, xa, xb, kk * 4 + ir_w[i] * 1);
@@ -1646,6 +1673,7 @@ void vn_block(i64 b, i64 cont) {
                                 vn_heavy[V] = hv;
                                 if op == IR_F2BITS || op == IR_BITS2F { vn_inv[V] = va2; }
                                 if op == IR_ADD && ir_bi[i] == 1 { vn_ab[V] = va2; vn_ao[V] = ir_b[i]; }
+                                if op == IR_SUB && ir_bi[i] == 1 && ir_b[i] < 4096 { vn_ab[V] = va2; vn_ao[V] = 0 - ir_b[i]; }
                             }
                         }
                     }
@@ -1666,6 +1694,17 @@ void vn_block(i64 b, i64 cont) {
                         ir_a[i] = h;
                         ir_bi[i] = 0;
                     }
+                    vn_changes += 1;
+                    done = true;
+                } else if (op == IR_ADD || op == IR_SUB) && ir_bi[i] == 1 && vn_k[V] == 1002 && vn_def[V] >= 0 && vn_def[V] < i && ir_vcls[d] == 0 && ir_op[vn_def[V]] == IR_LOAD && ir_a[vn_def[V]] == 30 && vn_ver_st[vn_x[V]] == vn_hcur && vn_ver[vn_x[V]] == vn_y[V] {
+                    // x + c - c: no register holds x any more, but its slot has not been written since: read it again (the register pass keeps it in a register)
+                    i64 ld0 = vn_def[V];
+                    ir_op[i] = IR_LOAD;
+                    ir_a[i] = 30;
+                    ir_k[i] = ir_k[ld0];
+                    ir_w[i] = ir_w[ld0];
+                    ir_b[i] = 0;
+                    ir_bi[i] = 0;
                     vn_changes += 1;
                     done = true;
                 } else if op == IR_LOAD && fwd && (ir_opt & 1048576) == 0 && ir_vcls[d] == 0 && vn_k[V] == 1001 && !op_costly(vn_x[V]) {
@@ -1823,6 +1862,104 @@ bool vn_emit(i64 b) {
 i64 vn_done[IR_MAXB];
 i64 vn_pc[IR_MAXB];             // the number of predecessors (that the flow can reach)
 
+// ---------------------------------------------------------------------------------------------- constants of locals that are written once (-irdbg 70368744177664 = 1<<46 switches it off)
+// "int w = 512;" in the entry block, and no other store to the slot anywhere: every load of the slot is the number (the loop passes then see
+// `y * 512`, a shift, and constant offsets). The slot must be a plain one (nobody takes its address).
+i64 sk_cnt[8192];
+i64 sk_val[8192];
+i64 sk_idx[8192];
+i64 sk_has[8192];
+i64 sk_known[IR_MAXV];
+i64 sk_kv[IR_MAXV];
+i64 sk_changes;
+
+void op_slotconst() {
+    op_graph();
+    vn_hints();
+    i64 z = 0;
+    while z < 8192 { sk_cnt[z] = 0; sk_has[z] = 0; z += 1; }
+    i64 b = 0;
+    while b < ir_nb {
+        i64 i = ir_bs[b];
+        while i < ir_be[b] {
+            if ir_op[i] == IR_STORE && ir_a[i] == 30 && ir_k[i] >= 0 {
+                i64 w = ir_w[i];
+                if w < 0 { w = 0 - w; }
+                if w < 1 { w = 1; }
+                i64 s0 = ir_k[i] / 8;
+                i64 s1 = (ir_k[i] + w - 1) / 8;
+                while s0 <= s1 && s0 < 8192 { sk_cnt[s0] += 1; s0 += 1; }
+            }
+            i += 1;
+        }
+        b += 1;
+    }
+    // the entry block: the numbers that registers hold, and the stores of them into plain slots
+    i64 r = 0;
+    while r < ir_nv { sk_known[r] = 0; r += 1; }
+    i64 i2 = ir_bs[0];
+    while i2 < ir_be[0] {
+        i64 op = ir_op[i2];
+        i64 d = ir_d[i2];
+        if op == IR_STORE && ir_a[i2] == 30 && ir_w[i2] == 8 && ir_bi[i2] == 0 && ir_k[i2] >= 0 && ir_k[i2] % 8 == 0 && ir_k[i2] / 8 < 8192 {
+            i64 sl = ir_k[i2] / 8;
+            if (op_plain[sl] == 1 && sk_cnt[sl] == 1 && ir_b[i2] >= 1 && ir_b[i2] < ir_nv && sk_known[ir_b[i2]] == 1) {
+                sk_has[sl] = 1;
+                sk_val[sl] = sk_kv[ir_b[i2]];
+                sk_idx[sl] = i2;
+            }
+        } else if op == IR_CALL || op == IR_CALLIND || op == IR_SYSCALL {
+            r = 0;
+            while r < ir_nv { sk_known[r] = 0; r += 1; }
+        } else if d >= 1 && d < ir_nv {
+            i64 ka = 0;
+            i64 va = 0;
+            if ir_a[i2] >= 1 && ir_a[i2] < ir_nv { ka = sk_known[ir_a[i2]]; va = sk_kv[ir_a[i2]]; }
+            sk_known[d] = 0;
+            if op == IR_CONST { sk_known[d] = 1; sk_kv[d] = ir_k[i2]; }
+            else if op == IR_COPY && ka == 1 { sk_known[d] = 1; sk_kv[d] = va; }
+            else if op == IR_EXT && ka == 1 && ir_k[i2] == 32 {
+                i64 v = va;
+                if ir_w[i2] == 1 {
+                    v = v & 4294967295;
+                    if v >= 2147483648 { v = v - 4294967296; }
+                } else { v = v & 4294967295; }
+                sk_known[d] = 1;
+                sk_kv[d] = v;
+            }
+        }
+        i2 += 1;
+    }
+    b = 0;
+    while b < ir_nb {
+        if op_po[b] >= 0 {
+            i64 i3 = ir_bs[b];
+            while i3 < ir_be[b] {
+                if ir_op[i3] == IR_LOAD && ir_a[i3] == 30 && ir_k[i3] >= 0 && ir_k[i3] % 8 == 0 && ir_k[i3] / 8 < 8192 && ir_d[i3] >= 1 && ir_vcls[ir_d[i3]] == 0 {
+                    i64 sl3 = ir_k[i3] / 8;
+                    if sk_has[sl3] == 1 && !(b == 0 && i3 < sk_idx[sl3]) {
+                        i64 v3 = sk_val[sl3];
+                        i64 lw = ir_w[i3];
+                        bool ok = false;
+                        if lw == 8 { ok = true; }
+                        else if lw == 0 - 4 { v3 = v3 & 4294967295; if v3 >= 2147483648 { v3 = v3 - 4294967296; } ok = true; }
+                        else if lw == 4 { v3 = v3 & 4294967295; ok = true; }
+                        if ok {
+                            ir_op[i3] = IR_CONST;
+                            ir_k[i3] = v3;
+                            ir_a[i3] = 0;
+                            ir_bi[i3] = 1;
+                            sk_changes += 1;
+                        }
+                    }
+                }
+                i3 += 1;
+            }
+        }
+        b += 1;
+    }
+}
+
 // global value numbering over an if: the side q (one block, entered from the branch `term` only, ending in a jump) is numbered with the facts of the
 // code before the branch; afterwards what the side wrote is forgotten (the registers it wrote become unknown, the slots it stored get a new version,
 // the values it made cannot be found), so the join block can use everything that was known before the branch
@@ -1943,7 +2080,7 @@ void op_walk(i64 kind) {
                 if tk == IR_BR || tk == IR_FBR { cand1 = ir_t2[term]; cand2 = ir_t1[term]; }
                 i64 which = 0;
                 bool joined = false;
-                if kind == 0 && tk == IR_BR && (ir_opt & 1125899906842624) == 0 && (ir_opt & 256) == 0 && ir_t1[term] != ir_t2[term] {
+                if kind == 0 && tk == IR_BR && (ir_opt & 17592186044416) == 0 && (ir_opt & 256) == 0 && ir_t1[term] != ir_t2[term] {
                     i64 ga = ir_t1[term];
                     i64 gb = ir_t2[term];
                     i64 gj = 0 - 1;
@@ -3555,7 +3692,7 @@ i64 lc_rootslot;
 
 // a load of a plain 8-byte frame slot that the loop never writes
 bool lc_inv_load(i64 m) {
-    if ir_op[m] != IR_LOAD || ir_a[m] != 30 || ir_w[m] != 8 { return false; }
+    if ir_op[m] != IR_LOAD || ir_a[m] != 30 || !(ir_w[m] == 8 || ((ir_w[m] == 4 || ir_w[m] == 0 - 4) && (ir_opt & 35184372088832) == 0)) { return false; }       // a 32-bit local (load.-4) of a plain slot too
     i64 k = ir_k[m];
     if k % 8 != 0 { return false; }
     if k < 0 { return (0 - k) / 8 < 8192 && lc_nst[8192 + (0 - k) / 8] == 0; }

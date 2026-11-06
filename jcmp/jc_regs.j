@@ -32,6 +32,7 @@ i64 rg_labl[8192];
 i64 rg_nlab;
 i64 rg_pick[8];              // the slots that got a register
 i64 rg_npick;
+i64 rg_main_off;             // -irdbg 4398046511104 (1<<42): main does not get the caller-saved extras
 i64 rg_leaf;                 // 1: the function makes no call (only calls that never return)
 i64 rg_nextra;               // caller-saved registers that a leaf function may use for variables: they are not mentioned in its text
 i64 rg_extra[8];
@@ -929,7 +930,7 @@ void rg_function(i64 is_main) {
     rg_leaf = 0;
     rg_nextra = 0;
     rg_mask = 0;
-    if ok == 1 && is_main == 0 && opt_debug == 0 {
+    if ok == 1 && (is_main == 0 || rg_main_off == 0) && opt_debug == 0 {          // main too (-irdbg 4398046511104 = 1<<42 keeps the old rule)
         rg_leaf = 1;
         i = 0;
         rg_callpre[0] = 0;

@@ -2269,6 +2269,7 @@ void ir_passes_basic() {
             op_sroa();
         }
     }
+    if (ir_opt & 8) != 0 && (ir_opt & 70368744177664) == 0 { op_slotconst(); }
     if (ir_opt & 8) != 0 { op_cse_run(); }
     if (ir_opt & 8) != 0 { op_cell_fwd(); }
     if (ir_opt & 8) != 0 { op_vfwd(); }

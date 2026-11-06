@@ -1,7 +1,11 @@
 # Changelog
 
+## 1.2.28.0 (2026-11-06)
+* **Added (speed):** a local that is written once with a number in the entry block (`int w = 512`) is that number everywhere it is read (`-irdbg 70368744177664` turns it off); `(x + c1) - c2` is folded when the constants cancel (`-irdbg 8796093022208`); loads of 32-bit locals leave loops like the 64-bit ones; `main` uses the free caller-saved registers when it makes no call (`-irdbg 4398046511104`). The tile-map scan: 2.2 -> 1.7 times clang -O2. Tests t616 and the switch runs.
+* **Fixed:** the switch of the value numbering across an `if` (1.2.27.0) is `-irdbg 17592186044416`; the bit named in the 1.2.27.0 notes (1<<50) belongs to another pass.
+
 ## 1.2.27.0 (2026-11-06)
-* **Added (speed):** value numbering now goes through an `if` (a triangle or a diamond whose sides are single blocks): what was computed before the `if` is reused after it, and what a side changed is forgotten (`-irdbg 1125899906842624` turns it off). The tile-map scan: 2.4 -> 2.1 times gcc -O2. Test t615 (compared with a Python reference and with the switch off).
+* **Added (speed):** value numbering now goes through an `if` (a triangle or a diamond whose sides are single blocks): what was computed before the `if` is reused after it, and what a side changed is forgotten (`-irdbg 17592186044416` turns it off). The tile-map scan: 2.4 -> 2.1 times gcc -O2. Test t615 (compared with a Python reference and with the switch off).
 * **Fixed:** none in this release.
 
 ## 1.2.26.0 (2026-11-06)
