@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.2.19.0 (2026-11-06)
+* **Added (speed):** the clean-up of dead cells and temporaries and the scalar replacement of struct locals now repeat until nothing changes (at most 4 rounds; `-irdbg 2199023255552` turns it off). Before, a struct local (`vec3 p`) stayed in the frame because the chain of address computations needed several rounds; `vec3` runs in 40 ms instead of 54 (gcc -O2: 46). Test t591.
+* **Fixed:** `Channel<T>::receive` / `try_receive` on a closed empty channel returned an uninitialised `T` (now `(T)0`; a struct `T` still gives unspecified field values).
+
 ## 1.2.18.0 (2026-11-05)
 * **Added (speed):** array handles whose null check was already dropped are hoisted out of counted loops when their data pointer is the base of an indexed access (`-irdbg 288230376151711744` turns it off); a heap-array matmul (`double[]`, n = 300) runs in 46 ms instead of 79 ms, the same as gcc -O2. Test t596.
 * **Added (speed):** a scratch temporary of the lifter may reuse the register of an operand that is read for the last time by the writing instruction (`-irdbg 576460752303423488` turns it off). Before, a block with many temporaries could overflow the two scratch registers, and the lifter then silently kept the unoptimised text of the whole function (this hit `main` of the matmul benchmark).

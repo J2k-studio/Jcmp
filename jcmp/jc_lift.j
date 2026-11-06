@@ -2283,6 +2283,21 @@ void ir_passes_basic() {
         if (ir_opt & 8) != 0 { op_dead_cells(); }
         if (ir_opt & 4) != 0 { op_clean_run(); }
     }
+    if (ir_opt & 32768) != 0 && (ir_opt & 16777216) == 0 && (ir_opt & 2147483648) == 0 && (ir_opt & 2199023255552) == 0 {      // -irdbg 2199023255552: not
+        // the cells and slots that went dead only now (a pointer that was passed through a cell, then through a slot) free the next ones: until nothing changes
+        int fx = 0;
+        while fx < 4 {
+            int fc0 = dc_changes + dt_changes;
+            op_dead_cells();
+            op_dead_temps();
+            if fx > 0 && dc_changes + dt_changes == fc0 { break; }
+            if (ir_opt & 4) != 0 { op_clean_run(); }
+            op_sroa();
+            if (ir_opt & 8) != 0 { op_cse_run(); }
+            if (ir_opt & 4) != 0 { op_clean_run(); }
+            fx += 1;
+        }
+    }
     if (ir_opt & 67108864) != 0 {
         op_range_run();
         if rn_changes > 0 && (ir_opt & 4) != 0 { op_clean_run(); }
