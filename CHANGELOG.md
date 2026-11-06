@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.2.29.0 (2026-11-06)
+* **Added (speed):** a loop over `i % c` (c up to 8, starting at a multiple of c) is run in whole rounds of c turns with the body written c times, so the remainders are numbers: `loop` 267 -> 139 ms (clang -O2: 198), the 32-bit `loop` 281 -> 209 (212). `-irdbg 281474976710656` turns it off. Test t617. `loop` and `i32_loop` leave the known exceptions of `gate.sh`.
+* **Fixed:** none in this release.
+
 ## 1.2.28.0 (2026-11-06)
 * **Added (speed):** a local that is written once with a number in the entry block (`int w = 512`) is that number everywhere it is read (`-irdbg 70368744177664` turns it off); `(x + c1) - c2` is folded when the constants cancel (`-irdbg 8796093022208`); loads of 32-bit locals leave loops like the 64-bit ones; `main` uses the free caller-saved registers when it makes no call (`-irdbg 4398046511104`). The tile-map scan: 2.2 -> 1.7 times clang -O2. Tests t616 and the switch runs.
 * **Fixed:** the switch of the value numbering across an `if` (1.2.27.0) is `-irdbg 17592186044416`; the bit named in the 1.2.27.0 notes (1<<50) belongs to another pass.

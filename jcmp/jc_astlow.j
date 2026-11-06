@@ -3665,6 +3665,50 @@ i64 gl_wr_find(i64 a, i64 b) {
     return 1;
 }
 
+// a loop with a wrapping counter (i % c, c <= 8) that starts at a multiple of c: while a whole round of c turns is left, the body is written c times, with
+// the counter cell holding the numbers 0 .. c-1 (value numbering then sees constants: `s + i % 7` adds 0, 1, .. 6); the turns that are left run in the
+// ordinary loop that follows (-irdbg 281474976710656 switches it off)
+void gl_wchunk(i64 n, i64 iv, i64 bv, i64 wc, i64 le3) {
+    i64 lch = gl_label();
+    i64 lchb = gl_label();
+    i64 ltail = gl_label();
+    gl_place(lch);
+    gl_load(1, 30, iv);
+    ir_add(IR_ADD, 1, 1, wc, 1, 0);
+    gl_load(2, 30, bv);
+    gl_br(IR_LE, 1, 2, 0, lchb, ltail);
+    gl_place(lchb);
+    i64 t = 0;
+    while t < wc {
+        gl_ensure();
+        ir_add(IR_CONST, 1, 0, 0, 0, t);
+        gl_store(30, gl_wrs[n], 1);
+        i64 lsc = gl_label();
+        if gl_loops >= 32 { gl_failx(8); return; }
+        gl_brk[gl_loops] = le3;
+        gl_cnt[gl_loops] = lsc;
+        gl_looptry[gl_loops] = gl_trydepth;
+        gl_loops += 1;
+        gl_wr_vi[gl_wr_n] = at_val[n];
+        gl_wr_c[gl_wr_n] = wc;
+        gl_wr_sl[gl_wr_n] = gl_wrs[n];
+        gl_wr_n += 1;
+        gl_stmt(at_c[n]);
+        gl_wr_n -= 1;
+        gl_loops -= 1;
+        gl_place(lsc);
+        gl_load(1, 30, iv);
+        ir_add(IR_ADD, 1, 1, 1, 1, 0);
+        gl_store(30, iv, 1);
+        t += 1;
+    }
+    gl_jmp(lch);
+    gl_place(ltail);
+    gl_ensure();
+    ir_add(IR_CONST, 1, 0, 0, 0, 0);
+    gl_store(30, gl_wrs[n], 1);
+}
+
 void gl_for(i64 n) {
         if gl_unr[n] > 0 {
             i64 uiv = gl_off[at_val[n]];
@@ -3710,6 +3754,14 @@ void gl_for(i64 n) {
         i64 lb2 = gl_label();
         i64 ls = gl_label();
         i64 le3 = gl_label();
+        if wc != 0 && wc <= 8 && (ir_opt & 281474976710656) == 0 && at_val[at_a[n]] % wc == 0 {
+            wr_ok = true;
+            wr_cnt = 0;
+            wr_vi = at_val[n];
+            wr_c = wc;
+            wr_scan(at_c[n]);
+            if wr_ok && wr_cnt <= 40 { gl_wchunk(n, iv, bv, wc, le3); }
+        }
         gl_place(lc2);
         gl_load(1, 30, iv);
         gl_load(2, 30, bv);
