@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.2.27.0 (2026-11-06)
+* **Added (speed):** value numbering now goes through an `if` (a triangle or a diamond whose sides are single blocks): what was computed before the `if` is reused after it, and what a side changed is forgotten (`-irdbg 1125899906842624` turns it off). The tile-map scan: 2.4 -> 2.1 times gcc -O2. Test t615 (compared with a Python reference and with the switch off).
+* **Fixed:** none in this release.
+
 ## 1.2.26.0 (2026-11-06)
 * **Added (speed, games):** a `for` loop over constants with 1 to 8 turns and a small body that leaves the counter alone (`for dy in 0..3`) is written out once for each turn, so the offsets of the body become constants (`-irdbg 1099511627776` turns it off). A tile-map neighbour scan (3 x 3 inside two loops): 127 -> 86 ms (gcc -O2: 35). Test t614 (compared with a Python reference and with the switch off).
 * **Added (bench):** `particles` (array of structs with float fields), `tilemap` (grid scan with `if` in nested loops) and `soa` (struct of arrays) with C twins: the game-like loops show the gaps that the old table did not (`particles` 2.0 times gcc, `tilemap` 2.5 times, `soa` 0.6 times); `gate.sh` lists the first two as known exceptions.

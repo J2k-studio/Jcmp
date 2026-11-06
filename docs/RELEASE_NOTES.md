@@ -1,6 +1,8 @@
-# J2K / Jcmp 1.2.26.0
+# J2K / Jcmp 1.2.27.0
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
+
+**1.2.27.0:** the optimiser keeps what it knows across an `if` (tile-map scan 2.4 -> 2.1 times gcc -O2).
 
 **1.2.26.0:** loops over a few constants (`for dy in 0..3`) are unrolled completely (tile-map scan 127 -> 86 ms); new game-like benchmarks.
 

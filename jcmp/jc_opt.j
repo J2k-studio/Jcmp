@@ -1447,8 +1447,30 @@ i64 vn_reg(i64 r) {
     return v;
 }
 
+// the log of the registers that a region (one side of an if) writes, so that the facts of the code before the if can come back after it
+#define GV_LOG 4096
+i64 gv_lr[GV_LOG];
+i64 gv_lvn[GV_LOG];
+i64 gv_lst[GV_LOG];
+i64 gv_lv[GV_LOG];
+i64 gv_lh[GV_LOG];
+i64 gv_ln;
+i64 gv_on;
+i64 gv_over;
+i64 gv_joins;                   // how many joins of an if kept the facts
+
 void vn_set(i64 r, i64 v) {
     if r < 1 || r >= ir_nv { return; }
+    if gv_on == 1 {
+        if gv_ln < GV_LOG {
+            gv_lr[gv_ln] = r;
+            gv_lvn[gv_ln] = vr_vn[r];
+            gv_lst[gv_ln] = vr_st[r];
+            gv_lv[gv_ln] = v;
+            if v >= 0 { gv_lh[gv_ln] = vn_holder[v]; }
+            gv_ln += 1;
+        } else { gv_over = 1; }
+    }
     if v < 0 {
         vr_st[r] = 0;
         return;
@@ -1801,6 +1823,65 @@ bool vn_emit(i64 b) {
 i64 vn_done[IR_MAXB];
 i64 vn_pc[IR_MAXB];             // the number of predecessors (that the flow can reach)
 
+// global value numbering over an if: the side q (one block, entered from the branch `term` only, ending in a jump) is numbered with the facts of the
+// code before the branch; afterwards what the side wrote is forgotten (the registers it wrote become unknown, the slots it stored get a new version,
+// the values it made cannot be found), so the join block can use everything that was known before the branch
+void gv_side(i64 q, i64 term, i64 trueside) {
+    i64 vf0 = vf_n;
+    if ir_bi[term] == 1 {
+        i64 vq = vn_reg(ir_a[term]);
+        if vq >= 0 && vf_n < 16 {
+            vf_vn[vf_n] = vq;
+            vf_cc[vf_n] = ir_k[term];
+            vf_imm[vf_n] = ir_b[term];
+            vf_t[vf_n] = trueside;
+            vf_n += 1;
+        }
+    }
+    i64 mark = vn_n;
+    gv_ln = 0;
+    gv_over = 0;
+    gv_on = 1;
+    vn_done[q] = 1;
+    vn_block(q, 1);
+    gv_on = 0;
+    if gv_over == 1 {
+        vr_cur += 1;
+    } else {
+        i64 g = gv_ln - 1;
+        while g >= 0 {
+            i64 r = gv_lr[g];
+            vr_st[r] = 0;                          // the register has another value on the way through the side: unknown at the join
+            if gv_lv[g] >= 0 { vn_holder[gv_lv[g]] = gv_lh[g]; }
+            g -= 1;
+        }
+    }
+    i64 i = ir_bs[q];
+    while i < ir_be[q] {
+        if ir_op[i] == IR_STORE {
+            i64 sl = vn_slot(i);
+            if sl >= 0 {
+                if vn_ver_st[sl] != vn_hcur { vn_ver_st[sl] = vn_hcur; vn_ver[sl] = 0; vn_cellvn[sl] = 0 - 1; }
+                vn_ver[sl] += 1;
+            }
+        }
+        i += 1;
+    }
+    i64 v = mark;
+    while v < vn_n {
+        if vn_k[v] != 1000 && vn_k[v] != 1003 { vn_k[v] = 0 - 5; }
+        v += 1;
+    }
+    vf_n = vf0;
+}
+
+// the block q is a side of an if: only the branch leads to it, and it ends in a jump to j
+bool gv_is_side(i64 q, i64 p, i64 j, i64 nb0) {
+    if q < 0 || q >= nb0 || q == p || q == j || vn_pc[q] != 1 || vn_done[q] != 0 || op_po[q] < 0 { return false; }
+    i64 t = ir_be[q] - 1;
+    return t >= ir_bs[q] && ir_op[t] == IR_JMP && ir_t1[t] == j;
+}
+
 void op_walk(i64 kind) {
     op_graph();
     vn_hints();
@@ -1861,10 +1942,41 @@ void op_walk(i64 kind) {
                 if tk == IR_JMP { cand1 = ir_t1[term]; }
                 if tk == IR_BR || tk == IR_FBR { cand1 = ir_t2[term]; cand2 = ir_t1[term]; }
                 i64 which = 0;
-                if cand1 >= 0 && cand1 < nb0 && vn_pc[cand1] == 1 && vn_done[cand1] == 0 && cand1 != cur { nxt = cand1; which = 2; }
+                bool joined = false;
+                if kind == 0 && tk == IR_BR && (ir_opt & 1125899906842624) == 0 && (ir_opt & 256) == 0 && ir_t1[term] != ir_t2[term] {
+                    i64 ga = ir_t1[term];
+                    i64 gb = ir_t2[term];
+                    i64 gj = 0 - 1;
+                    bool ga_side = false;
+                    bool gb_side = false;
+                    if ga >= 0 && ga < nb0 && gb >= 0 && gb < nb0 {
+                        i64 ta2 = ir_be[ga] - 1;
+                        i64 tb2 = ir_be[gb] - 1;
+                        if ta2 >= ir_bs[ga] && tb2 >= ir_bs[gb] && ir_op[ta2] == IR_JMP && ir_op[tb2] == IR_JMP && ir_t1[ta2] == ir_t1[tb2] {
+                            gj = ir_t1[ta2];                         // a diamond
+                            ga_side = gv_is_side(ga, cur, gj, nb0);
+                            gb_side = gv_is_side(gb, cur, gj, nb0);
+                            if !(ga_side && gb_side) { ga_side = false; gb_side = false; }
+                        }
+                        if !ga_side && !gb_side {
+                            // a triangle: one side is the join itself
+                            if gv_is_side(ga, cur, gb, nb0) { gj = gb; ga_side = true; }
+                            else if gv_is_side(gb, cur, ga, nb0) { gj = ga; gb_side = true; }
+                        }
+                    }
+                    if gj >= 0 && gj < nb0 && gj != cur && vn_pc[gj] == 2 && vn_done[gj] == 0 && (ga_side || gb_side) {
+                        if ga_side { gv_side(ga, term, 1); }
+                        if gb_side { gv_side(gb, term, 0); }
+                        gv_joins += 1;
+                        nxt = gj;
+                        joined = true;
+                    }
+                }
+                if joined { }
+                else if cand1 >= 0 && cand1 < nb0 && vn_pc[cand1] == 1 && vn_done[cand1] == 0 && cand1 != cur { nxt = cand1; which = 2; }
                 else if cand2 >= 0 && cand2 < nb0 && vn_pc[cand2] == 1 && vn_done[cand2] == 0 && cand2 != cur && cand1 != cand2 { nxt = cand2; which = 1; }
                 if (ir_opt & 256) != 0 { nxt = 0 - 1; }
-                if nxt >= 0 && tk == IR_BR && ir_bi[term] == 1 {
+                if nxt >= 0 && !joined && tk == IR_BR && ir_bi[term] == 1 {
                     // what the branch tells about its value on the way to nxt
                     i64 vq = vn_reg(ir_a[term]);
                     if vq >= 0 && vf_n < 16 {
