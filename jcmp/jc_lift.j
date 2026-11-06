@@ -1320,12 +1320,53 @@ void lw_wreg(int v) {
 }
 
 // a temporary that is written now gets the next scratch register
+// (the one of the two that does not hold a temporary that is still to be read; none free: lw_ovf, the function stays as it was)
+int lw_cur;                       // the instruction being lowered
+int lw_last[IR_MAXV];             // the last instruction of its block that reads a temporary
+int lw_occ[64];                   // the temporary that sits in the scratch register r (0: none), valid inside one block
+int lw_ovf;
+
 void lw_def(int v) {
     if v >= 64 {
         lw_tmp_i += 1;
-        if ir_vcls[v] == 1 { lw_tmp_reg[v] = 30 + lw_tmp_i % 2; }
-        else if ir_vcls[v] == 2 { }                              // the vector registers were given by vr_run
-        else { lw_tmp_reg[v] = 15 + lw_tmp_i % 2; }
+        if ir_vcls[v] == 2 { return; }                           // the vector registers were given by vr_run
+        int base = 15;
+        if ir_vcls[v] == 1 { base = 30; }
+        // an instruction that writes its result in its last step (one machine instruction) may reuse the register of an operand
+        // whose last read it is; `-irdbg 576460752303423488` switches that off
+        int lim = lw_cur;
+        int opc = ir_op[lw_cur];
+        if (ir_opt & 576460752303423488) == 0 && (opc == IR_ADD || opc == IR_SUB || opc == IR_MUL || opc == IR_SHL || opc == IR_ASHR || opc == IR_LSHR || opc == IR_AND || opc == IR_OR || opc == IR_XOR || opc == IR_COPY) { lim = lw_cur + 1; }
+        int r = base + lw_tmp_i % 2;
+        int o = lw_occ[r];
+        if o != 0 && o != v && lw_last[o] >= lim {
+            r = base + 1 - lw_tmp_i % 2;
+            o = lw_occ[r];
+            if o != 0 && o != v && lw_last[o] >= lim { lw_ovf = 1; }
+        }
+        lw_tmp_reg[v] = r;
+        lw_occ[r] = v;
+    }
+}
+
+// the last reads of the temporaries of the block b
+void lw_scan(int b) {
+    int r = 0;
+    while r < 64 { lw_occ[r] = 0; r += 1; }
+    int k = ir_bs[b];
+    while k < ir_be[b] {
+        int op = ir_op[k];
+        if ir_a[k] >= 64 { lw_last[ir_a[k]] = k; }
+        if ir_uses_b(op) && ir_bi[k] == 0 && ir_b[k] >= 64 { lw_last[ir_b[k]] = k; }
+        if op == IR_CALL || op == IR_CALLIND || op == IR_SYSCALL {
+            int a = 0;
+            while a < ir_ac[k] {
+                if ir_args[ir_as[k] + a] >= 64 { lw_last[ir_args[ir_as[k] + a]] = k; }
+                a += 1;
+            }
+        }
+        if ir_d[k] >= 64 { lw_last[ir_d[k]] = k; }
+        k += 1;
     }
 }
 
@@ -2005,14 +2046,18 @@ bool lw_rot_ok(int b, int h) {
 
 bool lw_dup_test(int h, int b) {
     int k = ir_bs[h];
+    lw_scan(h);
     while k < ir_be[h] {
+        lw_cur = k;
         if !lw_instr(k, b) { return false; }
+        if lw_ovf == 1 { if (ir_opt & 4194304) != 0 { write_err("lw: ovf\n"); } return false; }
         k += 1;
     }
     return true;
 }
 
 bool lw_function() {
+    lw_ovf = 0;
     lw_tmp_i = 0;                // the choice of x15 / x16 must not depend on the functions lowered before (the cache of the back end)
     // the deepest stack cell
     lw_maxq = 0;
@@ -2066,7 +2111,7 @@ bool lw_function() {
     }
     lw_rotn = 0;
     if ir_opt != 0 { op_webs(); }
-    if !vr_run() { return false; }
+    if !vr_run() { if (ir_opt & 4194304) != 0 { write_err("lw: vr_run failed\n"); } return false; }
     lw_layout();
     // the blocks that a jump goes to get a label; the others do not
     b = 0;
@@ -2118,7 +2163,9 @@ bool lw_function() {
             rg_text(":\n");
         }
         int k = ir_bs[b];
+        lw_scan(b);
         while k < ir_be[b] {
+            lw_cur = k;
             if lw_fuse(k, b) {
                 k += 2;
                 continue;
@@ -2128,7 +2175,8 @@ bool lw_function() {
                 k += 1;
                 continue;
             }
-            if !lw_instr(k, b) { return false; }
+            if !lw_instr(k, b) { if (ir_opt & 4194304) != 0 { write_err("lw: instr "); write_err_int(ir_op[k]); write_err("\n"); } return false; }
+            if lw_ovf == 1 { if (ir_opt & 4194304) != 0 { write_err("lw: ovf in block "); write_err_int(b); write_err("\n"); } return false; }
             if ir_op[k] == IR_RET && b != ir_lastb {
                 rg_text("b L");
                 rg_int(epi_label);
@@ -2137,6 +2185,7 @@ bool lw_function() {
             k += 1;
         }
     }
+    if lw_ovf == 1 { return false; }
     if lf_epi_line >= 0 { lw_hint(); }
     // the epilogue
     if lf_epi_line >= 0 {

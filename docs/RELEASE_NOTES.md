@@ -1,6 +1,8 @@
-# J2K / Jcmp 1.2.17.0
+# J2K / Jcmp 1.2.18.0
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
+
+**1.2.18.0:** heap-array matmul as fast as gcc -O2, lifter scratch register fix.
 
 **1.2.17.0:** variable-stride strength reduction and wider array-check hoisting (groundwork, no measured speed change).
 

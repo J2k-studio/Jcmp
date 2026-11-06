@@ -8578,6 +8578,26 @@ int ah_cellidx(int cell) {
     return hi;
 }
 
+// the data pointer loaded at j (register d) is used as the base of an indexed access in the same block: the handle is an array whose
+// null check was dropped earlier (known not to be null), so it is hoisted like a checked one. `-irdbg 288230376151711744` switches this off.
+bool ah_indexed(int b, int j, int d) {
+    if (ir_opt & 288230376151711744) != 0 || d <= 0 { return false; }
+    int e = ir_be[b] - 1;
+    int m = j + 1;
+    while m < e {
+        int op = ir_op[m];
+        if (op == IR_LOAD || op == IR_STORE) && ir_bi[m] == 0 && ir_b[m] == d && ir_a[m] != 30 { return true; }
+        if op == IR_ADD && ir_bi[m] == 0 && (ir_a[m] == d || ir_b[m] == d) && ir_d[m] > 0 {
+            // data + index, and the sum is the address of the next access
+            int n2 = m + 1;
+            while n2 < e && ir_op[n2] == IR_NOP { n2 += 1; }
+            if n2 < e && (ir_op[n2] == IR_LOAD || ir_op[n2] == IR_STORE) && ir_a[n2] == ir_d[m] && ir_a[n2] != 30 { return true; }
+        }
+        m += 1;
+    }
+    return false;
+}
+
 // a block that runs at every turn (spine = 1) decides which handles are hoisted: from its checks, and from the data loads of handles
 // that no check guards any more (the check was dropped because the handle is known not to be null); the other blocks (inside an `if`)
 // only use what the spine gave
@@ -8591,7 +8611,7 @@ void ah_scan(int b, int nch, int spine) {
         if op == IR_LOAD && ir_a[j] != 30 && ah_get(ir_a[j]) >= 0 && ir_k[j] == 16 && ir_w[j] == 8 {
             int cell = ah_get(ir_a[j]);
             int hi = ah_cellidx(cell);
-            if hi == ah_n && spine == 1 && ah_n < AH_MAXH && (ir_opt & 144115188075855872) == 0 && ah_incheck(cell) {
+            if hi == ah_n && spine == 1 && ah_n < AH_MAXH && (ir_opt & 144115188075855872) == 0 && (ah_incheck(cell) || ah_indexed(b, j, d)) {
                 ah_cell[ah_n] = cell;
                 ah_trap[ah_n] = 0 - 1;
                 ah_n += 1;

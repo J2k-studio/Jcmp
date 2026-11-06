@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.18.0 (2026-11-05)
+* **Added (speed):** array handles whose null check was already dropped are hoisted out of counted loops when their data pointer is the base of an indexed access (`-irdbg 288230376151711744` turns it off); a heap-array matmul (`double[]`, n = 300) runs in 46 ms instead of 79 ms, the same as gcc -O2. Test t596.
+* **Added (speed):** a scratch temporary of the lifter may reuse the register of an operand that is read for the last time by the writing instruction (`-irdbg 576460752303423488` turns it off). Before, a block with many temporaries could overflow the two scratch registers, and the lifter then silently kept the unoptimised text of the whole function (this hit `main` of the matmul benchmark).
+* **Fixed:** the lifter gave the scratch registers x15/x16 in strict alternation, so a temporary that lived across two later definitions in a block could be overwritten (not reproduced by a small program; guard test t595). It now picks the register that holds no live temporary, and keeps the original text when both are busy.
+* **Added (bench):** `tools/bench` has `heapmm`, best of 6 runs, a check of the exit code against the C program, and a history file.
+
 ## 1.2.17.0 (2026-11-05)
 * **Added (speed):** strength reduction accepts a loop-invariant variable stride (`b[k*n+j]`, `(i*n+k)*8 + data`); the hoist of array checks also covers loops with an `if` inside and handles whose null check was already dropped (only if the handle is null-checked somewhere in the function). Switches: `-irdbg 2305843009213693952` (variable stride), `72057594037927936` (straight chains only), `144115188075855872` (no unchecked case). Tests t593, t594. No measurable speed change on the benchmarks (the pointer cells stay in memory under register pressure); this is groundwork.
 * **Fixed:** none in this release.
