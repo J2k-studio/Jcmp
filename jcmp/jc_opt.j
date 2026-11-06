@@ -6045,6 +6045,7 @@ bool vz_scan(int q, int islot, int incl, int inch, bool emit) {
                         continue;
                     }
                     if s == islot { vz_kind[d] = VZ_I; }
+                    else if d >= 32 && d < 64 && (ir_opt & 562949953421312) == 0 { vz_kind[d] = VZ_DINV; vz_dslot[d] = s; }      // a double loaded from its cell (-irdbg 2251799813685248: not)
                     else { vz_kind[d] = VZ_INV; vz_base[d] = 0; vz_off[d] = 0; vz_lslot[d] = s; }
                     if emit && vz_kind[d] != VZ_I { vz_clone(j2); }
                 } else if vz_kind[ir_a[j2]] == VZ_ADDR {

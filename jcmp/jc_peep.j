@@ -11,6 +11,26 @@
 
 char peep_buf[8388608];
 int peep_len;
+int peep_next;               // the index in out_buf of the line after the one that was just copied (for the rules that look ahead)
+
+// is x16 not mentioned in the next three lines of out_buf? (a label or a branch ends the look: x16 is a scratch inside a statement)
+bool peep_x16_quiet() {
+    int p = peep_next;
+    int k = 0;
+    while k < 3 && p < out_len {
+        int q = p;
+        while q < out_len && out_buf[q] != 10 { q += 1; }
+        if out_buf[q - 1] == ':' { return true; }
+        int r = p;
+        while r + 2 < q {
+            if out_buf[r] == 'x' && out_buf[r + 1] == '1' && out_buf[r + 2] == '6' { return false; }
+            r += 1;
+        }
+        p = q + 1;
+        k += 1;
+    }
+    return true;
+}
 
 // the start of the line that is `back` lines before the last one in peep_buf (0 = the last), or -1
 int peep_start(int back) {
@@ -114,6 +134,30 @@ int peep_put_number(int n, int at) {
     return at;
 }
 
+// may the line after the one just copied read x0? (a label, a jump or a line without x0 does not)
+bool peep_next_free0() {
+    int p = peep_next;
+    if p >= out_len { return true; }
+    int q = p;
+    while q < out_len && out_buf[q] != 10 { q += 1; }
+    if q > p && out_buf[q - 1] == ':' { return true; }
+    if out_buf[p] == 'b' && out_buf[p + 1] == ' ' { return true; }
+    int r = p;
+    while r + 1 < q {
+        if out_buf[r] == 'x' && out_buf[r + 1] == '0' { return false; }
+        r += 1;
+    }
+    return true;
+}
+
+// is there a register name x19 .. x25 at p?
+bool peep_isreg(int p) {
+    int a = peep_buf[p];
+    int b = peep_buf[p + 1];
+    if peep_buf[p + 2] >= '0' && peep_buf[p + 2] <= '9' { return false; }
+    return (a == '1' && b == '9') || (a == '2' && b >= '0' && b <= '5');
+}
+
 // tries every rule on the end of peep_buf; true if something was changed
 bool peep_try() {
     int l0 = peep_start(0);
@@ -146,6 +190,105 @@ bool peep_try() {
             }
         }
         return false;
+    }
+    // OP x16, ... / mov xK, x16  (K = 19..25; x16 is a scratch that nothing reads after the move)  ->  OP xK, ...   (-irdbg 18014398509481984: off; the rule after it: 2251799813685248)
+    if (ir_opt & 18014398509481984) == 0 && peep_has(l0, "mov x") && peep_isreg(l0 + 5) && peep_has(l0 + 7, ", x16\n") && peep_x16_quiet() {
+        int l1 = peep_start(1);
+        if l1 >= 0 && (peep_has(l1, "add x16, ") || peep_has(l1, "sub x16, ") || peep_has(l1, "mov x16, ")) {
+            int e1 = peep_end(l1);
+            bool uses = false;
+            int q = l1 + 9;
+            while q + 2 < e1 {
+                if peep_buf[q] == 'x' && peep_buf[q + 1] == '1' && peep_buf[q + 2] == '6' { uses = true; }
+                q += 1;
+            }
+            if !uses {
+                peep_buf[l1 + 5] = peep_buf[l0 + 5];
+                peep_buf[l1 + 6] = peep_buf[l0 + 6];
+                peep_len = l0;
+                return true;
+            }
+        }
+    }
+    // add x0, xK, #c / mov xK, x0 / (add/ldr/mov lines that do not touch x0 or xK) / cmp x0, A / b.cc L
+    //   ->  add xK, xK, #c / (those lines) / cmp xK, A / b.cc L      (x0 is a temporary of the statement; nobody reads it after the compare)
+    if (ir_opt & 2251799813685248) == 0 && peep_has(l0, "b.") && peep_next_free0() {
+        int l1 = peep_start(1);
+        if l1 >= 0 && peep_has(l1, "cmp x0, ") {
+            int e1 = peep_end(l1);
+            bool uses0 = false;
+            int q = l1 + 8;
+            while q + 1 < e1 {
+                if peep_buf[q] == 'x' && peep_buf[q + 1] == '0' { uses0 = true; }
+                q += 1;
+            }
+            int back = 2;
+            int mv = -1;
+            bool ok = !uses0;
+            while ok && mv < 0 && back < 6 {
+                int lb = peep_start(back);
+                if lb < 0 { ok = false; }
+                else if peep_has(lb, "mov x") && peep_isreg(lb + 5) && peep_has(lb + 7, ", x0\n") { mv = lb; }
+                else if peep_has(lb, "add x") || peep_has(lb, "ldr x") || peep_has(lb, "mov x") || peep_has(lb, "sub x") {
+                    int eb = peep_end(lb);
+                    int kk = lb;
+                    while kk + 1 < eb {
+                        if peep_buf[kk] == 'x' && peep_buf[kk + 1] == '0' { ok = false; }
+                        kk += 1;
+                    }
+                    back += 1;
+                } else { ok = false; }
+            }
+            if ok && mv >= 0 {
+                int la = peep_start(back + 1);
+                int d1 = peep_buf[mv + 5];
+                int d2 = peep_buf[mv + 6];
+                if la >= 0 && peep_has(la, "add x0, x") && peep_buf[la + 9] == d1 && peep_buf[la + 10] == d2 && peep_buf[la + 11] == ',' && peep_buf[la + 13] == '#' {
+                    // the lines between must not mention xK
+                    bool free = true;
+                    int lb = peep_start(back - 1);
+                    int bb = back - 1;
+                    while bb >= 2 {
+                        lb = peep_start(bb);
+                        int eb = peep_end(lb);
+                        int kk = lb;
+                        while kk + 2 < eb {
+                            if peep_buf[kk] == 'x' && peep_buf[kk + 1] == d1 && peep_buf[kk + 2] == d2 { free = false; }
+                            kk += 1;
+                        }
+                        bb -= 1;
+                    }
+                    if free && peep_end(mv) + 1 + 0 > 0 {
+                        // build the new tail in t[]
+                        char t[640];
+                        int tn = 0;
+                        int ea = peep_end(la);
+                        // add xK, xK, #c
+                        str_copy(@t + tn, "add x", 8); tn += 5;
+                        t[tn] = d1; t[tn + 1] = d2; tn += 2;
+                        str_copy(@t + tn, ", x", 8); tn += 3;
+                        t[tn] = d1; t[tn + 1] = d2; tn += 2;
+                        int r = la + 11;
+                        while r <= ea { t[tn] = peep_buf[r]; tn += 1; r += 1; }
+                        // the lines between the mov and the cmp
+                        int emv = peep_end(mv);
+                        r = emv + 1;
+                        while r < l1 { t[tn] = peep_buf[r]; tn += 1; r += 1; }
+                        // cmp xK, A
+                        str_copy(@t + tn, "cmp x", 8); tn += 5;
+                        t[tn] = d1; t[tn + 1] = d2; tn += 2;
+                        r = l1 + 6;
+                        while r < peep_len { t[tn] = peep_buf[r]; tn += 1; r += 1; }
+                        if tn < 600 {
+                            int w = 0;
+                            while w < tn { peep_buf[la + w] = t[w]; w += 1; }
+                            peep_len = la + tn;
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
     }
     // str xR, [xB, #N] / ldr xR, [xB, #N]  : the load goes (the base is the frame, the globals or the stack, never xR itself)
     if peep_has(l0, "ldr x") {
@@ -488,6 +631,7 @@ void peep_run() {
             k += 1;
         }
         i = j + 1;
+        peep_next = i;
         int guard = 0;
         while peep_try() && guard < 16 { guard += 1; }
     }

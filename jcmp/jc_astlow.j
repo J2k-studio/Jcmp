@@ -5298,7 +5298,7 @@ void gl_slots(int n) {
         gl_hint_add(gl_nslot);
         gl_nslot += 8;
         gl_wrc[n] = 0;
-        if (ir_opt & 2305843009213693952) == 0 && at_b[n] != 0 && at_kind[at_a[n]] == AK_NUM && at_val[at_a[n]] >= 0 {
+        if (ir_opt & 140737488355328) == 0 && at_b[n] != 0 && at_kind[at_a[n]] == AK_NUM && at_val[at_a[n]] >= 0 {
             wr_c = 0;
             wr_vi = at_val[n];
             wr_ok = true;

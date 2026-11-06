@@ -1,7 +1,13 @@
 # Changelog
 
+## 1.2.22.0 (2026-11-06)
+* **Fixed (speed regression of 1.2.19.0 - 1.2.21.0):** the `arrays` benchmark took 609 ms instead of 124. After the repeated clean-up a `double` kept in a stack cell is loaded as a float-typed value, and the vectoriser gave up on it (it did not count as loop-invariant); now it does (`-irdbg 562949953421312` turns it off). Test t605.
+* **Fixed:** the debug switch of the wrapping counter shared a bit with the variable-stride pass; it has its own now (`-irdbg 140737488355328`).
+* **Added (speed):** two peephole rules: `OP x16,... / mov xK,x16` becomes `OP xK,...`, and `add x0,xK,#c / mov xK,x0 / ... / cmp x0,A` becomes `add xK,xK,#c / ... / cmp xK,A` (`-irdbg 18014398509481984`, `-irdbg 2251799813685248`). Test t604.
+* **Added (bench):** `tools/bench/gate.sh` fails when a program is slower than 1.5 times gcc -O2 (arrays, loop, hashmap are listed exceptions); all 16 programs of `run.sh` are within 1.5 times on this build.
+
 ## 1.2.21.0 (2026-11-06)
-* **Added (speed):** `i % c` in a counted `for` loop (constant start >= 0, 2 <= c <= 4095, the body leaves `i` alone) keeps the remainder as a wrapping counter (`-irdbg 2305843009213693952` turns it off); the `loop` benchmark runs in 270 ms instead of 759 (gcc -O2: 190). Test t602.
+* **Added (speed):** `i % c` in a counted `for` loop (constant start >= 0, 2 <= c <= 4095, the body leaves `i` alone) keeps the remainder as a wrapping counter (`-irdbg 140737488355328` turns it off, bit corrected in 1.2.22.0); the `loop` benchmark runs in 270 ms instead of 759 (gcc -O2: 190). Test t602.
 * **Added (speed):** a call reads only the argument registers of its callee in the lifter (`__flush` none, a known function its parameter count; `-irdbg 4611686018427387904` turns it off). Dead argument set-up and the stores of a dead struct temporary no longer stay alive; the game benchmark runs in 56 ms instead of 64 (gcc -O2: 44). Test t603.
 * **Fixed:** none in this release.
 
