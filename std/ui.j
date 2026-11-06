@@ -27,22 +27,22 @@ struct UiFx {
         return v;
     }
     // the colour between a and b (t = 0 is a, 1 is b), every channel including the alpha
-    static int mix(int a, int b, double t) {
+    static i64 mix(i64 a, i64 b, double t) {
         double k = UiFx::clamp01(t);
-        int aa = (int)((double)((a >> 24) & 255) * (1.0 - k) + (double)((b >> 24) & 255) * k + 0.5);
-        int rr = (int)((double)((a >> 16) & 255) * (1.0 - k) + (double)((b >> 16) & 255) * k + 0.5);
-        int gg = (int)((double)((a >> 8) & 255) * (1.0 - k) + (double)((b >> 8) & 255) * k + 0.5);
-        int bb = (int)((double)(a & 255) * (1.0 - k) + (double)(b & 255) * k + 0.5);
+        i64 aa = (i64)((double)((a >> 24) & 255) * (1.0 - k) + (double)((b >> 24) & 255) * k + 0.5);
+        i64 rr = (i64)((double)((a >> 16) & 255) * (1.0 - k) + (double)((b >> 16) & 255) * k + 0.5);
+        i64 gg = (i64)((double)((a >> 8) & 255) * (1.0 - k) + (double)((b >> 8) & 255) * k + 0.5);
+        i64 bb = (i64)((double)(a & 255) * (1.0 - k) + (double)(b & 255) * k + 0.5);
         return ((aa & 255) << 24) | ((rr & 255) << 16) | ((gg & 255) << 8) | (bb & 255);
     }
     // the same colour with the alpha a (0..1)
-    static int alpha(int col, double a) {
-        int al = (int)(UiFx::clamp01(a) * 255.0 + 0.5);
+    static i64 alpha(i64 col, double a) {
+        i64 al = (i64)(UiFx::clamp01(a) * 255.0 + 0.5);
         return (al << 24) | (col & 0xffffff);
     }
     // a rounded rectangle from the top colour to the bottom colour, drawn as rows (a row of the corner is 1 dot high, a flat part `step` dots);
     // hfrac < 1 draws only the upper part of it (for a gloss)
-    static void round_rect(Canvas2d^ c, double x, double y, double w, double h, double r, int top, int bot, double hfrac, double step) {
+    static void round_rect(Canvas2d^ c, double x, double y, double w, double h, double r, i64 top, i64 bot, double hfrac, double step) {
         if r > w / 2.0 { r = w / 2.0; }
         if r > h / 2.0 { r = h / 2.0; }
         double hh = h * hfrac;
@@ -73,11 +73,11 @@ struct UiFx {
             yy += rh;
         }
     }
-    static void fill(Canvas2d^ c, double x, double y, double w, double h, double r, int col) {
+    static void fill(Canvas2d^ c, double x, double y, double w, double h, double r, i64 col) {
         UiFx::round_rect(c, x, y, w, h, r, col, col, 1.0, 4.0);
     }
     // a soft round light: many circles on top of each other, each with a little alpha; the centre gets `strength` (0..1)
-    static void glow(Canvas2d^ c, double cx, double cy, double r, int col, double strength, int layers) {
+    static void glow(Canvas2d^ c, double cx, double cy, double r, i64 col, double strength, i64 layers) {
         double a = strength * 1.3 / (double)layers;
         for i in 0..layers {
             double rr = r * (double)(i + 1) / (double)layers;
@@ -85,7 +85,7 @@ struct UiFx {
         }
     }
     // a soft shadow under a rounded box: bigger and bigger boxes with a little alpha
-    static void shadow(Canvas2d^ c, double x, double y, double w, double h, double r, int col, double spread, double dy, int layers) {
+    static void shadow(Canvas2d^ c, double x, double y, double w, double h, double r, i64 col, double spread, double dy, i64 layers) {
         double a = 0.5 / (double)layers;
         for i in 0..layers {
             double g = spread * (double)(layers - i) / (double)layers;
@@ -101,43 +101,43 @@ struct UiScale impl Canvas2d {
     void init(self) { self.k = 1.0; }
     void begin(self) { }
     void end(self) { }
-    void clear(self, int argb) { self.c^.clear(argb); }
-    void rect(self, double x, double y, double w, double h, int argb) { self.c^.rect(x * self.k, y * self.k, w * self.k, h * self.k, argb); }
-    void tri(self, double x0, double y0, double x1, double y1, double x2, double y2, int argb) {
+    void clear(self, i64 argb) { self.c^.clear(argb); }
+    void rect(self, double x, double y, double w, double h, i64 argb) { self.c^.rect(x * self.k, y * self.k, w * self.k, h * self.k, argb); }
+    void tri(self, double x0, double y0, double x1, double y1, double x2, double y2, i64 argb) {
         self.c^.tri(x0 * self.k, y0 * self.k, x1 * self.k, y1 * self.k, x2 * self.k, y2 * self.k, argb);
     }
-    void line(self, double x0, double y0, double x1, double y1, double width, int argb) {
+    void line(self, double x0, double y0, double x1, double y1, double width, i64 argb) {
         self.c^.line(x0 * self.k, y0 * self.k, x1 * self.k, y1 * self.k, width * self.k, argb);
     }
-    void circle(self, double cx, double cy, double r, int argb) { self.c^.circle(cx * self.k, cy * self.k, r * self.k, argb); }
+    void circle(self, double cx, double cy, double r, i64 argb) { self.c^.circle(cx * self.k, cy * self.k, r * self.k, argb); }
     bool has_instancing(self) { return self.c^.has_instancing(); }
     bool has_shaders(self) { return self.c^.has_shaders(); }
-    int load(self, String path) { return self.c^.load(path); }
-    void image(self, int pic, double x, double y, double w, double h, int tint) { self.c^.image(pic, x * self.k, y * self.k, w * self.k, h * self.k, tint); }
+    i64 load(self, String path) { return self.c^.load(path); }
+    void image(self, i64 pic, double x, double y, double w, double h, i64 tint) { self.c^.image(pic, x * self.k, y * self.k, w * self.k, h * self.k, tint); }
 }
 
 struct UiTheme {
-    int bg;                    // the top of the background
-    int bg2;                   // the bottom of the background
-    int panel;                 // the top of a box (a switch, a slider, a list row)
-    int panel2;                // the bottom of a box
-    int border;                // the thin line round a box
-    int accent;                // the main colour (buttons, a switch that is on, a filled bar)
-    int hot;                   // the lighter colour of the same family (a pressed button, the end of a bar)
-    int text;
-    int dim;                   // quiet text and the track of a bar
-    int glow;                  // the colour of the lights
-    int shadow;                // the colour of the shadows
-    int blob1;                 // the three lights of the background
-    int blob2;
-    int blob3;
+    i64 bg;                    // the top of the background
+    i64 bg2;                   // the bottom of the background
+    i64 panel;                 // the top of a box (a switch, a slider, a list row)
+    i64 panel2;                // the bottom of a box
+    i64 border;                // the thin line round a box
+    i64 accent;                // the main colour (buttons, a switch that is on, a filled bar)
+    i64 hot;                   // the lighter colour of the same family (a pressed button, the end of a bar)
+    i64 text;
+    i64 dim;                   // quiet text and the track of a bar
+    i64 glow;                  // the colour of the lights
+    i64 shadow;                // the colour of the shadows
+    i64 blob1;                 // the three lights of the background
+    i64 blob2;
+    i64 blob3;
     double pad;                // the space at the edges
     double gap;                // the space between widgets
     double row_h;              // the height of a button or a switch
     double scale;              // the size of a dot of the letters
     double radius;             // the roundness of the corners
-    int quality;               // 2: all effects, 1: fewer layers, 0: flat
-    int bgstyle;               // 0 flat, 1 gradient, 2 gradient with moving light
+    i64 quality;               // 2: all effects, 1: fewer layers, 0: flat
+    i64 bgstyle;               // 0 flat, 1 gradient, 2 gradient with moving light
 }
 
 struct Ui {
@@ -150,21 +150,21 @@ struct Ui {
     double cw;
     double left;               // the left edge and the width of the whole column
     double full;
-    int ncols;                 // 0: not in a row of columns
-    int col;
+    i64 ncols;                 // 0: not in a row of columns
+    i64 col;
     double row_top;
     double row_max;
-    int id;                    // the number of the widget being made in this frame
-    int held;                  // the widget that the finger went down on (0: none)
+    i64 id;                    // the number of the widget being made in this frame
+    i64 held;                  // the widget that the finger went down on (0: none)
     bool down;                 // events since the last frame
     bool up;
     bool moving;
-    int tx;
-    int ty;
-    int state;                 // 1: the finger is down now
+    i64 tx;
+    i64 ty;
+    i64 state;                 // 1: the finger is down now
     double t;                  // seconds since start (the animations)
     double dt;                 // seconds since the last frame
-    int last_ms;
+    i64 last_ms;
     bool auto_time;            // true: the clock is the real clock; set_time() makes it manual (tests, pictures)
     double hov[64];            // 0..1 per widget: how much it is lit (a finger on it), eased
     double pos[64];            // 0..1 per widget: a switch that moves
@@ -208,7 +208,7 @@ struct Ui {
     }
 
     // the colours: 0 midnight, 1 aurora, 2 sunset, 3 light, 4 neon
-    void theme(self, int n) {
+    void theme(self, i64 n) {
         if n == 1 {
             self.th.bg = 0xff06121a; self.th.bg2 = 0xff0d2a30; self.th.panel = 0xff16343c; self.th.panel2 = 0xff102a31; self.th.border = 0x3366ffe0;
             self.th.accent = 0xff1fcfa5; self.th.hot = 0xff7dffe3; self.th.text = 0xffeafffa; self.th.dim = 0xff7fa8a8;
@@ -244,9 +244,9 @@ struct Ui {
     }
 
     // call from game_touch: 1 down, 2 move, 3 up
-    void touch(self, int action, int x, int y) {
-        self.tx = (int)((double)x / self.k);
-        self.ty = (int)((double)y / self.k);
+    void touch(self, i64 action, i64 x, i64 y) {
+        self.tx = (i64)((double)x / self.k);
+        self.ty = (i64)((double)y / self.k);
         if action == 1 { self.down = true; self.state = 1; }
         if action == 2 { self.moving = true; }
         if action == 3 { self.up = true; self.state = 0; }
@@ -271,7 +271,7 @@ struct Ui {
             if uifx_row > 1.0 { uifx_row = 1.0; }
         }
         if self.auto_time {
-            int now = Time::now_ms();
+            i64 now = Time::now_ms();
             if self.last_ms != 0 { self.dt = (double)(now - self.last_ms) / 1000.0; }
             if self.dt > 0.1 { self.dt = 0.1; }
             if self.dt < 0.0 { self.dt = 0.0; }
@@ -300,13 +300,13 @@ struct Ui {
             cv^.rect(0.0, 0.0, self.w, self.h, self.th.bg);
             return;
         }
-        int n = 32;
+        i64 n = 32;
         double sh = self.h / (double)n;
         for i in 0..n {
             cv^.rect(0.0, (double)i * sh, self.w, sh + 1.0, UiFx::mix(self.th.bg, self.th.bg2, ((double)i + 0.5) / (double)n));
         }
         if self.th.bgstyle >= 2 {
-            int layers = 10;
+            i64 layers = 10;
             if self.th.quality >= 2 { layers = 18; }
             double s = self.w;
             if self.h < s { s = self.h; }
@@ -356,7 +356,7 @@ struct Ui {
         if self.fnt != null { return self.fnt^.text_height(self.fpx * self.k) / self.k; }
         return 5.0 * self.th.scale;
     }
-    void text(self, double x, double y, String s, int color) {
+    void text(self, double x, double y, String s, i64 color) {
         if self.fnt != null { self.fnt^.text_draw(self.real, x * self.k, y * self.k, s, self.fpx * self.k, color); return; }
         canvas_text(self.c, x, y, s, self.th.scale, color);
     }
@@ -370,7 +370,7 @@ struct Ui {
             self.y += hh + self.th.gap;
         }
     }
-    void cols(self, int n) {
+    void cols(self, i64 n) {
         self.ncols = n;
         self.col = 0;
         self.row_top = self.y;
@@ -387,10 +387,10 @@ struct Ui {
     void spacer(self, double hh) { self.y += hh; }
 
     // the eased 0..1 value of a widget that is lit while the finger is on it
-    double lit(self, int wid, bool on) {
+    double lit(self, i64 wid, bool on) {
         double target = 0.0;
         if on { target = 1.0; }
-        int i = wid & 63;
+        i64 i = wid & 63;
         self.hov[i] += (target - self.hov[i]) * UiFx::clamp01(self.dt * 16.0);
         return self.hov[i];
     }
@@ -400,7 +400,7 @@ struct Ui {
         Canvas2d^ cv = self.c;
         double r = self.th.radius;
         if self.th.quality >= 1 {
-            int layers = 3;
+            i64 layers = 3;
             if self.th.quality >= 2 { layers = 5; }
             UiFx::shadow(cv, bx, by, bw, bh, r, self.th.shadow, 10.0 + 6.0 * lift, 5.0, layers);
         }
@@ -447,12 +447,12 @@ struct Ui {
         if self.th.quality >= 1 {
             // a halo that grows with the light on the button
             UiFx::glow(cv, self.x + self.cw / 2.0, by + bh / 2.0 + off, self.cw * 0.5 + 18.0, self.th.glow, 0.18 + 0.22 * a, 5);
-            int layers = 3;
+            i64 layers = 3;
             if self.th.quality >= 2 { layers = 5; }
             UiFx::shadow(cv, self.x, by + off, self.cw, bh, r, self.th.shadow, 12.0 - 4.0 * a, 7.0, layers);
         }
-        int top = UiFx::mix(self.th.hot, self.th.accent, 0.35 - 0.3 * a);
-        int bot = UiFx::mix(self.th.accent, self.th.bg, 0.3);
+        i64 top = UiFx::mix(self.th.hot, self.th.accent, 0.35 - 0.3 * a);
+        i64 bot = UiFx::mix(self.th.accent, self.th.bg, 0.3);
         UiFx::round_rect(cv, self.x, by + off, self.cw, bh, r, top, bot, 1.0, 3.0);
         UiFx::round_rect(cv, self.x + 2.0, by + off + 2.0, self.cw - 4.0, bh * 0.5, r - 2.0, 0x38ffffff, 0x00ffffff, 1.0, 2.0);     // the gloss
         double tw = self.text_w(s);
@@ -469,7 +469,7 @@ struct Ui {
         if self.down && in_box { self.held = self.id; }
         bool changed = self.up && self.held == self.id && in_box;
         if changed { v^ = !v^; }
-        int i = self.id & 63;
+        i64 i = self.id & 63;
         double target = 0.0;
         if v^ { target = 1.0; }
         self.pos[i] += (target - self.pos[i]) * UiFx::clamp01(self.dt * 12.0);
@@ -481,7 +481,7 @@ struct Ui {
         double sh = 44.0;
         double sx = self.x + self.cw - sw - 20.0;
         double sy = by + (bh - sh) / 2.0;
-        int off = UiFx::mix(self.th.dim, self.th.bg, 0.55);
+        i64 off = UiFx::mix(self.th.dim, self.th.bg, 0.55);
         UiFx::round_rect(self.c, sx, sy, sw, sh, sh / 2.0, UiFx::mix(off, self.th.hot, k * 0.8), UiFx::mix(off, self.th.accent, k), 1.0, 2.0);
         double kx = sx + sh / 2.0 + k * (sw - sh);
         if self.th.quality >= 1 && k > 0.02 { UiFx::glow(self.c, kx, sy + sh / 2.0, 34.0, self.th.glow, 0.55 * k, 5); }
@@ -542,14 +542,14 @@ struct Ui {
     }
     // a row of tabs (names are joined with | in one text, for example "Home|Search|Me") with a pill that slides to the chosen one, stretching a little
     // while it moves; a tap on a tab sets *sel; true when it changed
-    bool tabs(self, String names, int^ sel) {
+    bool tabs(self, String names, i64^ sel) {
         self.id += 1;
-        int n = 1;
+        i64 n = 1;
         for i in 0..names.len { if names[i] == '|' { n += 1; } }
         double bh = self.th.row_h - 8.0;
         double tw = self.cw / (double)n;
         bool changed = false;
-        int slot = self.id & 63;
+        i64 slot = self.id & 63;
         // the pill: its place (in tabs, 0 .. n - 1) follows the chosen tab with an ease
         if self.pos[slot] > (double)(n - 1) { self.pos[slot] = (double)(n - 1); }
         double want = (double)sel^;
@@ -565,8 +565,8 @@ struct Ui {
         if self.th.quality >= 1 { UiFx::glow(self.c, px + pw / 2.0, self.y + bh / 2.0, pw * 0.75, self.th.glow, 0.28, 5); }
         UiFx::round_rect(self.c, px, self.y + 6.0, pw, bh - 12.0, (bh - 12.0) / 2.0, self.th.hot, self.th.accent, 1.0, 3.0);
         UiFx::round_rect(self.c, px + 2.0, self.y + 8.0, pw - 4.0, (bh - 12.0) * 0.5, (bh - 16.0) / 2.0, 0x38ffffff, 0x00ffffff, 1.0, 2.0);
-        int k = 0;
-        int start = 0;
+        i64 k = 0;
+        i64 start = 0;
         for i in 0..names.len + 1 {
             if i == names.len || names[i] == '|' {
                 String one = names.slice(start, i);

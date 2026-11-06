@@ -25,10 +25,10 @@ struct cplx {
     double arg(self) { return Math::atan2(self.im, self.re); }
     cplx exp(self) { return cplx::from_polar(Math::exp(self.re), self.im); }
     // the whole power n >= 0
-    cplx powi(self, int n) {
+    cplx powi(self, i64 n) {
         cplx r = cplx::make(1.0, 0.0);
         cplx b = self^;
-        int k = n;
+        i64 k = n;
         while k > 0 {
             if k % 2 == 1 { r = r * b; }
             b = b * b;

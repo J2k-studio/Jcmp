@@ -6,20 +6,20 @@ struct Toml {
     // the value of the key as it is written (a quoted text without its quotes), or None
     static Option<String> get(String text, String key) {
         String section = "";
-        int pos = 0;
+        i64 pos = 0;
         while pos <= text.len {
-            int end = pos;
+            i64 end = pos;
             while end < text.len && text[end] != 10 { end += 1; }
             String line = text.slice(pos, end);
             pos = end + 1;
             String t = line.trim();
             if t.len == 0 || t[0] == '#' { continue; }
             if t[0] == '[' {
-                int close = t.find("]");
+                i64 close = t.find("]");
                 if close > 1 { section = t.slice(1, close).trim(); }
                 continue;
             }
-            int eq = t.find("=");
+            i64 eq = t.find("=");
             if eq < 1 { continue; }
             String k = t.slice(0, eq).trim();
             String full = k;
@@ -28,7 +28,7 @@ struct Toml {
             String v = t.slice(eq + 1, t.len).trim();
             if v.len >= 2 && v[0] == '"' {
                 String r = "";
-                int i = 1;
+                i64 i = 1;
                 while i < v.len && v[i] != '"' {
                     if v[i] == '\\' && i + 1 < v.len {
                         i += 1;
@@ -43,35 +43,35 @@ struct Toml {
                 return Option<String>::Some(r);
             }
             // a value without quotes ends at a comment
-            int hash = v.find("#");
+            i64 hash = v.find("#");
             if hash >= 0 { v = v.slice(0, hash).trim(); }
             return Option<String>::Some(v);
         }
         return Option<String>::None;
     }
-    static Option<int> get_int(String text, String key) {
+    static Option<i64> get_int(String text, String key) {
         Option<String> v = Toml::get(text, key);
-        if v.is_none() { return Option<int>::None; }
+        if v.is_none() { return Option<i64>::None; }
         String s = v.unwrap();
-        if s.len == 0 { return Option<int>::None; }
-        int i = 0;
-        int sign = 1;
+        if s.len == 0 { return Option<i64>::None; }
+        i64 i = 0;
+        i64 sign = 1;
         if s[0] == '-' {
             sign = -1;
             i = 1;
         }
-        if i >= s.len { return Option<int>::None; }
-        int n = 0;
+        if i >= s.len { return Option<i64>::None; }
+        i64 n = 0;
         while i < s.len {
             if s[i] == '_' {
                 i += 1;
                 continue;
             }
-            if s[i] < '0' || s[i] > '9' { return Option<int>::None; }
+            if s[i] < '0' || s[i] > '9' { return Option<i64>::None; }
             n = n * 10 + (s[i] - '0');
             i += 1;
         }
-        return Option<int>::Some(n * sign);
+        return Option<i64>::Some(n * sign);
     }
     static Option<bool> get_bool(String text, String key) {
         Option<String> v = Toml::get(text, key);
@@ -86,7 +86,7 @@ struct Toml {
         if v.is_none() { return Option<double>::None; }
         String s = v.unwrap();
         if s.len == 0 { return Option<double>::None; }
-        int i = 0;
+        i64 i = 0;
         double sign = 1.0;
         if s[0] == '-' {
             sign = -1.0;
@@ -134,7 +134,7 @@ struct __Data {
         }
         return fallback;
     }
-    static Option<int> toml_get_int(String text, String key) { return Toml::get_int(text, key); }
+    static Option<i64> toml_get_int(String text, String key) { return Toml::get_int(text, key); }
     static Option<bool> toml_get_bool(String text, String key) { return Toml::get_bool(text, key); }
     static Option<double> toml_get_double(String text, String key) { return Toml::get_double(text, key); }
 }

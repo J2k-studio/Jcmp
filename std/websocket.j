@@ -10,25 +10,25 @@
 #import <net>
 
 struct WsMessage {
-    int kind;                          // 1 text, 2 binary, 8 the connection was closed
+    i64 kind;                          // 1 text, 2 binary, 8 the connection was closed
     String text;                       // the bytes of the message
 }
 
 struct WebSocket {
-    static WsMessage msg(int kind, String text) {
+    static WsMessage msg(i64 kind, String text) {
         WsMessage m;
         m.kind = kind;
         m.text = text + "";
         return m;
     }
 
-    int secure;
-    int h;
+    i64 secure;
+    i64 h;
     bool open;
     String buf;                        // bytes read but not used yet
 
     // more bytes in buf until it has n; false when the connection is gone
-    bool need(self, int n) {
+    bool need(self, i64 n) {
         while self.buf.len < n {
             String piece = "";
             switch Net::http_chan_recv(self.secure, self.h, 8192) {
@@ -42,11 +42,11 @@ struct WebSocket {
     }
 
     // one frame: opcode 1 text, 2 binary, 8 close, 9 ping, 10 pong; the bytes are masked as a client must
-    bool send_frame(self, int op, String data) {
+    bool send_frame(self, i64 op, String data) {
         if !self.open { return false; }
         String f = "";
         f.push((char)(128 + op));
-        int n = data.len;
+        i64 n = data.len;
         if n < 126 { f.push((char)(128 + n)); }
         else if n < 65536 { f.push((char)(128 + 126)); f.push((char)((n >> 8) & 255)); f.push((char)(n & 255)); }
         else {
@@ -70,15 +70,15 @@ struct WebSocket {
     // the next message; ping is answered, pong is skipped; a close frame (or a lost connection) gives kind 8
     WsMessage recv(self) {
         String msg = "";
-        int kind = 0;
+        i64 kind = 0;
         while true {
             if !self.need(2) { return WebSocket::msg(8, "connection lost"); }
-            int b0 = self.buf[0] & 255;
-            int b1 = self.buf[1] & 255;
-            int op = b0 & 15;
+            i64 b0 = self.buf[0] & 255;
+            i64 b1 = self.buf[1] & 255;
+            i64 op = b0 & 15;
             bool fin = (b0 & 128) != 0;
-            int len = b1 & 127;
-            int p = 2;
+            i64 len = b1 & 127;
+            i64 p = 2;
             if len == 126 {
                 if !self.need(4) { return WebSocket::msg(8, "connection lost"); }
                 len = ((self.buf[2] & 255) << 8) | (self.buf[3] & 255);
@@ -109,29 +109,29 @@ struct WebSocket {
     }
 
     // the file number under the connection (for a TLS connection: the socket below it)
-    int fd(self) {
+    i64 fd(self) {
         if self.secure == 0 { return self.h; }
         return Crypto::tls_geti((char^)self.h, 0);
     }
 
     // like recv, but waits at most ms milliseconds for something to arrive: kind 0 and text "" when nothing came (the connection stays open)
-    WsMessage recv_wait(self, int ms) {
+    WsMessage recv_wait(self, i64 ms) {
         if self.open && self.buf.len < 2 {
             char pfd[8];
             char ts[16];
             for i in 0..8 { pfd[i] = 0; }
             for i in 0..16 { ts[i] = 0; }
-            int f = self.fd();
+            i64 f = self.fd();
             pfd[0] = (char)(f & 255);
             pfd[1] = (char)((f >> 8) & 255);
             pfd[2] = (char)((f >> 16) & 255);
             pfd[3] = (char)((f >> 24) & 255);
             pfd[4] = 1;                                     // POLLIN
-            int sec = ms / 1000;
-            int nsec = (ms % 1000) * 1000000;
+            i64 sec = ms / 1000;
+            i64 nsec = (ms % 1000) * 1000000;
             for k in 0..8 { ts[k] = (char)((sec >> (8 * k)) & 255); }
             for k in 0..8 { ts[8 + k] = (char)((nsec >> (8 * k)) & 255); }
-            int rc = Sys::ppoll(@pfd, 1, @ts);
+            i64 rc = Sys::ppoll(@pfd, 1, @ts);
             if rc <= 0 { return WebSocket::msg(0, ""); }
         }
         return self.recv();
@@ -152,13 +152,13 @@ struct Ws {
 
     // headers: extra lines for the handshake, separated by \r\n ("" for none)
     static Result<WebSocket, Error> connect(String url, String headers) {
-        int secure = 0;
-        int plen = 5;
-        int port = 80;
+        i64 secure = 0;
+        i64 plen = 5;
+        i64 port = 80;
         if url.starts_with("wss://") { secure = 1; plen = 6; port = 443; }
         else if !url.starts_with("ws://") { return Ws::bad(ErrorKind::Invalid, "not a ws or wss address: " + url); }
         String rest = url.slice(plen, url.len);
-        int slash = rest.find("/");
+        i64 slash = rest.find("/");
         String hostport = rest;
         String path = "/";
         if slash >= 0 {
@@ -166,7 +166,7 @@ struct Ws {
             path = rest.slice(slash, rest.len);
         }
         String host = hostport;
-        int colon = hostport.find(":");
+        i64 colon = hostport.find(":");
         if colon >= 0 {
             host = hostport.slice(0, colon);
             String ps = hostport.slice(colon + 1, hostport.len);
@@ -177,7 +177,7 @@ struct Ws {
             }
         }
         if host.len == 0 { return Ws::bad(ErrorKind::Invalid, "no host in " + url); }
-        int h = 0;
+        i64 h = 0;
         switch Net::http_open(host, port, secure) {
             Result::Ok(x): { h = x; }
             Result::Err(e): { return Ws::bad(e.kind, e.message); }
@@ -194,7 +194,7 @@ struct Ws {
             Result::Err(e): { Net::http_chan_close(secure, h); return Ws::bad(e.kind, e.message); }
         }
         String got = "";
-        int he = 0 - 1;
+        i64 he = 0 - 1;
         while he < 0 {
             String piece = "";
             switch Net::http_chan_recv(secure, h, 4096) {
@@ -209,7 +209,7 @@ struct Ws {
         if !head.starts_with("HTTP/1.1 101") {
             Net::http_chan_close(secure, h);
             String line = head;
-            int eol = head.find("\r\n");
+            i64 eol = head.find("\r\n");
             if eol >= 0 { line = head.slice(0, eol); }
             return Ws::bad(ErrorKind::Io, "the server did not upgrade: " + line);
         }

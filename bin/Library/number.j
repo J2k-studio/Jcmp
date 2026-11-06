@@ -12,11 +12,11 @@ struct Math {
         if b > a { return b; }
         return a;
     }
-    static int min_int(int a, int b) {
+    static i64 min_int(i64 a, i64 b) {
         if b < a { return b; }
         return a;
     }
-    static int max_int(int a, int b) {
+    static i64 max_int(i64 a, i64 b) {
         if b > a { return b; }
         return a;
     }
@@ -34,7 +34,7 @@ struct Math {
         return __ftrunc(x);
     }
     // x to the power n (n a whole number, negative too): by squaring
-    static double powi(double x, int n) {
+    static double powi(double x, i64 n) {
         if n < 0 { return 1.0 / Math::powi(x, 0 - n); }
         double r = 1.0;
         double b = x;
@@ -46,14 +46,14 @@ struct Math {
         return r;
     }
     // ---- numbers made from and taken apart into bits (the IEEE form)
-    static double from_bits(int bits) {
-        int b = bits;
+    static double from_bits(i64 bits) {
+        i64 b = bits;
         double^ p = (double^)@b;
         return p[0];
     }
-    static int to_bits(double x) {
+    static i64 to_bits(double x) {
         double y = x;
-        int^ p = (int^)@y;
+        i64^ p = (i64^)@y;
         return p[0];
     }
     static double inf() { return Math::from_bits(0x7FF0000000000000); }
@@ -95,18 +95,18 @@ struct Math {
         if x > 709.78 { return Math::inf(); }
         if x < -745.2 { return 0.0; }
         double kf = Math::round(x * 1.442695040888963);
-        int k = (int)kf;
+        i64 k = (i64)kf;
         double r = x - kf * Math::from_bits(0x3FE62E42FEE00000) - kf * Math::from_bits(0x3DEA39EF35793C76);
         // e^r for |r| <= 0.35 : the series, from the end
         double t = 1.0 + r / 14.0;
-        int i = 13;
+        i64 i = 13;
         while i >= 1 {
             t = 1.0 + r * t / (double)i;
             i -= 1;
         }
         // times 2^k (in two steps so that a big k does not overflow the power)
-        int k1 = k / 2;
-        int k2 = k - k1;
+        i64 k1 = k / 2;
+        i64 k2 = k - k1;
         double s1 = Math::from_bits((k1 + 1023) shl 52);
         double s2 = Math::from_bits((k2 + 1023) shl 52);
         return t * s1 * s2;
@@ -117,8 +117,8 @@ struct Math {
         if x < 0.0 { return Math::nan(); }
         if x == 0.0 { return 0.0 - Math::inf(); }
         if x == Math::inf() { return x; }
-        int bits = Math::to_bits(x);
-        int ex = ((bits shr 52) & 2047) - 1023;
+        i64 bits = Math::to_bits(x);
+        i64 ex = ((bits shr 52) & 2047) - 1023;
         if ex == -1023 {
             // a very small number: scale it up first
             return Math::log(x * 4.503599627370496e15) - 36.04365338911715;
@@ -132,7 +132,7 @@ struct Math {
         double s2 = s * s;
         // 2 * (s + s^3/3 + s^5/5 + ...) , from the end
         double t = 1.0 / 25.0;
-        int j = 23;
+        i64 j = 23;
         while j >= 1 {
             t = t * s2 + 1.0 / (double)j;
             j -= 2;
@@ -146,7 +146,7 @@ struct Math {
         if y == 0.0 { return 1.0; }
         if Math::is_nan(x) || Math::is_nan(y) { return Math::nan(); }
         double yi = Math::trunc(y);
-        if yi == y && Math::abs(y) < 2147483648.0 { return Math::powi(x, (int)y); }
+        if yi == y && Math::abs(y) < 2147483648.0 { return Math::powi(x, (i64)y); }
         if x < 0.0 { return Math::nan(); }
         if x == 0.0 {
             if y > 0.0 { return 0.0; }
@@ -167,7 +167,7 @@ struct Math {
         if Math::is_nan(x) || Math::is_inf(x) { return Math::nan(); }
         double kf = Math::round(x * 0.6366197723675814);
         double r = x - kf * Math::from_bits(0x3FF921FB54400000) - kf * Math::from_bits(0x3DD0B4611A626331);
-        int q = (int)Math::fmod(kf, 4.0);
+        i64 q = (i64)Math::fmod(kf, 4.0);
         if q < 0 { q += 4; }
         if q == 0 { return Math::sin_poly(r); }
         if q == 1 { return Math::cos_poly(r); }
@@ -178,7 +178,7 @@ struct Math {
         if Math::is_nan(x) || Math::is_inf(x) { return Math::nan(); }
         double kf = Math::round(x * 0.6366197723675814);
         double r = x - kf * Math::from_bits(0x3FF921FB54400000) - kf * Math::from_bits(0x3DD0B4611A626331);
-        int q = (int)Math::fmod(kf, 4.0);
+        i64 q = (i64)Math::fmod(kf, 4.0);
         if q < 0 { q += 4; }
         if q == 0 { return Math::cos_poly(r); }
         if q == 1 { return 0.0 - Math::sin_poly(r); }
@@ -190,7 +190,7 @@ struct Math {
     static double sin_poly(double r) {
         double r2 = r * r;
         double t = 1.0;
-        int i = 15;
+        i64 i = 15;
         while i >= 5 {
             t = 1.0 - r2 * t / (double)(i * (i - 1));
             i -= 2;
@@ -200,7 +200,7 @@ struct Math {
     static double cos_poly(double r) {
         double r2 = r * r;
         double t = 1.0;
-        int i = 16;
+        i64 i = 16;
         while i >= 2 {
             t = 1.0 - r2 * t / (double)(i * (i - 1));
             i -= 2;
@@ -217,7 +217,7 @@ struct Math {
         y = y / (1.0 + Math::sqrt(1.0 + y * y));
         double y2 = y * y;
         double t = 1.0 / 27.0;
-        int j = 25;
+        i64 j = 25;
         while j >= 1 {
             t = 1.0 / (double)j - y2 * t;
             j -= 2;
@@ -253,20 +253,20 @@ struct Math {
         double a = Math::exp(2.0 * x);
         return (a - 1.0) / (a + 1.0);
     }
-    static int iabs(int x) {
+    static i64 iabs(i64 x) {
         if x < 0 { return 0 - x; }
         return x;
     }
-    static int imin(int a, int b) {
+    static i64 imin(i64 a, i64 b) {
         if b < a { return b; }
         return a;
     }
-    static int imax(int a, int b) {
+    static i64 imax(i64 a, i64 b) {
         if b > a { return b; }
         return a;
     }
-    static int ipow(int x, int n) {
-        int r = 1;
+    static i64 ipow(i64 x, i64 n) {
+        i64 r = 1;
         while n > 0 {
             r = r * x;
             n -= 1;
@@ -284,12 +284,12 @@ T clamp<T>(T x, T lo, T hi) { if x < lo { return lo; } if x > hi { return hi; } 
 // Num: conversions between numbers and text.
 // text to numbers, as a Result (String.to_int() / to_double() throw instead)
 struct Num {
-    static Result<int, Error> parse_int(String s) {
-        int v = 0;
+    static Result<i64, Error> parse_int(String s) {
+        i64 v = 0;
         try { v = s.to_int(); } catch (e) {
-            return Result<int, Error>::Err(Error::make(ErrorKind::Parse, "not a whole number: " + s));
+            return Result<i64, Error>::Err(Error::make(ErrorKind::Parse, "not a whole number: " + s));
         }
-        return Result<int, Error>::Ok(v);
+        return Result<i64, Error>::Ok(v);
     }
     static Result<double, Error> parse_double(String s) {
         double v = 0.0;
@@ -302,8 +302,8 @@ struct Num {
 
 // num: the short names (Num::num.parse_int(text), with  using Num;  num.parse_int(text)); a text that is not a number is thrown
 struct __Num {
-    static int parse_int(String s) { return Num::parse_int(s).take(); }
-    static Result<int, Error> try_parse_int(String s) { return Num::parse_int(s); }
+    static i64 parse_int(String s) { return Num::parse_int(s).take(); }
+    static Result<i64, Error> try_parse_int(String s) { return Num::parse_int(s); }
     static double parse_double(String s) { return Num::parse_double(s).take(); }
     static Result<double, Error> try_parse_double(String s) { return Num::parse_double(s); }
 }

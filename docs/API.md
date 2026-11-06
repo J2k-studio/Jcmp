@@ -21,98 +21,98 @@ struct Sys {
     static void panic(char^ msg);
     // stop with the message if ok is false
     static void assert(bool ok, char^ msg);
-    static int argc();
-    static char^ arg(int i);
+    static i64 argc();
+    static char^ arg(i64 i);
     // ---- a call that is not here yet
-    static int call(int number, int a0, int a1, int a2, int a3, int a4, int a5);
+    static i64 call(i64 number, i64 a0, i64 a1, i64 a2, i64 a3, i64 a4, i64 a5);
     // is the first name (n letters) one of the real places of the system?
-    static bool vr_system(char^ s, int n);
+    static bool vr_system(char^ s, i64 n);
     // ---- the virtual root of Jaric. When the environment has JARIC_ROOT (the folder of the app: files/ with home, usr, ... and the links bin, etc, tmp, lib, var),
     // a path that begins with / and whose first name is a folder of that place is read there: /etc/hosts is JARIC_ROOT/etc/hosts, / is JARIC_ROOT, /u is the
     // storage of the user (/sdcard). The real places of the system (/proc, /dev, /sys, /sdcard, /storage, /data, /system ...) and every path that does not
     // begin with / stay as they are. Without JARIC_ROOT nothing changes. The answer is written in buf (4096 bytes) or is the path itself.
     static char^ vroot(char^ path, char^ buf);
     // the path of the real folder the other way: the answer of getcwd begins with JARIC_ROOT: it is shown as / ...
-    static int vr_back(char^ buf, int n);
+    static i64 vr_back(char^ buf, i64 n);
 
     // ---- files
     // flags and mode are the numbers of this machine; open_read / open_write / open_append / open_dir need none
-    static int open(char^ path, int flags, int mode);
-    static int open_read(char^ path);
+    static i64 open(char^ path, i64 flags, i64 mode);
+    static i64 open_read(char^ path);
     // create or empty the file; mode 0644 (before the umask)
-    static int open_write(char^ path);
+    static i64 open_write(char^ path);
     // create the file if it is not there; writes go to the end
-    static int open_append(char^ path);
+    static i64 open_append(char^ path);
     // a folder, to read with getdents
-    static int open_dir(char^ path);
-    static int close(int fd);
-    static int read(int fd, void^ buf, int n);
-    static int write(int fd, void^ buf, int n);
+    static i64 open_dir(char^ path);
+    static i64 close(i64 fd);
+    static i64 read(i64 fd, void^ buf, i64 n);
+    static i64 write(i64 fd, void^ buf, i64 n);
     // whence: 0 from the start, 1 from here, 2 from the end
-    static int lseek(int fd, int offset, int whence);
-    static int unlink(char^ path);
-    static int rmdir(char^ path);
-    static int rename(char^ from, char^ to);
-    static int mkdir(char^ path, int mode);
-    static int chmod(char^ path, int mode);
+    static i64 lseek(i64 fd, i64 offset, i64 whence);
+    static i64 unlink(char^ path);
+    static i64 rmdir(char^ path);
+    static i64 rename(char^ from, char^ to);
+    static i64 mkdir(char^ path, i64 mode);
+    static i64 chmod(char^ path, i64 mode);
     // the details of a file in buf (128 bytes); the mode is the 4 bytes at offset 16, the size the 8 bytes at offset 48
-    static int stat(char^ path, void^ buf);
-    static int fstat(int fd, void^ buf);
-    static int readlink(char^ path, char^ buf, int n);
+    static i64 stat(char^ path, void^ buf);
+    static i64 fstat(i64 fd, void^ buf);
+    static i64 readlink(char^ path, char^ buf, i64 n);
     // the entries of a folder opened with open_dir (linux_dirent64)
-    static int getdents(int fd, void^ buf, int n);
-    static int getcwd(char^ buf, int n);
+    static i64 getdents(i64 fd, void^ buf, i64 n);
+    static i64 getcwd(char^ buf, i64 n);
     // change the folder of the program (a virtual path is read as in open)
-    static int chdir(char^ path);
+    static i64 chdir(char^ path);
     // is the file number a terminal? (the call TCGETS: 0 yes)
-    static int isatty(int fd);
+    static i64 isatty(i64 fd);
     // the size of the terminal in buf (8 bytes: rows, columns, 2 more numbers of 16 bits)
-    static int window_size(int fd, void^ buf);
-    static int pipe(void^ fds);
-    static int dup2(int old, int fresh);
+    static i64 window_size(i64 fd, void^ buf);
+    static i64 pipe(void^ fds);
+    static i64 dup2(i64 old, i64 fresh);
     // ---- memory
     // n bytes of fresh zeroed memory from the system (null on failure)
-    static void^ mmap(int n);
-    static int munmap(void^ p, int n);
+    static void^ mmap(i64 n);
+    static i64 munmap(void^ p, i64 n);
     // prot: 0 nothing, 1 read, 2 write, 4 execute (added)
-    static int mprotect(void^ p, int n, int prot);
+    static i64 mprotect(void^ p, i64 n, i64 prot);
     // ---- the program and its processes
-    static void exit(int code);
-    static int getpid();
-    static int gettid();
+    static void exit(i64 code);
+    static i64 getpid();
+    static i64 gettid();
     // send a signal to ONE process (pid > 0); the calls that reach a whole group of processes (pid <= 0) are refused here: use Sys::call for them
-    static int kill(int pid, int sig);
+    static i64 kill(i64 pid, i64 sig);
     // a new process like this one (fork): 0 in the child, the id of the child in the parent
-    static int fork();
-    static int execve(char^ path, void^ argv, void^ envp);
+    static i64 fork();
+    static i64 execve(char^ path, void^ argv, void^ envp);
     // wait for the child pid; its state goes to *status
-    static int wait(int pid, int^ status);
-    static int sleep_ms(int ms);
-    static int yield();
+    static i64 wait(i64 pid, i64^ status);
+    static i64 sleep_ms(i64 ms);
+    static i64 yield();
     // sleep for the time in ts (ts[0] seconds, ts[1] nanoseconds)
-    static int nanosleep(int^ ts);
+    static i64 nanosleep(i64^ ts);
     // the fast user lock of the kernel: op 128 waits while *addr == val, 129 wakes val waiters (the "private" kinds); 0 waits (shared)
-    static int futex(int^ addr, int op, int val);
+    static i64 futex(i64^ addr, i64 op, i64 val);
     // wait until one of the n file numbers in fds (struct pollfd, 8 bytes each) is ready, or the time in ts has passed (ts null: no limit)
-    static int ppoll(void^ fds, int n, void^ ts);
+    static i64 ppoll(void^ fds, i64 n, void^ ts);
     // 0 when the file or folder can be seen (it exists), else the error
-    static int access(char^ path);
+    static i64 access(char^ path);
     // the clock: which = 0 the time of day, 1 a clock that only goes forward; the seconds and the nanoseconds go to ts[0] and ts[1]
-    static int clock_gettime(int which, int^ ts);
+    static i64 clock_gettime(i64 which, i64^ ts);
     // n random bytes from the system
-    static int random(void^ buf, int n);
+    static i64 random(void^ buf, i64 n);
     // ---- sockets (IPv4)
-    static int socket_tcp();
-    static int socket_udp();
-    static int socketpair(void^ fds);
-    static int bind(int fd, void^ addr, int len);
-    static int listen(int fd, int backlog);
-    static int connect(int fd, void^ addr, int len);
-    static int accept(int fd);
-    static int getsockname(int fd, void^ addr, int^ len);
-    static int setsockopt(int fd, int level, int name, void^ value, int len);
+    static i64 socket_tcp();
+    static i64 socket_udp();
+    static i64 socketpair(void^ fds);
+    static i64 bind(i64 fd, void^ addr, i64 len);
+    static i64 listen(i64 fd, i64 backlog);
+    static i64 connect(i64 fd, void^ addr, i64 len);
+    static i64 accept(i64 fd);
+    static i64 getsockname(i64 fd, void^ addr, i64^ len);
+    static i64 setsockopt(i64 fd, i64 level, i64 name, void^ value, i64 len);
     // wait for data at most ms milliseconds on a socket: the receive time out
-    static int set_receive_timeout(int fd, int seconds);
+    static i64 set_receive_timeout(i64 fd, i64 seconds);
 }
 
 // Option<T> and Result<T,E>: a value that may be missing, or an operation that may fail, as a value.
@@ -133,11 +133,11 @@ struct Error {
     // throw a text (the short forms of the library throw instead of returning a Result; catch with try { } catch (e) { })
     static void raise(char^ msg);
     // the reason of a system error number in words (a negative number from a system call is fine)
-    static String reason(int e);
+    static String reason(i64 e);
     // the kind of a system error number
-    static ErrorKind kind_of(int e);
+    static ErrorKind kind_of(i64 e);
     // the error for a system error number: "what: reason (error N)"
-    static Error from_errno(int e, String what);
+    static Error from_errno(i64 e, String what);
     void free(self);
 }
 
@@ -165,14 +165,14 @@ enum class Result<T, E> { Ok(T value), Err(E error);
 //   Arena a;  a.init(4096);  int^ p = (int^)a.take(80);  ...  a.reset();  ...  a.free();
 // take gives 8-byte aligned memory (zeroed), or null when the block is full.
 struct Arena {
-    int^ base;
-    int size;
-    int used;
-    void init(self, int bytes);
-    void^ take(self, int bytes);
+    i64^ base;
+    i64 size;
+    i64 used;
+    void init(self, i64 bytes);
+    void^ take(self, i64 bytes);
     // everything taken so far is given back (the block stays)
     void reset(self);
-    int left(self);
+    i64 left(self);
     void free(self);
 }
 ```
@@ -185,18 +185,18 @@ struct Math {
     static double abs(double x);
     static double min(double a, double b);
     static double max(double a, double b);
-    static int min_int(int a, int b);
-    static int max_int(int a, int b);
+    static i64 min_int(i64 a, i64 b);
+    static i64 max_int(i64 a, i64 b);
     static double sqrt(double x);
     // round down / up / toward zero
     static double floor(double x);
     static double ceil(double x);
     static double trunc(double x);
     // x to the power n (n a whole number, negative too): by squaring
-    static double powi(double x, int n);
+    static double powi(double x, i64 n);
     // ---- numbers made from and taken apart into bits (the IEEE form)
-    static double from_bits(int bits);
-    static int to_bits(double x);
+    static double from_bits(i64 bits);
+    static i64 to_bits(double x);
     static double inf();
     static double nan();
     static bool is_nan(double x);
@@ -240,10 +240,10 @@ struct Math {
     static double sinh(double x);
     static double cosh(double x);
     static double tanh(double x);
-    static int iabs(int x);
-    static int imin(int a, int b);
-    static int imax(int a, int b);
-    static int ipow(int x, int n);
+    static i64 iabs(i64 x);
+    static i64 imin(i64 a, i64 b);
+    static i64 imax(i64 a, i64 b);
+    static i64 ipow(i64 x, i64 n);
 }
 
 // the smaller, the larger, the absolute value and the limited value of numbers of one type (int, double, float ...): min(3, 5), max(2.5, 1.5), abs(-4), clamp(x, 0, 10)
@@ -255,14 +255,14 @@ T clamp<T>(T x, T lo, T hi);
 // Num: conversions between numbers and text.
 // text to numbers, as a Result (String.to_int() / to_double() throw instead)
 struct Num {
-    static Result<int, Error> parse_int(String s);
+    static Result<i64, Error> parse_int(String s);
     static Result<double, Error> parse_double(String s);
 }
 
 // num: the short names (Num::num.parse_int(text), with  using Num;  num.parse_int(text)); a text that is not a number is thrown
 struct __Num {
-    static int parse_int(String s);
-    static Result<int, Error> try_parse_int(String s);
+    static i64 parse_int(String s);
+    static Result<i64, Error> try_parse_int(String s);
     static double parse_double(String s);
     static Result<double, Error> try_parse_double(String s);
 }
@@ -273,28 +273,28 @@ struct __Num {
 ```jk
 // Str: functions on 0-terminated text (a char array, a string literal or a char^)
 struct Str {
-    static int len(char^ s);
+    static i64 len(char^ s);
     static bool eq(char^ a, char^ b);
     // < 0, 0 or > 0 like strcmp
-    static int cmp(char^ a, char^ b);
+    static i64 cmp(char^ a, char^ b);
     // copy src into dst (room for cap characters including the 0); returns the length
-    static int copy(char^ dst, int cap, char^ src);
+    static i64 copy(char^ dst, i64 cap, char^ src);
     // add src to the end of dst; returns the new length
-    static int append(char^ dst, int cap, char^ src);
+    static i64 append(char^ dst, i64 cap, char^ src);
     // index of the first t in s, or -1
-    static int find(char^ s, char^ t);
+    static i64 find(char^ s, char^ t);
     static bool starts_with(char^ s, char^ prefix);
     // leading spaces, an optional sign, then digits (stops at the first other character)
-    static int to_int(char^ s);
+    static i64 to_int(char^ s);
     // write v as text into dst (room for cap characters); returns the length
-    static int from_int(char^ dst, int cap, int v);
+    static i64 from_int(char^ dst, i64 cap, i64 v);
 }
 
 // Hex: bytes as two hex digits each
 //   Hex::encode("Hi") -> "4869"      Hex::decode("4869")? -> "Hi"
 struct Hex {
     static String encode(String s);
-    static int nibble(char c);
+    static i64 nibble(char c);
     static Result<String, Error> decode(String h);
 }
 
@@ -302,7 +302,7 @@ struct Hex {
 //   Base64::encode("Man") -> "TWFu"      Base64::decode("TWFu")? -> "Man"
 struct Base64 {
     static String encode(String s);
-    static int value(char c);
+    static i64 value(char c);
     static Result<String, Error> decode(String b);
 }
 
@@ -313,30 +313,30 @@ struct Base64 {
 //   Fmt::hex(255) -> "ff"      Fmt::bin(5) -> "101"      Fmt::percent(0.256, 1) -> "25.6%"      Fmt::bytes(1536) -> "1.5 KB"
 struct Fmt {
     // s with c added on the left until it has `width` characters (a longer text stays as it is)
-    static String pad_left(String s, int width, char c);
+    static String pad_left(String s, i64 width, char c);
     // s with c added on the right
-    static String pad_right(String s, int width, char c);
+    static String pad_right(String s, i64 width, char c);
     // the number x with exactly `digits` digits after the point (0 .. 15), rounded half away from zero
-    static String fixed(double x, int digits);
+    static String fixed(double x, i64 digits);
     // the digits of n (n >= 0) in the base b (2 .. 16)
-    static String base(int n, int b);
-    static String hex(int n);
-    static String bin(int n);
+    static String base(i64 n, i64 b);
+    static String hex(i64 n);
+    static String bin(i64 n);
     // 1234567 -> "1,234,567"
-    static String thousands(int n);
+    static String thousands(i64 n);
     // 0.256 -> "25.6%"
-    static String percent(double ratio, int digits);
+    static String percent(double ratio, i64 digits);
     // a size in bytes: 1536 -> "1.5 KB"
-    static String bytes(int n);
+    static String bytes(i64 n);
 }
 
 // The short names for  jout << ...  (owner's decision 2026-11-03, syntax-design 107): no new syntax, only functions.
 //   jout << fmt(3.14159, 2) << " " << tohex(255) << " [" << pad("ab", 5) << "] [" << padl("7", 3) << "]\n";     -> 3.14 ff [ab   ] [  7]
-String fmt(double x, int digits);
-String tohex(int n);
-String tobin(int n);
-String pad(String s, int width);
-String padl(String s, int width);
+String fmt(double x, i64 digits);
+String tohex(i64 n);
+String tobin(i64 n);
+String pad(String s, i64 width);
+String padl(String s, i64 width);
 
 // Regex: a small pattern matcher (a backtracking one), for the common cases.
 //   Regex::matches("[a-z]+@[a-z]+\\.com", "ann@mail.com") -> true     (the whole text)
@@ -346,45 +346,45 @@ String padl(String s, int width);
 // Pattern: a character, . (any), \d \w \s (and \D \W \S), [abc] [a-z] [^0-9], \. (a character that has a meaning), ^ $,
 // x* x+ x? and x{n} x{n,} x{n,m} on one thing (greedy; a ? after them makes them lazy: x*?), ( ... ) a group (also with | inside, and
 // with a quantifier after it; (?: ... ) is the same), and | between whole alternatives. There are no captures yet.
-int rx_depth;
+i64 rx_depth;
                        // how deep the matcher is (a group repeated many times is a deep recursion)
-int rx_steps;
+i64 rx_steps;
                        // the work of one search: a pattern that cannot end (a group that matches nothing, repeated) is stopped
-int rx_qmin;
+i64 rx_qmin;
                         // the last quantifier read by quant(): its least and its most (-1: no limit), its length, and lazy
-int rx_qmax;
-int rx_qlen;
-int rx_lazy;
+i64 rx_qmax;
+i64 rx_qlen;
+i64 rx_lazy;
 
 struct Regex {
     // does the character c belong to the class at p[i] (a \d, \w, \s, a [..] set, a . or a literal)? the length of the item in rl
-    static int item_len(String p, int i);
+    static i64 item_len(String p, i64 i);
     static bool class_has(char e, char c);
     // does the single item p[i .. i + n) match the character c?
-    static bool item_matches(String p, int i, int n, char c);
+    static bool item_matches(String p, i64 i, i64 n, char c);
     // the quantifier at p[i] (i < pe): rx_qmin, rx_qmax (-1: no limit), rx_qlen (0: none) and rx_lazy
-    static void quant(String p, int i, int pe);
+    static void quant(String p, i64 i, i64 pe);
     // the ")" that closes the "(" at p[i] (-1: none); p[i .. pe)
-    static int group_end(String p, int i, int pe);
+    static i64 group_end(String p, i64 i, i64 pe);
     // the end of a match of p[pi .. pe) at t[ti ..], or -1 (backtracking)
-    static int m(String p, int pi, int pe, String t, int ti);
-    static int m2(String p, int pi, int pe, String t, int ti);
+    static i64 m(String p, i64 pi, i64 pe, String t, i64 ti);
+    static i64 m2(String p, i64 pi, i64 pe, String t, i64 ti);
     // a group "(inner)" repeated qmin .. qmax times, then the rest of the pattern: each branch of the group, followed by the group
     // again (with the counts one less) and the rest, is a pattern of its own
-    static int group(String inner, int qmin, int qmax, int lazy, String rest, String t, int ti);
+    static i64 group(String inner, i64 qmin, i64 qmax, i64 lazy, String rest, String t, i64 ti);
     // the parts of a pattern between the top-level | (not inside [ ], \ or ( ))
     static String[] alternatives(String p);
     // the end of the match that starts exactly at ti (every top-level branch is tried), or -1
-    static int match_here(String p, String t, int ti);
+    static i64 match_here(String p, String t, i64 ti);
     // the position where the first match starts (-1: none)
-    static int find(String p, String t);
+    static i64 find(String p, String t);
     // the text of the first match ("" when there is none: use find to tell the difference)
     static String find_text(String p, String t);
     // does the pattern match the whole text?
     static bool matches(String p, String t);
     // every match, from left to right, none overlapping (an empty match is skipped)
     static String[] find_all(String p, String t);
-    static int count(String p, String t);
+    static i64 count(String p, String t);
     // the text with every match replaced by `with`
     static String replace(String p, String t, String with);
     // the pieces of the text between the matches
@@ -401,7 +401,7 @@ struct __Text {
     static String base64_encode(String s);
     static String base64_decode(String b);
     static Result<String, Error> base64_try_decode(String b);
-    static int regex_find(String p, String t);
+    static i64 regex_find(String p, String t);
     static String regex_text(String p, String t);
     static bool regex_matches(String p, String t);
 }
@@ -423,34 +423,34 @@ struct File {
 // Files and folders: Fs (whole files), Dir (folders). Needs the core (Result, Error) and text (Str).
 // an Error for the system error number e (a negative number from a system call is fine) and what was being done
 struct Fs {
-    static Error error(int e, String what, String path);
+    static Error error(i64 e, String what, String path);
     // the whole file as a String
     static Result<String, Error> read_text(String path);
     // the whole file as bytes in a String: any byte, also zero (read_text stops at a zero byte)
     static Result<String, Error> read_bytes(String path);
     // write the bytes of a String (any byte) to the file (made or emptied); Ok(the number of bytes)
-    static Result<int, Error> write_bytes(String path, String data);
+    static Result<i64, Error> write_bytes(String path, String data);
     // the lines of a file (without the line ends)
     static Result<String[], Error> read_lines(String path);
     // write the text to the file (made or emptied); Ok(the number of bytes)
-    static Result<int, Error> write_text(String path, String text);
+    static Result<i64, Error> write_text(String path, String text);
     // add the text at the end of the file (made if needed)
-    static Result<int, Error> append_text(String path, String text);
-    static Result<int, Error> put(String path, String text, int flags);
+    static Result<i64, Error> append_text(String path, String text);
+    static Result<i64, Error> put(String path, String text, i64 flags);
     static bool exists(String path);
     // the size of a file in bytes
-    static Result<int, Error> size(String path);
-    static Result<int, Error> remove(String path);
-    static Result<int, Error> rename(String from, String to);
+    static Result<i64, Error> size(String path);
+    static Result<i64, Error> remove(String path);
+    static Result<i64, Error> rename(String from, String to);
 }
 
 struct Dir {
     static bool exists(String path);
-    static Result<int, Error> make(String path);
+    static Result<i64, Error> make(String path);
     // the folder and the ones above it (like mkdir -p)
-    static Result<int, Error> make_all(String path);
+    static Result<i64, Error> make_all(String path);
     // remove an empty folder
-    static Result<int, Error> remove(String path);
+    static Result<i64, Error> remove(String path);
     // the names in a folder (not . and ..), in order
     static Result<String[], Error> list(String path);
     static Result<String, Error> current();
@@ -484,22 +484,22 @@ struct __Files {
     static Result<String, Error> fs_try_read(String path);
     static String[] fs_lines(String path);
     static Result<String[], Error> fs_try_lines(String path);
-    static int fs_write(String path, String text);
-    static Result<int, Error> fs_try_write(String path, String text);
-    static int fs_append(String path, String text);
-    static Result<int, Error> fs_try_append(String path, String text);
+    static i64 fs_write(String path, String text);
+    static Result<i64, Error> fs_try_write(String path, String text);
+    static i64 fs_append(String path, String text);
+    static Result<i64, Error> fs_try_append(String path, String text);
     // the long names of the same functions (owner 2026-11-03: "f.read_text is fine too"): fs.read_text(p), fs.read_lines(p), fs.write_text(p, t), fs.append_text(p, t)
     static String fs_read_text(String path);
     static String[] fs_read_lines(String path);
-    static int fs_write_text(String path, String text);
-    static int fs_append_text(String path, String text);
+    static i64 fs_write_text(String path, String text);
+    static i64 fs_append_text(String path, String text);
     static bool fs_exists(String path);
-    static int fs_size(String path);
-    static Result<int, Error> fs_try_size(String path);
-    static int fs_remove(String path);
-    static Result<int, Error> fs_try_remove(String path);
-    static int fs_rename(String from, String to);
-    static Result<int, Error> fs_try_rename(String from, String to);
+    static i64 fs_size(String path);
+    static Result<i64, Error> fs_try_size(String path);
+    static i64 fs_remove(String path);
+    static Result<i64, Error> fs_try_remove(String path);
+    static i64 fs_rename(String from, String to);
+    static Result<i64, Error> fs_try_rename(String from, String to);
     static String read_text(String path);
     static Result<String, Error> read_try_text(String path);
     static String read_bytes(String path);
@@ -507,12 +507,12 @@ struct __Files {
     static String[] read_lines(String path);
     static Result<String[], Error> read_try_lines(String path);
     static bool dir_exists(String path);
-    static int dir_make(String path);
-    static Result<int, Error> dir_try_make(String path);
-    static int dir_make_all(String path);
-    static Result<int, Error> dir_try_make_all(String path);
-    static int dir_remove(String path);
-    static Result<int, Error> dir_try_remove(String path);
+    static i64 dir_make(String path);
+    static Result<i64, Error> dir_try_make(String path);
+    static i64 dir_make_all(String path);
+    static Result<i64, Error> dir_try_make_all(String path);
+    static i64 dir_remove(String path);
+    static Result<i64, Error> dir_try_remove(String path);
     static String[] dir_list(String path);
     static Result<String[], Error> dir_try_list(String path);
     static String dir_current();
@@ -541,11 +541,11 @@ struct Env {
 //   String text = Proc::output("echo", args)?;    (the output is returned as text)
 struct Proc {
     // starts a child (stdout to wfd when wfd >= 0); returns its id, or a negative error number
-    static int launch(String cmd, String[] args, int wfd);
+    static i64 launch(String cmd, String[] args, i64 wfd);
     // waits for the child; its exit code (128 + the signal if it was killed)
-    static int finish(int pid);
+    static i64 finish(i64 pid);
     // runs a program and waits for it; its exit code (127 if it could not be started)
-    static Result<int, Error> run(String cmd, String[] args);
+    static Result<i64, Error> run(String cmd, String[] args);
     // runs a program, waits for it and returns what it wrote to its output
     static Result<String, Error> output(String cmd, String[] args);
 }
@@ -554,9 +554,9 @@ struct Proc {
 //   int cols = Term::cols();   if Term::key_pressed() { break; }       (a line + Enter; Ctrl-C always stops a program)
 struct Term {
     // the number of columns (80 if it cannot be asked)
-    static int cols();
+    static i64 cols();
     // the number of rows (24 if it cannot be asked)
-    static int rows();
+    static i64 rows();
     // true if something was typed (it is read and thrown away); nothing is waited for, and the terminal is not changed.
     // With the keyboard line by line, the text arrives when Enter is pressed.
     static bool key_pressed();
@@ -569,19 +569,19 @@ struct Input {
     // a line without its new line; "" at the end of the input
     static String line();
     // the line as a whole number (an error when it is not one)
-    static Result<int, Error> number();
+    static Result<i64, Error> number();
     // waits for Enter (the rest of the line is thrown away)
     static void enter();
     // asks and waits for y or n (Enter alone is no); true for y / Y
     static bool yes(String question);
     // true when the file 0 has something to read within ms milliseconds (ms < 0: wait for ever)
-    static bool ready(int ms);
+    static bool ready(i64 ms);
     // one key without Enter and without an echo. A letter is its code; Escape is 27; the other keys are 257 up, 258 down, 259 right,
     // 260 left, 261 Home, 262 End, 263 Delete, 264 PageUp, 265 PageDown, 266 Insert, 270 .. 273 F1 .. F4; -1 at the end of the input.
     // When the input is not a terminal it is the next byte.
-    static int key();
+    static i64 key();
     // the same, but it waits at most ms milliseconds; -2 when no key was pressed in that time
-    static int key_wait(int ms);
+    static i64 key_wait(i64 ms);
     // a line typed without an echo (a password); on a terminal the new line is written for the user
     static String password();
     // a line as a decimal number (an error when it is not one)
@@ -595,20 +595,20 @@ struct __System {
     static Option<String> env_get(String name);
     static String env_get_or(String name, String fallback);
     static String[] env_args();
-    static int proc_run(String cmd, String[] args);
-    static Result<int, Error> proc_try_run(String cmd, String[] args);
+    static i64 proc_run(String cmd, String[] args);
+    static Result<i64, Error> proc_try_run(String cmd, String[] args);
     static String proc_output(String cmd, String[] args);
     static Result<String, Error> proc_try_output(String cmd, String[] args);
-    static int term_cols();
-    static int term_rows();
+    static i64 term_cols();
+    static i64 term_rows();
     static bool term_key_pressed();
     static String read_line();
-    static int read_number();
-    static Result<int, Error> read_try_number();
+    static i64 read_number();
+    static Result<i64, Error> read_try_number();
     static void read_enter();
     static bool read_yes(String question);
-    static int read_key();
-    static int read_key_timeout(int ms);
+    static i64 read_key();
+    static i64 read_key_timeout(i64 ms);
     static String read_password();
     static double read_decimal();
 }
@@ -616,12 +616,12 @@ struct __System {
 // Log: messages for the person who runs the program, on the error output (standard error), with a level.
 //   Log::set_level(2);    Log::info("not shown");    Log::error("shown: " + str(code));
 // levels: 0 debug, 1 info, 2 warn, 3 error (the default is 1)
-int std_log_level = 1;
+i64 std_log_level = 1;
 
 struct Log {
-    static void set_level(int level);
-    static int level();
-    static void write(int level, String name, String msg);
+    static void set_level(i64 level);
+    static i64 level();
+    static void write(i64 level, String name, String msg);
     static void debug(String msg);
     static void info(String msg);
     static void warn(String msg);
@@ -635,21 +635,21 @@ struct Log {
 // Time and random numbers: Time (clock, sleep), Random (a generator).
 struct Time {
     // milliseconds since 1970 (the clock of the computer)
-    static int now_ms();
+    static i64 now_ms();
     // a clock that only goes forward, in nanoseconds: for measuring how long something takes
-    static int mono_ns();
-    static void sleep_ms(int ms);
+    static i64 mono_ns();
+    static void sleep_ms(i64 ms);
 }
 
 u64 std_rand_state;
 
 struct Random {
     // start the series from a number (the same number gives the same series)
-    static void seed(int s);
+    static void seed(i64 s);
     // the next number: 0 or more (xorshift64)
-    static int next();
+    static i64 next();
     // a number from lo up to (not including) hi
-    static int range(int lo, int hi);
+    static i64 range(i64 lo, i64 hi);
     // a decimal number from 0 up to (not including) 1
     static double unit();
 }
@@ -658,40 +658,40 @@ struct Random {
 
 // the short names of the time unit (time, random): <module>_<name>, the compiler adds the prefix
 struct __TimeM {
-    static int time_now_ms();
-    static int time_mono_ns();
-    static void time_sleep_ms(int ms);
-    static void random_seed(int s);
-    static int random_next();
-    static int random_range(int lo, int hi);
+    static i64 time_now_ms();
+    static i64 time_mono_ns();
+    static void time_sleep_ms(i64 ms);
+    static void random_seed(i64 s);
+    static i64 random_next();
+    static i64 random_range(i64 lo, i64 hi);
     static double random_unit();
 }
 
 // Date: a day and a time on the calendar (the Gregorian calendar, UTC), from and to seconds since 1970.
 //   Date d;  d.set_unix(86400 * 365);  jout << d.text() << " " << d.weekday() << "\n";     // 1971-01-01 00:00:00 5
 struct Date {
-    int year;
-    int month;
+    i64 year;
+    i64 month;
            // 1 .. 12
-    int day;
+    i64 day;
              // 1 .. 31
-    int hour;
-    int minute;
-    int second;
+    i64 hour;
+    i64 minute;
+    i64 second;
 
-    static bool is_leap(int y);
-    static int days_in_month(int y, int m);
+    static bool is_leap(i64 y);
+    static i64 days_in_month(i64 y, i64 m);
     // the number of days from 1970-01-01 to the day y-m-d (negative before it)
-    static int days_from_civil(int y, int m, int d);
+    static i64 days_from_civil(i64 y, i64 m, i64 d);
     // the date and the time of `secs` seconds since 1970-01-01 00:00:00
-    void set_unix(self, int secs);
+    void set_unix(self, i64 secs);
     // seconds since 1970-01-01 00:00:00
-    int unix(self);
+    i64 unix(self);
     // 0 Sunday .. 6 Saturday
-    int weekday(self);
+    i64 weekday(self);
     // the day of the year, 1 .. 366
-    int day_of_year(self);
-    void add_days(self, int n);
+    i64 day_of_year(self);
+    void add_days(self, i64 n);
     // "2024-02-29 13:05:09"
     String text(self);
 }
@@ -706,15 +706,15 @@ struct Date {
 struct Map<K, V> {
     K[] keys;
     V[] vals;
-    int[] st;
+    i64[] st;
                   // 0 empty, 1 used, 2 deleted
-    int len;
+    i64 len;
                    // how many keys
-    int used;
+    i64 used;
                   // used + deleted places
 
     // the place of key k, or -1
-    int find(self, K k);
+    i64 find(self, K k);
     bool has(self, K k);
     // the value of key k (throws "key not found")
     V get(self, K k);
@@ -723,7 +723,7 @@ struct Map<K, V> {
     void put(self, K k, V v);
     // true if key k was there
     bool remove(self, K k);
-    void rehash(self, int cap);
+    void rehash(self, i64 cap);
     // a new array with the keys (in table order)
     K[] keys_list(self);
     V[] values_list(self);
@@ -732,16 +732,16 @@ struct Map<K, V> {
 
 struct Set<T> {
     T[] items;
-    int[] st;
-    int len;
-    int used;
+    i64[] st;
+    i64 len;
+    i64 used;
 
-    int find(self, T x);
+    i64 find(self, T x);
     bool has(self, T x);
     // true if x was new
     bool add(self, T x);
     bool remove(self, T x);
-    void rehash(self, int cap);
+    void rehash(self, i64 cap);
     T[] items_list(self);
     void free(self);
 }
@@ -753,13 +753,13 @@ struct Set<T> {
 void sort_by<T>(T[] a, bool(T, T)^ less);
 
 // the first place i of the sorted array a where a[i] >= x (a.len when there is none)
-int lower_bound<T>(T[] a, T x);
+i64 lower_bound<T>(T[] a, T x);
 
 // the first place i where a[i] > x
-int upper_bound<T>(T[] a, T x);
+i64 upper_bound<T>(T[] a, T x);
 
 // the place of x in the sorted array a, or -1
-int binary_search<T>(T[] a, T x);
+i64 binary_search<T>(T[] a, T x);
 
 // ---------------------------------------------------------------------------------------------- Queue, Deque, Heap
 // Queue<T>: first in, first out (a ring buffer). Deque<T>: also at the front. Heap<T>: the smallest element (by `<`) comes out first.
@@ -767,8 +767,8 @@ int binary_search<T>(T[] a, T x);
 
 struct Queue<T> {
     T[] items;
-    int head;
-    int len;
+    i64 head;
+    i64 len;
 
     void push(self, T x);
     T front(self);
@@ -778,8 +778,8 @@ struct Queue<T> {
 
 struct Deque<T> {
     T[] items;
-    int head;
-    int len;
+    i64 head;
+    i64 len;
 
     void grow(self);
     void push_back(self, T x);
@@ -789,13 +789,13 @@ struct Deque<T> {
     T pop_front(self);
     T pop_back(self);
     // the element number i from the front
-    T get(self, int i);
+    T get(self, i64 i);
     void free(self);
 }
 
 struct Heap<T> {
     T[] items;
-    int len;
+    i64 len;
 
     void push(self, T x);
     T top(self);
@@ -811,18 +811,18 @@ struct Heap<T> {
 
 struct Span<T> {
     T[] base;
-    int off;
-    int len;
+    i64 off;
+    i64 len;
 
-    T get(self, int i);
-    void set(self, int i, T x);
+    T get(self, i64 i);
+    void set(self, i64 i, T x);
     // the part lo .. hi of this span (a view of the same array)
-    Span<T> sub(self, int lo, int hi);
+    Span<T> sub(self, i64 lo, i64 hi);
     // a new array with a copy of the elements (the caller frees it)
     T[] to_array(self);
 }
 
-Span<T> span<T>(T[] a, int lo, int hi);
+Span<T> span<T>(T[] a, i64 lo, i64 hi);
 
 // JSON: Json::parse(text) gives a document, a table of nodes; a node is a number (-1 means "none").
 //   JsonDoc doc = Json::parse(text)?;
@@ -831,7 +831,7 @@ Span<T> span<T>(T[] a, int lo, int hi);
 //   String out = doc.dump(doc.root());               // back to (compact) JSON text
 // json_quote(s) makes a JSON string literal; json_num_text(x) is a number as text.
 // helpers (also reachable as Json::quote and Json::num_text)
-String json_int_text(int v);
+String json_int_text(i64 v);
 // a number as the shortest text that reads back the same (up to 15 digits); nan and inf are null
 String json_num_text(double x);
 // a JSON string literal for s (with the quotes)
@@ -839,57 +839,57 @@ String json_quote(String s);
 
 struct JsonDoc {
     String src;
-    int pos;
+    i64 pos;
     String err;
-    int[] kind;
+    i64[] kind;
                   // 0 null, 1 false, 2 true, 3 number, 4 string, 5 array, 6 object
     double[] num;
     String[] txt;
                 // the value of a string node
     String[] key;
                 // the name of a node that is a member of an object
-    int[] first;
+    i64[] first;
                  // the first child (array, object)
-    int[] last;
-    int[] next;
+    i64[] last;
+    i64[] next;
                   // the next brother
     void free(self);
     // ---- reading (JsonDoc is made by Json::parse)
-    int fail(self, String m);
+    i64 fail(self, String m);
     void skip_ws(self);
     // a new node; its text and name are stored with it
-    int add(self, int k, String t, String name);
+    i64 add(self, i64 k, String t, String name);
     // puts node c at the end of the children of node p
-    void link(self, int p, int c);
+    void link(self, i64 p, i64 c);
     bool word(self, String w);
-    int value(self, String name);
-    int number_lit(self, String name);
-    int hex4(self);
+    i64 value(self, String name);
+    i64 number_lit(self, String name);
+    i64 hex4(self);
     // the string at pos (which is the opening quote); the text is decoded; err is set on a mistake
     String string_lit(self);
-    int array(self, String name);
-    int object(self, String name);
+    i64 array(self, String name);
+    i64 object(self, String name);
 
     // ---- looking at a document (n is a node; -1 or a wrong kind gives an empty answer)
-    int root(self);
+    i64 root(self);
     // 0 null, 1 false, 2 true, 3 number, 4 string, 5 array, 6 object; -1 for no node
-    int kind_of(self, int n);
-    int len(self, int n);
+    i64 kind_of(self, i64 n);
+    i64 len(self, i64 n);
     // the i-th element of an array or member of an object (counted from 0), or -1
-    int at(self, int n, int i);
+    i64 at(self, i64 n, i64 i);
     // the member of an object with this name, or -1
-    int get(self, int n, String name);
-    bool has(self, int n, String name);
+    i64 get(self, i64 n, String name);
+    bool has(self, i64 n, String name);
     // the name of a node that is a member of an object
-    String name_of(self, int n);
-    String text(self, int n);
-    double number(self, int n);
-    int integer(self, int n);
-    bool boolean(self, int n);
-    bool is_null(self, int n);
+    String name_of(self, i64 n);
+    String text(self, i64 n);
+    double number(self, i64 n);
+    i64 integer(self, i64 n);
+    bool boolean(self, i64 n);
+    bool is_null(self, i64 n);
 
     // ---- writing: the node and what is below it as compact JSON text
-    String dump(self, int n);
+    String dump(self, i64 n);
 }
 
 // the entry points: Json::parse(text), Json::quote(s), Json::num_text(x)
@@ -919,7 +919,7 @@ struct Csv {
 struct Toml {
     // the value of the key as it is written (a quoted text without its quotes), or None
     static Option<String> get(String text, String key);
-    static Option<int> get_int(String text, String key);
+    static Option<i64> get_int(String text, String key);
     static Option<bool> get_bool(String text, String key);
     static Option<double> get_double(String text, String key);
 }
@@ -937,7 +937,7 @@ struct __Data {
     static String json_num_text(double x);
     static Option<String> toml_get(String text, String key);
     static String toml_get_or(String text, String key, String fallback);
-    static Option<int> toml_get_int(String text, String key);
+    static Option<i64> toml_get_int(String text, String key);
     static Option<bool> toml_get_bool(String text, String key);
     static Option<double> toml_get_double(String text, String key);
 }
@@ -950,15 +950,15 @@ struct __Data {
 //   String h = Sha256::hex("abc");            // ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad
 //   String f = Sha256::file("jcmp")?;         // the same for a file (any bytes)
 struct Sha256 {
-    static void init(int^ st);
-    static void constants(int^ st);
+    static void init(i64^ st);
+    static void constants(i64^ st);
     // the 32 bits of x turned right by n places (n = 1 .. 31); the mask first: the compiler then knows the value fits in 32 bits and
     // makes one `ror w` of it
-    static int rotr(int x, int n);
+    static i64 rotr(i64 x, i64 n);
     // one block of 64 bytes at p
-    static void block(int^ st, char^ p);
+    static void block(i64^ st, char^ p);
     // the last bytes (tn < 64) of a message of total bytes, padded; then the digest as hex
-    static String finish(int^ st, char^ tail, int tn, int total);
+    static String finish(i64^ st, char^ tail, i64 tn, i64 total);
     // the digest of the bytes of a String
     static String hex(String s);
     // the digest of the bytes of a file
@@ -977,57 +977,57 @@ struct Hash {
 //   char out[48];   Crypto::sha384(data, n, @out);
 // Designed by the assistant (2026-10-17, the first pieces of TLS for jget: docs/design/17-tls.md), adjustable. Not constant time.
 struct Crypto {
-    static void sha512_init(int^ h);
-    static void sha384_init(int^ h);
-    static void sha512_constants(int^ k);
+    static void sha512_init(i64^ h);
+    static void sha384_init(i64^ h);
+    static void sha512_constants(i64^ k);
     // the 64-bit right rotation (the shift of a whole number is arithmetic, so the high bits are cut)
-    static int rotr64(int x, int n);
-    static int shr64(int x, int n);
-    static int load64(char^ p);
-    static void store64(char^ p, int v);
+    static i64 rotr64(i64 x, i64 n);
+    static i64 shr64(i64 x, i64 n);
+    static i64 load64(char^ p);
+    static void store64(char^ p, i64 v);
     // one block of 128 bytes; h: the 8 words of the state; k: the 80 constants; w: 80 words of room
-    static void sha512_block(int^ h, int^ k, int^ w, char^ blk);
+    static void sha512_block(i64^ h, i64^ k, i64^ w, char^ blk);
     // the digest of n bytes: bits = 512 (64 bytes out) or 384 (48 bytes out)
-    static void sha512_family(int bits, char^ data, int n, char^ out);
-    static void sha384(char^ data, int n, char^ out);
-    static void sha512(char^ data, int n, char^ out);
+    static void sha512_family(i64 bits, char^ data, i64 n, char^ out);
+    static void sha384(char^ data, i64 n, char^ out);
+    static void sha512(char^ data, i64 n, char^ out);
     // SHA-256 on raw bytes (the digest of 32 bytes goes to out)
-    static void sha256(char^ data, int n, char^ out);
+    static void sha256(char^ data, i64 n, char^ out);
     // the digest of the algorithm alg (256, 384 or 512); the number of bytes it gives
-    static int hash(int alg, char^ data, int n, char^ out);
-    static int hash_size(int alg);
+    static i64 hash(i64 alg, char^ data, i64 n, char^ out);
+    static i64 hash_size(i64 alg);
     // HMAC (RFC 2104) with the hash alg; out gets hash_size(alg) bytes
-    static void hmac(int alg, char^ key, int klen, char^ msg, int mlen, char^ out);
+    static void hmac(i64 alg, char^ key, i64 klen, char^ msg, i64 mlen, char^ out);
     // HKDF-Extract (RFC 5869): prk = HMAC(salt, ikm); an empty salt is hash_size zero bytes
-    static void hkdf_extract(int alg, char^ salt, int slen, char^ ikm, int ilen, char^ prk);
+    static void hkdf_extract(i64 alg, char^ salt, i64 slen, char^ ikm, i64 ilen, char^ prk);
     // HKDF-Expand: length bytes of output keying material (length <= 255 * hash_size)
-    static void hkdf_expand(int alg, char^ prk, int plen, char^ info, int ilen, char^ okm, int length);
+    static void hkdf_expand(i64 alg, char^ prk, i64 plen, char^ info, i64 ilen, char^ okm, i64 length);
     // ---------------------------------------------------------------- ChaCha20 and Poly1305 (RFC 8439)
-    static int rotl32(int x, int n);
-    static int le32(char^ p);
-    static void put_le32(char^ p, int v);
-    static void chacha_quarter(int^ x, int a, int b, int c, int d);
+    static i64 rotl32(i64 x, i64 n);
+    static i64 le32(char^ p);
+    static void put_le32(char^ p, i64 v);
+    static void chacha_quarter(i64^ x, i64 a, i64 b, i64 c, i64 d);
     // one block of 64 bytes of the key stream: key 32 bytes, nonce 12 bytes
-    static void chacha20_block(char^ key, int counter, char^ nonce, char^ out);
+    static void chacha20_block(char^ key, i64 counter, char^ nonce, char^ out);
     // data xor key stream (encrypts and decrypts); the first block uses `counter`; out may be the same buffer as in
-    static void chacha20_xor(char^ key, int counter, char^ nonce, char^ in, int n, char^ out);
+    static void chacha20_xor(char^ key, i64 counter, char^ nonce, char^ in, i64 n, char^ out);
     // Poly1305 of n bytes with the one-time key (32 bytes); the tag (16 bytes) goes to out
-    static void poly1305(char^ key, char^ msg, int n, char^ out);
+    static void poly1305(char^ key, char^ msg, i64 n, char^ out);
     // the data that Poly1305 signs in the AEAD: aad, padding to 16, ciphertext, padding to 16, the two lengths (8 bytes each)
-    static void aead_tag(char^ key, char^ nonce, char^ aad, int alen, char^ ct, int clen, char^ tag);
+    static void aead_tag(char^ key, char^ nonce, char^ aad, i64 alen, char^ ct, i64 clen, char^ tag);
     // ChaCha20-Poly1305 AEAD (RFC 8439): encrypts n bytes of in into out (the same size) and writes the 16 bytes tag
-    static void aead_seal(char^ key, char^ nonce, char^ aad, int alen, char^ in, int n, char^ out, char^ tag);
+    static void aead_seal(char^ key, char^ nonce, char^ aad, i64 alen, char^ in, i64 n, char^ out, char^ tag);
     // checks the tag of the n bytes of ciphertext and decrypts them into out; false (and out is not written) when the tag is wrong
-    static bool aead_open(char^ key, char^ nonce, char^ aad, int alen, char^ ct, int n, char^ tag, char^ out);
+    static bool aead_open(char^ key, char^ nonce, char^ aad, i64 alen, char^ ct, i64 n, char^ tag, char^ out);
     // ---------------------------------------------------------------- X25519 (RFC 7748; the numbers are 16 limbs of 16 bits, after TweetNaCl)
-    static void gf_car(int^ o);
-    static void gf_sel(int^ p, int^ q, int b);
-    static void gf_pack(char^ o, int^ n);
-    static void gf_unpack(int^ o, char^ n);
-    static void gf_add(int^ o, int^ a, int^ b);
-    static void gf_sub(int^ o, int^ a, int^ b);
-    static void gf_mul(int^ o, int^ a, int^ b);
-    static void gf_inv(int^ o, int^ x);
+    static void gf_car(i64^ o);
+    static void gf_sel(i64^ p, i64^ q, i64 b);
+    static void gf_pack(char^ o, i64^ n);
+    static void gf_unpack(i64^ o, char^ n);
+    static void gf_add(i64^ o, i64^ a, i64^ b);
+    static void gf_sub(i64^ o, i64^ a, i64^ b);
+    static void gf_mul(i64^ o, i64^ a, i64^ b);
+    static void gf_inv(i64^ o, i64^ x);
     // q = n * p on Curve25519 (n: 32 bytes, p: 32 bytes, q: 32 bytes)
     static void x25519(char^ q, char^ n, char^ p);
     // the public key of a private key (32 random bytes): n * 9
@@ -1037,44 +1037,44 @@ struct Crypto {
     //   0 fd  8 write sequence  16 read sequence  24 write encrypted?  32 read encrypted?  40 bytes waiting in inbuf  48 plain bytes ready  56 where the plain bytes start
     //   64 inbuf (address)  72 plainbuf (address)  80 transcript (address)  88 transcript length  96 certificates (address)  104 certificates length  112 peer closed?
     //   392 cipher suite  400 CertificateVerify (address)  408 its size  416 transcript hash at CertificateVerify (32)  128 write key (32)  160 write iv (12)  176 read key (32)  208 read iv (12)  224 client handshake secret (32)  256 server handshake secret (32)  288 handshake secret (32)
-    static int tls_geti(char^ c, int off);
-    static void tls_seti(char^ c, int off, int v);
-    static void tls_put16(char^ p, int v);
-    static void tls_put24(char^ p, int v);
-    static int tls_get16(char^ p);
-    static int tls_get24(char^ p);
+    static i64 tls_geti(char^ c, i64 off);
+    static void tls_seti(char^ c, i64 off, i64 v);
+    static void tls_put16(char^ p, i64 v);
+    static void tls_put24(char^ p, i64 v);
+    static i64 tls_get16(char^ p);
+    static i64 tls_get24(char^ p);
     // HKDF-Expand-Label (RFC 8446 7.1) with SHA-256: out gets length bytes
-    static void tls_expand_label(char^ secret, String label, char^ context, int clen, char^ out, int length);
+    static void tls_expand_label(char^ secret, String label, char^ context, i64 clen, char^ out, i64 length);
     // Derive-Secret: the label and the hash of the transcript
-    static void tls_derive(char^ secret, String label, char^ transcript, int tlen, char^ out);
-    static void tls_random(char^ p, int n);
+    static void tls_derive(char^ secret, String label, char^ transcript, i64 tlen, char^ out);
+    static void tls_random(char^ p, i64 n);
     // n bytes from the socket into p (false when the other side closes first)
-    static bool tls_read_exact(int fd, char^ p, int n);
-    static bool tls_write_all(int fd, char^ p, int n);
+    static bool tls_read_exact(i64 fd, char^ p, i64 n);
+    static bool tls_write_all(i64 fd, char^ p, i64 n);
     // append a handshake message to the transcript
-    static void tls_transcript(char^ c, char^ msg, int n);
-    static void tls_nonce(char^ iv, int seq, char^ out);
+    static void tls_transcript(char^ c, char^ msg, i64 n);
+    static void tls_nonce(char^ iv, i64 seq, char^ out);
     // send one record: type, content n bytes; encrypted when the write side has keys
-    static bool tls_send_record(char^ c, int type, char^ data, int n);
+    static bool tls_send_record(char^ c, i64 type, char^ data, i64 n);
     // read one record into plainbuf: gives the content type (the inner one when it was encrypted) and sets plain length at 48; -1 when the line is closed or the record is bad
-    static int tls_read_record(char^ c);
-    static void tls_set_keys(char^ c, int write, char^ secret);
+    static i64 tls_read_record(char^ c);
+    static void tls_set_keys(char^ c, i64 write, char^ secret);
     // starts TLS on a socket that is connected (fd): gives the handle of the connection. host is the name for the server (SNI) and for the check of the certificate.
     // insecure = 1: the certificate is NOT checked (only for tests against a server of your own). On a failure the socket is closed.
-    static Result<int, Error> tls_connect(int fd, String host, int insecure);
+    static Result<i64, Error> tls_connect(i64 fd, String host, i64 insecure);
     // the check of what the server sent: the chain of certificates (trusted, named, in date) and the signature of CertificateVerify made with the key of the first one. "" when good.
     static String tls_check_server(char^ c, String host);
     // close the socket and free the memory of the connection
     static void tls_release(char^ c);
-    static Result<int, Error> tls_fail(char^ c, String why);
+    static Result<i64, Error> tls_fail(char^ c, String why);
     // send data over the connection
-    static bool tls_send(int h, String data);
+    static bool tls_send(i64 h, String data);
     // the next piece of application data ("" when the server closed the connection)
-    static String tls_recv(int h);
-    static void tls_close(int h);
+    static String tls_recv(i64 h);
+    static void tls_close(i64 h);
     // ---------------------------------------------------------------- AES-128 and GCM (FIPS 197, NIST SP 800-38D)
     static void aes_sbox(char^ out);
-    static int aes_xtime(int a);
+    static i64 aes_xtime(i64 a);
     // the 11 round keys of a 16 byte key into rk (176 bytes); sb: the S-box (256 bytes)
     static void aes_expand(char^ key, char^ rk, char^ sb);
     // one block of 16 bytes encrypted (in and out may be the same)
@@ -1082,102 +1082,102 @@ struct Crypto {
     // multiplication in GF(2^128) of GCM: x = x * h (both as 16 bytes, big-endian bit order of the standard)
     static void ghash_mul(char^ x, char^ h);
     // GHASH of the aad and the ciphertext, then the tag = E(J0) xor GHASH
-    static void gcm_tag(char^ rk, char^ sb, char^ h, char^ j0, char^ aad, int alen, char^ ct, int clen, char^ tag);
+    static void gcm_tag(char^ rk, char^ sb, char^ h, char^ j0, char^ aad, i64 alen, char^ ct, i64 clen, char^ tag);
     // counter mode starting at the counter block cb (the last 4 bytes are the counter); in -> out
-    static void gcm_ctr(char^ rk, char^ sb, char^ cb0, char^ in, int n, char^ out);
+    static void gcm_ctr(char^ rk, char^ sb, char^ cb0, char^ in, i64 n, char^ out);
     // AES-128-GCM with a 12 byte iv: encrypts n bytes of in into out, writes the 16 bytes tag
-    static void gcm_seal(char^ key, char^ iv, char^ aad, int alen, char^ in, int n, char^ out, char^ tag);
+    static void gcm_seal(char^ key, char^ iv, char^ aad, i64 alen, char^ in, i64 n, char^ out, char^ tag);
     // checks the tag and decrypts; false (out not written) when the tag is wrong
-    static bool gcm_open(char^ key, char^ iv, char^ aad, int alen, char^ ct, int n, char^ tag, char^ out);
+    static bool gcm_open(char^ key, char^ iv, char^ aad, i64 alen, char^ ct, i64 n, char^ tag, char^ out);
     // ---------------------------------------------------------------- big numbers (Montgomery arithmetic) for RSA and the curves
     // A number is an array of n limbs of 28 bits, the least significant first. The modulus must be odd.
-    static void bn_from_bytes(int^ a, int n, char^ b, int len);
+    static void bn_from_bytes(i64^ a, i64 n, char^ b, i64 len);
     // the number as len bytes, big-endian (it must fit)
-    static void bn_to_bytes(int^ a, int n, char^ out, int len);
-    static int bn_cmp(int^ a, int^ b, int n);
-    static bool bn_is_zero(int^ a, int n);
+    static void bn_to_bytes(i64^ a, i64 n, char^ out, i64 len);
+    static i64 bn_cmp(i64^ a, i64^ b, i64 n);
+    static bool bn_is_zero(i64^ a, i64 n);
     // a = a - b (the borrow out is returned)
-    static int bn_sub(int^ a, int^ b, int n);
+    static i64 bn_sub(i64^ a, i64^ b, i64 n);
     // a = a + b (the carry out is returned)
-    static int bn_add(int^ a, int^ b, int n);
+    static i64 bn_add(i64^ a, i64^ b, i64 n);
     // -m^-1 mod 2^28
-    static int mont_n0(int m0);
+    static i64 mont_n0(i64 m0);
     // r = a * b / R mod m   (R = 2^(28 n)); r may be the same array as a or b
-    static void mont_mul(int^ r, int^ a, int^ b, int^ m, int n, int n0);
+    static void mont_mul(i64^ r, i64^ a, i64^ b, i64^ m, i64 n, i64 n0);
     // rr = R^2 mod m (by doubling), n0 is returned
-    static int mont_setup(int^ m, int n, int^ rr);
+    static i64 mont_setup(i64^ m, i64 n, i64^ rr);
     // out = base ^ e mod m, e given as bytes (big-endian); base < m
-    static void mont_pow(int^ out, int^ base, char^ e, int elen, int^ m, int n, int^ rr, int n0);
+    static void mont_pow(i64^ out, i64^ base, char^ e, i64 elen, i64^ m, i64 n, i64^ rr, i64 n0);
     // ---------------------------------------------------------------- RSA signatures (RFC 8017), checking only
     // the public key as big-endian bytes: modulus nb (nlen), exponent eb (elen). halg: 256, 384 or 512 (the hash of the signed message).
-    static bool rsa_public(char^ nb, int nlen, char^ eb, int elen, char^ sig, int slen, char^ em);
+    static bool rsa_public(char^ nb, i64 nlen, char^ eb, i64 elen, char^ sig, i64 slen, char^ em);
     // the DigestInfo prefix of a hash (RFC 8017 9.2); the length
-    static int rsa_prefix(int halg, char^ out);
+    static i64 rsa_prefix(i64 halg, char^ out);
     // RSASSA-PKCS1-v1_5: the signature of the message msg
-    static bool rsa_verify_pkcs1(char^ nb, int nlen, char^ eb, int elen, int halg, char^ msg, int mlen, char^ sig, int slen);
+    static bool rsa_verify_pkcs1(char^ nb, i64 nlen, char^ eb, i64 elen, i64 halg, char^ msg, i64 mlen, char^ sig, i64 slen);
     // MGF1 (RFC 8017 B.2.1): length bytes from the seed
-    static void mgf1(int halg, char^ seed, int slen, char^ out, int length);
+    static void mgf1(i64 halg, char^ seed, i64 slen, char^ out, i64 length);
     // RSASSA-PSS with MGF1 and a salt as long as the hash (what TLS 1.3 uses): the signature of the message msg
-    static bool rsa_verify_pss(char^ nb, int nlen, char^ eb, int elen, int halg, char^ msg, int mlen, char^ sig, int slen);
+    static bool rsa_verify_pss(char^ nb, i64 nlen, char^ eb, i64 elen, i64 halg, char^ msg, i64 mlen, char^ sig, i64 slen);
     // ---------------------------------------------------------------- ECDSA on P-256 and P-384 (checking only; the curves a = -3)
-    static int unhex(String h, char^ out);
+    static i64 unhex(String h, char^ out);
     // the constants of a curve (256 or 384) as big-endian bytes: which = 0 p, 1 n, 2 Gx, 3 Gy, 4 b
-    static String ec_const(int curve, int which);
+    static String ec_const(i64 curve, i64 which);
     // modular addition / subtraction of numbers below m
-    static void fe_add(int^ r, int^ a, int^ b, int^ m, int n);
-    static void fe_sub(int^ r, int^ a, int^ b, int^ m, int n);
+    static void fe_add(i64^ r, i64^ a, i64^ b, i64^ m, i64 n);
+    static void fe_sub(i64^ r, i64^ a, i64^ b, i64^ m, i64 n);
     // points in Jacobian coordinates: 3 numbers of 16 limbs in one array (x at 0, y at 16, z at 32); z = 0 is the point at infinity.
     // The context: pm (the prime) at 0, prr at 16, [pn0, n] at 32,33 ; the numbers are in the Montgomery form.
-    static void ec_double(int^ r, int^ pt, int^ ctx);
-    static void ec_add(int^ r, int^ p1, int^ p2, int^ ctx);
+    static void ec_double(i64^ r, i64^ pt, i64^ ctx);
+    static void ec_add(i64^ r, i64^ p1, i64^ p2, i64^ ctx);
     // r = k * pt, k as limbs (kn limbs)
-    static void ec_mul(int^ r, int^ k, int kn, int^ pt, int^ ctx);
+    static void ec_mul(i64^ r, i64^ k, i64 kn, i64^ pt, i64^ ctx);
     // ECDSA (FIPS 186-4 6.4): the public key is the point (qx, qy) as big-endian bytes of the size of the curve; e: the hash of the message (bytes);
     // r and s: the two numbers of the signature (bytes). curve: 256 or 384.
-    static bool ecdsa_verify(int curve, char^ qx, char^ qy, char^ hash, int hlen, char^ rb, int rlen, char^ sb, int slen);
+    static bool ecdsa_verify(i64 curve, char^ qx, char^ qy, char^ hash, i64 hlen, char^ rb, i64 rlen, char^ sb, i64 slen);
     // a DER signature (SEQUENCE { INTEGER r, INTEGER s }) of a message that is hashed here with halg
-    static bool ecdsa_verify_der(int curve, char^ qx, char^ qy, int halg, char^ msg, int mlen, char^ sig, int slen);
+    static bool ecdsa_verify_der(i64 curve, char^ qx, char^ qy, i64 halg, char^ msg, i64 mlen, char^ sig, i64 slen);
     // ---------------------------------------------------------------- X.509 certificates (DER), the chain, the names, the dates
     // the element at p (avail bytes follow): its total size, or -1; info gets [tag, header size, content size]
-    static int der_elem(char^ p, int avail, int^ info);
-    static bool bytes_equal(char^ a, char^ b, int n);
+    static i64 der_elem(char^ p, i64 avail, i64^ info);
+    static bool bytes_equal(char^ a, char^ b, i64 n);
     // does the OID (the content bytes at p, n long) equal the hex text?
-    static bool oid_is(char^ p, int n, String hex);
+    static bool oid_is(char^ p, i64 n, String hex);
     // the fields of a certificate (offsets into the DER bytes `c`, 0 when absent):
     //  0 tbs offset  1 tbs size   2 outer signature algorithm (oid content offset)  3 its size   4 signature bits  5 size   6 issuer (whole element)  7 size   8 subject  9 size
     //  10 notBefore (content)  11 size  12 tag   13 notAfter  14 size  15 tag   16 key algorithm oid  17 size   18 key parameters oid (content)  19 size   20 public key bits  21 size
     //  22 subjectAltName extension value (the content of its OCTET STRING)  23 size   24 basicConstraints: -1 absent, 0 not a CA, 1 a CA
-    static bool x509_parse(char^ c, int len, int^ o);
+    static bool x509_parse(char^ c, i64 len, i64^ o);
     // days since 1970-01-01 of a date (the civil calendar)
-    static int days_from_civil(int y, int m, int d);
-    static int two(char^ p);
+    static i64 days_from_civil(i64 y, i64 m, i64 d);
+    static i64 two(char^ p);
     // the seconds since 1970 of a UTCTime (tag 0x17: YYMMDDHHMMSSZ) or GeneralizedTime (tag 0x18: YYYYMMDDHHMMSSZ); -1 when it is not understood
-    static int der_time(char^ p, int n, int tag);
-    static int unix_now();
+    static i64 der_time(char^ p, i64 n, i64 tag);
+    static i64 unix_now();
     static char lower_c(char c);
     // does a name of the certificate (a dNSName, may start with *.) cover the host?
-    static bool host_matches(char^ pat, int plen, String host);
+    static bool host_matches(char^ pat, i64 plen, String host);
     // is the host named in the subjectAltName extension of the certificate?
-    static bool x509_names_host(char^ c, int^ o, String host);
+    static bool x509_names_host(char^ c, i64^ o, String host);
     // the public key of a certificate: the kind (1 RSA, 2 P-256, 3 P-384, 0 not supported)
-    static int x509_key_kind(char^ c, int^ o);
+    static i64 x509_key_kind(char^ c, i64^ o);
     // verifies `msg` (mlen bytes) signed with the key of the certificate cs (parsed in os): by the signature scheme of TLS (0x0804 ...) or by an X.509 algorithm (scheme 1 sha256WithRSA, 2 sha384WithRSA, 3 sha512WithRSA, 4 ecdsa-sha256, 5 ecdsa-sha384, 6 ecdsa-sha512)
-    static bool x509_check_sig(char^ cs, int^ os, int scheme, char^ msg, int mlen, char^ sig, int slen);
+    static bool x509_check_sig(char^ cs, i64^ os, i64 scheme, char^ msg, i64 mlen, char^ sig, i64 slen);
     // the scheme number (see x509_check_sig) of the signature algorithm of a certificate; 0 when it is not supported
-    static int x509_sig_scheme(char^ c, int^ o);
+    static i64 x509_sig_scheme(char^ c, i64^ o);
     // is the certificate c (parsed in o) valid at the time `now`?
-    static bool x509_valid_at(char^ c, int^ o, int now);
+    static bool x509_valid_at(char^ c, i64^ o, i64 now);
     // is the certificate `c` signed by the certificate `i`? (the issuer name, the signature, and that i may sign certificates)
-    static bool x509_signed_by(char^ c, int^ o, char^ i, int^ oi, int now);
+    static bool x509_signed_by(char^ c, i64^ o, char^ i, i64^ oi, i64 now);
     // ---------------------------------------------------------------- base 64 and the files of trusted certificates
-    static int b64_value(int c);
+    static i64 b64_value(i64 c);
     // the bytes of a base 64 text (spaces and line ends are skipped); out must have room for n * 3 / 4 bytes
-    static int b64_decode(char^ in, int n, char^ out);
+    static i64 b64_decode(char^ in, i64 n, char^ out);
     // a whole file as text, "" when it cannot be read
     static String read_text(String path);
-    static int find_from(String s, String x, int from);
+    static i64 find_from(String s, String x, i64 from);
     // the certificates of a PEM text one after the other (DER, each prefixed by its size as 4 bytes, big-endian) in out; the number of bytes written
-    static int pem_to_der_list(String text, char^ out, int cap);
+    static i64 pem_to_der_list(String text, char^ out, i64 cap);
     // ---------------------------------------------------------------- the trust store and the check of a chain
     static String env_value(String name);
     // the names of the files of a folder, one per line ("" when it is not a folder)
@@ -1185,12 +1185,12 @@ struct Crypto {
     // the texts (PEM) in which the trusted certificates are: the files of J2K_CA (a file or a folder) or, when it is not set, the usual places
     static String[] ca_files();
     // is the certificate `last` (parsed in ol) trusted: is it in the store, or signed by a certificate of the store?
-    static bool trusted_by_store(char^ last, int lastlen, int^ ol, int now);
+    static bool trusted_by_store(char^ last, i64 lastlen, i64^ ol, i64 now);
     // the check of a chain: `chain` is the certificates one after the other, each as 4 bytes of size (big-endian) and the DER bytes, the server's certificate first.
     // Gives "" when the chain is good, else the reason. The host must be named in the first certificate; now: seconds since 1970 (0: the clock of this computer).
-    static String x509_check_chain(char^ chain, int chainlen, String host, int now);
+    static String x509_check_chain(char^ chain, i64 chainlen, String host, i64 now);
     // bytes as lower case hex
-    static String hex(char^ p, int n);
+    static String hex(char^ p, i64 n);
 }
 ```
 
@@ -1201,29 +1201,29 @@ struct Crypto {
 //   server:  int l = Net::tcp_listen(8080)?;   int c = Net::accept(l)?;   String req = Net::recv(c, 4096)?;   Net::send(c, "hi")?;
 //   client:  int s = Net::tcp_connect("127.0.0.1", 8080)?;   Net::send(s, "hello")?;   Net::close(s);
 // the state of the progress line (the speed of the last moments)
-int net_pg_t;
-int net_pg_b;
-int net_pg_sp;
+i64 net_pg_t;
+i64 net_pg_b;
+i64 net_pg_sp;
 
 struct Net {
-    static Error fail(String what, int e);
+    static Error fail(String what, i64 e);
     // the four numbers of "a.b.c.d" in a[0..3]; false when it is not an address
-    static bool parse_ip(String s, int^ a);
+    static bool parse_ip(String s, i64^ a);
     // sockaddr_in in 16 bytes: family 2, the port and the address in network order
-    static void make_addr(char^ sa, int a0, int a1, int a2, int a3, int port);
+    static void make_addr(char^ sa, i64 a0, i64 a1, i64 a2, i64 a3, i64 port);
     // a socket that listens on the port (0: the system picks one; Net::port_of tells which) on every address of this computer
-    static Result<int, Error> tcp_listen(int port);
+    static Result<i64, Error> tcp_listen(i64 port);
     // the port that the socket is bound to
-    static int port_of(int fd);
-    static Result<int, Error> accept(int fd);
-    static Result<int, Error> tcp_connect(String ip, int port);
+    static i64 port_of(i64 fd);
+    static Result<i64, Error> accept(i64 fd);
+    static Result<i64, Error> tcp_connect(String ip, i64 port);
     // two sockets that are joined to each other (a connection inside the program)
-    static Result<int, Error> pair(int^ out);
+    static Result<i64, Error> pair(i64^ out);
     // all of the text is sent (the number of bytes)
-    static Result<int, Error> send(int fd, String data);
+    static Result<i64, Error> send(i64 fd, String data);
     // what arrived (at most max bytes; "" when the other side closed)
-    static Result<String, Error> recv(int fd, int max);
-    static void close(int fd);
+    static Result<String, Error> recv(i64 fd, i64 max);
+    static void close(i64 fd);
     // ---- names and pages: Net::dns.lookup("example.com"), Net::http.get("http://...") (designed by the assistant for jget, 2026-10-17, adjustable)
     // dns: A records over UDP port 53, no cache. A name that is already an address stays; localhost, the hosts files, then the name server.
     // http: GET over plain TCP (no https yet: TLS is not written), redirects followed, chunked answers decoded.
@@ -1239,9 +1239,9 @@ struct Net {
     // the address that a hosts file (a text with lines "address name name ...") gives to the name, or ""
     static String dns_hosts_in(String text, String name);
     // the question: the header and one question for the A record of the name
-    static String dns_build_query(String name, int id);
+    static String dns_build_query(String name, i64 id);
     // the position after the name that starts at p (a name ends with 0, or with a pointer of two bytes)
-    static int dns_skip_name(String r, int p);
+    static i64 dns_skip_name(String r, i64 p);
     // the first A record of an answer, as "a.b.c.d", or "" when there is none
     static String dns_parse_answer(String r);
     // ask the name server (UDP), up to three times, waiting 3 seconds each time
@@ -1250,41 +1250,41 @@ struct Net {
     // the same, thrown as a text when it fails
     static String dns_lookup(String name);
     static String http_lower_ascii(String s);
-    static int http_find_from(String s, String x, int from);
-    static int http_hex_value(char c);
+    static i64 http_find_from(String s, String x, i64 from);
+    static i64 http_hex_value(char c);
     // the body of a chunked answer ("size in hex CRLF data CRLF ... 0 CRLF CRLF"); false in ok[0] when it is damaged
-    static String http_unchunk(String body, int^ ok);
+    static String http_unchunk(String body, i64^ ok);
     // one connection, plain (secure 0: h is the socket) or TLS (secure 1: h is the handle of Crypto::tls_connect)
-    static Result<int, Error> http_open(String host, int port, int secure);
-    static Result<int, Error> http_chan_send(int secure, int h, String data);
-    static Result<String, Error> http_chan_recv(int secure, int h, int max);
-    static void http_chan_close(int secure, int h);
-    static Result<String, Error> http_read_all(int secure, int h);
-    static Result<String, Error> http_fetch(String url, int depth);
+    static Result<i64, Error> http_open(String host, i64 port, i64 secure);
+    static Result<i64, Error> http_chan_send(i64 secure, i64 h, String data);
+    static Result<String, Error> http_chan_recv(i64 secure, i64 h, i64 max);
+    static void http_chan_close(i64 secure, i64 h);
+    static Result<String, Error> http_read_all(i64 secure, i64 h);
+    static Result<String, Error> http_fetch(String url, i64 depth);
     // A whole exchange for tools like curl: the request is  METHOD url  with the extra header lines `headers` (each ends with \r\n) and the text `body` (Content-Length is
     // added when it is not empty); the answer is the head, an empty line and the body (a chunked body is joined), as one text. follow: 1 goes on to the address of a
     // redirect (301 302 303 turn a POST into a GET, 307 and 308 keep the method), 0 gives the answer of the redirect. An HTTP code of 400 or more is an answer, not an error.
-    static Result<String, Error> http_exchange(String method, String url, String headers, String body, int follow, int depth);
+    static Result<String, Error> http_exchange(String method, String url, String headers, String body, i64 follow, i64 depth);
     // the parts of an http:// address: [host, host:port, path, port]; one text (the reason) when it cannot be used
     static String[] http_split(String url);
     // 1.2 MB, 340.5 KB, 17 B
-    static String http_size_text(int n);
+    static String http_size_text(i64 n);
     // 3:07 or 1:02:03
-    static String http_time_text(int sec);
+    static String http_time_text(i64 sec);
     // the progress line on the error output (replaces the line before it):
     //   [#########>               ]  45%  1.2 MB / 2.7 MB  340.5 KB/s  ETA 0:04
     //   [###########]  100%  2.7 MB in 0:03  (840.1 KB/s)                       (last = 1)
     //   [      <###>      ]  257.2 KB  666.4 KB/s  0:01                          (the size is not known)
     // The speed is the speed of the last second or so (not the average of everything), the bar fits the width of the terminal.
-    static void http_show_progress(int done, int total, int ms, int last);
-    static int http_now_ms();
-    static void http_write_all(int fd, String s);
+    static void http_show_progress(i64 done, i64 total, i64 ms, i64 last);
+    static i64 http_now_ms();
+    static void http_write_all(i64 fd, String s);
     // fetch the page into the file `path` as it arrives (written to path.part first, then renamed); show: 1 = a progress bar on the error
     // output when it is a terminal, 0 = never. Redirects and chunked answers are followed. Gives the number of bytes.
-    static Result<int, Error> http_download_to(String url, String path, int show, int depth);
-    static Result<int, Error> http_try_download(String url, String path, int show);
+    static Result<i64, Error> http_download_to(String url, String path, i64 show, i64 depth);
+    static Result<i64, Error> http_try_download(String url, String path, i64 show);
     // the same, thrown as a text when it fails
-    static int http_download(String url, String path, int show);
+    static i64 http_download(String url, String path, i64 show);
     static Result<String, Error> http_try_get(String url);
     // the same, thrown as a text when it fails
     static String http_get(String url);
@@ -1298,20 +1298,20 @@ struct Net {
 struct Tcp {
     // throw the message of the error (copied to a buffer that stays alive while the stack is unwound)
     static void fail(char^ msg);
-    static int take(Result<int, Error> r);
-    static int listen(int port);
-    static int accept(int l);
-    static int connect(String ip, int port);
-    static int send(int c, String data);
-    static String recv_max(int c, int max);
-    static String recv(int c);
-    static int port_of(int l);
-    static void close(int c);
-    static Result<int, Error> try_listen(int port);
-    static Result<int, Error> try_accept(int l);
-    static Result<int, Error> try_connect(String ip, int port);
-    static Result<int, Error> try_send(int c, String data);
-    static Result<String, Error> try_recv(int c);
+    static i64 take(Result<i64, Error> r);
+    static i64 listen(i64 port);
+    static i64 accept(i64 l);
+    static i64 connect(String ip, i64 port);
+    static i64 send(i64 c, String data);
+    static String recv_max(i64 c, i64 max);
+    static String recv(i64 c);
+    static i64 port_of(i64 l);
+    static void close(i64 c);
+    static Result<i64, Error> try_listen(i64 port);
+    static Result<i64, Error> try_accept(i64 l);
+    static Result<i64, Error> try_connect(String ip, i64 port);
+    static Result<i64, Error> try_send(i64 c, String data);
+    static Result<String, Error> try_recv(i64 c);
 }
 
 // Listener and Connection: the formal names of the two sides of a TCP line (docs/syntax-design.md 79.1). Nothing closes by itself:
@@ -1320,19 +1320,19 @@ struct Tcp {
 //   Connection s = Connection::to("127.0.0.1", 8080);
 // Designed by the assistant (the names Listener::on and Connection::to), adjustable.
 struct Connection {
-    int fd;
-    static Connection to(String ip, int port);
+    i64 fd;
+    static Connection to(String ip, i64 port);
     String receive(self);
-    String receive_max(self, int max);
-    int send(self, String data);
-    int close(self);
+    String receive_max(self, i64 max);
+    i64 send(self, String data);
+    i64 close(self);
 }
 struct Listener {
-    int fd;
-    static Listener on(int port);
-    int port(self);
+    i64 fd;
+    static Listener on(i64 port);
+    i64 port(self);
     Connection accept(self);
-    int close(self);
+    i64 close(self);
 }
 ```
 
@@ -1355,7 +1355,7 @@ struct Listener {
 // own stack, so that memory stays until the program ends.
 
 struct Mutex {
-    int state;
+    i64 state;
                          // 0 free, 1 taken, 2 taken and somebody waits
 
     void init(self);
@@ -1366,7 +1366,7 @@ struct Mutex {
 }
 
 struct Thread {
-    int^ cb;
+    i64^ cb;
                            // [0] thread id (the kernel makes it 0 when the thread ends), [1] stack, [2] size, [3] detached
 
     // start function(arg) in a new thread
@@ -1377,9 +1377,9 @@ struct Thread {
     void detach(self);
     bool is_running(self);
     // pause the calling thread for ms milliseconds
-    static void sleep(int ms);
+    static void sleep(i64 ms);
     static void yield();
-    static int id();
+    static i64 id();
 }
 ```
 
@@ -1403,8 +1403,8 @@ struct f64x2 {
 
     // f64x2::load(a, i) is the pair a[i], a[i + 1] in one 16-byte load; v.store(a, i) writes it back (the compiler makes the
     // instruction; these bodies say what it means)
-    static f64x2 load(double^ p, int i);
-    void store(self, double^ p, int i);
+    static f64x2 load(double^ p, i64 i);
+    void store(self, double^ p, i64 i);
     // the lanes together: sum() is x + y, min() and max() the smaller and the larger lane
     double sum(self);
     double min(self);
@@ -1412,14 +1412,14 @@ struct f64x2 {
 }
 
 struct i64x2 {
-    int x;
-    int y;
+    i64 x;
+    i64 y;
 
-    static i64x2 load(int^ p, int i);
-    void store(self, int^ p, int i);
-    int sum(self);
-    int min(self);
-    int max(self);
+    static i64x2 load(i64^ p, i64 i);
+    void store(self, i64^ p, i64 i);
+    i64 sum(self);
+    i64 min(self);
+    i64 max(self);
 }
 
 struct f32x4 {
@@ -1428,8 +1428,8 @@ struct f32x4 {
     float z;
     float w;
 
-    static f32x4 load(float^ p, int i);
-    void store(self, float^ p, int i);
+    static f32x4 load(float^ p, i64 i);
+    void store(self, float^ p, i64 i);
     // sum() is (x + y) + (z + w)
     float sum(self);
     float min(self);
@@ -1442,8 +1442,8 @@ struct i32x4 {
     i32 z;
     i32 w;
 
-    static i32x4 load(i32^ p, int i);
-    void store(self, i32^ p, int i);
+    static i32x4 load(i32^ p, i64 i);
+    void store(self, i32^ p, i64 i);
     // sum() is (x + y) + (z + w)
     i32 sum(self);
     i32 min(self);
@@ -1471,8 +1471,8 @@ struct i8x16 {
  i8 l14;
  i8 l15;
 
-    static i8x16 load(i8^ p, int i);
-    void store(self, i8^ p, int i);
+    static i8x16 load(i8^ p, i64 i);
+    void store(self, i8^ p, i64 i);
     // the meaning of dot (the compiler makes SDOT of it on aarch64)
     i32x4 dot(self, i8x16 o);
 }

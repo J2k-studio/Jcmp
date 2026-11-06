@@ -11,42 +11,42 @@
 // registers, run passes on the IR and allocate registers.
 
 char lf_why[100];                 // why the last function could not be lifted
-int lf_lifted;                    // counts, for -irstat
-int lf_failed;
-int lf_blab[8192];                // the labels of the function: their numbers and the block that each one starts
-int lf_blk[8192];
-int lf_nlab;
-int lf_leader[65536];             // 1: the line starts a block (and the number of the block, from 1)
-int lf_depth_at[IR_MAXB];         // the depth of the stack at the start of each block (-1: not known yet)
-int lf_depth;                     // the depth of the stack now (bytes below the frame pointer)
-int lf_inbody;                    // 1: the lines are the body of a defer
-int lf_isent[IR_MAXB];            // 1: the block is called locally (a defer body), ARM32 only
-int lf_cmp_kind;                  // the comparison that is waiting for its jump: 1 whole numbers, 2 doubles, 0 none
-int lf_cmp_a;
-int lf_cmp_b;
-int lf_cmp_bi;
-int lf_epi_line;                  // the line where the epilogue starts (-1: none, a program that ends with a system call)
-int lf_epi_len;                   // how many lines the epilogue has
+i64 lf_lifted;                    // counts, for -irstat
+i64 lf_failed;
+i64 lf_blab[8192];                // the labels of the function: their numbers and the block that each one starts
+i64 lf_blk[8192];
+i64 lf_nlab;
+i64 lf_leader[65536];             // 1: the line starts a block (and the number of the block, from 1)
+i64 lf_depth_at[IR_MAXB];         // the depth of the stack at the start of each block (-1: not known yet)
+i64 lf_depth;                     // the depth of the stack now (bytes below the frame pointer)
+i64 lf_inbody;                    // 1: the lines are the body of a defer
+i64 lf_isent[IR_MAXB];            // 1: the block is called locally (a defer body), ARM32 only
+i64 lf_cmp_kind;                  // the comparison that is waiting for its jump: 1 whole numbers, 2 doubles, 0 none
+i64 lf_cmp_a;
+i64 lf_cmp_b;
+i64 lf_cmp_bi;
+i64 lf_epi_line;                  // the line where the epilogue starts (-1: none, a program that ends with a system call)
+i64 lf_epi_len;                   // how many lines the epilogue has
 char lf_epi_text[1024];           // the epilogue as it was written, to be used again by the lowering
-int lf_epi_n;
-int lf_body_start;                // the first line after the prologue
-int lf_fp;                        // the vreg of the frame pointer (x29)
-int lf_head_n;                    // the lines before the body (the prologue), as text
+i64 lf_epi_n;
+i64 lf_body_start;                // the first line after the prologue
+i64 lf_fp;                        // the vreg of the frame pointer (x29)
+i64 lf_head_n;                    // the lines before the body (the prologue), as text
 char lf_head_text[512];
 
-int lf_fail(char^ why) {
+i64 lf_fail(char^ why) {
     str_copy(@lf_why, why, 100);
     return 0;
 }
 
 // the same, with the text of the line that was not understood
-int lf_fail_line(char^ why, int idx) {
+i64 lf_fail_line(char^ why, i64 idx) {
     str_copy(@lf_why, why, 100);
-    int n = str_len(@lf_why);
+    i64 n = str_len(@lf_why);
     if n < 60 {
         lf_why[n] = ':';
         lf_why[n + 1] = ' ';
-        int k = 0;
+        i64 k = 0;
         while pt_txt[idx * 64 + k] != 0 && n + 2 + k < 98 {
             lf_why[n + 2 + k] = pt_txt[idx * 64 + k];
             k += 1;
@@ -57,20 +57,20 @@ int lf_fail_line(char^ why, int idx) {
 }
 
 // the vreg of the machine register x<n> / d<n>
-int lf_x(int n) {
+i64 lf_x(i64 n) {
     return n + 1;
 }
 
-int lf_d(int n) {
+i64 lf_d(i64 n) {
     return 32 + n;
 }
 
 // a number written as  #12  12  -12  #-12  at the operand (s, k): lf_val, true if it is one
-int lf_val;
-bool lf_imm(int s, int k) {
-    int o = (s * 4 + k) * 40;
+i64 lf_val;
+bool lf_imm(i64 s, i64 k) {
+    i64 o = (s * 4 + k) * 40;
     if k >= pt_no[s] { return false; }
-    int i = 0;
+    i64 i = 0;
     if pt_o[o] == '#' { i = 1; }
     bool neg = false;
     if pt_o[o + i] == '-' {
@@ -78,7 +78,7 @@ bool lf_imm(int s, int k) {
         i += 1;
     }
     if pt_o[o + i] < '0' || pt_o[o + i] > '9' { return false; }
-    int v = 0;
+    i64 v = 0;
     while pt_o[o + i] >= '0' && pt_o[o + i] <= '9' {
         v = v * 10 + (pt_o[o + i] - '0');
         i += 1;
@@ -90,18 +90,18 @@ bool lf_imm(int s, int k) {
 }
 
 // a memory operand  [xB, #N]  or  [xB]  or  [sp, #N]: lf_mbase (0..30, 31 = sp) and lf_moff
-int lf_mbase;
-int lf_moff;
-bool lf_mem(int s, int k) {
-    int o = (s * 4 + k) * 40;
+i64 lf_mbase;
+i64 lf_moff;
+bool lf_mem(i64 s, i64 k) {
+    i64 o = (s * 4 + k) * 40;
     if k >= pt_no[s] || pt_o[o] != '[' { return false; }
-    int i = 1;
+    i64 i = 1;
     if pt_o[o + i] == 's' && pt_o[o + i + 1] == 'p' {
         lf_mbase = 31;
         i += 2;
     } else if pt_o[o + i] == 'x' && pt_o[o + i + 1] >= '0' && pt_o[o + i + 1] <= '9' {
         i += 1;
-        int v = 0;
+        i64 v = 0;
         while pt_o[o + i] >= '0' && pt_o[o + i] <= '9' {
             v = v * 10 + (pt_o[o + i] - '0');
             i += 1;
@@ -122,7 +122,7 @@ bool lf_mem(int s, int k) {
         i += 1;
     }
     if pt_o[o + i] < '0' || pt_o[o + i] > '9' { return false; }
-    int n = 0;
+    i64 n = 0;
     while pt_o[o + i] >= '0' && pt_o[o + i] <= '9' {
         n = n * 10 + (pt_o[o + i] - '0');
         i += 1;
@@ -134,12 +134,12 @@ bool lf_mem(int s, int k) {
 }
 
 // the number of a label "L123" at the operand (s, k), or -1
-int lf_label_of(int s, int k) {
-    int o = (s * 4 + k) * 40;
+i64 lf_label_of(i64 s, i64 k) {
+    i64 o = (s * 4 + k) * 40;
     if k >= pt_no[s] || pt_o[o] != 'L' { return 0 - 1; }
-    int i = 1;
+    i64 i = 1;
     if pt_o[o + i] < '0' || pt_o[o + i] > '9' { return 0 - 1; }
-    int v = 0;
+    i64 v = 0;
     while pt_o[o + i] >= '0' && pt_o[o + i] <= '9' {
         v = v * 10 + (pt_o[o + i] - '0');
         i += 1;
@@ -149,8 +149,8 @@ int lf_label_of(int s, int k) {
 }
 
 // the block that the label number starts, or -1
-int lf_block_of_label(int num) {
-    int i = 0;
+i64 lf_block_of_label(i64 num) {
+    i64 i = 0;
     while i < lf_nlab {
         if lf_blab[i] == num { return lf_blk[i]; }
         i += 1;
@@ -164,7 +164,7 @@ bool lf_noreturn(char^ name) {
 }
 
 // the condition of a b.cc: the IR condition, or -1 (float: the same names, see below)
-int lf_cc(char^ cc, int is_float) {
+i64 lf_cc(char^ cc, i64 is_float) {
     if str_eq(cc, "eq") { return IR_EQ; }
     if str_eq(cc, "ne") { return IR_NE; }
     if is_float == 1 {
@@ -186,16 +186,16 @@ int lf_cc(char^ cc, int is_float) {
 }
 
 // the lines of the function out_buf[st .. en) go to pt_txt (64 bytes each); false if a line is too long
-bool lf_load(int st, int en) {
-    int n = 0;
-    int p = st;
+bool lf_load(i64 st, i64 en) {
+    i64 n = 0;
+    i64 p = st;
     lf_hint_n = 0;
     while p < en {
-        int e = p;
+        i64 e = p;
         while out_buf[e] != 10 { e += 1; }
         if out_buf[p] == ';' && out_buf[p + 1] == 'H' {
             // the hint line (long): kept for the register pass
-            int hc = p;
+            i64 hc = p;
             while hc < e && lf_hint_n < 16000 {
                 lf_hint_text[lf_hint_n] = out_buf[hc];
                 lf_hint_n += 1;
@@ -209,7 +209,7 @@ bool lf_load(int st, int en) {
             continue;
         }
         if e - p > 62 || n >= 65000 { return false; }
-        int c = 0;
+        i64 c = 0;
         while p + c < e {
             pt_txt[n * 64 + c] = out_buf[p + c];
             c += 1;
@@ -223,9 +223,9 @@ bool lf_load(int st, int en) {
 }
 
 // does the line idx of pt_txt start with the text t?
-bool lf_starts(int idx, char^ t) {
-    int b = idx * 64;
-    int i = 0;
+bool lf_starts(i64 idx, char^ t) {
+    i64 b = idx * 64;
+    i64 i = 0;
     while t[i] != 0 {
         if pt_txt[b + i] != t[i] { return false; }
         i += 1;
@@ -233,20 +233,20 @@ bool lf_starts(int idx, char^ t) {
     return true;
 }
 
-int lf_naked;                     // 1: the function is naked (ARM32: lifted like the others, with no frame; `ret` returns v1)
+i64 lf_naked;                     // 1: the function is naked (ARM32: lifted like the others, with no frame; `ret` returns v1)
 // a line that holds no instruction: the hint line ";H ...", the markers ";N" ";NB" ";NE" of the low level statements
-bool lf_marker(int idx) {
+bool lf_marker(i64 idx) {
     return lf_starts(idx, ";H") || (x_target == 32 && lf_starts(idx, ";N"));          // on ARM64 a function with them stays text (the instructions are the ones written)
 }
 
 
 // is the line a label "L<number>:" ? then the number, else -1
-int lf_label_line(int idx) {
-    int b = idx * 64;
+i64 lf_label_line(i64 idx) {
+    i64 b = idx * 64;
     if pt_txt[b] != 'L' { return 0 - 1; }
-    int i = 1;
+    i64 i = 1;
     if pt_txt[b + i] < '0' || pt_txt[b + i] > '9' { return 0 - 1; }
-    int v = 0;
+    i64 v = 0;
     while pt_txt[b + i] >= '0' && pt_txt[b + i] <= '9' {
         v = v * 10 + (pt_txt[b + i] - '0');
         i += 1;
@@ -257,16 +257,16 @@ int lf_label_line(int idx) {
 
 // the registers that the compare of the line (a, b) uses: is one of them written by the lines between the comparison at idx and the
 // jump that uses it? (then the comparison works on copies)
-bool lf_cmp_clobbered(int idx, int ra, int rb) {
-    int j = idx + 1;
-    int guard = 0;
+bool lf_cmp_clobbered(i64 idx, i64 ra, i64 rb) {
+    i64 j = idx + 1;
+    i64 guard = 0;
     while j < pt_n && guard < 6 {
         guard += 1;
         if lf_label_line(j) >= 0 { return false; }
         if !pt_parse(1, j) { return false; }
         if pt_mn(1, "b.eq") || pt_m[16] == 'b' && pt_m[17] == '.' { return false; }
         if pt_no[1] >= 1 && pt_writes_first(1) && pt_isreg(1, 0) {
-            int w = pt_regno(1, 0, 'x');
+            i64 w = pt_regno(1, 0, 'x');
             if w == ra || w == rb { return true; }
         }
         j += 1;
@@ -279,11 +279,11 @@ bool lf_cmp_clobbered(int idx, int ra, int rb) {
 // ---------------------------------------------------------------------------------------------- 128-bit vectors (NEON, class 2)
 // A vector register qN / vN of the text is a temporary vreg (class 2) that lives inside one block: lf_qv[N] is the vreg that holds it
 // now (0: not written in this block, so a read of it is not understood).
-int lf_qv[32];
-int lf_varr;                     // after lf_vnum: 1 = .2d, 2 = .4s
+i64 lf_qv[32];
+i64 lf_varr;                     // after lf_vnum: 1 = .2d, 2 = .4s
 
 void lf_qreset() {
-    int i = 0;
+    i64 i = 0;
     while i < 32 {
         lf_qv[i] = 0;
         i += 1;
@@ -291,12 +291,12 @@ void lf_qreset() {
 }
 
 // the number of the vector register at operand (s, k): "q5" (pre 'q') or "v5.2d" / "v5.4s" (pre 'v'); -1 if it is not one
-int lf_vnum(int s, int k, char pre) {
-    int o = (s * 4 + k) * 40;
+i64 lf_vnum(i64 s, i64 k, char pre) {
+    i64 o = (s * 4 + k) * 40;
     if k >= pt_no[s] || pt_o[o] != pre { return 0 - 1; }
-    int i = 1;
+    i64 i = 1;
     if pt_o[o + i] < '0' || pt_o[o + i] > '9' { return 0 - 1; }
-    int v = 0;
+    i64 v = 0;
     while pt_o[o + i] >= '0' && pt_o[o + i] <= '9' {
         v = v * 10 + (pt_o[o + i] - '0');
         i += 1;
@@ -317,7 +317,7 @@ int lf_vnum(int s, int k, char pre) {
 }
 
 // instructions with the vregs of the machine registers
-int lf_emit(int op, int d, int a, int b, int bi, int k) {
+i64 lf_emit(i64 op, i64 d, i64 a, i64 b, i64 bi, i64 k) {
     return ir_add(op, d, a, b, bi, k);
 }
 
@@ -325,12 +325,12 @@ int lf_emit(int op, int d, int a, int b, int bi, int k) {
 // The registers are x0 .. x9 (r0 .. r9 around a run of raw words, see docs/syntax-design.md 84); only the forms that are listed.
 
 // the modified immediate of an ARM instruction (an 8 bit number rotated right by an even amount), or -1
-int lf_arm_imm(int v) {
-    int u = v & 4294967295;
-    int r = 0;
+i64 lf_arm_imm(i64 v) {
+    i64 u = v & 4294967295;
+    i64 r = 0;
     while r < 32 {
         // rotate u left by r: the result must fit in 8 bits
-        int rot = ((u << r) | (u >> (32 - r))) & 4294967295;
+        i64 rot = ((u << r) | (u >> (32 - r))) & 4294967295;
         if r == 0 { rot = u; }
         if rot < 256 {
             return (((32 - r) / 2) % 16) << 8 | rot;
@@ -340,14 +340,14 @@ int lf_arm_imm(int v) {
     return 0 - 1;
 }
 
-int lf_inst32() {
-    int n = pt_no[0];
-    int rd = 0 - 1;
+i64 lf_inst32() {
+    i64 n = pt_no[0];
+    i64 rd = 0 - 1;
     // data processing: and eor sub rsb add adc sbc rsc tst teq cmp cmn orr mov bic mvn (a trailing s sets the flags)
-    int dop = 0 - 1;
+    i64 dop = 0 - 1;
     bool sflag = false;
     char mn[16];
-    int mi = 0;
+    i64 mi = 0;
     while pt_m[mi] != 0 && mi < 14 {
         mn[mi] = pt_m[mi];
         mi += 1;
@@ -357,8 +357,8 @@ int lf_inst32() {
         sflag = true;
     }
     char base[16];
-    int bi = 0;
-    int blen = mi;
+    i64 bi = 0;
+    i64 blen = mi;
     if sflag { blen = mi - 1; }
     while bi < blen {
         base[bi] = mn[bi];
@@ -370,7 +370,7 @@ int lf_inst32() {
     else if str_eq(@base, "sbc") { dop = 6; } else if str_eq(@base, "rsc") { dop = 7; } else if str_eq(@base, "orr") { dop = 12; }
     else if str_eq(@base, "bic") { dop = 14; }
     if dop >= 0 && n == 3 && pt_regno(0, 0, 'x') >= 0 && pt_regno(0, 1, 'x') >= 0 {
-        int w = 0xE0000000 | (dop << 21) | (pt_regno(0, 0, 'x') << 12) | (pt_regno(0, 1, 'x') << 16);
+        i64 w = 0xE0000000 | (dop << 21) | (pt_regno(0, 0, 'x') << 12) | (pt_regno(0, 1, 'x') << 16);
         if sflag { w = w | 0x00100000; }
         if pt_regno(0, 2, 'x') >= 0 {
             w = w | pt_regno(0, 2, 'x');
@@ -383,9 +383,9 @@ int lf_inst32() {
         return 1;
     }
     if (str_eq(@base, "mov") || str_eq(@base, "mvn")) && n == 2 && pt_regno(0, 0, 'x') >= 0 {
-        int dm = 13;
+        i64 dm = 13;
         if str_eq(@base, "mvn") { dm = 15; }
-        int w2 = 0xE0000000 | (dm << 21) | (pt_regno(0, 0, 'x') << 12);
+        i64 w2 = 0xE0000000 | (dm << 21) | (pt_regno(0, 0, 'x') << 12);
         if sflag { w2 = w2 | 0x00100000; }
         if pt_regno(0, 1, 'x') >= 0 {
             w2 = w2 | pt_regno(0, 1, 'x');
@@ -398,10 +398,10 @@ int lf_inst32() {
         return 1;
     }
     if (str_eq(@mn, "tst") || str_eq(@mn, "teq") || str_eq(@mn, "cmn")) && n == 2 && pt_regno(0, 0, 'x') >= 0 {
-        int cop = 8;
+        i64 cop = 8;
         if str_eq(@mn, "teq") { cop = 9; }
         if str_eq(@mn, "cmn") { cop = 11; }
-        int w3 = 0xE0100000 | (cop << 21) | (pt_regno(0, 0, 'x') << 16);
+        i64 w3 = 0xE0100000 | (cop << 21) | (pt_regno(0, 0, 'x') << 16);
         if pt_regno(0, 1, 'x') >= 0 {
             w3 = w3 | pt_regno(0, 1, 'x');
         } else if lf_imm(0, 1) && lf_arm_imm(lf_val) >= 0 {
@@ -422,20 +422,20 @@ int lf_inst32() {
         return 1;
     }
     if (str_eq(@mn, "umull") || str_eq(@mn, "smull")) && n == 4 && pt_regno(0, 0, 'x') >= 0 && pt_regno(0, 1, 'x') >= 0 && pt_regno(0, 2, 'x') >= 0 && pt_regno(0, 3, 'x') >= 0 {
-        int mw = 0xE0800090;
+        i64 mw = 0xE0800090;
         if str_eq(@mn, "smull") { mw = 0xE0C00090; }
         ir_add(IR_RAW, 0, 0, 0, 0, mw | (pt_regno(0, 1, 'x') << 16) | (pt_regno(0, 0, 'x') << 12) | (pt_regno(0, 3, 'x') << 8) | pt_regno(0, 2, 'x'));
         return 1;
     }
     if (str_eq(@mn, "udiv") || str_eq(@mn, "sdiv")) && n == 3 && pt_regno(0, 0, 'x') >= 0 && pt_regno(0, 1, 'x') >= 0 && pt_regno(0, 2, 'x') >= 0 {
-        int dw = 0xE730F010;
+        i64 dw = 0xE730F010;
         if str_eq(@mn, "sdiv") { dw = 0xE710F010; }
         ir_add(IR_RAW, 0, 0, 0, 0, dw | (pt_regno(0, 0, 'x') << 16) | (pt_regno(0, 2, 'x') << 8) | pt_regno(0, 1, 'x'));
         return 1;
     }
     // one register to one register: clz rbit rev uxtb uxth sxtb sxth
     if n == 2 && pt_regno(0, 0, 'x') >= 0 && pt_regno(0, 1, 'x') >= 0 {
-        int base2 = 0;
+        i64 base2 = 0;
         if str_eq(@mn, "uxtb") { base2 = 0xE6EF0070; }
         else if str_eq(@mn, "uxth") { base2 = 0xE6FF0070; }
         else if str_eq(@mn, "sxtb") { base2 = 0xE6AF0070; }
@@ -447,9 +447,9 @@ int lf_inst32() {
     }
     // bit fields: ubfx / sbfx rd, rn, lsb, width
     if (str_eq(@mn, "ubfx") || str_eq(@mn, "sbfx")) && n == 4 && pt_regno(0, 0, 'x') >= 0 && pt_regno(0, 1, 'x') >= 0 && lf_imm(0, 2) {
-        int lsb = lf_val;
+        i64 lsb = lf_val;
         if lf_imm(0, 3) && lsb >= 0 && lsb < 32 && lf_val >= 1 && lsb + lf_val <= 32 {
-            int bw = 0xE7E00050;
+            i64 bw = 0xE7E00050;
             if str_eq(@mn, "sbfx") { bw = 0xE7A00050; }
             ir_add(IR_RAW, 0, 0, 0, 0, bw | ((lf_val - 1) << 16) | (pt_regno(0, 0, 'x') << 12) | (lsb << 7) | pt_regno(0, 1, 'x'));
             return 1;
@@ -457,10 +457,10 @@ int lf_inst32() {
     }
     // memory: ldr str ldrb strb ldrex rt, [rn, #off]   strex rd, rt, [rn]
     if (str_eq(@mn, "ldr") || str_eq(@mn, "str") || str_eq(@mn, "ldrb") || str_eq(@mn, "strb")) && n == 2 && pt_regno(0, 0, 'x') >= 0 && lf_mem(0, 1) && lf_moff > 0 - 4096 && lf_moff < 4096 {
-        int mem = 0xE5000000;
+        i64 mem = 0xE5000000;
         if str_eq(@mn, "ldr") || str_eq(@mn, "ldrb") { mem = mem | 0x00100000; }
         if str_eq(@mn, "strb") || str_eq(@mn, "ldrb") { mem = mem | 0x00400000; }
-        int off = lf_moff;
+        i64 off = lf_moff;
         if off >= 0 { mem = mem | 0x00800000; } else { off = 0 - off; }
         ir_add(IR_RAW, 0, 0, 0, 0, mem | (lf_mbase << 16) | (pt_regno(0, 0, 'x') << 12) | off);
         return 1;
@@ -478,11 +478,11 @@ int lf_inst32() {
 }
 
 // one line of the body; returns 0 if it could not be understood (lf_why says what)
-int lf_line(int idx) {
+i64 lf_line(i64 idx) {
     if !pt_parse(0, idx) { return 1; }
-    int fp = lf_fp;
+    i64 fp = lf_fp;
     if pt_no[0] >= 1 && pt_isreg(0, 0) && pt_writes_first(0) {
-        int wr = pt_regno(0, 0, 'x');
+        i64 wr = pt_regno(0, 0, 'x');
         if wr == 27 || wr == 28 || wr == 29 { return lf_fail("a write to x27, x28 or x29"); }
     }
     // a machine word written by the program (raw<u32>[...]): the ARM32 target puts it in the code as it is
@@ -492,10 +492,10 @@ int lf_line(int idx) {
     }
     // 128-bit vectors: ldr / str qN, [..]; fadd fsub fmul fdiv add sub mul vD.T, vN.T, vM.T; dup vD.T, xN | wN
     if (pt_mn(0, "ldr") || pt_mn(0, "str")) && pt_no[0] == 2 && lf_vnum(0, 0, 'q') >= 0 {
-        int qn = lf_vnum(0, 0, 'q');
+        i64 qn = lf_vnum(0, 0, 'q');
         if !lf_mem(0, 1) { return lf_fail_line("memory access", idx); }
-        int qbase = 0;
-        int qoff = lf_moff;
+        i64 qbase = 0;
+        i64 qoff = lf_moff;
         if lf_mbase == 29 && lf_moff >= lf_frame { return lf_fail("reads an argument that was passed on the stack (more than 8 arguments)"); }
         if lf_mbase == 31 {
             qbase = fp;
@@ -504,32 +504,32 @@ int lf_line(int idx) {
             qbase = lf_x(lf_mbase);
         }
         if pt_mn(0, "ldr") {
-            int qv = ir_vreg(2);
-            int qe = lf_emit(IR_LOAD, qv, qbase, 0, 0, qoff);
+            i64 qv = ir_vreg(2);
+            i64 qe = lf_emit(IR_LOAD, qv, qbase, 0, 0, qoff);
             ir_w[qe] = 16;
             lf_qv[qn] = qv;
         } else {
             if lf_qv[qn] == 0 { return lf_fail("a vector register that was not written in this block"); }
-            int qs = lf_emit(IR_STORE, 0, qbase, lf_qv[qn], 0, qoff);
+            i64 qs = lf_emit(IR_STORE, 0, qbase, lf_qv[qn], 0, qoff);
             ir_w[qs] = 16;
         }
         return 1;
     }
     if pt_mn(0, "sdotz") && pt_no[0] == 3 && lf_vnum(0, 0, 'v') >= 0 {
         // sdotz vD.4s, vN.16b, vM.16b: D = the dot products of the bytes of N and M, four bytes into every 32-bit lane (the assembler makes SDOT of it)
-        int zd = lf_vnum(0, 0, 'v');
-        int zn = lf_vnum(0, 1, 'v');
-        int zm = lf_vnum(0, 2, 'v');
+        i64 zd = lf_vnum(0, 0, 'v');
+        i64 zn = lf_vnum(0, 1, 'v');
+        i64 zm = lf_vnum(0, 2, 'v');
         if zn < 0 || zm < 0 { return lf_fail("a vector instruction that is not understood"); }
         if lf_qv[zn] == 0 || lf_qv[zm] == 0 { return lf_fail("a vector register that was not written in this block"); }
-        int zres = ir_vreg(2);
-        int ze = lf_emit(IR_VOP, zres, lf_qv[zn], lf_qv[zm], 0, 11);
+        i64 zres = ir_vreg(2);
+        i64 ze = lf_emit(IR_VOP, zres, lf_qv[zn], lf_qv[zm], 0, 11);
         ir_w[ze] = 2;
         lf_qv[zd] = zres;
         return 1;
     }
     if pt_no[0] == 3 && lf_vnum(0, 0, 'v') >= 0 {
-        int vk = 0 - 1;
+        i64 vk = 0 - 1;
         if pt_mn(0, "fadd") { vk = 0; }
         else if pt_mn(0, "fsub") { vk = 1; }
         else if pt_mn(0, "fmul") { vk = 2; }
@@ -538,27 +538,27 @@ int lf_line(int idx) {
         else if pt_mn(0, "sub") { vk = 5; }
         else if pt_mn(0, "mul") { vk = 6; }
         if vk < 0 { return lf_fail("a vector instruction that is not understood"); }
-        int vd = lf_vnum(0, 0, 'v');
-        int arr = lf_varr;
-        int vn = lf_vnum(0, 1, 'v');
+        i64 vd = lf_vnum(0, 0, 'v');
+        i64 arr = lf_varr;
+        i64 vn = lf_vnum(0, 1, 'v');
         if vn < 0 || lf_varr != arr { return lf_fail("a vector instruction that is not understood"); }
-        int vm = lf_vnum(0, 2, 'v');
+        i64 vm = lf_vnum(0, 2, 'v');
         if vm < 0 || lf_varr != arr { return lf_fail("a vector instruction that is not understood"); }
         if lf_qv[vn] == 0 || lf_qv[vm] == 0 { return lf_fail("a vector register that was not written in this block"); }
-        int vres = ir_vreg(2);
-        int ve = lf_emit(IR_VOP, vres, lf_qv[vn], lf_qv[vm], 0, vk);
+        i64 vres = ir_vreg(2);
+        i64 ve = lf_emit(IR_VOP, vres, lf_qv[vn], lf_qv[vm], 0, vk);
         ir_w[ve] = arr;
         lf_qv[vd] = vres;
         return 1;
     }
     if pt_mn(0, "dup") && pt_no[0] == 2 && lf_vnum(0, 0, 'v') >= 0 {
-        int dd = lf_vnum(0, 0, 'v');
-        int darr = lf_varr;
-        int sr = 0 - 1;
+        i64 dd = lf_vnum(0, 0, 'v');
+        i64 darr = lf_varr;
+        i64 sr = 0 - 1;
         if darr == 1 { sr = pt_regno(0, 1, 'x'); } else { sr = pt_regno(0, 1, 'w'); }
         if sr < 0 { return lf_fail("a vector instruction that is not understood"); }
-        int dres = ir_vreg(2);
-        int de = lf_emit(IR_VDUP, dres, lf_x(sr), 0, 0, 0);
+        i64 dres = ir_vreg(2);
+        i64 de = lf_emit(IR_VDUP, dres, lf_x(sr), 0, 0, 0);
         ir_w[de] = darr;
         lf_qv[dd] = dres;
         return 1;
@@ -579,7 +579,7 @@ int lf_line(int idx) {
         return lf_fail("the address of something on the stack (add xN, sp, #K)");
     }
     if pt_mn(0, "mov") && pt_no[0] == 2 && pt_isreg(0, 0) {
-        int d = lf_x(pt_regno(0, 0, 'x'));
+        i64 d = lf_x(pt_regno(0, 0, 'x'));
         if pt_op(0, 1, "sp") { return lf_fail("mov xN, sp"); }
         if pt_isreg(0, 1) {
             lf_emit(IR_COPY, d, lf_x(pt_regno(0, 1, 'x')), 0, 0, 0);
@@ -592,7 +592,7 @@ int lf_line(int idx) {
         return lf_fail_line("mov", idx);
     }
     // the three-operand arithmetic: add sub mul sdiv udiv and orr eor lsl lsr asr (register or number as the last operand)
-    int op = 0;
+    i64 op = 0;
     if pt_mn(0, "add") { op = IR_ADD; }
     else if pt_mn(0, "sub") { op = IR_SUB; }
     else if pt_mn(0, "mul") { op = IR_MUL; }
@@ -609,8 +609,8 @@ int lf_line(int idx) {
     else if pt_mn(0, "ror32") { op = IR_ROTR32; }
     if op != 0 {
         if pt_no[0] != 3 || !pt_isreg(0, 0) || !pt_isreg(0, 1) { return lf_fail("arithmetic with an operand that is not understood"); }
-        int dd = lf_x(pt_regno(0, 0, 'x'));
-        int aa = lf_x(pt_regno(0, 1, 'x'));
+        i64 dd = lf_x(pt_regno(0, 0, 'x'));
+        i64 aa = lf_x(pt_regno(0, 1, 'x'));
         if pt_isreg(0, 2) {
             lf_emit(op, dd, aa, lf_x(pt_regno(0, 2, 'x')), 0, 0);
             return 1;
@@ -623,7 +623,7 @@ int lf_line(int idx) {
     }
     if (pt_mn(0, "msub") || pt_mn(0, "madd")) && pt_no[0] == 4 && pt_isreg(0, 0) && pt_isreg(0, 1) && pt_isreg(0, 2) && pt_isreg(0, 3) {
         // d = a -/+ n * m
-        int t = ir_vreg(0);
+        i64 t = ir_vreg(0);
         lf_emit(IR_MUL, t, lf_x(pt_regno(0, 1, 'x')), lf_x(pt_regno(0, 2, 'x')), 0, 0);
         if pt_mn(0, "msub") {
             lf_emit(IR_SUB, lf_x(pt_regno(0, 0, 'x')), lf_x(pt_regno(0, 3, 'x')), t, 0, 0);
@@ -633,7 +633,7 @@ int lf_line(int idx) {
         return 1;
     }
     if (pt_mn(0, "clz") || pt_mn(0, "rbit") || pt_mn(0, "rev") || pt_mn(0, "popcnt")) && pt_no[0] == 2 && pt_isreg(0, 0) && pt_isreg(0, 1) {
-        int opb = IR_CLZ;
+        i64 opb = IR_CLZ;
         if pt_mn(0, "rbit") { opb = IR_RBIT; }
         if pt_mn(0, "rev") { opb = IR_BSWAP; }
         if pt_mn(0, "popcnt") { opb = IR_POPCNT; }
@@ -641,21 +641,21 @@ int lf_line(int idx) {
         return 1;
     }
     if (pt_mn(0, "neg") || pt_mn(0, "mvn")) && pt_no[0] == 2 && pt_isreg(0, 0) && pt_isreg(0, 1) {
-        int opn = IR_NEG;
+        i64 opn = IR_NEG;
         if pt_mn(0, "mvn") { opn = IR_NOT; }
         lf_emit(opn, lf_x(pt_regno(0, 0, 'x')), lf_x(pt_regno(0, 1, 'x')), 0, 0, 0);
         return 1;
     }
     if (pt_mn(0, "sxtb") || pt_mn(0, "sxth") || pt_mn(0, "sxtw") || pt_mn(0, "uxtb") || pt_mn(0, "uxth") || pt_mn(0, "uxtw")) && pt_no[0] == 2 && pt_isreg(0, 0) && pt_isreg(0, 1) {
-        int bits = 8;
+        i64 bits = 8;
         if pt_m[3] == 'h' { bits = 16; }
         if pt_m[3] == 'w' { bits = 32; }
-        int e = lf_emit(IR_EXT, lf_x(pt_regno(0, 0, 'x')), lf_x(pt_regno(0, 1, 'x')), 0, 0, bits);
+        i64 e = lf_emit(IR_EXT, lf_x(pt_regno(0, 0, 'x')), lf_x(pt_regno(0, 1, 'x')), 0, 0, bits);
         if pt_m[0] == 's' { ir_w[e] = 1; }
         return 1;
     }
     // memory
-    int width = 0;
+    i64 width = 0;
     bool is_load = false;
     if pt_mn(0, "ldr") { width = 8; is_load = true; }
     else if pt_mn(0, "ldrb") { width = 1; is_load = true; }
@@ -670,7 +670,7 @@ int lf_line(int idx) {
     else if pt_mn(0, "strw") { width = 4; }
     if width != 0 {
         if pt_no[0] != 2 || !lf_mem(0, 1) { return lf_fail_line("memory access", idx); }
-        int vr = 0;
+        i64 vr = 0;
         if pt_isreg(0, 0) {
             vr = lf_x(pt_regno(0, 0, 'x'));
         } else if pt_regno(0, 0, 'd') >= 0 {
@@ -679,8 +679,8 @@ int lf_line(int idx) {
         } else {
             return lf_fail("a memory access with a register that is not understood");
         }
-        int base = 0;
-        int off = lf_moff;
+        i64 base = 0;
+        i64 off = lf_moff;
         if lf_mbase == 29 && lf_moff >= lf_frame { return lf_fail("reads an argument that was passed on the stack (more than 8 arguments)"); }
         if lf_mbase == 31 {
             base = fp;
@@ -689,31 +689,31 @@ int lf_line(int idx) {
             base = lf_x(lf_mbase);
         }
         if is_load {
-            int e = lf_emit(IR_LOAD, vr, base, 0, 0, off);
+            i64 e = lf_emit(IR_LOAD, vr, base, 0, 0, off);
             ir_w[e] = width;
         } else {
-            int e2 = lf_emit(IR_STORE, 0, base, vr, 0, off);
+            i64 e2 = lf_emit(IR_STORE, 0, base, vr, 0, off);
             ir_w[e2] = width;
         }
         return 1;
     }
     // comparisons: the jump that uses them takes the values
     if pt_mn(0, "cmp") && pt_no[0] == 2 && pt_isreg(0, 0) {
-        int ra = pt_regno(0, 0, 'x');
-        int rb = 0 - 1;
+        i64 ra = pt_regno(0, 0, 'x');
+        i64 rb = 0 - 1;
         bool bimm = false;
-        int immv = 0;
+        i64 immv = 0;
         if pt_isreg(0, 1) { rb = pt_regno(0, 1, 'x'); }
         else if lf_imm(0, 1) { bimm = true; immv = lf_val; }
         else { return lf_fail("cmp with an operand that is not understood"); }
         lf_cmp_kind = 1;
         lf_cmp_a = lf_x(ra);
         if lf_cmp_clobbered(idx, ra, rb) {
-            int ta = ir_vreg(0);
+            i64 ta = ir_vreg(0);
             lf_emit(IR_COPY, ta, lf_x(ra), 0, 0, 0);
             lf_cmp_a = ta;
             if rb >= 0 {
-                int tb = ir_vreg(0);
+                i64 tb = ir_vreg(0);
                 lf_emit(IR_COPY, tb, lf_x(rb), 0, 0, 0);
                 lf_cmp_b = tb;
             }
@@ -730,8 +730,8 @@ int lf_line(int idx) {
     }
     if pt_mn(0, "fcmp") && pt_no[0] == 2 && pt_regno(0, 0, 's') >= 0 && pt_regno(0, 1, 's') >= 0 {
         // two floats: compared as doubles (the conversion is exact, so the result is the same)
-        int sa = ir_vreg(1);
-        int sb = ir_vreg(1);
+        i64 sa = ir_vreg(1);
+        i64 sb = ir_vreg(1);
         lf_emit(IR_FCVT_SD, sa, lf_d(pt_regno(0, 0, 's')), 0, 0, 0);
         lf_emit(IR_FCVT_SD, sb, lf_d(pt_regno(0, 1, 's')), 0, 0, 0);
         lf_cmp_kind = 2;
@@ -746,8 +746,8 @@ int lf_line(int idx) {
         lf_cmp_b = lf_d(pt_regno(0, 1, 'd'));
         lf_cmp_bi = 0;
         // the registers are copied: the lines in between may write them
-        int fa = ir_vreg(1);
-        int fb = ir_vreg(1);
+        i64 fa = ir_vreg(1);
+        i64 fb = ir_vreg(1);
         lf_emit(IR_COPY, fa, lf_cmp_a, 0, 0, 0);
         lf_emit(IR_COPY, fb, lf_cmp_b, 0, 0, 0);
         lf_cmp_a = fa;
@@ -783,7 +783,7 @@ int lf_line(int idx) {
         return lf_fail("a float of 32 bits (an fmov that is not understood)");
     }
     // floats: the instructions with s registers (the register dN and sN are the same vreg: it holds the float in its low 32 bits)
-    int lfs = 0;
+    i64 lfs = 0;
     if pt_mn(0, "fadd") { lfs = IR_FADD32; }
     else if pt_mn(0, "fsub") { lfs = IR_FSUB32; }
     else if pt_mn(0, "fmul") { lfs = IR_FMUL32; }
@@ -792,7 +792,7 @@ int lf_line(int idx) {
         lf_emit(lfs, lf_d(pt_regno(0, 0, 's')), lf_d(pt_regno(0, 1, 's')), lf_d(pt_regno(0, 2, 's')), 0, 0);
         return 1;
     }
-    int lfu = 0 - 1;
+    i64 lfu = 0 - 1;
     if pt_mn(0, "fneg") { lfu = 0; }
     else if pt_mn(0, "fabs") { lfu = 1; }
     else if pt_mn(0, "fsqrt") { lfu = 2; }
@@ -819,7 +819,7 @@ int lf_line(int idx) {
         lf_emit(IR_F32TOI, lf_x(pt_regno(0, 0, 'x')), lf_d(pt_regno(0, 1, 's')), 0, 0, 0);
         return 1;
     }
-    int lfop = 0;
+    i64 lfop = 0;
     if pt_mn(0, "fadd") { lfop = IR_FADD; }
     else if pt_mn(0, "fsub") { lfop = IR_FSUB; }
     else if pt_mn(0, "fmul") { lfop = IR_FMUL; }
@@ -829,7 +829,7 @@ int lf_line(int idx) {
         lf_emit(lfop, lf_d(pt_regno(0, 0, 'd')), lf_d(pt_regno(0, 1, 'd')), lf_d(pt_regno(0, 2, 'd')), 0, 0);
         return 1;
     }
-    int lfop1 = 0;
+    i64 lfop1 = 0;
     if pt_mn(0, "fsqrt") { lfop1 = IR_FSQRT; }
     else if pt_mn(0, "fneg") { lfop1 = IR_FNEG; }
     else if pt_mn(0, "fabs") { lfop1 = IR_FABS; }
@@ -847,14 +847,14 @@ int lf_line(int idx) {
     }
     // ucvtf dN, xN (ARM32 only): hi * 2^32 + lo, both halves are exact, so the one rounding is the right one
     if pt_mn(0, "ucvtf") && pt_no[0] == 2 && pt_regno(0, 0, 'd') >= 0 && pt_regno(0, 1, 'x') >= 0 && x_target == 32 {
-        int uh = ir_vreg(0);
-        int ul = ir_vreg(0);
-        int uc = ir_vreg(0);
-        int fh = ir_vreg(1);
-        int fl = ir_vreg(1);
-        int fc = ir_vreg(1);
-        int fm = ir_vreg(1);
-        int usrc = lf_x(pt_regno(0, 1, 'x'));
+        i64 uh = ir_vreg(0);
+        i64 ul = ir_vreg(0);
+        i64 uc = ir_vreg(0);
+        i64 fh = ir_vreg(1);
+        i64 fl = ir_vreg(1);
+        i64 fc = ir_vreg(1);
+        i64 fm = ir_vreg(1);
+        i64 usrc = lf_x(pt_regno(0, 1, 'x'));
         lf_emit(IR_LSHR, uh, usrc, 32, 1, 0);
         lf_emit(IR_AND, ul, usrc, 4294967295, 1, 0);
         lf_emit(IR_I2F, fh, uh, 0, 0, 0);
@@ -872,18 +872,18 @@ int lf_line(int idx) {
     // addresses of functions
     if pt_mn(0, "adr") && pt_no[0] == 2 && pt_isreg(0, 0) {
         if lf_label_of(0, 1) >= 0 {
-            int abk = lf_block_of_label(lf_label_of(0, 1));
+            i64 abk = lf_block_of_label(lf_label_of(0, 1));
             bool abok = x_target == 32 && abk >= 0;
             if abok { abok = lf_isent[abk] == 1; }
             if !abok { return lf_fail("the address of a label inside the function (a defer or a loop body)"); }
             lf_depth_at[abk] = 64;
-            int abe = lf_emit(IR_ADDR_BLOCK, lf_x(pt_regno(0, 0, 'x')), 0, 0, 0, 0);
+            i64 abe = lf_emit(IR_ADDR_BLOCK, lf_x(pt_regno(0, 0, 'x')), 0, 0, 0, 0);
             ir_t1[abe] = abk;
             return 1;
         }
         char nm[64];
-        int o = (0 * 4 + 1) * 40;
-        int c = 0;
+        i64 o = (0 * 4 + 1) * 40;
+        i64 c = 0;
         while pt_o[o + c] != 0 && c < 62 {
             nm[c] = pt_o[o + c];
             c += 1;
@@ -897,9 +897,9 @@ int lf_line(int idx) {
 }
 
 // the arguments of every call: x0..x7 (what the callee reads is not known here)
-int lf_args[8];
-void lf_set_call_args(int e) {
-    int k = 0;
+i64 lf_args[8];
+void lf_set_call_args(i64 e) {
+    i64 k = 0;
     while k < 8 {
         lf_args[k] = lf_x(k);
         k += 1;
@@ -908,15 +908,15 @@ void lf_set_call_args(int e) {
 }
 
 // lift the function that is in pt_txt[0 .. pt_n): 1 if it worked, else 0 and the reason in lf_why
-int lf_total;                         // the lines of the body end here (the epilogue is not part of it)
-int lf_nblocks;
+i64 lf_total;                         // the lines of the body end here (the epilogue is not part of it)
+i64 lf_nblocks;
 
 // is the label the start of the body of a defer? (sub sp, sp, #16 / str x30, [sp, #0] ... ldr x30, [sp, #0] / add sp, sp, #16 / ret)
-int lf_is_defer_body(int num) {
-    int li = lf_body_start;
+i64 lf_is_defer_body(i64 num) {
+    i64 li = lf_body_start;
     while li < lf_total {
         if lf_label_line(li) == num {
-            int lj = li + 1;
+            i64 lj = li + 1;
             while lj < lf_total && (lf_marker(lj) || lf_label_line(lj) >= 0) { lj += 1; }
             if lj + 1 < lf_total && lf_starts(lj, "sub sp, sp, #16") && lf_starts(lj + 1, "str x30, [sp, #0]") { return 1; }
             return 0;
@@ -927,13 +927,13 @@ int lf_is_defer_body(int num) {
 }
 
 // the first pass: which lines start a block
-int lf_find_blocks() {
+i64 lf_find_blocks() {
     lf_nlab = 0;
-    int i = lf_body_start;
-    int nblocks = 0;
+    i64 i = lf_body_start;
+    i64 nblocks = 0;
     bool open = false;                // the block that is being made has an instruction already
     bool need_new = false;            // the line before ended a block
-    int li = 0;
+    i64 li = 0;
     while li < pt_n {
         lf_leader[li] = 0;
         li += 1;
@@ -943,7 +943,7 @@ int lf_find_blocks() {
             i += 1;
             continue;
         }
-        int lab = lf_label_line(i);
+        i64 lab = lf_label_line(i);
         if lab >= 0 {
             if nblocks == 0 || open || need_new {
                 nblocks += 1;
@@ -979,7 +979,7 @@ int lf_find_blocks() {
     return 1;
 }
 
-int lf_function(char^ name) {
+i64 lf_function(char^ name) {
     lf_why[0] = 0;
     lf_naked = 0;
     if x_target == 32 && pt_n >= 3 && lf_starts(1, ";N") { lf_naked = 1; }
@@ -996,13 +996,13 @@ int lf_function(char^ name) {
         }
         lf_body_start = 5;
         lf_frame = 0;
-        int pi = 13;
+        i64 pi = 13;
         while pt_txt[64 + pi] >= '0' && pt_txt[64 + pi] <= '9' {
             lf_frame = lf_frame * 10 + (pt_txt[64 + pi] - '0');
             pi += 1;
         }
         // the end: the epilogue (ldr x29, ldr x30, add sp, ret) or, in main, the exit call
-        int last = pt_n - 1;
+        i64 last = pt_n - 1;
         while last >= 0 && lf_marker(last) { last -= 1; }
         if lf_starts(last, "ret") && last >= 8 && lf_starts(last - 1, "add sp, sp, #") && lf_starts(last - 2, "ldr x30, [sp, #8]") && lf_starts(last - 3, "ldr x29, [sp, #0]") {
             lf_epi_line = last - 3;
@@ -1010,25 +1010,25 @@ int lf_function(char^ name) {
         if lf_epi_line >= 0 { lf_total = lf_epi_line; } else { lf_total = last + 1; }
     }
     if lf_find_blocks() == 0 { return 0; }
-    int nblocks = lf_nblocks;
+    i64 nblocks = lf_nblocks;
     if nblocks == 0 { return lf_fail("no code"); }
     if nblocks > IR_MAXB - 4 { return lf_fail("too many blocks"); }
-    int ek = 0;
+    i64 ek = 0;
     while ek < nblocks {
         lf_isent[ek] = 0;
         ek += 1;
     }
     if x_target == 32 {
         // the blocks that are the target of `bl L` or `adr xN, L` (the bodies of defer)
-        int ei = lf_body_start;
+        i64 ei = lf_body_start;
         while ei < lf_total {
             if !lf_marker(ei) && lf_label_line(ei) < 0 && pt_parse(0, ei) {
                 if (pt_mn(0, "bl") && pt_no[0] == 1) || (pt_mn(0, "adr") && pt_no[0] == 2) {
-                    int ek2 = 1;
+                    i64 ek2 = 1;
                     if pt_mn(0, "bl") { ek2 = 0; }
-                    int elab = lf_label_of(0, ek2);
+                    i64 elab = lf_label_of(0, ek2);
                     if elab >= 0 && lf_is_defer_body(elab) == 1 {
-                        int eb = lf_block_of_label(elab);
+                        i64 eb = lf_block_of_label(elab);
                         if eb >= 0 { lf_isent[eb] = 1; }
                     }
                 }
@@ -1041,9 +1041,9 @@ int lf_function(char^ name) {
         // main has no epilogue (it ends with the exit call): the tree makes that too
         char tn[128];
         str_copy(@tn, name, 128);
-        int tl = str_len(@tn);
+        i64 tl = str_len(@tn);
         if tl > 0 && tn[tl - 1] == ':' { tn[tl - 1] = 0; }
-        int tl2 = 0;
+        i64 tl2 = 0;
         while tn[tl2] != 0 && tn[tl2] != 10 { tl2 += 1; }
         tn[tl2] = 0;
         if tl2 > 0 && tn[tl2 - 1] == ':' { tn[tl2 - 1] = 0; }
@@ -1051,7 +1051,7 @@ int lf_function(char^ name) {
     }
     ir_reset(name);
     ir_nv = 64;
-    int cv = 1;
+    i64 cv = 1;
     while cv < 32 {
         ir_vcls[cv] = 0;
         cv += 1;
@@ -1065,27 +1065,27 @@ int lf_function(char^ name) {
     lf_inbody = 0;
     lf_cmp_kind = 0;
     lf_qreset();
-    int bi = 0;
+    i64 bi = 0;
     while bi < nblocks {
         lf_depth_at[bi] = 0 - 1;
         if lf_isent[bi] == 1 { lf_depth_at[bi] = 64; }
         bi += 1;
     }
-    int cur = 0 - 1;
-    int i = lf_body_start;
+    i64 cur = 0 - 1;
+    i64 i = lf_body_start;
     bool fell = true;                     // the flow can come from the line above
     while i < lf_total {
         if lf_marker(i) {
             i += 1;
             continue;
         }
-        int ldr = lf_leader[i];
+        i64 ldr = lf_leader[i];
         if ldr > 0 {
-            int nb = ir_nb;
+            i64 nb = ir_nb;
             if nb != ldr - 1 { return lf_fail("internal error: blocks out of order"); }
             if cur >= 0 && fell {
                 if lf_depth_at[nb] >= 0 && lf_depth_at[nb] != lf_depth { return lf_fail("the depth of the stack is not the same at a join"); }
-                int j = ir_add(IR_JMP, 0, 0, 0, 0, 0);
+                i64 j = ir_add(IR_JMP, 0, 0, 0, 0, 0);
                 ir_t1[j] = nb;
             }
             ir_new_block(0 - 1);
@@ -1094,7 +1094,7 @@ int lf_function(char^ name) {
             if lf_depth_at[nb] >= 0 && !fell { lf_depth = lf_depth_at[nb]; }
             if lf_depth_at[nb] < 0 { lf_depth_at[nb] = lf_depth; }
             if nb == 0 {
-                int pk = 0;
+                i64 pk = 0;
                 while pk < 8 {
                     ir_add(IR_PARAM, lf_x(pk), 0, 0, 0, pk);
                     pk += 1;
@@ -1121,17 +1121,17 @@ int lf_function(char^ name) {
             cc[0] = pt_m[2];
             cc[1] = pt_m[3];
             cc[2] = 0;
-            int ccn = lf_cc(@cc, lf_cmp_kind - 1);
+            i64 ccn = lf_cc(@cc, lf_cmp_kind - 1);
             if ccn < 0 { return lf_fail("a condition that is not understood"); }
-            int target = lf_label_of(0, 0);
+            i64 target = lf_label_of(0, 0);
             if target < 0 { return lf_fail("a conditional jump to something that is not a label"); }
-            int tb = lf_block_of_label(target);
+            i64 tb = lf_block_of_label(target);
             if tb < 0 { return lf_fail("a jump to a label that was not found"); }
-            int nxt = cur + 1;
+            i64 nxt = cur + 1;
             if nxt >= nblocks { return lf_fail("a conditional jump at the end of the function"); }
-            int opj = IR_BR;
+            i64 opj = IR_BR;
             if lf_cmp_kind == 2 { opj = IR_FBR; }
-            int e = ir_add(opj, 0, lf_cmp_a, lf_cmp_b, lf_cmp_bi, ccn);
+            i64 e = ir_add(opj, 0, lf_cmp_a, lf_cmp_b, lf_cmp_bi, ccn);
             ir_t1[e] = tb;
             ir_t2[e] = nxt;
             if lf_depth_at[tb] >= 0 && lf_depth_at[tb] != lf_depth { return lf_fail("the depth of the stack is not the same at a jump"); }
@@ -1144,11 +1144,11 @@ int lf_function(char^ name) {
             continue;
         }
         if pt_mn(0, "b") && pt_no[0] == 1 {
-            int tg = lf_label_of(0, 0);
+            i64 tg = lf_label_of(0, 0);
             if tg < 0 { return lf_fail("a jump to something that is not a label"); }
-            int tb2 = lf_block_of_label(tg);
+            i64 tb2 = lf_block_of_label(tg);
             if tb2 < 0 { return lf_fail("a jump to a label that was not found"); }
-            int e2 = ir_add(IR_JMP, 0, 0, 0, 0, 0);
+            i64 e2 = ir_add(IR_JMP, 0, 0, 0, 0, 0);
             ir_t1[e2] = tb2;
             if lf_depth_at[tb2] >= 0 && lf_depth_at[tb2] != lf_depth { return lf_fail("the depth of the stack is not the same at a jump"); }
             lf_depth_at[tb2] = lf_depth;
@@ -1157,16 +1157,16 @@ int lf_function(char^ name) {
             continue;
         }
         if pt_mn(0, "bl") && pt_no[0] == 1 && lf_label_of(0, 0) >= 0 {
-            int lcb0 = lf_block_of_label(lf_label_of(0, 0));
+            i64 lcb0 = lf_block_of_label(lf_label_of(0, 0));
             bool lcok = x_target == 32 && lcb0 >= 0;
             if lcok { lcok = lf_isent[lcb0] == 1; }
             if !lcok { return lf_fail("a call of a label inside the function (a defer)"); }
-            int lcb = lf_block_of_label(lf_label_of(0, 0));
+            i64 lcb = lf_block_of_label(lf_label_of(0, 0));
             if lcb < 0 { return lf_fail("a call of a label that was not found"); }
             // the body of a defer works above the stack cells of the caller (the caller may have a value pushed)
             if lf_depth > 64 { return lf_fail("a local call with a deep stack"); }
             lf_depth_at[lcb] = 64;
-            int lce = ir_add(IR_LCALL, 0, 0, 0, 0, 0);
+            i64 lce = ir_add(IR_LCALL, 0, 0, 0, 0, 0);
             ir_t1[lce] = lcb;
             lf_cmp_kind = 0;
             i += 1;
@@ -1182,13 +1182,13 @@ int lf_function(char^ name) {
         if pt_mn(0, "b") && pt_no[0] == 1 && lf_naked == 1 && lf_label_of(0, 0) < 0 {
             // `tail name`: the call, then the return of its result
             char tfn[64];
-            int tc = 0;
+            i64 tc = 0;
             while pt_o[tc] != 0 && tc < 62 {
                 tfn[tc] = pt_o[tc];
                 tc += 1;
             }
             tfn[tc] = 0;
-            int tce = ir_add(IR_CALL, lf_x(0), 0, 0, 0, ir_name_index(@tfn));
+            i64 tce = ir_add(IR_CALL, lf_x(0), 0, 0, 0, ir_name_index(@tfn));
             lf_set_call_args(tce);
             ir_add(IR_RET, 0, lf_x(0), 0, 0, 0);
             fell = false;
@@ -1206,7 +1206,7 @@ int lf_function(char^ name) {
         }
         if pt_mn(0, "bl") && pt_no[0] == 1 {
             char fn[64];
-            int c = 0;
+            i64 c = 0;
             while pt_o[c] != 0 && c < 62 {
                 fn[c] = pt_o[c];
                 c += 1;
@@ -1216,19 +1216,19 @@ int lf_function(char^ name) {
                 // the stack is popped after the call: arguments on the stack (more than 8) or only a value that was pushed before? The runtime
                 // helpers and the functions with few parameters take everything in registers, so it is a pop.
                 bool regs_only = fn[0] == 'j' && fn[1] == '2' && fn[2] == 'k' && fn[3] == '_';
-                int ff = find_func(@fn);
+                i64 ff = find_func(@fn);
                 if ff >= 0 && fnpar[ff] + fself[ff] <= 5 && farr[ff] == 0 { regs_only = true; }
                 if !regs_only { return lf_fail("a call with arguments on the stack (more than 8)"); }
             }
-            int ce = ir_add(IR_CALL, lf_x(0), 0, 0, 0, ir_name_index(@fn));
+            i64 ce = ir_add(IR_CALL, lf_x(0), 0, 0, 0, ir_name_index(@fn));
             lf_set_call_args(ce);
             // the registers that the callee does not read are no arguments (so a dead set-up of x2 .. x7 before the call is dead code):
             // __flush reads none, a function reads its parameters, self and the hidden address of a struct result (-irdbg 4611686018427387904: all eight)
             if x_target != 32 && (ir_opt & 4611686018427387904) == 0 {
-                int nac = 8;
+                i64 nac = 8;
                 if str_eq(@fn, "__flush") { nac = 0; }
                 else {
-                    int ffa = find_func(@fn);
+                    i64 ffa = find_func(@fn);
                     if ffa >= 0 && farr[ffa] == 0 && fnpar[ffa] + fself[ffa] + 1 < 8 { nac = fnpar[ffa] + fself[ffa] + 1; }
                 }
                 ir_ac[ce] = nac;
@@ -1242,17 +1242,17 @@ int lf_function(char^ name) {
             continue;
         }
         if pt_mn(0, "blr") && pt_no[0] == 1 && pt_isreg(0, 0) {
-            int ce2 = ir_add(IR_CALLIND, lf_x(0), lf_x(pt_regno(0, 0, 'x')), 0, 0, 0);
+            i64 ce2 = ir_add(IR_CALLIND, lf_x(0), lf_x(pt_regno(0, 0, 'x')), 0, 0, 0);
             lf_set_call_args(ce2);
             lf_cmp_kind = 0;
             i += 1;
             continue;
         }
         if pt_mn(0, "svc") {
-            int se = ir_add(IR_SYSCALL, lf_x(0), lf_x(8), 0, 0, 0);
+            i64 se = ir_add(IR_SYSCALL, lf_x(0), lf_x(8), 0, 0, 0);
             lf_set_call_args(se);
             // exit / exit_group (the number is a constant made in this block): only x0 is an argument; the others must not stay alive for it
-            int sj = se - 1;
+            i64 sj = se - 1;
             while sj >= ir_bs[ir_cur] {
                 if ir_d[sj] == lf_x(8) || (ir_op[sj] == IR_CALL || ir_op[sj] == IR_CALLIND || ir_op[sj] == IR_SYSCALL) {
                     if ir_op[sj] == IR_CONST && ir_d[sj] == lf_x(8) && (ir_k[sj] == 93 || ir_k[sj] == 94) { ir_ac[se] = 1; }
@@ -1290,16 +1290,16 @@ int lf_function(char^ name) {
 
 // ---------------------------------------------------------------------------------------------- the lowering (IR -> text)
 
-int lw_lab[IR_MAXB];              // the label number of each block in the new text
-int lw_tmp_i;                     // the temporaries (vregs from 64 on) get the scratch registers x15, x16 / d30, d31 in turn
-int lw_tmp_reg[IR_MAXV];
-int lw_need[IR_MAXB];             // 1: some jump goes to the block, so it needs a label
-int lw_maxq;                      // the deepest stack cell that the function used (bytes below the frame pointer)
-int lw_cells[512];                // the frame offsets that the stack cells got (for the hint line)
-int lw_ncells;
+i64 lw_lab[IR_MAXB];              // the label number of each block in the new text
+i64 lw_tmp_i;                     // the temporaries (vregs from 64 on) get the scratch registers x15, x16 / d30, d31 in turn
+i64 lw_tmp_reg[IR_MAXV];
+i64 lw_need[IR_MAXB];             // 1: some jump goes to the block, so it needs a label
+i64 lw_maxq;                      // the deepest stack cell that the function used (bytes below the frame pointer)
+i64 lw_cells[512];                // the frame offsets that the stack cells got (for the hint line)
+i64 lw_ncells;
 
 // the name of the register of a vreg: x5 / d3; a temporary gets a scratch register when it is written
-void lw_reg(int v) {
+void lw_reg(i64 v) {
     if v >= 1 && v <= 31 {
         rg_text("x");
         rg_int(v - 1);
@@ -1307,20 +1307,20 @@ void lw_reg(int v) {
         rg_text("d");
         rg_int(v - 32);
     } else {
-        int r = lw_tmp_reg[v];
+        i64 r = lw_tmp_reg[v];
         if ir_vcls[v] == 1 { rg_text("d"); } else if ir_vcls[v] == 2 { rg_text("v"); } else { rg_text("x"); }
         rg_int(r);
     }
 }
 
 // the single-precision name (sN) of a double register vreg
-void lw_sreg(int v) {
+void lw_sreg(i64 v) {
     rg_text("s");
     if v >= 32 && v <= 63 { rg_int(v - 32); } else { rg_int(lw_tmp_reg[v]); }
 }
 
 // the same as lw_reg for a whole-number register, written as a 32-bit one (wN)
-void lw_wreg(int v) {
+void lw_wreg(i64 v) {
     if v >= 1 && v <= 31 {
         rg_text("w");
         rg_int(v - 1);
@@ -1332,24 +1332,24 @@ void lw_wreg(int v) {
 
 // a temporary that is written now gets the next scratch register
 // (the one of the two that does not hold a temporary that is still to be read; none free: lw_ovf, the function stays as it was)
-int lw_cur;                       // the instruction being lowered
-int lw_last[IR_MAXV];             // the last instruction of its block that reads a temporary
-int lw_occ[64];                   // the temporary that sits in the scratch register r (0: none), valid inside one block
-int lw_ovf;
+i64 lw_cur;                       // the instruction being lowered
+i64 lw_last[IR_MAXV];             // the last instruction of its block that reads a temporary
+i64 lw_occ[64];                   // the temporary that sits in the scratch register r (0: none), valid inside one block
+i64 lw_ovf;
 
-void lw_def(int v) {
+void lw_def(i64 v) {
     if v >= 64 {
         lw_tmp_i += 1;
         if ir_vcls[v] == 2 { return; }                           // the vector registers were given by vr_run
-        int base = 15;
+        i64 base = 15;
         if ir_vcls[v] == 1 { base = 30; }
         // an instruction that writes its result in its last step (one machine instruction) may reuse the register of an operand
         // whose last read it is; `-irdbg 576460752303423488` switches that off
-        int lim = lw_cur;
-        int opc = ir_op[lw_cur];
+        i64 lim = lw_cur;
+        i64 opc = ir_op[lw_cur];
         if (ir_opt & 576460752303423488) == 0 && (opc == IR_ADD || opc == IR_SUB || opc == IR_MUL || opc == IR_SHL || opc == IR_ASHR || opc == IR_LSHR || opc == IR_AND || opc == IR_OR || opc == IR_XOR || opc == IR_COPY) { lim = lw_cur + 1; }
-        int r = base + lw_tmp_i % 2;
-        int o = lw_occ[r];
+        i64 r = base + lw_tmp_i % 2;
+        i64 o = lw_occ[r];
         if o != 0 && o != v && lw_last[o] >= lim {
             r = base + 1 - lw_tmp_i % 2;
             o = lw_occ[r];
@@ -1361,16 +1361,16 @@ void lw_def(int v) {
 }
 
 // the last reads of the temporaries of the block b
-void lw_scan(int b) {
-    int r = 0;
+void lw_scan(i64 b) {
+    i64 r = 0;
     while r < 64 { lw_occ[r] = 0; r += 1; }
-    int k = ir_bs[b];
+    i64 k = ir_bs[b];
     while k < ir_be[b] {
-        int op = ir_op[k];
+        i64 op = ir_op[k];
         if ir_a[k] >= 64 { lw_last[ir_a[k]] = k; }
         if ir_uses_b(op) && ir_bi[k] == 0 && ir_b[k] >= 64 { lw_last[ir_b[k]] = k; }
         if op == IR_CALL || op == IR_CALLIND || op == IR_SYSCALL {
-            int a = 0;
+            i64 a = 0;
             while a < ir_ac[k] {
                 if ir_args[ir_as[k] + a] >= 64 { lw_last[ir_args[ir_as[k] + a]] = k; }
                 a += 1;
@@ -1382,7 +1382,7 @@ void lw_scan(int b) {
 }
 
 // the second operand of an instruction: a register or a number
-void lw_b(int i) {
+void lw_b(i64 i) {
     if ir_bi[i] == 1 {
         rg_text("#");
         rg_int(ir_b[i]);
@@ -1392,7 +1392,7 @@ void lw_b(int i) {
 }
 
 // the offset of a memory access: a stack cell (negative, from the frame pointer) goes into the extra room after the frame
-int lw_offset(int base, int off) {
+i64 lw_offset(i64 base, i64 off) {
     if base == 30 && off < 0 {
         lw_note_cell(lf_frame + lw_maxq + off);
         return lf_frame + lw_maxq + off;
@@ -1401,7 +1401,7 @@ int lw_offset(int base, int off) {
 }
 
 // the text of the condition for b.cc
-char^ lw_cc(int cc, int is_float) {
+char^ lw_cc(i64 cc, i64 is_float) {
     if cc == IR_EQ { return "eq"; }
     if cc == IR_NE { return "ne"; }
     if is_float == 1 {
@@ -1436,17 +1436,17 @@ char^ lw_inv(char^ cc) {
     return "mi";
 }
 
-void lw_label(int b) {
+void lw_label(i64 b) {
     rg_text("L");
     rg_int(lw_lab[b]);
 }
 
 // does the instruction j read the vreg v (as its first or second operand or as an argument of a call)?
-bool lw_reads(int j, int v) {
+bool lw_reads(i64 j, i64 v) {
     if ir_a[j] == v { return true; }
     if ir_uses_b(ir_op[j]) && ir_bi[j] == 0 && ir_b[j] == v { return true; }
     if ir_op[j] == IR_CALL || ir_op[j] == IR_CALLIND || ir_op[j] == IR_SYSCALL {
-        int a = 0;
+        i64 a = 0;
         while a < ir_ac[j] {
             if ir_args[ir_as[j] + a] == v { return true; }
             a += 1;
@@ -1456,22 +1456,22 @@ bool lw_reads(int j, int v) {
 }
 
 // a product in a temporary that the next instruction adds or subtracts (and nobody reads again) is one madd / msub
-bool lw_fuse(int k, int b) {
+bool lw_fuse(i64 k, i64 b) {
     if ir_op[k] != IR_MUL || ir_bi[k] == 1 || k + 1 >= ir_be[b] { return false; }
-    int t = ir_d[k];
+    i64 t = ir_d[k];
     if t < 1 || ir_vcls[t] != 0 || (t >= 16 && t < 64) { return false; }
-    int n = k + 1;
-    int op = ir_op[n];
+    i64 n = k + 1;
+    i64 op = ir_op[n];
     if ir_bi[n] == 1 || ir_vcls[ir_d[n]] != 0 { return false; }
     char^ nm = null;
-    int other = 0;
+    i64 other = 0;
     if op == IR_SUB && ir_b[n] == t && ir_a[n] != t { nm = "msub"; other = ir_a[n]; }
     else if op == IR_ADD && ir_a[n] == t && ir_b[n] != t { nm = "madd"; other = ir_b[n]; }
     else if op == IR_ADD && ir_b[n] == t && ir_a[n] != t { nm = "madd"; other = ir_a[n]; }
     if nm == null { return false; }
     // nobody reads the product afterwards
     bool gone = ir_d[n] == t;
-    int j = n + 1;
+    i64 j = n + 1;
     while j < ir_be[b] && !gone {
         if lw_reads(j, t) { return false; }
         if ir_d[j] == t { gone = true; }
@@ -1481,7 +1481,7 @@ bool lw_fuse(int k, int b) {
     if t < 64 && (ir_opt & 512) != 0 { return false; }
     if t < 64 && !gone && ir_opt != 0 && (op_lo[b] & (1 << t)) != 0 { return false; }
     if t < 64 && !gone && ir_opt == 0 { return false; }
-    int d = ir_d[n];
+    i64 d = ir_d[n];
     lw_def(d);
     rg_text(nm);
     rg_text(" ");
@@ -1497,12 +1497,12 @@ bool lw_fuse(int k, int b) {
 }
 
 // the block that is written after the block b (the last block of the function is written at the end)
-int lw_ord[IR_MAXB];              // the order in which the blocks are written
-int lw_pos[IR_MAXB];
-int lw_nord;
+i64 lw_ord[IR_MAXB];              // the order in which the blocks are written
+i64 lw_pos[IR_MAXB];
+i64 lw_nord;
 
-int lw_next(int b) {
-    int p = lw_pos[b];
+i64 lw_next(i64 b) {
+    i64 p = lw_pos[b];
     if p < 0 || p + 1 >= lw_nord { return 0 - 1; }
     return lw_ord[p + 1];
 }
@@ -1511,25 +1511,25 @@ int lw_next(int b) {
 // first), the last block of the function (the exit) is written at the end
 // can the flow get from the block s back to the block target without passing the exit block (a few blocks are looked at)? Used to
 // find the side of a branch that is the body of a loop: it is written next to the test, not the exit
-int lw_seen[IR_MAXB];
-int lw_seen_stamp;
-int lw_stack[256];
+i64 lw_seen[IR_MAXB];
+i64 lw_seen_stamp;
+i64 lw_stack[256];
 
-bool lw_reaches(int s, int target) {
+bool lw_reaches(i64 s, i64 target) {
     lw_seen_stamp += 1;
-    int sp = 0;
-    int visited = 0;
+    i64 sp = 0;
+    i64 visited = 0;
     lw_stack[sp] = s;
     sp += 1;
     while sp > 0 && visited < 48 {
         sp -= 1;
-        int cur = lw_stack[sp];
+        i64 cur = lw_stack[sp];
         if cur == target { return true; }
         if cur == ir_lastb || lw_seen[cur] == lw_seen_stamp { continue; }
         lw_seen[cur] = lw_seen_stamp;
         visited += 1;
-        int t = ir_be[cur] - 1;
-        int tk = ir_op[t];
+        i64 t = ir_be[cur] - 1;
+        i64 tk = ir_op[t];
         if tk == IR_JMP {
             if sp < 250 { lw_stack[sp] = ir_t1[t]; sp += 1; }
         } else if tk == IR_BR || tk == IR_FBR {
@@ -1545,7 +1545,7 @@ bool lw_reaches(int s, int target) {
 }
 
 void lw_layout() {
-    int b = 0;
+    i64 b = 0;
     while b < ir_nb {
         lw_pos[b] = 0 - 1;
         b += 1;
@@ -1554,24 +1554,24 @@ void lw_layout() {
     b = 0;
     while b < ir_nb {
         if b != ir_lastb && lw_pos[b] < 0 && (ir_opt == 0 || op_po[b] >= 0) {
-            int cur = b;
+            i64 cur = b;
             while cur >= 0 && cur != ir_lastb && lw_pos[cur] < 0 {
                 lw_pos[cur] = lw_nord;
                 lw_ord[lw_nord] = cur;
                 lw_nord += 1;
-                int t = ir_be[cur] - 1;
-                int tk = ir_op[t];
-                int nx = 0 - 1;
+                i64 t = ir_be[cur] - 1;
+                i64 tk = ir_op[t];
+                i64 nx = 0 - 1;
                 if ir_opt != 0 {
                     if tk == IR_JMP { nx = ir_t1[t]; }
                     else if tk == IR_BR || tk == IR_FBR {
                         nx = ir_t2[t];
                         // the side that comes back to this block is the body of a loop: it follows the test (the exit is written later)
-                        int tb = ir_t1[t];
+                        i64 tb = ir_t1[t];
                         if tb != nx && lw_pos[tb] < 0 && tb != ir_lastb && lw_pos[nx] < 0 && lw_reaches(tb, cur) && !lw_reaches(nx, cur) { nx = tb; }
                         // a block that only goes back to a loop that is written already (the end of a loop body: the step and the jump back) is written after the other side, the code that does the work
                         if opt_rotate == 1 && nx != tb && lw_pos[nx] < 0 && lw_pos[tb] < 0 && tb != ir_lastb && nx != ir_lastb {
-                            int nt = ir_be[nx] - 1;
+                            i64 nt = ir_be[nx] - 1;
                             if ir_op[nt] == IR_JMP && lw_pos[ir_t1[nt]] >= 0 && !lw_reaches(tb, cur) { nx = tb; }
                         }
                         if nx == ir_lastb || lw_pos[nx] >= 0 { nx = ir_t1[t]; }
@@ -1587,14 +1587,14 @@ void lw_layout() {
     lw_nord += 1;
 }
 // the 8-bit number of a double that "fmov dN, #imm" can make (sign, 4 bits of fraction, exponent from -3 to 4), or -1
-int lw_fpimm(int bits) {
-    int low = bits & 281474976710655;                  // the lower 48 bits of the fraction must be 0
+i64 lw_fpimm(i64 bits) {
+    i64 low = bits & 281474976710655;                  // the lower 48 bits of the fraction must be 0
     if low != 0 { return 0 - 1; }
-    int e = (bits >> 52) & 2047;
-    int sign = (bits >> 63) & 1;
-    int f = (bits >> 48) & 15;
-    int bb = 0;
-    int cd = 0;
+    i64 e = (bits >> 52) & 2047;
+    i64 sign = (bits >> 63) & 1;
+    i64 f = (bits >> 48) & 15;
+    i64 bb = 0;
+    i64 cd = 0;
     if e >= 1024 && e <= 1027 { bb = 0; cd = e - 1024; }
     else if e >= 1020 && e <= 1023 { bb = 1; cd = e - 1020; }
     else { return 0 - 1; }
@@ -1602,9 +1602,9 @@ int lw_fpimm(int bits) {
 }
 
 // one instruction as text; the block b is the one that it is in (for the fall through of jumps)
-bool lw_instr(int i, int b) {
-    int op = ir_op[i];
-    int d = ir_d[i];
+bool lw_instr(i64 i, i64 b) {
+    i64 op = ir_op[i];
+    i64 d = ir_d[i];
     if op == IR_PARAM {
         return true;                                     // the arguments are in x0..x7 already
     }
@@ -1629,7 +1629,7 @@ bool lw_instr(int i, int b) {
     }
     if op == IR_FCONST {
         lw_def(d);
-        int imm8 = lw_fpimm(ir_k[i]);
+        i64 imm8 = lw_fpimm(ir_k[i]);
         if imm8 >= 0 {
             rg_text("fmovi ");
             lw_reg(d);
@@ -1674,8 +1674,8 @@ bool lw_instr(int i, int b) {
     }
     if op == IR_VLANE {
         lw_def(d);
-        int vl = ir_k[i];
-        int vw = ir_w[i];
+        i64 vl = ir_k[i];
+        i64 vw = ir_w[i];
         if ir_vcls[d] == 1 {
             rg_text("dup ");
             lw_reg(d);
@@ -1711,7 +1711,7 @@ bool lw_instr(int i, int b) {
             rg_int(lw_tmp_reg[ir_a[i]]);
             rg_text(".16b\n");
         }
-        int il = ir_k[i];
+        i64 il = ir_k[i];
         rg_text("ins v");
         rg_int(lw_tmp_reg[d]);
         if ir_w[i] == 8 {
@@ -1746,7 +1746,7 @@ bool lw_instr(int i, int b) {
             rg_put(10);
             return true;
         }
-        int vk = ir_k[i];
+        i64 vk = ir_k[i];
         if vk == 11 {
             rg_text("sdotz v");
             rg_int(lw_tmp_reg[d]);
@@ -1873,7 +1873,7 @@ bool lw_instr(int i, int b) {
         return true;
     }
     if (op == IR_LOAD || op == IR_STORE) && ir_w[i] == 16 {
-        int qo = lw_offset(ir_a[i], ir_k[i]);
+        i64 qo = lw_offset(ir_a[i], ir_k[i]);
         bool qfar = qo < 0 || qo % 16 != 0 || qo > 65520;
         if qfar {
             // the offset of ldr q is a multiple of 16: the address is made in x17 first
@@ -1903,7 +1903,7 @@ bool lw_instr(int i, int b) {
         return true;
     }
     if op == IR_LOAD || op == IR_STORE {
-        int w = ir_w[i];
+        i64 w = ir_w[i];
         if op == IR_LOAD {
             lw_def(d);
             if w == 8 { rg_text("ldr "); }
@@ -2004,7 +2004,7 @@ bool lw_instr(int i, int b) {
 // the function that was lifted goes to regs_buf as text; the frame is as large as the stack cells need (the head and the epilogue say it)
 // the hint line for the register pass: the old hints and the stack cells (plain 8-byte values)
 void lw_hint() {
-    int hl = 0;
+    i64 hl = 0;
     if lf_hint_n > 0 {
         while hl < lf_hint_n {
             rg_put(lf_hint_text[hl]);
@@ -2013,7 +2013,7 @@ void lw_hint() {
     } else {
         rg_text(";H");
     }
-    int ci = 0;
+    i64 ci = 0;
     while ci < lw_ncells {
         rg_text(" ");
         rg_int(lw_cells[ci]);
@@ -2026,20 +2026,20 @@ void lw_hint() {
 // Loop rotation at the end: a jump back to a small test block (a few instructions that end in a conditional branch) is written as a copy of that
 // test: the loop then costs one branch a turn (the test at the bottom jumps to the body) instead of a jump and a branch. The copy does exactly
 // what jumping to the test and running it does, so nothing else has to change; -norotate switches it off.
-int lw_rotdec[IR_MAXB];
-int lw_rotn;
-int lw_back[IR_MAXB];             // 1: a block that a jump from a block written after it (or from itself) goes to: the head of a loop
+i64 lw_rotdec[IR_MAXB];
+i64 lw_rotn;
+i64 lw_back[IR_MAXB];             // 1: a block that a jump from a block written after it (or from itself) goes to: the head of a loop
 
-bool lw_rot_ok(int b, int h) {
+bool lw_rot_ok(i64 b, i64 h) {
     if opt_rotate != 1 || ir_opt == 0 || h == b || h < 0 || h >= ir_nb { return false; }
     if op_po[h] < 0 || lw_pos[h] < 0 || lw_pos[b] < 0 || lw_pos[h] > lw_pos[b] { return false; }
-    int t = ir_be[h] - 1;
+    i64 t = ir_be[h] - 1;
     if t < ir_bs[h] || ir_op[t] != IR_BR { return false; }
     if ir_t1[t] < 0 || ir_t2[t] < 0 { return false; }
-    int n = 0;
-    int k = ir_bs[h];
+    i64 n = 0;
+    i64 k = ir_bs[h];
     while k < t {
-        int op = ir_op[k];
+        i64 op = ir_op[k];
         if op != IR_NOP {
             if op == IR_CALL || op == IR_CALLIND || op == IR_SYSCALL || op == IR_PARAM || op == IR_JMP || op == IR_BR || op == IR_FBR || op == IR_RET || op == IR_TRAP || op == IR_LCALL || op == IR_ADDR_BLOCK { return false; }
             n += 1;
@@ -2055,8 +2055,8 @@ bool lw_rot_ok(int b, int h) {
     return lw_rotdec[b] == 1;
 }
 
-bool lw_dup_test(int h, int b) {
-    int k = ir_bs[h];
+bool lw_dup_test(i64 h, i64 b) {
+    i64 k = ir_bs[h];
     lw_scan(h);
     while k < ir_be[h] {
         lw_cur = k;
@@ -2072,18 +2072,18 @@ bool lw_function() {
     lw_tmp_i = 0;                // the choice of x15 / x16 must not depend on the functions lowered before (the cache of the back end)
     // the deepest stack cell
     lw_maxq = 0;
-    int i = 0;
+    i64 i = 0;
     while i < ir_n {
         if (ir_op[i] == IR_LOAD || ir_op[i] == IR_STORE) && ir_a[i] == 30 && ir_k[i] < 0 {
-            int q = 0 - ir_k[i];
+            i64 q = 0 - ir_k[i];
             if q > lw_maxq { lw_maxq = q; }
         }
         i += 1;
     }
-    int nframe = (lf_frame + lw_maxq + 15) / 16 * 16;     // sp stays a multiple of 16
+    i64 nframe = (lf_frame + lw_maxq + 15) / 16 * 16;     // sp stays a multiple of 16
     // the head: the name, the frame size, the saves of x29 / x30
     char hn[64];
-    int c = 0;
+    i64 c = 0;
     while pt_txt[c] != 0 && c < 62 {
         hn[c] = pt_txt[c];
         c += 1;
@@ -2092,9 +2092,9 @@ bool lw_function() {
     rg_text(@hn);
     rg_put(10);
     rg_text("sub sp, sp, #");
-    int nn = nframe;
+    i64 nn = nframe;
     char dd[8];
-    int dk = 0;
+    i64 dk = 0;
     while dk < 7 {
         dd[6 - dk] = '0' + nn % 10;
         nn = nn / 10;
@@ -2108,8 +2108,8 @@ bool lw_function() {
     rg_put(10);
     rg_text("str x29, [sp, #0]\nstr x30, [sp, #8]\nadd x29, sp, #0\n");
     // blocks
-    int epi_label = new_label();
-    int b = 0;
+    i64 epi_label = new_label();
+    i64 b = 0;
     while b < ir_nb {
         lw_lab[b] = new_label();
         b += 1;
@@ -2135,11 +2135,11 @@ bool lw_function() {
     b = 0;
     while b < ir_nb {
         if ir_opt == 0 || op_po[b] >= 0 || b == ir_lastb {
-            int tm = ir_be[b] - 1;
-            int tk = ir_op[tm];
-            int nx = lw_next(b);
+            i64 tm = ir_be[b] - 1;
+            i64 tk = ir_op[tm];
+            i64 nx = lw_next(b);
             if tk == IR_JMP && lw_rot_ok(b, ir_t1[tm]) {
-                int ht = ir_be[ir_t1[tm]] - 1;
+                i64 ht = ir_be[ir_t1[tm]] - 1;
                 lw_need[ir_t1[ht]] = 1;
                 lw_need[ir_t2[ht]] = 1;
                 if lw_pos[ir_t1[ht]] >= 0 && lw_pos[ir_t1[ht]] <= lw_pos[b] { lw_back[ir_t1[ht]] = 1; }
@@ -2162,7 +2162,7 @@ bool lw_function() {
         }
         b += 1;
     }
-    int ord = 0;
+    i64 ord = 0;
     while ord < lw_nord {
         b = lw_ord[ord];
         ord += 1;
@@ -2173,7 +2173,7 @@ bool lw_function() {
             rg_int(lw_lab[b]);
             rg_text(":\n");
         }
-        int k = ir_bs[b];
+        i64 k = ir_bs[b];
         lw_scan(b);
         while k < ir_be[b] {
             lw_cur = k;
@@ -2221,8 +2221,8 @@ bool lw_function() {
 }
 
 // the cell was used: remember its offset for the hint line
-void lw_note_cell(int off) {
-    int i = 0;
+void lw_note_cell(i64 off) {
+    i64 i = 0;
     while i < lw_ncells {
         if lw_cells[i] == off { return; }
         i += 1;
@@ -2235,8 +2235,8 @@ void lw_note_cell(int off) {
 
 // ---------------------------------------------------------------------------------------------- the driver
 
-int ir_max = 1000000;             // -irmax N: only the first N functions that can be lifted are lowered again (to find a fault)
-int ir_min;                       // -irmin N: not the first N
+i64 ir_max = 1000000;             // -irmax N: only the first N functions that can be lifted are lowered again (to find a fault)
+i64 ir_min;                       // -irmin N: not the first N
 char ir_stat_fn[128];
 
 void ir_say(char^ a, char^ b, char^ c) {
@@ -2248,7 +2248,7 @@ void ir_say(char^ a, char^ b, char^ c) {
 
 // the passes that every function gets (the same for the functions that are kept for inlining and the others)
 void ir_passes_basic() {
-    int cf0 = cf_changes;
+    i64 cf0 = cf_changes;
     if (ir_opt & 4) != 0 && opt_nullchk == 1 {
         op_nullchk();
         if nc_changes > 0 { op_clean_run(); }
@@ -2257,12 +2257,12 @@ void ir_passes_basic() {
     if (ir_opt & 128) != 0 { op_thread(); }
     op_merge_blocks();
     if (ir_opt & 32768) != 0 {
-        int dt0 = dt_changes;
+        i64 dt0 = dt_changes;
         op_dead_temps();
         if dt_changes != dt0 && (ir_opt & 4) != 0 { op_clean_run(); }
         op_sroa();
         // the loads through the addresses are loads of the frame now: the stores of the addresses into the cells have no reader
-        int dt1 = dt_changes;
+        i64 dt1 = dt_changes;
         op_dead_temps();
         if dt_changes != dt1 {
             if (ir_opt & 4) != 0 { op_clean_run(); }
@@ -2274,9 +2274,9 @@ void ir_passes_basic() {
     if (ir_opt & 8) != 0 { op_vfwd(); }
     if (ir_opt & 8) != 0 {
         // a cell that holds a number makes the next numbers known (a size, a class, an address): again until nothing changes
-        int ccr = 0;
+        i64 ccr = 0;
         while ccr < 5 {
-            int cc0 = cc_changes;
+            i64 cc0 = cc_changes;
             op_const_cells();
             if cc_changes == cc0 { break; }
             if (ir_opt & 4) != 0 { op_clean_run(); }
@@ -2296,9 +2296,9 @@ void ir_passes_basic() {
     }
     if (ir_opt & 32768) != 0 && (ir_opt & 16777216) == 0 && (ir_opt & 2147483648) == 0 && (ir_opt & 2199023255552) == 0 {      // -irdbg 2199023255552: not
         // the cells and slots that went dead only now (a pointer that was passed through a cell, then through a slot) free the next ones: until nothing changes
-        int fx = 0;
+        i64 fx = 0;
         while fx < 4 {
-            int fc0 = dc_changes + dt_changes;
+            i64 fc0 = dc_changes + dt_changes;
             op_dead_cells();
             op_dead_temps();
             if fx > 0 && dc_changes + dt_changes == fc0 { break; }
@@ -2316,7 +2316,7 @@ void ir_passes_basic() {
     if (ir_opt & 134217728) != 0 { op_counted_loops(); }
     if (ir_opt & 128) != 0 { op_thread(); }
     if (ir_opt & 32) != 0 {
-        int fs0 = fs_changes;
+        i64 fs0 = fs_changes;
         op_fslots();
         if fs_changes != fs0 && (ir_opt & 4) != 0 { op_clean_run(); }
         op_bits_run();
@@ -2327,18 +2327,18 @@ void ir_passes_basic() {
 void ir_collect() {
     is_count = 0;
     is_ti = 0; is_tb = 0; is_ta = 0; is_tn = 0; is_th = 0; is_tv = 0;
-    int i = 0;
+    i64 i = 0;
     while i < out_len {
-        int en = rg_end(i);
+        i64 en = rg_end(i);
         if rg_is_func(i) {
-            int p = i;
+            i64 p = i;
             bool done = false;
             bool seen_epi = false;
             bool seen_exit = false;
             bool is_main = rg_has(i, "main:\n");
-            int cnt = 0;
+            i64 cnt = 0;
             while p < out_len && !done {
-                int pe = rg_end(p);
+                i64 pe = rg_end(p);
                 if p != i && rg_is_func(p) { break; }
                 cnt += 1;
                 if rg_has(p, "ldr x29, [sp, #0]") { seen_epi = true; }
@@ -2348,7 +2348,7 @@ void ir_collect() {
                 p = pe + 1;
             }
             if done && !is_main && cnt < 160 {
-                int nl = 0;
+                i64 nl = 0;
                 while i + nl < en - 1 && nl < 120 {
                     ir_stat_fn[nl] = out_buf[i + nl];
                     nl += 1;
@@ -2371,7 +2371,7 @@ void ir_collect() {
         write_err("kept for inlining: ");
         write_err_int(is_count);
         write_err("\n");
-        int f = 0;
+        i64 f = 0;
         while f < is_count {
             write_err("    ");
             write_err(@is_fname + f * 64);
@@ -2384,32 +2384,32 @@ void ir_collect() {
 }
 
 // the passes on the IR of one function (the lifted code is in the ir_ arrays); op_changed says whether the text has to be made again
-int rp_h[16];
-int rp_a[16];
-int rp_pass;
+i64 rp_h[16];
+i64 rp_a[16];
+i64 rp_pass;
 
-void rp_stage(int k) {
+void rp_stage(i64 k) {
     if x_repeat != 1 { return; }
     rp_h[k] = ir_text_hash();
 }
 
 void ir_pipeline(char^ name_) {
-            int h0 = op_hoisted;
-            int c0 = op_ra_changes;
-            int vh0 = vn_cellhits;
-            int cnt0 = 0;
+            i64 h0 = op_hoisted;
+            i64 c0 = op_ra_changes;
+            i64 vh0 = vn_cellhits;
+            i64 cnt0 = 0;
             if (ir_opt & 64) == 0 { cnt0 = op_count(); }
-            int bt0 = bt_changes;
-            int ci0 = ci_changes;
+            i64 bt0 = bt_changes;
+            i64 ci0 = ci_changes;
             if (ir_opt & 8192) != 0 && is_count > 0 && opt_debug == 0 { op_inline(name_); }
             rp_stage(1);
             ir_passes_basic();
             rp_stage(2);
-            int lc0 = lc_moved;
+            i64 lc0 = lc_moved;
             if (ir_opt & 1) != 0 { op_run(); }
             rp_stage(3);
-            int vz0 = vz_count;
-            int ss0 = ss_total;
+            i64 vz0 = vz_count;
+            i64 ss0 = ss_total;
             if (ir_opt & 268435456) != 0 {
                 op_vectorize();
                 rp_stage(4);
@@ -2430,7 +2430,7 @@ void ir_pipeline(char^ name_) {
             if (ir_opt & 8388608) == 0 { op_licm_exprs(); }
             // the cells of a block are kept in registers after the loops were looked at (a counter that is a copy is no counter for the vectoriser)
             if (ir_opt & 8) != 0 {
-                int cp0 = cp_changes;
+                i64 cp0 = cp_changes;
                 op_cell_promote();
                 if cp_changes != cp0 {
                     op_dead_cells();
@@ -2446,10 +2446,10 @@ void ir_pipeline(char^ name_) {
 
 // -xrepeat: the passes are run a second time on the same function; if the result is not the same, a pass remembers something from the
 // functions it saw before (this is what makes the result of a function depend on the others; docs/design/16-separate-compilation.md)
-int ir_text_hash() {
+i64 ir_text_hash() {
     ir_print();
-    int h = 1469598103934665603;
-    int k = 0;
+    i64 h = 1469598103934665603;
+    i64 k = 0;
     while k < ir_plen {
         h = (h xor ir_pbuf[k]) * 1099511628211;
         k += 1;
@@ -2457,19 +2457,19 @@ int ir_text_hash() {
     return h;
 }
 
-void ir_repeat_check(int i, int p) {
-    int h1 = ir_text_hash();
-    int sk = 0;
+void ir_repeat_check(i64 i, i64 p) {
+    i64 h1 = ir_text_hash();
+    i64 sk = 0;
     while sk < 16 { rp_a[sk] = rp_h[sk]; sk += 1; }
     if lf_load(i, p) {
         if lf_function(@ir_stat_fn) == 1 {
             ir_pipeline(@ir_stat_fn);
-            int h2 = ir_text_hash();
+            i64 h2 = ir_text_hash();
             if h1 != h2 {
                 write_err("repeat: the passes give another result the second time: ");
                 write_err(@ir_stat_fn);
                 write_err("  first different stage: ");
-                int st = 1;
+                i64 st = 1;
                 while st < 8 && rp_a[st] == rp_h[st] { st += 1; }
                 write_err_int(st);
                 write_err("\n");
@@ -2489,18 +2489,18 @@ void ir_run() {
 }
 
 void ir_run_loop() {
-    int i = 0;
+    i64 i = 0;
     while i < out_len {
-        int en = rg_end(i);
+        i64 en = rg_end(i);
         if par_open >= 0 && !rg_is_func(i) { par_close_open(); }
         if x_target == 32 && !rg_is_func(i) && rg_is_naked(i) {
             // a naked function (the low level of the language): lifted with no frame
-            int pn = en + 1;
+            i64 pn = en + 1;
             while pn < out_len {
                 if rg_has(pn, ".align") || rg_is_func(pn) || rg_is_naked(pn) { break; }
                 pn = rg_end(pn) + 1;
             }
-            int nn2 = 0;
+            i64 nn2 = 0;
             while i + nn2 < en - 1 && nn2 < 120 {
                 ir_stat_fn[nn2] = out_buf[i + nn2];
                 nn2 += 1;
@@ -2517,14 +2517,14 @@ void ir_run_loop() {
         if rg_is_func(i) {
             bool par_skip = par_skip_function();
             // the end of the function: the epilogue (ret) or, in main, the exit call
-            int p = i;
+            i64 p = i;
             bool done = false;
             bool seen_epi = false;
             bool seen_exit = false;
             bool is_main = rg_has(i, "main:\n");
-            int cnt = 0;
+            i64 cnt = 0;
             while p < out_len && !done {
-                int pe = rg_end(p);
+                i64 pe = rg_end(p);
                 if p != i && rg_is_func(p) { break; }
                 cnt += 1;
                 if rg_has(p, "ldr x29, [sp, #0]") { seen_epi = true; }
@@ -2534,7 +2534,7 @@ void ir_run_loop() {
                 p = pe + 1;
             }
             // the name
-            int nl = 0;
+            i64 nl = 0;
             while i + nl < en - 1 && nl < 120 {
                 ir_stat_fn[nl] = out_buf[i + nl];
                 nl += 1;
@@ -2558,9 +2558,9 @@ void ir_run_loop() {
                 lf_lifted += 1;
                 // the passes do not know the atomic operations and the local calls of the ARM32 target: such a function is left as it is
                 bool a32_plain = true;
-                int a32i = 0;
+                i64 a32i = 0;
                 while a32i < ir_n {
-                    int a32o = ir_op[a32i];
+                    i64 a32o = ir_op[a32i];
                     if a32o == IR_RAW || a32o == IR_ATOMIC || a32o == IR_LCALL || a32o == IR_LRET || a32o == IR_LENTRY || a32o == IR_ADDR_BLOCK { a32_plain = false; }
                     if a32o == IR_CALL && str_eq(@ir_name + ir_k[a32i] * 64, "__Mt__run") { a32_plain = false; }          // the frame is shared with the threads of the loop
                     a32i += 1;
@@ -2595,7 +2595,7 @@ void ir_run_loop() {
                 }
                 if ir_mode == 2 && op_changed == 1 && lf_lifted > ir_min && lf_lifted <= ir_max {
                     if ir_max < 1000000 { ir_say("lowering ", @ir_stat_fn, ""); }
-                    int mark = regs_len;
+                    i64 mark = regs_len;
                     if lw_function() {
                         i = p;
                         continue;
@@ -2605,9 +2605,9 @@ void ir_run_loop() {
                 }
             }
             // as it was
-            int q = i;
+            i64 q = i;
             while q < p {
-                int qe = rg_end(q);
+                i64 qe = rg_end(q);
                 rg_copy(q, qe);
                 q = qe + 1;
             }
@@ -2634,7 +2634,7 @@ void ir_run_loop() {
         write_err("\n");
     }
     if ir_mode == 2 || ir_mode == 3 {
-        int t = 0;
+        i64 t = 0;
         while t < regs_len {
             out_buf[t] = regs_buf[t];
             t += 1;

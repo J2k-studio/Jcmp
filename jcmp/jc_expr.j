@@ -14,83 +14,83 @@
 
 // the type last read by parse_type (jc_stmt.jk); width codes: 1 i8, 2 char,
 // 3 bool, 4 i32, 8 int
-int ty_elem;                 // code for one array element of this type
-int ty_width;                // code for a scalar of this type
-int ty_ptr;                  // 0, or the code of the pointee for T^
-int ty_void;                 // 1 for "void"
-int ty_dyn;                  // 0, or the packed element type of a dynamic array T[] (see dyn_pack)
-int arr_esize;               // element size for the arr(n) being parsed (0 = not known)
+i64 ty_elem;                 // code for one array element of this type
+i64 ty_width;                // code for a scalar of this type
+i64 ty_ptr;                  // 0, or the code of the pointee for T^
+i64 ty_void;                 // 1 for "void"
+i64 ty_dyn;                  // 0, or the packed element type of a dynamic array T[] (see dyn_pack)
+i64 arr_esize;               // element size for the arr(n) being parsed (0 = not known)
 // ---- ownership of memory (alloc / arr): a local variable declared from them frees it at the end of its block
-int own_off[256];            // frame offset of each owner (innermost last)
-int own_kind[256];           // 0 = Mem::alloc block, 1 = dynamic array / String, 2 = temporary String, 4 = a struct with a free(self) method
-int own_aux[256];            // kind 4: the struct
-int own_rec[256];            // the frame offset of its cleanup record (see own_add)
-int stmt_t0;                 // own_count where the statement being parsed began
-int own_blk[256];            // the block it belongs to
-int own_moved[256];          // 1 after the ownership went elsewhere (for the "used after move" warning)
-int own_count;
-int cur_blk;                 // id of the block being parsed
-int blk_serial;
-int own_ok = 1;              // 0 where a declaration may not run (a case body without braces)
-int ex_dyn;                  // the packed element type of the dynamic array the last expression was (0 = none)
-int ex_arr_cnt = -1;         // set when the last expression was a whole fixed array: its element count ...
-int ex_arr_code;             // ... and its element width code
-int alias_src;               // 1: the last value read was a name in a case that points into a data enum (see return)
-int lalias[8192];            // 1: a variable that is a pointer to a struct but is used like the struct itself (a name in a case)
-int lused[8192];             // 1 once the name was looked up after its declaration
-int lwarn[8192];             // 1: warn if it is never used (a scalar or array made by a declaration statement)
-int lw_line[8192];           // where it was declared
-int lw_col[8192];
-int lw_base[8192];
-int lw_ls[8192];
-int track_unused;            // 1 while a declaration statement is parsed
-int decl_line;               // the position of the name being declared
-int decl_col;
-int decl_base;
-int decl_ls;
-int rv_valid;                // the last operand read was exactly a plain local variable ...
-int rv_off;                  // ... at this frame offset
-int last_call_struct;        // the last call made a struct value (a fresh temporary)
-int own_src_off;             // struct_source: the frame offset of the local variable (or temporary) a value moves out of
-int cond_depth;              // > 0 while the right side of && or || is compiled (it may not run)
-int last_call_struct_off;    // the frame offset of the temporary that the last call's struct result is in
-int last_call_owning;        // the last call made returns memory its receiver owns
-int next_pin;                // the register (18 .. 25) the next local variable is pinned to (int n @ x19), else 0
-int lpin[8192];              // for each local: its pinned register, or 0
-int pin_used;                // 1 once a variable was pinned to a register
-int ty_tid;                  // type of values: 0 number, 1 bool, 3+n enum number n
-int ex_ty;                   // type of the last operand/result: 0 number, 1 bool, 2 the literal 0 or 1, 3+n enum n
-int ex_isptr;                // 1: the value just read is a pointer or an address (cout writes it 0x...); set by the reading of a pointer variable and by @
-int ex_w;                    // width code of the last operand/result: 0 = a plain number, else 1 i8, 2 char, 3 bool, 4 i32, 8 int
+i64 own_off[256];            // frame offset of each owner (innermost last)
+i64 own_kind[256];           // 0 = Mem::alloc block, 1 = dynamic array / String, 2 = temporary String, 4 = a struct with a free(self) method
+i64 own_aux[256];            // kind 4: the struct
+i64 own_rec[256];            // the frame offset of its cleanup record (see own_add)
+i64 stmt_t0;                 // own_count where the statement being parsed began
+i64 own_blk[256];            // the block it belongs to
+i64 own_moved[256];          // 1 after the ownership went elsewhere (for the "used after move" warning)
+i64 own_count;
+i64 cur_blk;                 // id of the block being parsed
+i64 blk_serial;
+i64 own_ok = 1;              // 0 where a declaration may not run (a case body without braces)
+i64 ex_dyn;                  // the packed element type of the dynamic array the last expression was (0 = none)
+i64 ex_arr_cnt = -1;         // set when the last expression was a whole fixed array: its element count ...
+i64 ex_arr_code;             // ... and its element width code
+i64 alias_src;               // 1: the last value read was a name in a case that points into a data enum (see return)
+i64 lalias[8192];            // 1: a variable that is a pointer to a struct but is used like the struct itself (a name in a case)
+i64 lused[8192];             // 1 once the name was looked up after its declaration
+i64 lwarn[8192];             // 1: warn if it is never used (a scalar or array made by a declaration statement)
+i64 lw_line[8192];           // where it was declared
+i64 lw_col[8192];
+i64 lw_base[8192];
+i64 lw_ls[8192];
+i64 track_unused;            // 1 while a declaration statement is parsed
+i64 decl_line;               // the position of the name being declared
+i64 decl_col;
+i64 decl_base;
+i64 decl_ls;
+i64 rv_valid;                // the last operand read was exactly a plain local variable ...
+i64 rv_off;                  // ... at this frame offset
+i64 last_call_struct;        // the last call made a struct value (a fresh temporary)
+i64 own_src_off;             // struct_source: the frame offset of the local variable (or temporary) a value moves out of
+i64 cond_depth;              // > 0 while the right side of && or || is compiled (it may not run)
+i64 last_call_struct_off;    // the frame offset of the temporary that the last call's struct result is in
+i64 last_call_owning;        // the last call made returns memory its receiver owns
+i64 next_pin;                // the register (18 .. 25) the next local variable is pinned to (int n @ x19), else 0
+i64 lpin[8192];              // for each local: its pinned register, or 0
+i64 pin_used;                // 1 once a variable was pinned to a register
+i64 ty_tid;                  // type of values: 0 number, 1 bool, 3+n enum number n
+i64 ex_ty;                   // type of the last operand/result: 0 number, 1 bool, 2 the literal 0 or 1, 3+n enum n
+i64 ex_isptr;                // 1: the value just read is a pointer or an address (cout writes it 0x...); set by the reading of a pointer variable and by @
+i64 ex_w;                    // width code of the last operand/result: 0 = a plain number, else 1 i8, 2 char, 3 bool, 4 i32, 8 int
 
 char sname[16384];           // 256 x 64
-int ssize[256];               // bytes, a multiple of 8
-int sfirst[256];              // its first field in the field tables
-int snf[256];                 // how many fields
-int sitf[256];                  // 1: this struct was declared with itf (an interface: virtual methods without bodies)
-int abs_body_ok;                // 1 while a virtual method is parsed: a ';' may stand where the body would be
-int sparent[256];               // the struct this one inherits from (struct Dog : Animal) plus 1; 0 for none
-int svoff[256];                 // the place of the pointer to the table of the methods in a struct, plus 1 (0: no virtual methods)
-int svcnt[256];                 // the number of virtual methods
+i64 ssize[256];               // bytes, a multiple of 8
+i64 sfirst[256];              // its first field in the field tables
+i64 snf[256];                 // how many fields
+i64 sitf[256];                  // 1: this struct was declared with itf (an interface: virtual methods without bodies)
+i64 abs_body_ok;                // 1 while a virtual method is parsed: a ';' may stand where the body would be
+i64 sparent[256];               // the struct this one inherits from (struct Dog : Animal) plus 1; 0 for none
+i64 svoff[256];                 // the place of the pointer to the table of the methods in a struct, plus 1 (0: no virtual methods)
+i64 svcnt[256];                 // the number of virtual methods
 char svname[524288];            // their names by slot: (struct * 32 + slot) * 64
-int vcall_slot;                 // set before gen_call: the slot of a virtual method that is called (-1: a plain call)
-int vcall_off;                  // ... and where the pointer to the table is in the object
-int scount;
+i64 vcall_slot;                 // set before gen_call: the slot of a virtual method that is called (-1: a plain call)
+i64 vcall_off;                  // ... and where the pointer to the table is in the object
+i64 scount;
 char fldname[524288];         // 1024 x 64
-int fldcode[8192];           // width code of the field (8 int, 16+n a struct ...)
-int fldoff[8192];
-int fldkind[8192];           // 0 scalar, 1 array
-int fldptr[8192];
-int fldtid[8192];
-int fldnd[8192];
-int fldst1[8192];
-int fldst2[8192];
-int fldcnt[8192];
-int flddyn[8192];
-int fldcount;
+i64 fldcode[8192];           // width code of the field (8 int, 16+n a struct ...)
+i64 fldoff[8192];
+i64 fldkind[8192];           // 0 scalar, 1 array
+i64 fldptr[8192];
+i64 fldtid[8192];
+i64 fldnd[8192];
+i64 fldst1[8192];
+i64 fldst2[8192];
+i64 fldcnt[8192];
+i64 flddyn[8192];
+i64 fldcount;
 
-int find_struct(char^ name) {
-    int i = 0;
+i64 find_struct(char^ name) {
+    i64 i = 0;
     while i < scount {
         if str_eq(@sname + i * 64, name) { return i; }
         i += 1;
@@ -98,9 +98,9 @@ int find_struct(char^ name) {
     return -1;
 }
 
-int find_field(int s, char^ name) {
-    int i = sfirst[s];
-    int last = sfirst[s] + snf[s];
+i64 find_field(i64 s, char^ name) {
+    i64 i = sfirst[s];
+    i64 last = sfirst[s] + snf[s];
     while i < last {
         if str_eq(@fldname + i * 64, name) { return i; }
         i += 1;
@@ -110,21 +110,21 @@ int find_field(int s, char^ name) {
 
 // the function of a method: Struct__name, or the same name of a base struct (struct Dog : Animal: a Dog has the methods of an Animal); -1 if none
 // "full" gets the name of the function that was found (it has room for 128 characters)
-int find_method_in(int st, char^ name, char^ full) {
-    int s = st;
-    int guard = 0;
+i64 find_method_in(i64 st, char^ name, char^ full) {
+    i64 s = st;
+    i64 guard = 0;
     while s >= 0 && guard < 32 {
         str_copy(full, @sname + s * 64, 64);
-        int k = str_len(full);
+        i64 k = str_len(full);
         full[k] = '_';
         full[k + 1] = '_';
-        int j = 0;
+        i64 j = 0;
         while name[j] != 0 && k + 2 + j < 120 {
             full[k + 2 + j] = name[j];
             j += 1;
         }
         full[k + 2 + j] = 0;
-        int f = find_func(full);
+        i64 f = find_func(full);
         if f >= 0 { return f; }
         s = sparent[s] - 1;
         guard += 1;
@@ -133,9 +133,9 @@ int find_method_in(int st, char^ name, char^ full) {
 }
 
 // the slot of a virtual method of a struct (its own or one of the bases: the list is inherited), -1 if it is not virtual
-int virt_slot(int s, char^ name) {
+i64 virt_slot(i64 s, char^ name) {
     if s < 0 || s >= scount { return 0 - 1; }
-    int i = 0;
+    i64 i = 0;
     while i < svcnt[s] {
         if str_eq(@svname + (s * 32 + i) * 64, name) { return i; }
         i += 1;
@@ -144,9 +144,9 @@ int virt_slot(int s, char^ name) {
 }
 
 // is the struct d the struct b, or one that inherits from it
-bool struct_is_a(int d, int b) {
-    int s = d;
-    int guard = 0;
+bool struct_is_a(i64 d, i64 b) {
+    i64 s = d;
+    i64 guard = 0;
     while s >= 0 && guard < 32 {
         if s == b { return true; }
         s = sparent[s] - 1;
@@ -157,18 +157,18 @@ bool struct_is_a(int d, int b) {
 
 // ------------------------------------------------------------------ enums
 char ename[4096];            // 64 x 64
-int ecount;
+i64 ecount;
 char emname[524288];          // 512 members x 64
-int emval[8192];
-int emenum[8192];
-int emcount;
-int us_g[256];                // "using Struct" at file level
-int us_l[256];                // ... inside the current function
+i64 emval[8192];
+i64 emenum[8192];
+i64 emcount;
+i64 us_g[256];                // "using Struct" at file level
+i64 us_l[256];                // ... inside the current function
 // ---------------------------------------------------------------- modules of the library: Namespace::module.function
 // The names of the library have three layers (docs/syntax-design.md 77): `Fs::fs.read(p)`. `using Fs;` takes the namespace away
 // (`fs.read(p)`), `using Fs::fs.read;` makes only that function available. A row: the namespace, the module, the struct that holds it.
-int mod_count() { return 27; }
-char^ mod_row(int i, int col) {
+i64 mod_count() { return 27; }
+char^ mod_row(i64 i, i64 col) {
     char^ ns = "";
     char^ md = "";
     char^ st = "";
@@ -206,8 +206,8 @@ char^ mod_row(int i, int col) {
     return st;
 }
 // the row of the module `md` in the namespace `ns` (ns "" : any namespace), or -1; the struct must exist in this program
-int mod_find(char^ ns, char^ md) {
-    int i = 0;
+i64 mod_find(char^ ns, char^ md) {
+    i64 i = 0;
     while i < mod_count() {
         if str_eq(mod_row(i, 1), md) && (ns[0] == 0 || str_eq(mod_row(i, 0), ns)) && find_struct(mod_row(i, 2)) >= 0 { return i; }
         i += 1;
@@ -215,7 +215,7 @@ int mod_find(char^ ns, char^ md) {
     return 0 - 1;
 }
 bool mod_is_namespace(char^ ns) {
-    int i = 0;
+    i64 i = 0;
     while i < mod_count() {
         if str_eq(mod_row(i, 0), ns) { return true; }
         i += 1;
@@ -232,27 +232,27 @@ void mod_apply_prefix() {
     str_copy(@tok_text, @t, 120);
     mod_prefix[0] = 0;
 }
-int um_g[256];               // the module (by row of the table) is open: "using Fs;" at file level (1: all its functions)
-int um_l[256];               // ... inside the current function
-int uf_n;                    // "using Fs::fs.read;" : a function of a module that is open alone
-int uf_st[64];               // the row of the module
-int uf_loc[64];
+i64 um_g[256];               // the module (by row of the table) is open: "using Fs;" at file level (1: all its functions)
+i64 um_l[256];               // ... inside the current function
+i64 uf_n;                    // "using Fs::fs.read;" : a function of a module that is open alone
+i64 uf_st[64];               // the row of the module
+i64 uf_loc[64];
 char uf_name[4096];          // 64 x 64
 // is the function `fn` of the module in the row `row` open (by `using`)?
-bool mod_open(int row, char^ fn) {
+bool mod_open(i64 row, char^ fn) {
     if um_g[row] == 1 || um_l[row] == 1 { return true; }
-    int i = 0;
+    i64 i = 0;
     while i < uf_n {
         if uf_st[i] == row && str_eq(@uf_name + i * 64, fn) { return true; }
         i += 1;
     }
     return false;
 }
-int ue_g[64];                // "using enum" at file level
-int ue_l[64];                // ... inside the current function
+i64 ue_g[64];                // "using enum" at file level
+i64 ue_l[64];                // ... inside the current function
 
-int find_enum(char^ name) {
-    int i = 0;
+i64 find_enum(char^ name) {
+    i64 i = 0;
     while i < ecount {
         if str_eq(@ename + i * 64, name) { return i; }
         i += 1;
@@ -261,9 +261,9 @@ int find_enum(char^ name) {
 }
 
 // the member `name` of enum `en`, or -1 (the value is left in found_val)
-int found_val;
-bool find_member(int en, char^ name) {
-    int i = 0;
+i64 found_val;
+bool find_member(i64 en, char^ name) {
+    i64 i = 0;
     while i < emcount {
         if emenum[i] == en && str_eq(@emname + i * 64, name) {
             found_val = emval[i];
@@ -276,7 +276,7 @@ bool find_member(int en, char^ name) {
 
 // a bare member name made visible by "using enum": sets found_val, ex_ty
 bool find_using_member(char^ name) {
-    int en = 0;
+    i64 en = 0;
     while en < ecount {
         if ue_g[en] == 1 || ue_l[en] == 1 {
             if find_member(en, name) {
@@ -292,22 +292,22 @@ bool find_using_member(char^ name) {
 // ---------------------------------------------------- function pointer types
 // A function pointer variable is an 8-byte scalar whose type id is negative:
 // -(n+1) = signature n  (the result type and the parameter types).
-int sig_ret[256];            // result type id (98 = void)
-int sig_n[256];
-int sig_p[4096];             // 16 parameter type ids per signature
-int sig_count;
-int sg_tmp[16];              // parameters of the signature being built
+i64 sig_ret[256];            // result type id (98 = void)
+i64 sig_n[256];
+i64 sig_p[4096];             // 16 parameter type ids per signature
+i64 sig_count;
+i64 sg_tmp[16];              // parameters of the signature being built
 
-bool is_fnptr(int t) {
+bool is_fnptr(i64 t) {
     return t < 0;
 }
 
-int sig_intern(int ret, int n) {
-    int i = 0;
+i64 sig_intern(i64 ret, i64 n) {
+    i64 i = 0;
     while i < sig_count {
         if sig_ret[i] == ret && sig_n[i] == n {
-            int same = 1;
-            int k = 0;
+            i64 same = 1;
+            i64 k = 0;
             while k < n {
                 if sig_p[i * 16 + k] != sg_tmp[k] { same = 0; }
                 k += 1;
@@ -319,7 +319,7 @@ int sig_intern(int ret, int n) {
     if sig_count >= 256 { die("too many different function pointer types"); }
     sig_ret[sig_count] = ret;
     sig_n[sig_count] = n;
-    int j = 0;
+    i64 j = 0;
     while j < n {
         sig_p[sig_count * 16 + j] = sg_tmp[j];
         j += 1;
@@ -333,10 +333,10 @@ int sig_intern(int ret, int n) {
 
 // the text for a type id in messages
 // the context of an argument that is being checked: which call and which argument (arg_ctx_fi < 0: none)
-int arg_ctx_fi = -1;
-int arg_ctx_no;
+i64 arg_ctx_fi = -1;
+i64 arg_ctx_no;
 
-void type_name_err(int t) {
+void type_name_err(i64 t) {
     if t == 80 {
         write_err("a String");
     } else if t == 97 {
@@ -376,12 +376,12 @@ void type_name_err(int t) {
 // A float lives in x0 as its IEEE bits: f64 = 64 bits, f32 = the low 32 bits.
 // Types: 90 f32, 91 f64, 92 a decimal literal (it becomes f32 or f64 as needed).
 
-bool is_float(int t) {
+bool is_float(i64 t) {
     return t >= 90 && t <= 92;
 }
 
 // "fmov dR, xR ; fcvt sR, dR ; fmov wR, sR": f64 bits in xR become f32 bits
-void lit_to_f32(int r) {
+void lit_to_f32(i64 r) {
     emit_str("fmov d");
     emit_int(r);
     emit_str(", x");
@@ -400,7 +400,7 @@ void lit_to_f32(int r) {
 }
 
 // f32 bits in xR become f64 bits
-void f32_to_f64(int r) {
+void f32_to_f64(i64 r) {
     emit_str("fmov s");
     emit_int(r);
     emit_str(", w");
@@ -418,11 +418,11 @@ void f32_to_f64(int r) {
     emit_nl();
 }
 
-int fp_in_d;                 // 1: the two operands of the next float operation are in d0 and d1 already (set by take_operands_s)
+i64 fp_in_d;                 // 1: the two operands of the next float operation are in d0 and d1 already (set by take_operands_s)
 
 // x0 = left, x1 = right, types lt / rt: both must be floats (a literal adapts);
 // returns 90 when the operation is done in f32, else 91; the operands are ready
-int fp_prepare(int lt, int rt) {
+i64 fp_prepare(i64 lt, i64 rt) {
     if (!is_float(lt) || !is_float(rt)) && pass_no >= 2 { die("cannot mix a float and a non-float (use a cast, e.g. (double)n)"); }
     if (lt == 90 && rt == 91) || (lt == 91 && rt == 90) { die_help("cannot mix float and double", "use a cast"); }
     if lt == 90 || rt == 90 {
@@ -434,8 +434,8 @@ int fp_prepare(int lt, int rt) {
 }
 
 // x0 = x0 op x1 for + - * /  ; returns the result type
-int fp_binop(char^ op, int lt, int rt) {
-    int kind = fp_prepare(lt, rt);
+i64 fp_binop(char^ op, i64 lt, i64 rt) {
+    i64 kind = fp_prepare(lt, rt);
     char ins[8];
     if str_eq(op, "+") { str_copy(@ins, "fadd", 8); }
     else if str_eq(op, "-") { str_copy(@ins, "fsub", 8); }
@@ -463,8 +463,8 @@ int fp_binop(char^ op, int lt, int rt) {
 }
 
 // x0 = (left cond right) for floats: cond is the integer-style name (lt le gt ge eq ne)
-void fp_compare(char^ cond, int lt, int rt) {
-    int kind = fp_prepare(lt, rt);
+void fp_compare(char^ cond, i64 lt, i64 rt) {
+    i64 kind = fp_prepare(lt, rt);
     if kind == 90 {
         emit_line("fmov s0, w0");
         emit_line("fmov s1, w1");
@@ -482,7 +482,7 @@ void fp_compare(char^ cond, int lt, int rt) {
     str_copy(@fc, cond, 4);
     if str_eq(cond, "lt") { str_copy(@fc, "mi", 4); }
     if str_eq(cond, "le") { str_copy(@fc, "ls", 4); }
-    int ld = new_label();
+    i64 ld = new_label();
     emit_line("mov x0, 1");
     jump_if(@fc, ld);
     emit_line("mov x0, 0");
@@ -490,7 +490,7 @@ void fp_compare(char^ cond, int lt, int rt) {
 }
 
 // the bits of the double 10^k for k = 19 .. 22 (exact)
-int pow10_bits(int k) {
+i64 pow10_bits(i64 k) {
     if k == 19 { return 4891288408196988160; }
     if k == 20 { return 4906019910204099648; }
     if k == 21 { return 4921056587992461136; }
@@ -499,16 +499,16 @@ int pow10_bits(int k) {
 
 // the bits of the double that a literal mant * 10^exp is: worked out with the same operations that the program would do (an exact
 // integer, one division or product)
-int float_literal_bits(int mant, int exp10) {
+i64 float_literal_bits(i64 mant, i64 exp10) {
     double fl[1];
     fl[0] = (double)mant;
     if exp10 != 0 {
         double pw = 1.0;
-        int ae = exp10;
+        i64 ae = exp10;
         if ae < 0 { ae = 0 - ae; }
         if ae <= 18 {
-            int p10 = 1;
-            int pk = 0;
+            i64 p10 = 1;
+            i64 pk = 0;
             while pk < ae {
                 p10 = p10 * 10;
                 pk += 1;
@@ -517,8 +517,8 @@ int float_literal_bits(int mant, int exp10) {
         } else {
             // 10^19 .. 10^22 are exact in a double; beyond that the power is built from 10^22 (the last bits of the result may differ)
             double pb[1];
-            int^ pbi = (int^)@pb[0];
-            int rest = ae;
+            i64^ pbi = (i64^)@pb[0];
+            i64 rest = ae;
             pw = 1.0;
             pbi[0] = pow10_bits(22);
             double big22 = pb[0];
@@ -530,8 +530,8 @@ int float_literal_bits(int mant, int exp10) {
                 pbi[0] = pow10_bits(rest);
                 pw = pw * pb[0];
             } else {
-                int p10b = 1;
-                int pkb = 0;
+                i64 p10b = 1;
+                i64 pkb = 0;
                 while pkb < rest {
                     p10b = p10b * 10;
                     pkb += 1;
@@ -545,7 +545,7 @@ int float_literal_bits(int mant, int exp10) {
             fl[0] = fl[0] * pw;
         }
     }
-    int^ fbits = (int^)@fl[0];
+    i64^ fbits = (i64^)@fl[0];
     return fbits[0];
 }
 
@@ -557,33 +557,33 @@ void gen_float_literal() {
     next();
 }
 
-bool is_unsigned(int t) {
+bool is_unsigned(i64 t) {
     return t >= 93 && t <= 95;
 }
 
 // a number of any kind (96 = a whole-number literal, 2 = the literal 0 or 1)
-bool is_numeric(int t) {
+bool is_numeric(i64 t) {
     return t == 0 || t == 2 || t == 96 || is_unsigned(t);
 }
 
-bool is_litnum(int t) {
+bool is_litnum(i64 t) {
     return t == 2 || t == 96;
 }
 
 // signed and unsigned do not mix without a cast (two unsigned sizes do: the wider one wins)
-bool num_compat(int a, int b) {
+bool num_compat(i64 a, i64 b) {
     if is_unsigned(a) && b == 0 { return false; }
     if is_unsigned(b) && a == 0 { return false; }
     return true;
 }
 
 // the type of  a OP b  (+ - * / % & | xor): dies on a bool, an enum, a float, or a bad mix
-int bin_type(int a, int b) {
+i64 bin_type(i64 a, i64 b) {
     if pass_no < 2 { return 0; }
     if !is_numeric(a) || !is_numeric(b) {
         begin_msg("error");
         write_err("this operation needs numbers, but the ");
-        int bad = a;
+        i64 bad = a;
         if is_numeric(a) { bad = b; write_err("right"); } else { write_err("left"); }
         write_err(" side is ");
         type_name_err(bad);
@@ -603,7 +603,7 @@ int bin_type(int a, int b) {
 }
 
 // a << n  /  a >> n : the type of the left side
-int shift_type(int a, int b) {
+i64 shift_type(i64 a, i64 b) {
     if pass_no < 2 { return 0; }
     if !is_numeric(a) || !is_numeric(b) { die_help("arithmetic needs numbers (bool and enum values cannot be used)", "compare them, or cast with (int) when you really want the number"); }
     if is_unsigned(a) { return a; }
@@ -612,9 +612,9 @@ int shift_type(int a, int b) {
 }
 
 // the value in x0 (type ex_ty) is stored where a `want` is expected
-void check_assign(int want) {
+void check_assign(i64 want) {
     if pass_no < 2 { return; }
-    int ok = 0;
+    i64 ok = 0;
     if want == 90 && (ex_ty == 90 || ex_ty == 92) { ok = 1; }
     if want == 91 && (ex_ty == 91 || ex_ty == 92) { ok = 1; }
     if ok == 1 && want == 90 && ex_ty == 92 { lit_to_f32(0); }
@@ -647,7 +647,7 @@ void check_assign(int want) {
 }
 
 // a text (char^) stored in an int is nearly always a mistake: say so (pointers and (int) casts are fine)
-void no_text_for_int(int want) {
+void no_text_for_int(i64 want) {
     if pass_no < 2 || want != 0 || ex_w != 9 { return; }
     if arg_ctx_fi >= 0 {
         begin_msg("error");
@@ -673,7 +673,7 @@ void need_bool() {
 }
 
 // the operand must be an ordinary number (not bool, not enum)
-void need_num(int t) {
+void need_num(i64 t) {
     if pass_no < 2 { return; }
     if !is_numeric(t) { die_help("arithmetic needs numbers (bool and enum values cannot be used)", "compare them, or cast with (int) when you really want the number"); }
 }
@@ -682,70 +682,70 @@ void need_num(int t) {
 
 // locals of the function being compiled (parameters first)
 char lname[524288];           // 1024 x 64
-int lkind[8192];             // 0 scalar, 1 array
-int lelem[8192];             // array: element size; scalar: width (1 = char, 8 = int)
-int loff[8192];              // frame offset from x29
-int lptr[8192];              // pointer variable: size of the pointee (0 = not a pointer)
-int lnd[8192];               // array dimensions: 1, 2 or 3
-int lst1[8192];              // elements to skip for a step in the first index
-int lst2[8192];              // ... in the second index (3 dimensions)
-int lblk[8192];              // the block each local variable was declared in
-int blk_parent[4096];        // parent block of each block id (0 = the function body's outside)
-int ldyn[8192];              // kind 3 (dynamic array): the packed element type
-int ltid[8192];              // type of a scalar / of an array's elements
-int lcnt[8192];              // array: number of elements
-int scope_base;              // locals below this index belong to enclosing blocks
-int lcount;
-int frame_bytes;             // frame used so far (starts at 16: saved x29, x30)
+i64 lkind[8192];             // 0 scalar, 1 array
+i64 lelem[8192];             // array: element size; scalar: width (1 = char, 8 = int)
+i64 loff[8192];              // frame offset from x29
+i64 lptr[8192];              // pointer variable: size of the pointee (0 = not a pointer)
+i64 lnd[8192];               // array dimensions: 1, 2 or 3
+i64 lst1[8192];              // elements to skip for a step in the first index
+i64 lst2[8192];              // ... in the second index (3 dimensions)
+i64 lblk[8192];              // the block each local variable was declared in
+i64 blk_parent[4096];        // parent block of each block id (0 = the function body's outside)
+i64 ldyn[8192];              // kind 3 (dynamic array): the packed element type
+i64 ltid[8192];              // type of a scalar / of an array's elements
+i64 lcnt[8192];              // array: number of elements
+i64 scope_base;              // locals below this index belong to enclosing blocks
+i64 lcount;
+i64 frame_bytes;             // frame used so far (starts at 16: saved x29, x30)
 
 // globals
 char gname[1048576];           // 2048 x 64
-int gkind[16384];
-int gelem[16384];
-int goff[16384];
-int gptr[16384];
-int gnd[16384];
-int gst1[16384];
-int gst2[16384];
-int gdyn[16384];
-int gro[16384];               // 1: #pragma read (the variable cannot be written)
-int gro_a[16384];             // the start of the region of a read-only variable and its size (a page before and after it)
-int gro_s[16384];
-int gtid[16384];
-int gcnt[16384];
-int gcount;
-int gl_bytes;                // bytes of the global area handed out (slot 0 = initial sp)
+i64 gkind[16384];
+i64 gelem[16384];
+i64 goff[16384];
+i64 gptr[16384];
+i64 gnd[16384];
+i64 gst1[16384];
+i64 gst2[16384];
+i64 gdyn[16384];
+i64 gro[16384];               // 1: #pragma read (the variable cannot be written)
+i64 gro_a[16384];             // the start of the region of a read-only variable and its size (a page before and after it)
+i64 gro_s[16384];
+i64 gtid[16384];
+i64 gcnt[16384];
+i64 gcount;
+i64 gl_bytes;                // bytes of the global area handed out (slot 0 = initial sp)
 
 // global initial values, stored at startup by the start stub
-int ginit_off[262144];
-int ginit_val[262144];
-int ginit_count;
+i64 ginit_off[262144];
+i64 ginit_val[262144];
+i64 ginit_count;
 
 // functions seen so far (to tell a call from an unknown name)
 char fname[1048576];          // 2048 x 64
-int fnpar[16384];             // declared parameters (an array parameter counts once)
-int fdefn[16384];            // the first parameter that has a default value (0 = none, else the index + 1); the values are in fdefv[function * 16 + parameter]
-int fdefv[262144];
-int fvoid[16384];            // 1 if the function returns void
-int fbuiltin[16384];         // 1 if the function is written in a built-in library (prelude, std)
-int fpstr[131072];             // 1 for a parameter of type String (8 per function)
-int fretdyn[16384];             // the packed element type if the function returns a dynamic array
-int fretstr[16384];             // 1 if the function returns a String
-int fowned[16384];           // 1 if the function returns memory it owned (return p; moves it out)
-int fcharret[16384];            // 1 if the function returns a char: cout prints the result as a character
-int fret[16384];              // type of the result
-int fptid[131072];            // type of each parameter (8 per function)
-int fptid2[131072];           // type of the parameters 8 .. 15 (8 per function): an argument that goes on the stack is checked and converted like the others
-int fop[16384];               // 1 if the method was declared with the word `operator` (a + b calls a.add(b))
-int op_pending;              // the word `operator` was read in front of the method being declared
-int fself[16384];             // 1 if the function is a method with self (not static)
-int fpd8[16384];             // bit k: the declared parameter 8 + k is a double (the tables above hold 8 parameters)
-int farr[16384];              // bit k: the declared parameter k is an array (T name[])
-int fcount;
+i64 fnpar[16384];             // declared parameters (an array parameter counts once)
+i64 fdefn[16384];            // the first parameter that has a default value (0 = none, else the index + 1); the values are in fdefv[function * 16 + parameter]
+i64 fdefv[262144];
+i64 fvoid[16384];            // 1 if the function returns void
+i64 fbuiltin[16384];         // 1 if the function is written in a built-in library (prelude, std)
+i64 fpstr[131072];             // 1 for a parameter of type String (8 per function)
+i64 fretdyn[16384];             // the packed element type if the function returns a dynamic array
+i64 fretstr[16384];             // 1 if the function returns a String
+i64 fowned[16384];           // 1 if the function returns memory it owned (return p; moves it out)
+i64 fcharret[16384];            // 1 if the function returns a char: cout prints the result as a character
+i64 fret[16384];              // type of the result
+i64 fptid[131072];            // type of each parameter (8 per function)
+i64 fptid2[131072];           // type of the parameters 8 .. 15 (8 per function): an argument that goes on the stack is checked and converted like the others
+i64 fop[16384];               // 1 if the method was declared with the word `operator` (a + b calls a.add(b))
+i64 op_pending;              // the word `operator` was read in front of the method being declared
+i64 fself[16384];             // 1 if the function is a method with self (not static)
+i64 fpd8[16384];             // bit k: the declared parameter 8 + k is a double (the tables above hold 8 parameters)
+i64 farr[16384];              // bit k: the declared parameter k is an array (T name[])
+i64 fcount;
 
 // every name that is known here (locals, globals, functions) is a candidate for "did you mean"
 void sug_names(char^ name) {
-    int i = 0;
+    i64 i = 0;
     while i < lcount {
         sug_try(name, @lname + i * 64);
         i += 1;
@@ -763,12 +763,12 @@ void sug_names(char^ name) {
 }
 
 // the names of the functions and of the globals are looked up in a hash table (the compiler asks for a name very often; a scan of all names took a third of the time)
-int ft_tab[65536];                // function index + 1, open addressing by the hash of the name
-int gt_tab[65536];
+i64 ft_tab[65536];                // function index + 1, open addressing by the hash of the name
+i64 gt_tab[65536];
 
-int name_hash(char^ s) {
-    int h = 5381;
-    int k = 0;
+i64 name_hash(char^ s) {
+    i64 h = 5381;
+    i64 k = 0;
     while s[k] != 0 && k < 63 {
         h = (h * 33 + s[k]) & 1073741823;
         k += 1;
@@ -776,10 +776,10 @@ int name_hash(char^ s) {
     return h & 65535;
 }
 
-int find_func(char^ name) {
-    int h = name_hash(name);
+i64 find_func(char^ name) {
+    i64 h = name_hash(name);
     while ft_tab[h] != 0 {
-        int i = ft_tab[h] - 1;
+        i64 i = ft_tab[h] - 1;
         if str_eq(@fname + i * 64, name) { return i; }
         h = (h + 1) & 65535;
     }
@@ -787,8 +787,8 @@ int find_func(char^ name) {
 }
 
 // the function i was just added: the first function with a name keeps the name (as the scan did)
-void ft_add(int i) {
-    int h = name_hash(@fname + i * 64);
+void ft_add(i64 i) {
+    i64 h = name_hash(@fname + i * 64);
     while ft_tab[h] != 0 {
         if str_eq(@fname + (ft_tab[h] - 1) * 64, @fname + i * 64) { return; }
         h = (h + 1) & 65535;
@@ -796,8 +796,8 @@ void ft_add(int i) {
     ft_tab[h] = i + 1;
 }
 
-void gt_add(int i) {
-    int h = name_hash(@gname + i * 64);
+void gt_add(i64 i) {
+    i64 h = name_hash(@gname + i * 64);
     while gt_tab[h] != 0 {
         if str_eq(@gname + (gt_tab[h] - 1) * 64, @gname + i * 64) { return; }
         h = (h + 1) & 65535;
@@ -807,31 +807,31 @@ void gt_add(int i) {
 
 
 // the variable last found by lookup_var
-int v_local;                 // 1 local, 2 local of the enclosing function (inside a #multithread body: base x26), 0 global
-int mt_outer;                // while a #multithread body is compiled: how many locals belong to the enclosing function
-int v_kind;
-int v_elem;
-int v_off;
-int v_ptr;
-int v_nd;
-int v_cnt;
-int v_dyn;
-int v_tid;
-int lfl32[8192];             // 1: a scalar float local: its slot is read and written as a whole 8-byte value (the register pass may keep it in a register)
-int v_fl32;                  // 1: the variable is a scalar float local kept as a whole 8-byte slot (lfl32)
-int v_st1;
-int v_st2;
+i64 v_local;                 // 1 local, 2 local of the enclosing function (inside a #multithread body: base x26), 0 global
+i64 mt_outer;                // while a #multithread body is compiled: how many locals belong to the enclosing function
+i64 v_kind;
+i64 v_elem;
+i64 v_off;
+i64 v_ptr;
+i64 v_nd;
+i64 v_cnt;
+i64 v_dyn;
+i64 v_tid;
+i64 lfl32[8192];             // 1: a scalar float local: its slot is read and written as a whole 8-byte value (the register pass may keep it in a register)
+i64 v_fl32;                  // 1: the variable is a scalar float local kept as a whole 8-byte slot (lfl32)
+i64 v_st1;
+i64 v_st2;
 
-int label_no;                // label counter
-int in_cout;                 // 1 while parsing a cout operand: << and >> end it
+i64 label_no;                // label counter
+i64 in_cout;                 // 1 while parsing a cout operand: << and >> end it
 
 char id_name[256];           // a copy of the identifier being parsed
-int in_free_call;            // 1 while the argument of Mem::free is read (a second free says so)
+i64 in_free_call;            // 1 while the argument of Mem::free is read (a second free says so)
 
 // ---------------------------------------------------------------- lookups
 
-int find_local(char^ name) {
-    int i = lcount - 1;
+i64 find_local(char^ name) {
+    i64 i = lcount - 1;
     while i >= 0 {
         if str_eq(@lname + i * 64, name) { return i; }
         i -= 1;
@@ -839,10 +839,10 @@ int find_local(char^ name) {
     return -1;
 }
 
-int find_global(char^ name) {
-    int h = name_hash(name);
+i64 find_global(char^ name) {
+    i64 h = name_hash(name);
     while gt_tab[h] != 0 {
-        int i = gt_tab[h] - 1;
+        i64 i = gt_tab[h] - 1;
         if str_eq(@gname + i * 64, name) { return i; }
         h = (h + 1) & 65535;
     }
@@ -851,7 +851,7 @@ int find_global(char^ name) {
 
 // finds a local, else a global; sets the v_* variables
 bool lookup_var(char^ name) {
-    int li = find_local(name);
+    i64 li = find_local(name);
     if li >= 0 {
         lused[li] = 1;
         v_local = 1;
@@ -869,7 +869,7 @@ bool lookup_var(char^ name) {
         v_st2 = lst2[li];
         return true;
     }
-    int gi = find_global(name);
+    i64 gi = find_global(name);
     if gi >= 0 {
         v_local = 0;
         v_kind = gkind[gi];
@@ -893,7 +893,7 @@ bool lookup_var(char^ name) {
 void check_local_name(char^ name) {
     if name[0] == '.' { return; }
     if find_global(name) >= 0 { die_name("a local variable hides a global of the same name", name); }
-    int dup = find_local(name);
+    i64 dup = find_local(name);
     if dup >= scope_base && dup >= 0 {
         begin_msg("error");
         write_err("'");
@@ -910,11 +910,11 @@ void check_local_name(char^ name) {
     }
 }
 
-int luninit[8192];           // 1: a scalar declared without a value that nothing has written yet
-int lunloop[8192];           // the loop depth where it was declared
+i64 luninit[8192];           // 1: a scalar declared without a value that nothing has written yet
+i64 lunloop[8192];           // the loop depth where it was declared
 
 // declare a local: bytes = 8 for a scalar, the (rounded) size for an array
-void add_local(char^ name, int kind, int elem, int bytes, int ptr) {
+void add_local(char^ name, i64 kind, i64 elem, i64 bytes, i64 ptr) {
     if lcount >= 8192 { die_help("too many local variables", "split the function in two, or keep some values in an array or a struct"); }
     check_local_name(name);
     str_copy(@lname + lcount * 64, name, 64);
@@ -940,7 +940,7 @@ void add_local(char^ name, int kind, int elem, int bytes, int ptr) {
     lst1[lcount] = 0;
     lst2[lcount] = 0;
     loff[lcount] = frame_bytes;
-    int hint_flag = 0;
+    i64 hint_flag = 0;
     if kind == 0 && bytes == 8 && ty_tid < 99 { hint_flag = 1; }
     lfl32[lcount] = 0;
     if kind == 0 && elem == 6 && ty_tid == 90 && ptr == 0 && hint_flag == 1 { lfl32[lcount] = 1; }
@@ -961,8 +961,8 @@ void add_local(char^ name, int kind, int elem, int bytes, int ptr) {
 // the hints for the register pass: "offset:size:flag " for every local (flag 1: a plain 8-byte value); the line ";H ..." is written
 // at the end of the function (see jc_regs.j)
 char hint_buf[16384];
-int hint_len;
-void hint_add(int off, int size, int flag) {
+i64 hint_len;
+void hint_add(i64 off, i64 size, i64 flag) {
     if hint_len > 16300 { hint_len = 16383; return; }
     if hint_len == 16383 { return; }
     hint_buf[hint_len] = 0;
@@ -975,7 +975,7 @@ void hint_add(int off, int size, int flag) {
     hint_len = str_len(@hint_buf);
 }
 
-void add_global(char^ name, int kind, int elem, int bytes, int ptr) {
+void add_global(char^ name, i64 kind, i64 elem, i64 bytes, i64 ptr) {
     if gcount >= 16384 { die_help("too many global variables", "keep related values in a struct or an array"); }
     str_copy(@gname + gcount * 64, name, 64);
     gkind[gcount] = kind;
@@ -1008,7 +1008,7 @@ void add_global(char^ name, int kind, int elem, int bytes, int ptr) {
     gcount += 1;
 }
 
-void add_ginit(int off, int val) {
+void add_ginit(i64 off, i64 val) {
     if ginit_count >= 262144 { die("too many global initializers"); }
     ginit_off[ginit_count] = off;
     ginit_val[ginit_count] = val;
@@ -1017,24 +1017,24 @@ void add_ginit(int off, int val) {
 
 // ------------------------------------------------------------ code helpers
 
-int new_label() {
+i64 new_label() {
     label_no += 1;
     return label_no;
 }
 
-void place_label(int n) {
+void place_label(i64 n) {
     emit_lab(n);
     emit_str(":\n");
 }
 
-void jump(int n) {
+void jump(i64 n) {
     emit_str("b ");
     emit_lab(n);
     emit_nl();
 }
 
 // "b.eq L12" and friends
-void jump_if(char^ cond, int n) {
+void jump_if(char^ cond, i64 n) {
     emit_str("b.");
     emit_str(cond);
     emit_ch(' ');
@@ -1043,14 +1043,14 @@ void jump_if(char^ cond, int n) {
 }
 
 // "text <number>"
-void ins_n(char^ text, int n) {
+void ins_n(char^ text, i64 n) {
     emit_str(text);
     emit_int(n);
     emit_nl();
 }
 
 // "ldr x0, [x29, #16]"  (op, register, base, offset)
-void ins_mem(char^ op, char^ reg, char^ base, int off) {
+void ins_mem(char^ op, char^ reg, char^ base, i64 off) {
     emit_str(op);
     emit_ch(' ');
     emit_str(reg);
@@ -1074,7 +1074,7 @@ void pop_x1() {
 
 // the register that a variable's offset is relative to: 1 = x29 (this function), 2 = x26 (the function
 // around a #multithread loop), 0 = x28 (globals)
-char^ base_of(int local) {
+char^ base_of(i64 local) {
     if local == 1 { return "x29"; }
     if local == 2 { return "x26"; }
     return "x28";
@@ -1106,7 +1106,7 @@ void load_scalar() {
 }
 
 // bytes taken by one value of a width code: 1 i8, 2 char, 3 bool, 4 i32, 8 int
-int size_of(int code) {
+i64 size_of(i64 code) {
     if code >= 400 { return 8; }         // 400 + c : a pointer to a pointer to c
     if code >= 16 { return ssize[code - 16]; }
     if code == 8 || code == 9 || code == 7 || code == 13 { return 8; }
@@ -1125,35 +1125,35 @@ void store_scalar() {
 }
 
 // x0 = the value of the given width code at the address held in x0
-int tail_start;              // where the last line of out_buf starts (set by tail_add_base)
-int tail_base;               // 28 or 29 : the base register of that line
+i64 tail_start;              // where the last line of out_buf starts (set by tail_add_base)
+i64 tail_base;               // 28 or 29 : the base register of that line
 
 // is the last line written "add x0, x29, #N" (or x28)? then N, else -1 (the line has to be the very last thing written: no label between)
-int tail_add_base() {
-    int e = out_len;
+i64 tail_add_base() {
+    i64 e = out_len;
     if e < 16 || out_buf[e - 1] != 10 { return 0 - 1; }
-    int st = e - 1;
+    i64 st = e - 1;
     while st > 0 && out_buf[st - 1] != 10 { st -= 1; }
     char^ want = "add x0, x2";
-    int i = 0;
+    i64 i = 0;
     while want[i] != 0 {
         if out_buf[st + i] != want[i] { return 0 - 1; }
         i += 1;
     }
-    int bch = out_buf[st + i];
+    i64 bch = out_buf[st + i];
     if bch != '8' && bch != '9' { return 0 - 1; }
     char^ rest = ", #";
-    int k = st + i + 1;
-    int j = 0;
+    i64 k = st + i + 1;
+    i64 j = 0;
     while rest[j] != 0 {
         if out_buf[k + j] != rest[j] { return 0 - 1; }
         j += 1;
     }
     k = k + j;
     if k >= e - 1 { return 0 - 1; }
-    int n = 0;
+    i64 n = 0;
     while k < e - 1 {
-        int c = out_buf[k];
+        i64 c = out_buf[k];
         if c < '0' || c > '9' { return 0 - 1; }
         n = n * 10 + (c - '0');
         k += 1;
@@ -1164,30 +1164,30 @@ int tail_add_base() {
 }
 
 // is the last line written "ldr x0, [x29, #N]" (or x28, 8-byte)? then N (and tail_start, tail_base are set), else -1
-int tail_ldr_base() {
-    int e = out_len;
+i64 tail_ldr_base() {
+    i64 e = out_len;
     if e < 16 || out_buf[e - 1] != 10 { return 0 - 1; }
-    int st = e - 1;
+    i64 st = e - 1;
     while st > 0 && out_buf[st - 1] != 10 { st -= 1; }
     char^ want = "ldr x0, [x2";
-    int i = 0;
+    i64 i = 0;
     while want[i] != 0 {
         if out_buf[st + i] != want[i] { return 0 - 1; }
         i += 1;
     }
-    int bch = out_buf[st + i];
+    i64 bch = out_buf[st + i];
     if bch != '8' && bch != '9' { return 0 - 1; }
     char^ rest = ", #";
-    int k = st + i + 1;
-    int j = 0;
+    i64 k = st + i + 1;
+    i64 j = 0;
     while rest[j] != 0 {
         if out_buf[k + j] != rest[j] { return 0 - 1; }
         j += 1;
     }
     k = k + j;
-    int n = 0;
+    i64 n = 0;
     while k < e - 2 {
-        int c = out_buf[k];
+        i64 c = out_buf[k];
         if c < '0' || c > '9' { return 0 - 1; }
         n = n * 10 + (c - '0');
         k += 1;
@@ -1200,8 +1200,8 @@ int tail_ldr_base() {
 }
 
 // "add x0, x29, #N" just before, then the load becomes one instruction: ldr x0, [x29, #N]
-bool load_direct(char^ op, int scale) {
-    int n = tail_add_base();
+bool load_direct(char^ op, i64 scale) {
+    i64 n = tail_add_base();
     if n < 0 || n >= 4096 || n % scale != 0 { return false; }
     out_len = tail_start;
     emit_str(op);
@@ -1213,7 +1213,7 @@ bool load_direct(char^ op, int scale) {
     return true;
 }
 
-void load_through(int code) {
+void load_through(i64 code) {
     if code == 6 { code = 4; }
     if code == 7 || code == 13 { code = 8; }
     if code == 11 { code = 2; }
@@ -1230,15 +1230,15 @@ void load_through(int code) {
     }
 }
 
-int lv_fl32;                 // 1: the lvalue is a scalar float local (see lfl32): the whole 8-byte slot is read and written
+i64 lv_fl32;                 // 1: the lvalue is a scalar float local (see lfl32): the whole 8-byte slot is read and written
 // the width code to read or write the lvalue with: a float local is a whole 8-byte slot
-int fl32_code(int code) {
+i64 fl32_code(i64 code) {
     if lv_fl32 == 1 && code == 6 { return 8; }
     return code;
 }
 
 // x0 = the value of the given width code at the address in x3
-void load_from_x3(int code) {
+void load_from_x3(i64 code) {
     if code == 6 { code = 4; }
     if code == 7 || code == 13 { code = 8; }
     if code == 11 { code = 2; }
@@ -1256,7 +1256,7 @@ void load_from_x3(int code) {
 }
 
 // store x1 at the address in x3 (width code)
-void store_through(int code) {
+void store_through(i64 code) {
     if code == 7 || code == 13 { code = 8; }
     if code == 6 || code == 12 { code = 4; }
     if code == 8 {
@@ -1288,8 +1288,8 @@ void element_address() {
 
 // the width an operation on two operands is done in: a plain number takes the
 // other side's width, otherwise the wider one
-int res_w(int a, int b) {
-    int r = a;
+i64 res_w(i64 a, i64 b) {
+    i64 r = a;
     if a == 0 { r = b; }
     else if b != 0 && size_of(b) > size_of(a) { r = b; }
     if r == 2 || r == 3 || r == 9 { r = 8; }      // char / bool / text arithmetic is int arithmetic
@@ -1297,7 +1297,7 @@ int res_w(int a, int b) {
 }
 
 // wrap x0 to a signed small width (i8, i32) and remember it as the result width
-void wrap_result(int w) {
+void wrap_result(i64 w) {
     // arithmetic is done at full register width (like C: i8 + i8 is an int);
     // the value is cut to its width only when it is stored or cast
     ex_w = 8;
@@ -1305,16 +1305,16 @@ void wrap_result(int w) {
 
 // the token is "[" : parses [i], [i][j] or [i][j][k] and leaves the element
 // number (counted from the start of the array) in x0
-int chk_cnt;                 // for the next index chain: elements of the array (0 = unknown)
-int chk_len_off;             // ... or: the frame/global offset of the hidden length (-1 = none)
-int chk_len_local;
+i64 chk_cnt;                 // for the next index chain: elements of the array (0 = unknown)
+i64 chk_len_off;             // ... or: the frame/global offset of the hidden length (-1 = none)
+i64 chk_len_local;
 
 // -d : x0 = the index; stop with a message if it is not below `size`
 // (size is a constant, or in x2 already when size < 0)
-void emit_bounds(int size) {
+void emit_bounds(i64 size) {
     if opt_debug == 0 { return; }
     if size == 0 { return; }
-    int lok = new_label();
+    i64 lok = new_label();
     if size > 0 { ins_n("mov x2, ", size); }
     emit_line("cmp x0, x2");
     jump_if("lo", lok);
@@ -1325,7 +1325,7 @@ void emit_bounds(int size) {
 }
 
 // the check of one index: dimension number k of nd, with the size from the plan above
-void check_index(int k, int nd, int cnt, int st1, int st2, int len_off, int len_local) {
+void check_index(i64 k, i64 nd, i64 cnt, i64 st1, i64 st2, i64 len_off, i64 len_local) {
     if opt_debug == 0 { return; }
     if len_off >= 0 {
         ins_mem("ldr", "x2", base_of(len_local), len_off);
@@ -1333,7 +1333,7 @@ void check_index(int k, int nd, int cnt, int st1, int st2, int len_off, int len_
         return;
     }
     if cnt <= 0 { return; }
-    int size = cnt;
+    i64 size = cnt;
     if nd == 2 && k == 0 { size = cnt / st1; }
     if nd == 2 && k == 1 { size = st1; }
     if nd == 3 && k == 0 { size = cnt / st1; }
@@ -1343,9 +1343,9 @@ void check_index(int k, int nd, int cnt, int st1, int st2, int len_off, int len_
 }
 
 // a literal index of a fixed array that is not below the size: an error at compile time
-void check_const_index(int lit, int lv, int k, int nd, int cnt, int st1, int st2, int len_off) {
+void check_const_index(i64 lit, i64 lv, i64 k, i64 nd, i64 cnt, i64 st1, i64 st2, i64 len_off) {
     if lit == 0 || len_off >= 0 || cnt <= 0 || pass_no < 2 { return; }
-    int size = cnt;
+    i64 size = cnt;
     if nd == 2 && k == 0 { size = cnt / st1; }
     if nd == 2 && k == 1 { size = st1; }
     if nd == 3 && k == 0 { size = cnt / st1; }
@@ -1367,18 +1367,18 @@ void check_const_index(int lit, int lv, int k, int nd, int cnt, int st1, int st2
 }
 
 void parse_index_chain() {
-    int nd = v_nd;
-    int st1 = v_st1;
-    int st2 = v_st2;
-    int cnt = chk_cnt;
-    int len_off = chk_len_off;
-    int len_local = chk_len_local;
+    i64 nd = v_nd;
+    i64 st1 = v_st1;
+    i64 st2 = v_st2;
+    i64 cnt = chk_cnt;
+    i64 len_off = chk_len_off;
+    i64 len_local = chk_len_local;
     chk_cnt = 0;
     chk_len_off = 0 - 1;
     next();
-    int lit = 0;
-    int lv = 0;
-    int sq = tok_seq;
+    i64 lit = 0;
+    i64 lv = 0;
+    i64 sq = tok_seq;
     if tok_kind == T_NUM && tok_float == 0 { lit = 1; lv = tok_num; }
     parse_expr();
     if tok_seq != sq + 1 { lit = 0; }
@@ -1433,22 +1433,22 @@ void parse_index_chain() {
 // the text (len characters) goes into the global block; x0 = its address
 // the literals that the text path placed in the function being compiled (offset, length, bytes): the lowering from the tree finds its
 // literals here instead of placing them again. ll_on is set by the probe of the tree.
-int ll_on;
-int ll_n;
-int ll_off[16384];
-int ll_len[16384];
-int ll_at[16384];
-int ll_used[16384];
-int ll_fn[16384];                // the function (its number in fname) that placed it
-int ll_cur;                      // the function being compiled
-int ll_tn;
+i64 ll_on;
+i64 ll_n;
+i64 ll_off[16384];
+i64 ll_len[16384];
+i64 ll_at[16384];
+i64 ll_used[16384];
+i64 ll_fn[16384];                // the function (its number in fname) that placed it
+i64 ll_cur;                      // the function being compiled
+i64 ll_tn;
 char ll_txt[1048576];
-int ll_over;
+i64 ll_over;
 char at_spool[262144];          // the literals of the trees (the node holds the offset and the length)
-int at_spn;
+i64 at_spn;
 
-void place_text(char^ text, int len) {
-    int off = (gl_bytes + 7) / 8 * 8;
+void place_text(char^ text, i64 len) {
+    i64 off = (gl_bytes + 7) / 8 * 8;
     if ll_on == 1 {
         if ll_n >= 16384 || ll_tn + len + 1 > 1048576 {
             ll_over = 1;
@@ -1457,7 +1457,7 @@ void place_text(char^ text, int len) {
             ll_len[ll_n] = len;
             ll_fn[ll_n] = ll_cur;
             ll_at[ll_n] = ll_tn;
-            int q = 0;
+            i64 q = 0;
             while q < len {
                 ll_txt[ll_tn + q] = text[q];
                 q += 1;
@@ -1466,12 +1466,12 @@ void place_text(char^ text, int len) {
             ll_n += 1;
         }
     }
-    int size = (len + 8) / 8 * 8;
+    i64 size = (len + 8) / 8 * 8;
     gl_bytes = off + size;
-    int k = 0;
+    i64 k = 0;
     while k < size {
-        int chunk = 0;
-        int b = 7;
+        i64 chunk = 0;
+        i64 b = 7;
         while b >= 0 {
             chunk = chunk * 256;
             if k + b < len { chunk = chunk + text[k + b]; }
@@ -1492,16 +1492,16 @@ void gen_string() {
 // ------------------------------------------------------------------- calls
 
 // arguments are evaluated in order and pushed; then popped into x0..x{n-1}
-int call_fi = -1;             // function of the call being parsed (-1 = unknown)
-int call_sig = -1;             // signature of the indirect call being parsed (-1 = none)
-int call_skip;               // leading parameters not written in the call (self)
-int arr_call_mask = 0;          // bit k: the argument k of the call being parsed is an array
+i64 call_fi = -1;             // function of the call being parsed (-1 = unknown)
+i64 call_sig = -1;             // signature of the indirect call being parsed (-1 = none)
+i64 call_skip;               // leading parameters not written in the call (self)
+i64 arr_call_mask = 0;          // bit k: the argument k of the call being parsed is an array
 
 // an argument for an array parameter: a string or an array name; pushes its
 // address and its length
 void parse_array_arg() {
     if tok_kind == T_STR {
-        int sl = tok_str_len + 1;
+        i64 sl = tok_str_len + 1;
         gen_string();
         push_x0();
         ins_n("mov x0, ", sl);
@@ -1533,11 +1533,11 @@ void write_arg_ctx() {
 }
 
 // the names of the struct st: fields (kind 0) or methods (kind 1), at most 8, in a help line
-void write_member_names(int st, int kind) {
-    int shown = 0;
+void write_member_names(i64 st, i64 kind) {
+    i64 shown = 0;
     if kind == 0 {
-        int f = sfirst[st];
-        int last = sfirst[st] + snf[st];
+        i64 f = sfirst[st];
+        i64 last = sfirst[st] + snf[st];
         while f < last && shown < 8 {
             if shown > 0 { write_err(", "); }
             write_err(@fldname + f * 64);
@@ -1545,12 +1545,12 @@ void write_member_names(int st, int kind) {
             f += 1;
         }
     } else {
-        int k = 0;
-        int pl = str_len(@sname + st * 64);
+        i64 k = 0;
+        i64 pl = str_len(@sname + st * 64);
         while k < fcount && shown < 8 {
             char^ nm = @fname + k * 64;
             bool same = true;
-            int c = 0;
+            i64 c = 0;
             while c < pl {
                 if nm[c] != sname[st * 64 + c] { same = false; }
                 c += 1;
@@ -1567,7 +1567,7 @@ void write_member_names(int st, int kind) {
 }
 
 // the struct st has no field / method `name`
-void die_no_member(int st, int kind, char^ name) {
+void die_no_member(i64 st, i64 kind, char^ name) {
     begin_msg("error");
     write_err("the struct '");
     write_err(@sname + st * 64);
@@ -1587,13 +1587,13 @@ void die_no_member(int st, int kind, char^ name) {
     die_end();
 }
 
-void check_arg_count(int fi, int skip, int given) {
+void check_arg_count(i64 fi, i64 skip, i64 given) {
     if fi < 0 || pass_no < 2 { return; }
-    int want = fnpar[fi] - skip;
+    i64 want = fnpar[fi] - skip;
     if want < 0 || given == want { return; }
     char m[300];
     str_copy(@m, "'", 4);
-    int at = str_len(@m);
+    i64 at = str_len(@m);
     append_text(@m, @fname + fi * 64);
     // a method is stored as Struct__name: write it as Struct::name
     while m[at] != 0 {
@@ -1613,10 +1613,10 @@ void check_arg_count(int fi, int skip, int given) {
 }
 
 // the parameters that the call left out and that have a default value get it now (pushed like arguments); returns how many
-int fill_defaults(int pfi, int pskip, int argno) {
-    int added = 0;
+i64 fill_defaults(i64 pfi, i64 pskip, i64 argno) {
+    i64 added = 0;
     if pfi < 0 || pass_no < 2 || fdefn[pfi] == 0 { return 0; }
-    int pk = argno + pskip;
+    i64 pk = argno + pskip;
     while pk >= fdefn[pfi] - 1 && pk < fnpar[pfi] {
         ins_n("mov x0, ", fdefv[pfi * 16 + pk]);
         push_x0();
@@ -1626,19 +1626,19 @@ int fill_defaults(int pfi, int pskip, int argno) {
     return added;
 }
 
-int parse_args() {
-    int n = 0;
-    int amask = arr_call_mask;
+i64 parse_args() {
+    i64 n = 0;
+    i64 amask = arr_call_mask;
     arr_call_mask = 0;
-    int pfi = call_fi;
-    int pskip = call_skip;
-    int psig = call_sig;
+    i64 pfi = call_fi;
+    i64 pskip = call_skip;
+    i64 psig = call_sig;
     call_sig = 0 - 1;
     call_fi = 0 - 1;
     call_skip = 0;
-    int argno = 0;
+    i64 argno = 0;
     if tok_is(")") {
-        int d0 = fill_defaults(pfi, pskip, 0);
+        i64 d0 = fill_defaults(pfi, pskip, 0);
         check_arg_count(pfi, pskip, d0);
         next();
         return d0;
@@ -1654,7 +1654,7 @@ int parse_args() {
                 str_temp();
             }
             if pfi >= 0 && argno + pskip < fnpar[pfi] && argno + pskip < 8 {
-                int pidx = pfi * 8 + argno + pskip;
+                i64 pidx = pfi * 8 + argno + pskip;
                 arg_ctx_fi = pfi;
                 arg_ctx_no = argno + 1;
                 if fpstr[pidx] == 2 { no_num_for_ptr(); }
@@ -1672,18 +1672,18 @@ int parse_args() {
             if pfi >= 0 && argno + pskip < 8 && fptid[pfi * 8 + argno + pskip] >= 100 && ex_ty >= 100 && struct_has_free(ex_ty - 100) {
                 // a value that frees itself is moved into the call: a fresh value goes as it is, a local variable is
                 // copied to a temporary and emptied now (so that a throw in the call cannot free it twice)
-                int how = struct_source(ex_ty - 100);
+                i64 how = struct_source(ex_ty - 100);
                 if how == 2 {
-                    int src_off = own_src_off;
-                    int ssz = ssize[ex_ty - 100];
+                    i64 src_off = own_src_off;
+                    i64 ssz = ssize[ex_ty - 100];
                     ty_tid = 0;
                     add_local("..moved", 0, 16 + ex_ty - 100, ssz, 0);
-                    int tmp_at = loff[lcount - 1];
+                    i64 tmp_at = loff[lcount - 1];
                     ins_n("add x3, x29, #", tmp_at);
                     ins_n("mov x2, ", ssz);
                     emit_copy_call(ex_ty - 100);
                     emit_zero_local(src_off, ssz);
-                    int oi2 = own_find(src_off);
+                    i64 oi2 = own_find(src_off);
                     if oi2 >= 0 && own_blk[oi2] == cur_blk { own_moved[oi2] = 1; }
                     ins_n("add x0, x29, #", tmp_at);
                 }
@@ -1699,7 +1699,7 @@ int parse_args() {
             break;
         }
     }
-    int dn = fill_defaults(pfi, pskip, argno);
+    i64 dn = fill_defaults(pfi, pskip, argno);
     check_arg_count(pfi, pskip, argno + dn);
     expect(")");
     return n + dn;
@@ -1708,9 +1708,9 @@ int parse_args() {
 // loads the pushed arguments into x0..x7. With 8 or fewer the stack slots are given back here;
 // with more, the slots stay (the callee reads arguments 9.. from them, on the stack of its own
 // thread) and the caller drops them after the call (see drop_args).
-void pop_args(int n) {
-    int i = n - 1;
-    int slot = 0;
+void pop_args(i64 n) {
+    i64 i = n - 1;
+    i64 slot = 0;
     while i >= 0 {
         if i < 8 {
             emit_str("ldr x");
@@ -1730,7 +1730,7 @@ void pop_args(int n) {
 }
 
 // after the call: give the argument slots back when there were more than 8
-void drop_args(int n) {
+void drop_args(i64 n) {
     if n > 8 { ins_n("add sp, sp, #", n * 16); }
 }
 
@@ -1743,8 +1743,8 @@ void resolve_callee() {
         return;
     }
     if str_eq(@id_name, "syscall") || str_eq(@id_name, "argc") || str_eq(@id_name, "arg") { return; }
-    int k = 0;
-    int found = 0 - 1;
+    i64 k = 0;
+    i64 found = 0 - 1;
     while k < scount {
         if us_g[k] == 1 || us_l[k] == 1 {
             char rc_full[256];
@@ -1777,8 +1777,8 @@ void resolve_callee() {
 
 // ---------------------------------------------- owners
 // is block `a` a strict ancestor of block `b` (an enclosing block)?
-bool blk_encloses(int a, int b) {
-    int x = blk_parent[b];
+bool blk_encloses(i64 a, i64 b) {
+    i64 x = blk_parent[b];
     while true {
         if x == a { return true; }
         if x == 0 { return false; }
@@ -1788,8 +1788,8 @@ bool blk_encloses(int a, int b) {
 }
 
 // the local variable at frame offset off: the block it was declared in (-1 = unknown)
-int local_blk(int off) {
-    int i = lcount - 1;
+i64 local_blk(i64 off) {
+    i64 i = lcount - 1;
     while i >= 0 {
         if loff[i] == off { return lblk[i]; }
         i -= 1;
@@ -1797,8 +1797,8 @@ int local_blk(int off) {
     return 0 - 1;
 }
 
-int own_find(int off) {
-    int i = own_count - 1;
+i64 own_find(i64 off) {
+    i64 i = own_count - 1;
     while i >= 0 {
         if own_off[i] == off { return i; }
         i -= 1;
@@ -1812,8 +1812,8 @@ int own_find(int off) {
 // slot, mode 1: it gets the address of the slot, a struct with free(self)). Leaving a block takes the
 // records out again (own_unlink).
 // an array of structs that free themselves is freed by a small routine made for the struct: S__free_arr (x0 = the array)
-int thunk_need[1024];
-void free_thunk_name(char^ fn, int sidx) {
+i64 thunk_need[1024];
+void free_thunk_name(char^ fn, i64 sidx) {
     str_copy(fn, @sname + sidx * 64, 64);
     append_text(fn, "__free_arr");
     thunk_need[sidx] = 1;
@@ -1829,21 +1829,21 @@ void free_thunk_name(char^ fn, int sidx) {
 // list does not match what it sees. Types: 1 an owner was added (a off, b kind, c aux, d the cleanup record), 2 a place where the
 // owners are freed (a: 1 end of a block, 2 return, 3 break, 4 continue, 5 end of the function; b the number of the block / statement;
 // c the cleanup record to go back to; d how many owners), 3 one owner freed there (a off, b kind, c aux), 4 a variable became null (a off).
-int ow_n;
-int ow_fn[16384];
-int ow_ty[16384];
-int ow_a[16384];
-int ow_b[16384];
-int ow_c[16384];
-int ow_d[16384];
-int ow_trace;                    // -ast2: say every event
-int ow_nk;                       // set before emit_owner_null: why (1 returned, 2 freed by a call, 3 stored somewhere, 4 move(p)); 0 = other
-int ow_site;                     // set by the caller of own_free_from: the kind of place, 0 = not one the tree knows
-int ow_id;
-int ow_retn;                     // the return statements / the break and continue statements seen so far in this function
-int ow_brkn;
+i64 ow_n;
+i64 ow_fn[16384];
+i64 ow_ty[16384];
+i64 ow_a[16384];
+i64 ow_b[16384];
+i64 ow_c[16384];
+i64 ow_d[16384];
+i64 ow_trace;                    // -ast2: say every event
+i64 ow_nk;                       // set before emit_owner_null: why (1 returned, 2 freed by a call, 3 stored somewhere, 4 move(p)); 0 = other
+i64 ow_site;                     // set by the caller of own_free_from: the kind of place, 0 = not one the tree knows
+i64 ow_id;
+i64 ow_retn;                     // the return statements / the break and continue statements seen so far in this function
+i64 ow_brkn;
 
-void ow_add(int ty, int a, int b, int c, int d) {
+void ow_add(i64 ty, i64 a, i64 b, i64 c, i64 d) {
     if ll_on != 1 { return; }
     if ow_n >= 16384 {
         ll_over = 1;
@@ -1873,7 +1873,7 @@ void ow_add(int ty, int a, int b, int c, int d) {
     ow_n += 1;
 }
 
-void own_add(int off, int kind, int aux) {
+void own_add(i64 off, i64 kind, i64 aux) {
     if own_count >= 256 { die("too many owning variables in one function"); }
     if kind != 2 && kind != 6 && kind != 7 && kind != 9 { str_flush(stmt_t0, 1); }       // Strings made by this statement go first: the records must be in order
     own_off[own_count] = off;
@@ -1885,7 +1885,7 @@ void own_add(int off, int kind, int aux) {
     ow_add(1, off, kind, aux, frame_bytes);
     frame_bytes += 32;
     char fn[128];
-    int mode = 0;
+    i64 mode = 0;
     if kind == 5 {
         mode = 2;                            // a deferred statement: aux is the label of its code, off is not used
     } else if kind == 0 {
@@ -1925,12 +1925,12 @@ void own_add(int off, int kind, int aux) {
 }
 
 // the cleanup chain goes back to what it was before owner `from` (and the ones after it) were entered
-void own_unlink(int from) {
+void own_unlink(i64 from) {
     ins_mem("ldr", "x1", "x29", own_rec[from]);
     emit_line("str x1, [x27, #784]");
 }
 
-void emit_owner_free(int i) {
+void emit_owner_free(i64 i) {
     if own_kind[i] == 5 {
         emit_str("bl ");                     // a deferred statement runs now
         emit_lab(own_aux[i]);
@@ -1961,7 +1961,7 @@ void emit_owner_free(int i) {
 }
 
 // the variable no longer owns anything (it is null)
-void emit_owner_null(int i) {
+void emit_owner_null(i64 i) {
     ow_add(4, own_off[i], ow_nk, 0, 0);
     ow_nk = 0;
     emit_line("mov x1, 0");
@@ -1969,8 +1969,8 @@ void emit_owner_null(int i) {
 }
 
 // free the owners with index >= from (innermost first); with pop the list shrinks
-void own_free_from(int from, int pop) {
-    int i = own_count - 1;
+void own_free_from(i64 from, i64 pop) {
+    i64 i = own_count - 1;
     if from < own_count {
         ow_add(2, ow_site, ow_id, own_rec[from], own_count - from);
         while i >= from {
@@ -1988,13 +1988,13 @@ void own_free_from(int from, int pop) {
 // ---------------------------------------------- which functions are used
 // Pass 2 records every call (from function cur_fidx, -1 = outside any function);
 // pass 3 leaves out the functions that main cannot reach (most of std).
-int cur_fidx = -1;
-int edge_from[262144];
+i64 cur_fidx = -1;
+i64 edge_from[262144];
 char edge_to[16777216];       // 65536 x 64
-int edge_count;
-int freach[16384];
-int fexport[16384];             // 1: the function is marked `export` (a library entry point with the C calling rules)
-int fn_export;                  // 1 while the function being parsed is marked `export`
+i64 edge_count;
+i64 freach[16384];
+i64 fexport[16384];             // 1: the function is marked `export` (a library entry point with the C calling rules)
+i64 fn_export;                  // 1 while the function being parsed is marked `export`
 
 void note_call(char^ name) {
     if pass_no != 2 { return; }
@@ -2007,29 +2007,29 @@ void note_call(char^ name) {
 
 // freach[f] = 1 for main and everything it (and the global initializers) can call
 void compute_reach() {
-    int k = 0;
+    i64 k = 0;
     while k < fcount {
         freach[k] = 0;
         k += 1;
     }
-    int m = find_func("main");
+    i64 m = find_func("main");
     if m >= 0 { freach[m] = 1; }
     // the methods that a table of virtual methods points to are reached without a call that can be seen
-    int vs = 0;
+    i64 vs = 0;
     while vs < scount {
-        int vi = 0;
+        i64 vi = 0;
         while vi < svcnt[vs] {
             char vfull[128];
-            int vf = find_method_in(vs, @svname + (vs * 32 + vi) * 64, @vfull);
+            i64 vf = find_method_in(vs, @svname + (vs * 32 + vi) * 64, @vfull);
             if vf >= 0 { freach[vf] = 1; }
             vi += 1;
         }
         vs += 1;
     }
     // the routines that cout uses for a bool and for a pointer (the syntax tree calls them, the parser does not see it)
-    int pbl = find_func("__print_bool");
+    i64 pbl = find_func("__print_bool");
     if pbl >= 0 && m >= 0 { freach[pbl] = 1; }
-    int ppt = find_func("__print_ptr");
+    i64 ppt = find_func("__print_ptr");
     if ppt >= 0 && m >= 0 { freach[ppt] = 1; }
     if x_lib == 1 {
         // a library: the entry points are the roots (there may be no main)
@@ -2057,9 +2057,9 @@ void compute_reach() {
     bool changed = true;
     while changed {
         changed = false;
-        int j = 0;
+        i64 j = 0;
         while j < edge_count {
-            int to = find_func(@edge_to + j * 64);
+            i64 to = find_func(@edge_to + j * 64);
             if to >= 0 && freach[to] == 0 && (edge_from[j] < 0 || freach[edge_from[j]] == 1) {
                 freach[to] = 1;
                 changed = true;
@@ -2081,9 +2081,9 @@ void compute_reach() {
         changed = true;
         while changed {
             changed = false;
-            int j2 = 0;
+            i64 j2 = 0;
             while j2 < edge_count {
-                int to2 = find_func(@edge_to + j2 * 64);
+                i64 to2 = find_func(@edge_to + j2 * 64);
                 if to2 >= 0 && freach[to2] == 0 && (edge_from[j2] < 0 || freach[edge_from[j2]] == 1) {
                     freach[to2] = 1;
                     changed = true;
@@ -2102,11 +2102,11 @@ void compute_reach() {
     }
 }
 
-int cur_abi;                 // the abi of the call being compiled (Name::call)
-int call_bare;               // 1: the next gen_call is a call without ( ) (a data enum member)
-int bare_call;
-int call_pre;                // arguments already pushed (self of a method call)
-int call_method;             // 1 for a method call: arguments are counted after self
+i64 cur_abi;                 // the abi of the call being compiled (Name::call)
+i64 call_bare;               // 1: the next gen_call is a call without ( ) (a data enum member)
+i64 bare_call;
+i64 call_pre;                // arguments already pushed (self of a method call)
+i64 call_method;             // 1 for a method call: arguments are counted after self
 
 // a call: the (mangled) name is in id_name and the token is the "(" after it
 void gen_call() {
@@ -2151,12 +2151,12 @@ void gen_call() {
         else if str_eq(@callee, "__atomic_bit_xor") { str_copy(@callee, "__fetch_xor", 256); }
     }
     note_call(@callee);
-    int vsl = vcall_slot;
-    int vsl_off = vcall_off;
+    i64 vsl = vcall_slot;
+    i64 vsl_off = vcall_off;
     vcall_slot = 0 - 1;
-    int pre = call_pre;
+    i64 pre = call_pre;
     call_pre = 0;
-    int is_method = call_method;
+    i64 is_method = call_method;
     call_method = 0;
     if call_bare == 1 {
         call_bare = 0;                   // a member of a data enum written without ( )
@@ -2164,16 +2164,16 @@ void gen_call() {
     } else {
         expect("(");
     }
-    int fi = find_func(@callee);
+    i64 fi = find_func(@callee);
     if fi < 0 && pass_no >= 2 && !(callee[0] == '_' && callee[1] == '_') && !str_eq(@callee, "syscall") && !str_eq(@callee, "argc") && !str_eq(@callee, "arg") {
         if lookup_var(@callee) { die_help("a variable cannot be called like a function", "it holds a value, not a function; call a function by its own name"); }
         die_name("unknown function", @callee);
     }
-    int res_ty = 0;
-    int tmp_off = 0;
+    i64 res_ty = 0;
+    i64 tmp_off = 0;
     if fi >= 0 { res_ty = fret[fi]; }
     if str_eq(@callee, "__fsqrt") || str_eq(@callee, "__ffloor") || str_eq(@callee, "__fceil") || str_eq(@callee, "__ftrunc") { res_ty = 91; }
-    int is_atomic = 0;
+    i64 is_atomic = 0;
     if str_eq(@callee, "__cas") || str_eq(@callee, "__xchg") || str_eq(@callee, "__fetch_add") || str_eq(@callee, "__fetch_sub") || str_eq(@callee, "__fetch_and") || str_eq(@callee, "__fetch_or") || str_eq(@callee, "__fetch_xor") { is_atomic = 1; }
     if fi >= 0 && farr[fi] != 0 { arr_call_mask = farr[fi] >> is_method; }
     last_call_struct = 0;
@@ -2204,7 +2204,7 @@ void gen_call() {
     }
     call_fi = fi;
     call_skip = is_method;
-    int n = pre;
+    i64 n = pre;
     if bare_call == 1 {
         bare_call = 0;
     } else {
@@ -2212,15 +2212,15 @@ void gen_call() {
         n = parse_args() + pre;
         in_free_call = 0;
     }
-    int free_owner = 0 - 1;
+    i64 free_owner = 0 - 1;
     if str_eq(@callee, "Mem__free") && n == 1 && rv_valid == 1 { free_owner = own_find(rv_off); }
     pop_args(n);
     if str_eq(@callee, "syscall") {
         if n < 1 || n > 7 { die("syscall takes 1 to 7 arguments"); }
         if allow_syscall == 0 { warn("syscall(number, ...) calls the system by a number that belongs to one machine; use Sys::open, Sys::read ... (Sys::call(number, ...) when Sys has no function for it), or write #allow syscall at the top of the program", "syscall"); }
         // exit / exit_group (93, 94): the buffered output goes out first (the number and the exit code wait on the stack)
-        int lsf = new_label();
-        int lsg = new_label();
+        i64 lsf = new_label();
+        i64 lsg = new_label();
         emit_line("cmp x0, 93");
         emit_str("b.eq L"); emit_int(lsf); emit_nl();
         emit_line("cmp x0, 94");
@@ -2235,7 +2235,7 @@ void gen_call() {
         emit_line("add sp, sp, #16");
         place_label(lsg);
         emit_line("mov x8, x0");
-        int i = 1;
+        i64 i = 1;
         while i < n {
             emit_str("mov x");
             emit_int(i - 1);
@@ -2321,8 +2321,8 @@ void gen_call() {
     } else if is_atomic == 1 {
         // atomic operations on an 8-byte word at the address in x0 (x1, x2 = the other arguments);
         // the result is the value the word had before. Built from load-exclusive / store-exclusive.
-        int la = new_label();
-        int lb = new_label();
+        i64 la = new_label();
+        i64 lb = new_label();
         place_label(la);
         emit_line("ldaxr x3, [x0]");
         if str_eq(@callee, "__cas") {
@@ -2372,7 +2372,7 @@ void gen_call() {
         // f64x2::load(a, i) / v.store(a, i) (and the other three simd types): one 16-byte load or store at the element i of the array.
         // x0 = the result (load) or the value (store), x1 = the array, x2 = the index.
         if n != 3 { die("this simd function takes the array and the index"); }
-        int smk = simd_mem_kind(@callee);
+        i64 smk = simd_mem_kind(@callee);
         if smk == 1 || smk == 2 || smk == 5 || smk == 6 { emit_line("lsl x2, x2, #3"); } else if smk != 9 && smk != 10 { emit_line("lsl x2, x2, #2"); }
         emit_line("add x1, x1, x2");
         if smk <= 4 || smk == 9 {
@@ -2439,7 +2439,7 @@ void gen_call() {
 }
 
 // the type of what a pointer to `code` points at
-int pointee_tid(int code) {
+i64 pointee_tid(i64 code) {
     if code >= 400 { return 0; }
     if code == 11 { return 93; }
     if code == 12 { return 94; }
@@ -2452,23 +2452,23 @@ int pointee_tid(int code) {
 }
 
 // the object found by parse_lvalue (its address is in x0)
-int lv_code;                 // width code of the object (16+n for a struct n)
-int lv_kind;                 // 1 if it is a whole array
-int lv_ptr;                  // pointee code if the object is a pointer variable
-int lv_tid;
-int lv_nd;
-int lv_st1;
-int lv_st2;
-int lv_cnt;
-int lv_dyn;
-int lv_base_off;             // frame offset / local-ness of the variable the chain began with
-int lv_base_local;
-int lv_self;                 // the variable is `self`
-int lv_swz;                  // 1: the value is a temporary made by a swizzle with several components (read only)
+i64 lv_code;                 // width code of the object (16+n for a struct n)
+i64 lv_kind;                 // 1 if it is a whole array
+i64 lv_ptr;                  // pointee code if the object is a pointer variable
+i64 lv_tid;
+i64 lv_nd;
+i64 lv_st1;
+i64 lv_st2;
+i64 lv_cnt;
+i64 lv_dyn;
+i64 lv_base_off;             // frame offset / local-ness of the variable the chain began with
+i64 lv_base_local;
+i64 lv_self;                 // the variable is `self`
+i64 lv_swz;                  // 1: the value is a temporary made by a swizzle with several components (read only)
 char lv_base[256];           // the variable the chain started from
-int lv_fresh;                // 1 while no [ ] ^ . has been followed yet
-int lv_serial;               // counts the l-value chains parsed (sizeof uses it)
-int lv_done;                 // 1: a method call ended the chain, its result is in x0
+i64 lv_fresh;                // 1 while no [ ] ^ . has been followed yet
+i64 lv_serial;               // counts the l-value chains parsed (sizeof uses it)
+i64 lv_done;                 // 1: a method call ended the chain, its result is in x0
 
 // is the "." that is the current token followed by the word len, on an array?
 // (looks one token ahead by reading the source text)
@@ -2482,8 +2482,8 @@ bool lv_len_next() {
         char hn[300];
         str_copy(@hn, @lv_base, 256);
         str_copy(@hn + str_len(@hn), "__len", 8);
-        int sv_off = v_off;
-        int sv_loc = v_local;
+        i64 sv_off = v_off;
+        i64 sv_loc = v_local;
         bool has = lookup_var(@hn);
         v_off = sv_off;
         v_local = sv_loc;
@@ -2493,7 +2493,7 @@ bool lv_len_next() {
 }
 
 // the struct named base + n  (vec2, vec3, vec4), or -1
-int find_struct_n(char^ base, int n) {
+i64 find_struct_n(char^ base, i64 n) {
     char nm[16];
     str_copy(@nm, base, 12);
     nm[str_len(@nm) + 1] = 0;
@@ -2502,17 +2502,17 @@ int find_struct_n(char^ base, int n) {
 }
 
 // is `name` a swizzle of the vector struct st: 1 to 4 letters of xyzw, or of rgba (not mixed), each one a component st has?
-bool swizzle_ok(int st, char^ name) {
+bool swizzle_ok(i64 st, char^ name) {
     if str_len(@sname + st * 64) != 4 || sname[st * 64] != 'v' || sname[st * 64 + 1] != 'e' || sname[st * 64 + 2] != 'c' { return false; }
-    int comps = sname[st * 64 + 3] - '0';
-    int n = str_len(name);
+    i64 comps = sname[st * 64 + 3] - '0';
+    i64 n = str_len(name);
     if n < 1 || n > 4 { return false; }
-    int set = 0;
-    int i = 0;
+    i64 set = 0;
+    i64 i = 0;
     while i < n {
-        int c = name[i];
-        int idx = 0 - 1;
-        int cs = 0;
+        i64 c = name[i];
+        i64 idx = 0 - 1;
+        i64 cs = 0;
         if c == 'x' { idx = 0; cs = 1; }
         else if c == 'y' { idx = 1; cs = 1; }
         else if c == 'z' { idx = 2; cs = 1; }
@@ -2535,7 +2535,7 @@ bool swizzle_ok(int st, char^ name) {
 
 // the letters rgba become xyzw (in place)
 void swizzle_letter(char^ name) {
-    int i = 0;
+    i64 i = 0;
     while name[i] != 0 {
         if name[i] == 'r' { name[i] = 'x'; }
         else if name[i] == 'g' { name[i] = 'y'; }
@@ -2555,7 +2555,7 @@ void parse_lvalue() {
     lv_serial += 1;
     str_copy(@lv_base, @id_name, 256);
     if str_eq(@id_name, "self") { lv_self = 1; }
-    int ali = find_local(@id_name);
+    i64 ali = find_local(@id_name);
     if ali >= 0 && lalias[ali] == 1 { lv_self = 1; }
     addr_of_var();
     lv_code = v_elem;
@@ -2576,7 +2576,7 @@ void parse_lvalue() {
 // the variable that this lvalue starts with was moved (it is null now) and is used again: p[i], p^, p.f
 void check_moved_use() {
     if lv_fresh == 1 && lv_base_local == 1 && lv_kind != 1 {
-        int oi = own_find(lv_base_off);
+        i64 oi = own_find(lv_base_off);
         if oi >= 0 && own_moved[oi] == 1 { warn("this variable was moved and is used afterwards (it is null now)", "moved"); }
         if oi >= 0 && own_moved[oi] == 2 { if in_free_call == 1 { warn("this variable was already freed by Mem::free and is freed again (it is null now)", "moved"); } else { warn("this variable was freed by Mem::free and is used afterwards (it is null now)", "moved"); } }
     }
@@ -2594,11 +2594,11 @@ void lvalue_loop() {
             if lv_done == 1 { return; }
         } else if tok_is("[") {
             check_moved_use();
-            int s_code = lv_code;
-            int s_ptr = lv_ptr;
-            int s_tid = lv_tid;
-            int s_self = lv_self;
-            int s_isarr = lv_kind;
+            i64 s_code = lv_code;
+            i64 s_ptr = lv_ptr;
+            i64 s_tid = lv_tid;
+            i64 s_self = lv_self;
+            i64 s_isarr = lv_kind;
             v_nd = lv_nd;
             v_st1 = lv_st1;
             v_st2 = lv_st2;
@@ -2610,8 +2610,8 @@ void lvalue_loop() {
                 char lim_name[300];
                 str_copy(@lim_name, @lv_base, 256);
                 str_copy(@lim_name + str_len(@lim_name), "__len", 8);
-                int saved_off = v_off;
-                int saved_loc = v_local;
+                i64 saved_off = v_off;
+                i64 saved_loc = v_local;
                 if lookup_var(@lim_name) {
                     chk_len_off = v_off;
                     chk_len_local = v_local;
@@ -2630,12 +2630,12 @@ void lvalue_loop() {
             }
             // a literal index (p[1], a[3]): the offset is a number, nothing is calculated at run time
             bool lit_idx = false;
-            int lit_val = 0;
+            i64 lit_val = 0;
             if opt_debug == 0 && v_nd == 1 && tok_is("[") {
                 // the text after the [ : digits, then ]
-                int lq = 0;
+                i64 lq = 0;
                 while is_space(lc(lq)) { lq += 1; }
-                int ld = 0;
+                i64 ld = 0;
                 while is_digit(lc(lq)) {
                     lq += 1;
                     ld += 1;
@@ -2649,23 +2649,23 @@ void lvalue_loop() {
                 check_const_index(1, lit_val, 0, 1, chk_cnt, 0, 0, chk_len_off);
                 next();                                  // the ]
                 expect("]");
-                int lit_off = lit_val * size_of(s_code);
+                i64 lit_off = lit_val * size_of(s_code);
                 if lit_off != 0 { ins_n("add x0, x0, #", lit_off); }
             } else {
                 // the base address waits on the stack, unless it is a fixed address or a plain pointer variable and the index is made
                 // of plain things: then it is written again after the index (the index is worked out first)
-                int bkind = 0;
-                int bnum = 0;
-                int bbase = 29;
+                i64 bkind = 0;
+                i64 bnum = 0;
+                i64 bbase = 29;
                 if pure_raw_ahead(100) {
-                    int tn = tail_add_base();
+                    i64 tn = tail_add_base();
                     if tn >= 0 && tn < 16777216 {
                         bkind = 1;
                         bnum = tn;
                         bbase = tail_base;
                         out_len = tail_start;
                     } else {
-                        int ln = tail_ldr_base();
+                        i64 ln = tail_ldr_base();
                         if ln >= 0 {
                             bkind = 2;
                             bnum = ln;
@@ -2676,11 +2676,11 @@ void lvalue_loop() {
                 }
                 if bkind == 0 { push_x0(); }       // the base address
                 parse_index_chain();
-                int es = size_of(s_code);
+                i64 es = size_of(s_code);
                 if es == 1 {
                     // nothing to multiply
                 } else if es == 2 || es == 4 || es == 8 || es == 16 {
-                    int sk = 1;
+                    i64 sk = 1;
                     if es == 4 { sk = 2; }
                     if es == 8 { sk = 3; }
                     if es == 16 { sk = 4; }
@@ -2742,7 +2742,7 @@ void lvalue_loop() {
             next();                          // "."
             next();                          // "len"
             if lv_kind == 1 {
-                int first_dim = lv_cnt;
+                i64 first_dim = lv_cnt;
                 if lv_nd > 1 { first_dim = lv_cnt / lv_st1; }
                 ins_n("mov x0, ", first_dim);
             } else {
@@ -2765,11 +2765,11 @@ void lvalue_loop() {
             if lv_code < 16 || lv_kind == 1 { die_help("this value has no fields", "only a struct (or a pointer to a struct) has fields; check the name before the dot"); }
             next();
             if tok_kind != T_IDENT { die_help("a field or method name was expected", "write the name after the dot"); }
-            int st = lv_code - 16;
+            i64 st = lv_code - 16;
             char m_name[256];
             str_copy(@m_name, @tok_text, 256);
             next();
-            int fld_try = find_field(st, @m_name);
+            i64 fld_try = find_field(st, @m_name);
             if tok_is("(") && !(fld_try >= 0 && fldtid[fld_try] < 0) {
                 // a method call: x0 = the object's address is `self`
                 push_x0();
@@ -2777,13 +2777,13 @@ void lvalue_loop() {
                 str_copy(@m_full, @sname + st * 64, 64);
                 str_copy(@m_full + str_len(@m_full), "__", 4);
                 str_copy(@m_full + str_len(@m_full), @m_name, 100);
-                int m_fn = find_method_in(st, @m_name, @m_full);          // also a method of a base struct (m_full gets its name)
+                i64 m_fn = find_method_in(st, @m_name, @m_full);          // also a method of a base struct (m_full gets its name)
                 if m_fn < 0 { str_copy(@m_full, @sname + st * 64, 64); str_copy(@m_full + str_len(@m_full), "__", 4); str_copy(@m_full + str_len(@m_full), @m_name, 100); }
                 if find_func(@m_full) < 0 && pass_no >= 2 { die_no_member(st, 1, @m_name); }
                 if pass_no >= 2 && fself[find_func(@m_full)] == 0 { die_name("this function is static: call it as Struct::name(...)", @m_name); }
                 str_copy(@id_name, @m_full, 256);
                 if lv_fresh == 1 && lv_base_local == 1 {
-                    int mvi = own_find(lv_base_off);
+                    i64 mvi = own_find(lv_base_off);
                     if mvi >= 0 && own_moved[mvi] == 1 { warn("this variable was moved and is used afterwards (it is empty now)", "moved"); }
                 }
                 call_pre = 1;
@@ -2804,27 +2804,27 @@ void lvalue_loop() {
                 lv_done = 1;
                 return;
             }
-            int fi = find_field(st, @m_name);
+            i64 fi = find_field(st, @m_name);
             if fi < 0 && swizzle_ok(st, @m_name) {
-                int sl = str_len(@m_name);
+                i64 sl = str_len(@m_name);
                 if sl == 1 {
                     swizzle_letter(@m_name);             // v.r is v.x, and so on
                     fi = find_field(st, @m_name);
                 } else {
                     // v.xy, c.rgb, v.zyx : a new vector with those components (the source stays as it is)
-                    int ns = find_struct_n("vec", sl);
+                    i64 ns = find_struct_n("vec", sl);
                     if ns < 0 { die("a swizzle makes a vec2, vec3 or vec4: it must be loaded (using math::vector)"); }
                     ty_tid = 0;
                     add_local("..swizzle", 0, 16 + ns, ssize[ns], 0);
-                    int sw_off = loff[lcount - 1];
+                    i64 sw_off = loff[lcount - 1];
                     emit_line("mov x1, x0");
-                    int sj = 0;
+                    i64 sj = 0;
                     while sj < sl {
                         char one[2];
                         one[0] = m_name[sj];
                         one[1] = 0;
                         swizzle_letter(@one);
-                        int sf = find_field(st, @one);
+                        i64 sf = find_field(st, @one);
                         ins_mem("ldr", "x2", "x1", fldoff[sf]);
                         ins_mem("str", "x2", "x29", sw_off + sj * 8);
                         sj += 1;
@@ -2861,11 +2861,11 @@ void lvalue_loop() {
 
 // the token is `::` after `Sys`: is the name that follows a function of the struct Sys (`Sys::write(...)`), not a system register?
 bool sys_function_follows() {
-    int sp = cur_pos;
+    i64 sp = cur_pos;
     while sp < cur_len && (src_bufs[cur_base + sp] == ' ' || src_bufs[cur_base + sp] == 9) { sp += 1; }
     char nm[64];
     char full[96];
-    int k = 0;
+    i64 k = 0;
     while sp < cur_len && k < 60 && is_alnum(src_bufs[cur_base + sp]) {
         nm[k] = src_bufs[cur_base + sp];
         k += 1;
@@ -2896,7 +2896,7 @@ void gen_scope() {
         return;
     }
     if find_frame(@id_name) >= 0 && gen_frame_size() { return; }
-    int abx = find_abi(@id_name);
+    i64 abx = find_abi(@id_name);
     if abx >= 0 {
         // Syscall::call(number, args ...): the values go to the registers that the abi names
         next();
@@ -2907,14 +2907,14 @@ void gen_scope() {
         gen_call();
         return;
     }
-    int en = find_enum(@id_name);
-    int sd = find_struct(@id_name);
+    i64 en = find_enum(@id_name);
+    i64 sd = find_struct(@id_name);
     if en < 0 && sd < 0 { die_name("unknown name", @id_name); }
     next();
     if tok_kind != T_IDENT { die_help("a name was expected after ::", "write the name of a function or a member: Math::sqrt, Color::Red"); }
     if en < 0 && lc(0) == '.' && lc(1) != '.' {
         // Fs::fs.read(p) : the namespace, the module, the function
-        int mrow = mod_find(@id_name, @tok_text);
+        i64 mrow = mod_find(@id_name, @tok_text);
         if mrow >= 0 {
             str_copy(@id_name, mod_row(mrow, 2), 64);
             str_copy(@mod_prefix, mod_row(mrow, 3), 60);
@@ -2950,7 +2950,7 @@ void gen_scope() {
     }
     if !tok_is("(") {
         // Struct::function without a call: its address
-        int sfv = find_func(@sc_full);
+        i64 sfv = find_func(@sc_full);
         if sfv < 0 { emit_line("mov x0, 0"); ex_ty = 97; ex_w = 8; return; }
         gen_function_value(sfv, @sc_full);
         return;
@@ -2962,8 +2962,8 @@ void gen_scope() {
 
 // after a call: f(...)(...) , f().field , f().method() , f()[i] , and a String result with a method (f().trim())
 void call_postfix() {
-    int again = 1;
-    int guard = 0;
+    i64 again = 1;
+    i64 guard = 0;
     while again == 1 && guard < 8 {
     guard += 1;
     again = 0;
@@ -2983,12 +2983,12 @@ void call_postfix() {
         finish_rvalue();
     } else if ex_ty == 99 && tok_is(".") && ex_dyn != 0 {
         // f().len : the array that f returned is a temporary kept in a frame slot until the end of the statement
-        int tk = 7;
+        i64 tk = 7;
         if is_strarr_dyn(ex_dyn) { tk = 9; }
         if cond_depth > 0 { die("a new array cannot be made on the right of && or ||"); }
         ty_tid = 0;
         add_local(".t", 0, 8, 8, 0);
-        int toff = loff[lcount - 1];
+        i64 toff = loff[lcount - 1];
         ins_mem("str", "x0", "x29", toff);
         own_add(toff, tk, 0);
         last_call_owning = 0;
@@ -3041,17 +3041,17 @@ char sg_pool[64];
 
 // the text that follows the current token is  [ ... ]  : copy what is between the brackets to sg_in (false if there is no [ ); after_open:
 // 1 if the current token is already the [
-bool sg_read(int after_open) {
-    int k = 0;
+bool sg_read(i64 after_open) {
+    i64 k = 0;
     if after_open == 0 {
         while is_space(lc(k)) { k += 1; }
         if lc(k) != '[' { return false; }
         k += 1;
     }
-    int depth = 1;
-    int n = 0;
+    i64 depth = 1;
+    i64 n = 0;
     while true {
-        int c = lc(k);
+        i64 c = lc(k);
         if c == 0 { return false; }
         if c == '[' { depth += 1; }
         if c == ']' {
@@ -3069,16 +3069,16 @@ bool sg_read(int after_open) {
 
 // is the first thing after the current token a [ ?
 bool sg_bracket_next() {
-    int k = 0;
+    i64 k = 0;
     while is_space(lc(k)) { k += 1; }
     return lc(k) == '[';
 }
 
 // skip the tokens from the current one (the word, or the [ if after_open is 1) up to the matching ]: the current token is that ]
 // (the text that is pushed next goes in front of what follows it)
-void sg_skip(int after_open) {
+void sg_skip(i64 after_open) {
     if after_open == 0 { next(); }                  // the [
-    int depth = 0;
+    i64 depth = 0;
     while true {
         if tok_kind == T_EOF { die("a ] was expected"); }
         if tok_is("[") { depth += 1; }
@@ -3091,10 +3091,10 @@ void sg_skip(int after_open) {
 }
 
 // the part sg_in[from .. to) without the spaces at both ends, copied to dst
-void sg_part(char^ dst, int from, int to, int cap) {
+void sg_part(char^ dst, i64 from, i64 to, i64 cap) {
     while from < to && is_space(sg_in[from]) { from += 1; }
     while to > from && is_space(sg_in[to - 1]) { to -= 1; }
-    int n = 0;
+    i64 n = 0;
     while from < to && n < cap - 1 {
         dst[n] = sg_in[from];
         n += 1;
@@ -3104,11 +3104,11 @@ void sg_part(char^ dst, int from, int to, int cap) {
 }
 
 // the place of the first  =  (not part of ==, <=, >=, !=) or  >>  that is not inside brackets or parentheses; -1 if none
-int sg_find(int want_shift) {
-    int depth = 0;
-    int i = 0;
+i64 sg_find(i64 want_shift) {
+    i64 depth = 0;
+    i64 i = 0;
     while sg_in[i] != 0 {
-        int c = sg_in[i];
+        i64 c = sg_in[i];
         if c == '(' || c == '[' { depth += 1; }
         if c == ')' || c == ']' { depth -= 1; }
         if depth == 0 {
@@ -3122,17 +3122,17 @@ int sg_find(int want_shift) {
 
 // "int^ p"  ->  the name in sg_tn and the type in sg_ty (the pointee, without the last ^, in sg_pt); false if it has no name or the type is not a pointer
 bool sg_decl(char^ text) {
-    int n = str_len(text);
-    int e = n;
+    i64 n = str_len(text);
+    i64 e = n;
     while e > 0 && (is_letter(text[e - 1]) || is_digit(text[e - 1]) || text[e - 1] == '_') { e -= 1; }
     if e == n { return false; }
-    int k = 0;
+    i64 k = 0;
     while e + k < n && k < 60 {
         sg_tn[k] = text[e + k];
         k += 1;
     }
     sg_tn[k] = 0;
-    int te = e;
+    i64 te = e;
     while te > 0 && is_space(text[te - 1]) { te -= 1; }
     if te == 0 || text[te - 1] != '^' { return false; }
     k = 0;
@@ -3152,7 +3152,7 @@ bool sg_decl(char^ text) {
 }
 
 // the bracket form of the word `kind` (0 alloc, 1 alloc0, 2 free, 3 grow, 4 arr) is in sg_in: make the new text in sg_out
-void sg_make(int kind) {
+void sg_make(i64 kind) {
     sg_out[0] = 0;
     char left[200];
     if kind == 4 {
@@ -3162,7 +3162,7 @@ void sg_make(int kind) {
         return;
     }
     if kind == 2 {
-        int eq = sg_find(0);
+        i64 eq = sg_find(0);
         if eq < 0 {
             append_text(@sg_out, "Mem::free(");
             append_text(@sg_out, @sg_in);
@@ -3189,7 +3189,7 @@ void sg_make(int kind) {
         return;
     }
     if kind == 3 {
-        int eq3 = sg_find(0);
+        i64 eq3 = sg_find(0);
         if eq3 < 0 { die("grow[p = n] : the new size was expected after ="); }
         char nm3[100];
         char cn3[200];
@@ -3205,7 +3205,7 @@ void sg_make(int kind) {
         return;
     }
     // alloc / alloc0: a declaration with a size, or a piece of a pool
-    int sh = sg_find(1);
+    i64 sh = sg_find(1);
     if sh >= 0 {
         if kind != 0 { die("alloc0[..] has no pool form: take the piece with alloc[a[n] >> int^ p]"); }
         char src[100];
@@ -3213,11 +3213,11 @@ void sg_make(int kind) {
         sg_part(@src, 0, sh, 100);
         sg_part(@dst, sh + 2, str_len(@sg_in), 100);
         // src = pool[count]
-        int ob = 0;
+        i64 ob = 0;
         while src[ob] != 0 && src[ob] != '[' { ob += 1; }
-        int cl = str_len(@src);
+        i64 cl = str_len(@src);
         if src[ob] != '[' || cl == 0 || src[cl - 1] != ']' { die("alloc[a[n] >> int^ p] : the part before >> must be pool[count]"); }
-        int k = 0;
+        i64 k = 0;
         while k < ob && k < 60 {
             sg_pool[k] = src[k];
             k += 1;
@@ -3244,7 +3244,7 @@ void sg_make(int kind) {
         append_text(@sg_out, "))");
         return;
     }
-    int eq2 = sg_find(0);
+    i64 eq2 = sg_find(0);
     if eq2 < 0 { die("alloc[int^ p = n] : the number of elements was expected after ="); }
     sg_part(@left, 0, eq2, 200);
     sg_part(@sg_cnt, eq2 + 1, str_len(@sg_in), 200);
@@ -3265,7 +3265,7 @@ void sg_make(int kind) {
 // form (without the ; that follows)
 bool sg_statement() {
     if tok_kind != T_IDENT { return false; }
-    int kind = 0 - 1;
+    i64 kind = 0 - 1;
     if str_eq(@tok_text, "alloc") { kind = 0; }
     else if str_eq(@tok_text, "alloc0") { kind = 1; }
     else if str_eq(@tok_text, "free") { kind = 2; }
@@ -3289,14 +3289,14 @@ bool sg_statement() {
 bool module_dot(char^ name) {
     if !tok_is(".") || name[0] < 'a' || name[0] > 'z' { return false; }
     if lookup_var(name) || find_func(name) >= 0 || find_device(name) >= 0 || find_enum(name) >= 0 { return false; }
-    int row = mod_find("", name);
+    i64 row = mod_find("", name);
     if row < 0 { return false; }
     char^ stn = mod_row(row, 2);
     // the word after the dot
-    int k = 0;
+    i64 k = 0;
     while lc(k) == ' ' || lc(k) == 9 { k += 1; }
     char fnm[64];
-    int j = 0;
+    i64 j = 0;
     while (is_alnum(lc(k + j)) || lc(k + j) == '_') && j < 62 {
         fnm[j] = lc(k + j);
         j += 1;
@@ -3305,12 +3305,12 @@ bool module_dot(char^ name) {
     if j == 0 { return false; }
     char full[200];
     str_copy(@full, stn, 64);
-    int n = str_len(@full);
+    i64 n = str_len(@full);
     full[n] = '_';
     full[n + 1] = '_';
     str_copy(@full + n + 2, mod_row(row, 3), 20);
     str_copy(@full + str_len(@full), @fnm, 60);
-    int fi = find_func(@full);
+    i64 fi = find_func(@full);
     if fi < 0 { if pass_no < 2 { str_copy(name, stn, 64); str_copy(@mod_prefix, mod_row(row, 3), 60); return true; } return false; }
     if fself[fi] == 1 { return false; }
     if !mod_open(row, @fnm) {
@@ -3357,7 +3357,7 @@ bool module_dot(char^ name) {
 
 void gen_identifier() {
     str_copy(@id_name, @tok_text, 256);
-    int idl = str_len(@id_name);
+    i64 idl = str_len(@id_name);
     if idl > 5 && id_name[idl - 1] == 'n' && id_name[idl - 2] == 'e' && id_name[idl - 3] == 'l' && id_name[idl - 4] == '_' && id_name[idl - 5] == '_' {
         warn("'name__len' is the old way to read the length of an array parameter; use 'name.len'", "oldlen");
     }
@@ -3371,23 +3371,23 @@ void gen_identifier() {
         next();
         parse_expr();
         expect(")");
-        int mi = 0 - 1;
+        i64 mi = 0 - 1;
         if rv_valid == 1 { mi = own_find(rv_off); }
         if mi < 0 && ex_ty >= 100 && struct_has_free(ex_ty - 100) && rv_valid == 0 {
             // move(ps[i]) : an element of a struct that frees itself: copied into a temporary owner, the element is emptied
-            int mv_s = ex_ty - 100;
-            int mv_sz = ssize[mv_s];
+            i64 mv_s = ex_ty - 100;
+            i64 mv_sz = ssize[mv_s];
             push_x0();
             ty_tid = 0;
             add_local("..moved", 0, 16 + mv_s, mv_sz, 0);
-            int mv_at = loff[lcount - 1];
+            i64 mv_at = loff[lcount - 1];
             ins_n("add x3, x29, #", mv_at);
             ins_n("mov x2, ", mv_sz);
             emit_copy_call(mv_s);
             emit_line("ldr x0, [sp, #0]");
             emit_line("add sp, sp, #16");
             emit_line("mov x1, 0");
-            int mv_k = 0;
+            i64 mv_k = 0;
             while mv_k < mv_sz {
                 ins_mem("str", "x1", "x0", mv_k);
                 mv_k += 8;
@@ -3426,8 +3426,8 @@ void gen_identifier() {
         next();
         parse_expr();
         expect(")");
-        int sx_ty = ex_ty;
-        int sx_w = ex_w;
+        i64 sx_ty = ex_ty;
+        i64 sx_w = ex_w;
         if sx_ty == 80 {
             rt_call("__Str__clone");
         } else if sx_w == 9 {
@@ -3437,8 +3437,8 @@ void gen_identifier() {
             rt_call("__Str__from_double");
         } else if sx_ty == 1 {
             // a bool: true or false
-            int lt = new_label();
-            int le = new_label();
+            i64 lt = new_label();
+            i64 le = new_label();
             emit_line("cmp x0, 0");
             jump_if("eq", lt);
             place_text("true", 4);
@@ -3471,7 +3471,7 @@ void gen_identifier() {
     if tok_is("(") && str_eq(@id_name, "arr") && !lookup_var(@id_name) && find_func(@id_name) < 0 {
         // arr(n) : a new dynamic array with room for n elements
         next();
-        int esz = arr_esize;
+        i64 esz = arr_esize;
         arr_esize = 0;
         if esz == 0 && pass_no >= 2 { die("arr(...) needs to know its element type: write  T[] x = arr(n);"); }
         parse_expr();
@@ -3504,7 +3504,7 @@ void gen_identifier() {
         }
         // a function name used as a value
         resolve_callee();
-        int fv = find_func(@id_name);
+        i64 fv = find_func(@id_name);
         if fv >= 0 {
             gen_function_value(fv, @id_name);
             return;
@@ -3529,18 +3529,18 @@ void gen_identifier() {
 
 // the function f used as a value (its name without a call): x0 = its address,
 // ex_ty = the type of its signature
-void gen_function_value(int fi, char^ name) {
+void gen_function_value(i64 fi, char^ name) {
     if pass_no < 2 { ex_ty = 97; ex_w = 8; emit_line("mov x0, 0"); return; }
     if fself[fi] == 1 || farr[fi] != 0 { die_name("the address of a method or of a function with an array parameter cannot be taken", name); }
     if fnpar[fi] > 8 { die_name("a function with more than 8 parameters cannot be used as a value", name); }
-    int k = 0;
+    i64 k = 0;
     while k < fnpar[fi] {
         sg_tmp[k] = fptid[fi * 8 + k];
         k += 1;
     }
-    int r = fret[fi];
+    i64 r = fret[fi];
     if fvoid[fi] == 1 { r = 98; }
-    int sg = sig_intern(r, fnpar[fi]);
+    i64 sg = sig_intern(r, fnpar[fi]);
     note_call(name);                     // the function is used: keep it in the program
     emit_str("adr x0, ");
     emit_line(name);
@@ -3549,13 +3549,13 @@ void gen_function_value(int fi, char^ name) {
 }
 
 // a call through a function pointer: its value is in x0, the token is "("
-void gen_call_indirect(int tid) {
-    int sg = 0 - tid - 1;
+void gen_call_indirect(i64 tid) {
+    i64 sg = 0 - tid - 1;
     push_x0();                           // the address waits under the arguments
     expect("(");
-    int pre = 0;
-    int tmp_off = 0;
-    int r = sig_ret[sg];
+    i64 pre = 0;
+    i64 tmp_off = 0;
+    i64 r = sig_ret[sg];
     if r >= 100 && r < 200 {
         ty_tid = 0;
         add_local("..result", 0, 16 + r - 100, ssize[r - 100], 0);
@@ -3567,7 +3567,7 @@ void gen_call_indirect(int tid) {
     call_sig = sg;
     call_fi = 0 - 1;
     call_skip = 0;
-    int n = parse_args();
+    i64 n = parse_args();
     if n != sig_n[sg] && pass_no >= 2 { die("wrong number of arguments for this function pointer"); }
     n += pre;
     pop_args(n);
@@ -3590,32 +3590,32 @@ void gen_call_indirect(int tid) {
 // A variable of type T[] holds the address of a header [length, capacity, data, element size]
 // (see std/prelude.j, struct __Arr). The packed element type: code | ptr << 8 | (tid + 1024) << 17.
 
-int dyn_pack(int code, int ptr, int tid) {
+i64 dyn_pack(i64 code, i64 ptr, i64 tid) {
     return code + ptr * 1024 + (tid + 1024) * 1048576;
 }
 
-int dyn_code(int info) {
+i64 dyn_code(i64 info) {
     return info % 1024;
 }
 
-int dyn_ptr(int info) {
+i64 dyn_ptr(i64 info) {
     return (info / 1024) % 1024;
 }
 
-int dyn_tid(int info) {
+i64 dyn_tid(i64 info) {
     return info / 1048576 - 1024;
 }
 
 // A value of a struct that frees itself (it has a method free(self)) cannot be copied. It moves: a fresh value (the result of
 // a call, a constructor) is taken over, a plain local variable is emptied (zeroed) after its bytes were copied, anything
 // else is an error. Returns 1 for a fresh value, 2 for a local variable (its frame offset in own_src_off), else dies.
-int struct_source(int sidx) {
+i64 struct_source(i64 sidx) {
     if last_call_struct == 1 && last_call_struct_off != 0 {
         own_src_off = last_call_struct_off;
         return 2;
     }
     if rv_valid == 1 {
-        int oi = own_find(rv_off);
+        i64 oi = own_find(rv_off);
         if oi >= 0 && own_kind[oi] == 4 {
             own_src_off = rv_off;
             return 2;
@@ -3626,9 +3626,9 @@ int struct_source(int sidx) {
 }
 
 // the local variable at frame offset off (a struct of size bytes) becomes empty: zeros
-void emit_zero_local(int off, int size) {
+void emit_zero_local(i64 off, i64 size) {
     ow_add(5, off, size, 0, 0);          // the tree makes the same zeros (a value that frees itself moved out of the local)
-    int zk = 0;
+    i64 zk = 0;
     emit_line("mov x1, 0");
     while zk < size {
         ins_mem("str", "x1", "x29", off + zk);
@@ -3642,12 +3642,12 @@ void emit_zero_local(int off, int size) {
 // a String variable, a text, or a temporary that is taken over), is freed at the end of its block
 // like the other owners, and a String made by an expression (a + b, s.slice(..), a call) is a
 // temporary owner of kind 2 that is freed at the end of the statement unless it is taken over.
-bool is_str_dyn(int info) {
+bool is_str_dyn(i64 info) {
     return info != 0 && dyn_code(info) == 2 && dyn_tid(info) == 70;
 }
 
 // String[]: a dynamic array whose elements are Strings (8 bytes each); the array owns them
-bool is_strarr_dyn(int info) {
+bool is_strarr_dyn(i64 info) {
     return info != 0 && dyn_code(info) == 8 && dyn_ptr(info) == 0 && dyn_tid(info) == 71;
 }
 
@@ -3658,7 +3658,7 @@ void str_temp() {
     if cur_fidx < 0 { die("a String can only be made inside a function"); }
     ty_tid = 0;
     add_local(".t", 0, 8, 8, 0);
-    int off = loff[lcount - 1];
+    i64 off = loff[lcount - 1];
     ins_mem("str", "x0", "x29", off);
     own_add(off, 2, 0);
     rv_valid = 1;
@@ -3668,7 +3668,7 @@ void str_temp() {
 }
 
 // how an operand is passed to the String routines: 0 a text, 1 a String, 2 one character
-int str_kind() {
+i64 str_kind() {
     if ex_ty == 80 { return 1; }
     if ex_w == 9 { return 0; }
     if ex_w == 2 { return 2; }
@@ -3681,7 +3681,7 @@ int str_kind() {
 void str_adopt() {
     if pass_no >= 2 {
         if ex_ty == 80 {
-            int ti = 0 - 1;
+            i64 ti = 0 - 1;
             if rv_valid == 1 { ti = own_find(rv_off); }
             if ti >= 0 && own_kind[ti] == 2 {
                 ow_nk = 5;
@@ -3707,15 +3707,15 @@ void str_adopt() {
 }
 
 // the temporaries from own[t0..] are freed (keep = 1: x0 is kept) and leave the list
-bool is_temp_kind(int k) {
+bool is_temp_kind(i64 k) {
     return k == 2 || k == 6 || k == 7 || k == 9;
 }
 
-void str_flush(int t0, int keep) {
-    int i = t0;
-    int any = 0;
-    int nfree = 0;
-    int first_tmp = 0 - 1;
+void str_flush(i64 t0, i64 keep) {
+    i64 i = t0;
+    i64 any = 0;
+    i64 nfree = 0;
+    i64 first_tmp = 0 - 1;
     while i < own_count {
         if is_temp_kind(own_kind[i]) && own_moved[i] == 0 {
             any = 1;
@@ -3741,7 +3741,7 @@ void str_flush(int t0, int keep) {
         }
     }
     if first_tmp >= 0 { own_unlink(first_tmp); }
-    int w = t0;
+    i64 w = t0;
     i = t0;
     while i < own_count {
         if !is_temp_kind(own_kind[i]) {
@@ -3766,7 +3766,7 @@ void rt_call(char^ name) {
 
 // x0 = a header address: stop with an exception if it is null
 void dyn_null_check() {
-    int lok = new_label();
+    i64 lok = new_label();
     emit_line("cmp x0, 0");
     jump_if("ne", lok);
     rt_call("__Arr__nullerr");
@@ -3816,7 +3816,7 @@ bool str_member(char^ dm) {
         push_x0();
         parse_expr();
         expect(")");
-        int kb = str_kind();
+        i64 kb = str_kind();
         emit_line("mov x1, x0");
         emit_line("ldr x0, [sp, #0]");
         emit_line("add sp, sp, #16");
@@ -3929,7 +3929,7 @@ bool str_member(char^ dm) {
         push_x0();
         parse_expr();
         expect(")");
-        int kx = str_kind();
+        i64 kx = str_kind();
         emit_line("mov x1, x0");
         emit_line("ldr x0, [sp, #0]");
         emit_line("add sp, sp, #16");
@@ -3952,12 +3952,12 @@ bool str_member(char^ dm) {
         load_through(8);
         push_x0();
         parse_expr();
-        int ka = str_kind();
+        i64 ka = str_kind();
         push_x0();
         expect(",");
         parse_expr();
         expect(")");
-        int kb = str_kind();
+        i64 kb = str_kind();
         emit_line("mov x3, x0");
         ins_n("mov x4, ", kb);
         emit_line("ldr x1, [sp, #0]");
@@ -3989,7 +3989,7 @@ bool str_member(char^ dm) {
         push_x0();
         parse_expr();
         expect(")");
-        int ks = str_kind();
+        i64 ks = str_kind();
         emit_line("mov x1, x0");
         emit_line("ldr x0, [sp, #0]");
         emit_line("add sp, sp, #16");
@@ -4082,7 +4082,7 @@ bool strarr_member(char^ dm) {
         push_x0();
         parse_expr();
         expect(")");
-        int kx = str_kind();
+        i64 kx = str_kind();
         emit_line("mov x1, x0");
         emit_line("ldr x0, [sp, #0]");
         emit_line("add sp, sp, #16");
@@ -4118,7 +4118,7 @@ bool strarr_member(char^ dm) {
         push_x0();
         parse_expr();
         expect(")");
-        int kj = str_kind();
+        i64 kj = str_kind();
         emit_line("mov x1, x0");
         emit_line("ldr x0, [sp, #0]");
         emit_line("add sp, sp, #16");
@@ -4146,7 +4146,7 @@ bool strarr_member(char^ dm) {
 }
 
 // how the array routines compare elements of this type: 0 signed, 1 unsigned (also pointers), 2 float, 3 double
-int arr_kind(int code, int eptr) {
+i64 arr_kind(i64 code, i64 eptr) {
     if eptr != 0 { return 1; }
     if code == 6 { return 2; }
     if code == 7 { return 3; }
@@ -4155,14 +4155,14 @@ int arr_kind(int code, int eptr) {
 }
 
 // insert remove sort contains index_of on an array of numbers / pointers (x0 = the address of the variable)
-bool num_member(char^ dm, int code, int eptr, int etid) {
+bool num_member(char^ dm, i64 code, i64 eptr, i64 etid) {
     if code >= 16 && eptr == 0 {
         if str_eq(dm, "insert") || str_eq(dm, "remove") || str_eq(dm, "sort") || str_eq(dm, "contains") || str_eq(dm, "index_of") {
             die_name("this method works on arrays of numbers, pointers and Strings", dm);
         }
         return false;
     }
-    int kind = arr_kind(code, eptr);
+    i64 kind = arr_kind(code, eptr);
     if str_eq(dm, "sort") {
         expect("(");
         expect(")");
@@ -4234,15 +4234,15 @@ bool num_member(char^ dm, int code, int eptr, int etid) {
 
 // x[i] on a dynamic array: x0 = the address of the variable
 void dyn_index() {
-    int info = lv_dyn;
-    int code = dyn_code(info);
-    int eptr = dyn_ptr(info);
-    int etid = dyn_tid(info);
+    i64 info = lv_dyn;
+    i64 code = dyn_code(info);
+    i64 eptr = dyn_ptr(info);
+    i64 etid = dyn_tid(info);
     if is_str_dyn(info) { etid = 0; }     // the elements of a String are plain chars
     load_through(8);                     // x0 = the header
     dyn_null_check();
     push_x0();
-    int sv_self = lv_self;
+    i64 sv_self = lv_self;
     next();                              // "["
     parse_expr();
     expect("]");
@@ -4250,7 +4250,7 @@ void dyn_index() {
     lv_self = sv_self;
     pop_x1();                            // x1 = the header, x0 = the index
     if opt_debug == 1 {
-        int lok = new_label();
+        i64 lok = new_label();
         emit_line("ldr x2, [x1, #0]");
         emit_line("cmp x0, x2");
         jump_if("lo", lok);
@@ -4260,11 +4260,11 @@ void dyn_index() {
         used_oob = 1;
     }
     emit_line("ldr x2, [x1, #16]");
-    int esz = size_of(code);
+    i64 esz = size_of(code);
     if esz == 1 {
         // nothing to multiply
     } else if esz == 2 || esz == 4 || esz == 8 || esz == 16 {
-        int ek = 1;
+        i64 ek = 1;
         if esz == 4 { ek = 2; }
         if esz == 8 { ek = 3; }
         if esz == 16 { ek = 4; }
@@ -4294,10 +4294,10 @@ void dyn_index() {
 // x.len  x.cap  x.push(v)  x.pop()  x.resize(n)  x.clear()  x.free()  on a dynamic array
 // (x0 = the address of the variable). Sets lv_done, or turns a popped struct into the object.
 void dyn_member() {
-    int info = lv_dyn;
-    int code = dyn_code(info);
-    int eptr = dyn_ptr(info);
-    int etid = dyn_tid(info);
+    i64 info = lv_dyn;
+    i64 code = dyn_code(info);
+    i64 eptr = dyn_ptr(info);
+    i64 etid = dyn_tid(info);
     if is_str_dyn(info) { etid = 0; }     // the elements of a String are plain chars
     next();                              // "."
     if tok_kind != T_IDENT { die_help("a member name was expected", "write the name of a field or a method after the dot"); }
@@ -4344,10 +4344,10 @@ void dyn_member() {
         parse_expr();
         if eptr == 0 { check_assign(etid); }
         expect(")");
-        int push_owner = 0 - 1;
+        i64 push_owner = 0 - 1;
         if rv_valid == 1 { push_owner = own_find(rv_off); }
         // a struct that frees itself (Node::Name("x")) that was just made: it moves into the array, the temporary is emptied below
-        int push_src = 0 - 1;
+        i64 push_src = 0 - 1;
         if code >= 16 && code < 400 && eptr == 0 && struct_has_free(code - 16) {
             if last_call_struct == 1 && last_call_struct_off != 0 {
                 push_src = last_call_struct_off;
@@ -4360,9 +4360,9 @@ void dyn_member() {
         if opt_debug == 0 && opt_pushfast == 1 {
             // the common case in line: the array is not null and has room (length < capacity): the place is data + length * size, the length goes up by one.
             // Otherwise (null, full) the call does it and says what is wrong.
-            int pslow = new_label();
-            int pdone = new_label();
-            int psz = size_of(code);
+            i64 pslow = new_label();
+            i64 pdone = new_label();
+            i64 psz = size_of(code);
             if eptr != 0 { psz = 8; }
             emit_line("cmp x0, 0");
             jump_if("eq", pslow);
@@ -4374,7 +4374,7 @@ void dyn_member() {
             if psz == 1 {
                 emit_line("add x2, x2, x1");
             } else if psz == 2 || psz == 4 || psz == 8 || psz == 16 {
-                int psk = 1;
+                i64 psk = 1;
                 if psz == 4 { psk = 2; }
                 if psz == 8 { psk = 3; }
                 if psz == 16 { psk = 4; }
@@ -4406,7 +4406,7 @@ void dyn_member() {
             emit_copy_call(code - 16);
             if push_src >= 0 {
                 emit_zero_local(push_src, ssize[code - 16]);          // the array owns what the struct owned
-                int psi = own_find(push_src);
+                i64 psi = own_find(push_src);
                 if psi >= 0 && own_blk[psi] == cur_blk { own_moved[psi] = 1; }
             }
         } else {
@@ -4504,7 +4504,7 @@ void finish_rvalue() {
     if lv_done == 1 { return; }
     alias_src = 0;
     if lv_fresh == 1 && lv_kind == 0 && lv_ptr >= 16 && lv_ptr < 1000 && lv_base_local == 1 {
-        int ali = find_local(@lv_base);
+        i64 ali = find_local(@lv_base);
         if ali >= 0 && lalias[ali] == 1 {
             // a name bound in a case to a struct that frees itself, read as a whole: the struct (its address)
             load_through(8);
@@ -4517,7 +4517,7 @@ void finish_rvalue() {
     if lv_fresh == 1 && lv_base_local == 1 && (lv_kind == 0 || lv_kind == 3) {
         rv_valid = 1;
         rv_off = lv_base_off;
-        int oi = own_find(lv_base_off);
+        i64 oi = own_find(lv_base_off);
         if oi >= 0 && own_moved[oi] == 1 { warn("this variable was moved and is used afterwards (it is null now)", "moved"); }
         if oi >= 0 && own_moved[oi] == 2 { if in_free_call == 1 { warn("this variable was already freed by Mem::free and is freed again (it is null now)", "moved"); } else { warn("this variable was freed by Mem::free and is used afterwards (it is null now)", "moved"); } }
     }
@@ -4553,7 +4553,7 @@ void finish_rvalue() {
 }
 
 // (T)x where T or x is a float; x0 = the value (type src)
-void gen_float_cast(int to, int src, int to_width) {
+void gen_float_cast(i64 to, i64 src, i64 to_width) {
     if is_float(to) && is_float(src) {
         if to == 90 && src == 91 || to == 90 && src == 92 {
             lit_to_f32(0);
@@ -4603,7 +4603,7 @@ void gen_float_cast(int to, int src, int to_width) {
 void gen_sizeof() {
     next();                              // "sizeof"
     expect("(");
-    int size = 0;
+    i64 size = 0;
     if at_type() {
         parse_type();
         if ty_void == 1 && ty_ptr == 0 { die_help("sizeof(void) has no meaning", "give a type with a size: sizeof(int), sizeof(Point)"); }
@@ -4611,14 +4611,14 @@ void gen_sizeof() {
         if ty_ptr == 0 { size = size_of(ty_elem); }
     } else {
         // the operand is read only for its type: the code it makes is thrown away
-        int sv_out = out_len;
-        int sv_gl = gl_bytes;
-        int sv_ginit = ginit_count;
-        int sv_fp = used_fprint;
-        int sv_oob = used_oob;
-        int sv_lcount = lcount;
-        int serial = lv_serial;
-        int sv_cout = in_cout;
+        i64 sv_out = out_len;
+        i64 sv_gl = gl_bytes;
+        i64 sv_ginit = ginit_count;
+        i64 sv_fp = used_fprint;
+        i64 sv_oob = used_oob;
+        i64 sv_lcount = lcount;
+        i64 serial = lv_serial;
+        i64 sv_cout = in_cout;
         in_cout = 1;                     // a whole array is allowed here
         parse_unary();
         in_cout = sv_cout;
@@ -4662,7 +4662,7 @@ void parse_unary() {
 
 // the current token is a struct / enum name followed by :: (Name::call(...), not a type in a cast)?
 bool scope_follows() {
-    int k = 0;
+    i64 k = 0;
     while lc(k) == 32 || lc(k) == 9 { k += 1; }
     return lc(k) == ':' && lc(k + 1) == ':';
 }
@@ -4747,9 +4747,9 @@ void parse_unary_core() {
             parse_type();
             if ty_void == 1 && ty_ptr == 0 { die_help("a value cannot be cast to void", "remove the cast: a call result that is not needed can be left alone"); }
             expect(")");
-            int cast_ty = ty_tid;
-            int cast_ptr = ty_ptr;
-            int cast_w = ty_width;
+            i64 cast_ty = ty_tid;
+            i64 cast_ptr = ty_ptr;
+            i64 cast_w = ty_width;
             parse_unary();
             if cast_ptr == 0 && pass_no >= 2 {
                 if cast_ty == 1 { die_help("a value cannot be cast to bool", "write a comparison"); }
@@ -4819,7 +4819,7 @@ void parse_unary_core() {
         next();
         parse_unary();
         need_bool();
-        int lt = new_label();
+        i64 lt = new_label();
         emit_line("cmp x0, 0");
         emit_line("mov x0, 1");
         jump_if("eq", lt);
@@ -4846,13 +4846,13 @@ void parse_unary_core() {
         str_copy(@id_name, @tok_text, 256);
         next();
         if !lookup_var(@id_name) { die_name("unknown name", @id_name); }
-        int pin_i = find_local(@id_name);
+        i64 pin_i = find_local(@id_name);
         if pin_i >= 0 && lpin[pin_i] > 0 { die_name("the address of a pinned variable cannot be taken (it lives in a register)", @id_name); }
         uninit_clear(@id_name);            // its address is taken: it may be written through it
         parse_lvalue();
         if lv_done == 1 { die("@ needs a variable, element or field"); }
         // a name bound in a case to a struct that frees itself is already a pointer to that struct: @name is that pointer
-        int al = find_local(@lv_base);
+        i64 al = find_local(@lv_base);
         if lv_fresh == 1 && lv_base_local == 1 && lv_kind == 0 && al >= 0 && lalias[al] == 1 { load_through(8); }
         ex_w = 8;
         ex_ty = 0;
@@ -4875,14 +4875,14 @@ void take_operands() {
 
 // the instruction for an arithmetic/bit operator word or symbol applied to
 // x0 and x1
-int uns_op;                  // 1: the next arith() works on unsigned numbers
+i64 uns_op;                  // 1: the next arith() works on unsigned numbers
 
 // x1 = the divisor: 0 throws "division by zero" (catchable), in every build
-int div_nonzero;             // 1: the divisor is a literal other than 0: no check
-int div_lit;                 // the value of that literal (0 if the divisor is not a literal)
+i64 div_nonzero;             // 1: the divisor is a literal other than 0: no check
+i64 div_lit;                 // the value of that literal (0 if the divisor is not a literal)
 void emit_divzero_check() {
     if div_nonzero == 1 { return; }
-    int lok = new_label();
+    i64 lok = new_label();
     emit_line("cmp x1, 0");
     jump_if("ne", lok);
     emit_line("bl j2k_divzero");
@@ -4893,13 +4893,13 @@ void emit_divzero_check() {
 
 // the magic number of the division by the constant d (Hacker's Delight, chapter 10): M as a signed 64-bit number in div_mg_m and the shift
 // in div_mg_s; used by the text path (emit_div_const) and by the lowering of the tree (jc_astlow.j)
-int div_mg_m;
-int div_mg_s;
-void div_magic(int d) {
+i64 div_mg_m;
+i64 div_mg_s;
+void div_magic(i64 d) {
     u64 two63 = (u64)1 << 63;
     u64 ad = (u64)d;
     u64 anc = two63 - 1 - two63 % ad;
-    int p = 63;
+    i64 p = 63;
     u64 q1 = two63 / anc;
     u64 r1 = two63 - q1 * anc;
     u64 q2 = two63 / ad;
@@ -4923,26 +4923,26 @@ void div_magic(int d) {
         delta = ad - r2;
         again = q1 < delta || (q1 == delta && r1 == 0);
     }
-    int m = (int)(q2 + 1);                       // the bits of M, read as a signed number
-    div_mg_m = (int)(q2 + 1);
+    i64 m = (i64)(q2 + 1);                       // the bits of M, read as a signed number
+    div_mg_m = (i64)(q2 + 1);
     div_mg_s = p - 64;
 }
 
 // x0 = x0 / d or x0 % d for a whole number d >= 1 known now (signed): without the slow sdiv instruction. A power of two is a shift;
 // any other number d is a multiplication by a "magic" number and a shift (Hacker's Delight, chapter 10): the high half of
 // x0 * M (smulh), a correction, a shift, and the sign bit added. x1..x4 are used.
-void emit_div_const(int d, bool is_mod) {
+void emit_div_const(i64 d, bool is_mod) {
     // the divisor was loaded into x1 just before (mov x1, d): it is not needed
-    int dl = out_len - 1;
+    i64 dl = out_len - 1;
     if dl > 12 && out_buf[dl] == 10 {
-        int st = dl;
+        i64 st = dl;
         while st > 0 && out_buf[st - 1] != 10 { st -= 1; }
         if out_buf[st] == 'm' && out_buf[st + 1] == 'o' && out_buf[st + 2] == 'v' && out_buf[st + 3] == ' ' && out_buf[st + 4] == 'x' && out_buf[st + 5] == '1' && out_buf[st + 6] == ',' {
-            int v = 0;
-            int q = st + 8;
+            i64 v = 0;
+            i64 q = st + 8;
             bool digits = q < dl;
             while q < dl {
-                int c = out_buf[q];
+                i64 c = out_buf[q];
                 if c < '0' || c > '9' { digits = false; }
                 v = v * 10 + (c - '0');
                 q += 1;
@@ -4955,7 +4955,7 @@ void emit_div_const(int d, bool is_mod) {
         return;
     }
     if (d & (d - 1)) == 0 {
-        int k = 0;
+        i64 k = 0;
         while (1 << k) < d { k += 1; }
         emit_line("asr x2, x0, #63");
         ins_n("lsr x2, x2, #", 64 - k);
@@ -4970,8 +4970,8 @@ void emit_div_const(int d, bool is_mod) {
         return;
     }
     div_magic(d);
-    int m = div_mg_m;
-    int sh = div_mg_s;
+    i64 m = div_mg_m;
+    i64 sh = div_mg_s;
     ins_n("mov x4, ", m);
     emit_line("smulh x2, x0, x4");
     if m < 0 { emit_line("add x2, x2, x0"); }
@@ -5033,7 +5033,7 @@ void operator_method(char^ op, char^ out) {
 
 // `left op right` where the left value is a struct: [sp] = the left value (its address), x0 = the right operand.
 // 1..4 = f64x2 i64x2 f32x4 i32x4 ::load, 5..8 = the same .store; 0 = something else
-int simd_mem_kind(char^ n) {
+i64 simd_mem_kind(char^ n) {
     if str_eq(n, "f64x2__load") { return 1; }
     if str_eq(n, "i64x2__load") { return 2; }
     if str_eq(n, "f32x4__load") { return 3; }
@@ -5048,7 +5048,7 @@ int simd_mem_kind(char^ n) {
 }
 
 // the four types of #import <simd>: 1 = f64x2, 2 = i64x2, 3 = f32x4, 4 = i32x4; 0 = another struct
-int simd_kind(int lt) {
+i64 simd_kind(i64 lt) {
     char^ n = @sname + (lt - 100) * 64;
     if str_eq(n, "f64x2") { return 1; }
     if str_eq(n, "i64x2") { return 2; }
@@ -5060,7 +5060,7 @@ int simd_kind(int lt) {
 
 // the call that copies a struct of the index sidx (x0 = from, x3 = to, x2 = size): a simd value is copied as one 16-byte vector (the IR
 // makes ldr q / str q of it, so a value that was written as a vector is read as a vector again)
-void emit_copy_call(int sidx) {
+void emit_copy_call(i64 sidx) {
     if ssize[sidx] == 16 && simd_kind(sidx + 100) != 0 {
         emit_line("bl j2k_copy16");
     } else {
@@ -5070,7 +5070,7 @@ void emit_copy_call(int sidx) {
 
 // a + b  a - b  a * b  a / b  on a simd struct: one NEON instruction on the whole 16 bytes. [sp] = the address of the left value,
 // x0 = the address of the right value (or a number: the same number is used for every lane); the result is a temporary, x0 = its address
-void emit_simd_op(char^ op, int lt, int kind) {
+void emit_simd_op(char^ op, i64 lt, i64 kind) {
     bool is_f = kind == 1 || kind == 3;
     char arr[8];
     str_copy(@arr, ".4s", 8);
@@ -5086,7 +5086,7 @@ void emit_simd_op(char^ op, int lt, int kind) {
         if !is_f { die_help("whole-number lanes have no /", "use f64x2 or f32x4"); }
         str_copy(@ins, "fdiv", 8);
     } else { die("a simd value works with + - * / only"); }
-    int rt = ex_ty;
+    i64 rt = ex_ty;
     bool scalar = rt < 100;
     if !scalar && rt != lt { die("the two simd values must have the same type"); }
     if scalar {
@@ -5095,7 +5095,7 @@ void emit_simd_op(char^ op, int lt, int kind) {
         if (kind == 2 || kind == 4 || kind == 5) && !is_numeric(rt) { die("a number for a whole-number simd value must be an int"); }
     }
     add_local("..result", 0, 16 + lt - 100, ssize[lt - 100], 0);
-    int tmp_off = loff[lcount - 1];
+    i64 tmp_off = loff[lcount - 1];
     if scalar && kind == 3 && rt == 92 { lit_to_f32(0); }
     emit_line("ldr x1, [sp, #0]");
     emit_line("add sp, sp, #16");
@@ -5121,8 +5121,8 @@ void emit_simd_op(char^ op, int lt, int kind) {
 }
 
 // The call is  left.method(right)  of a method declared with the word `operator`; the result is left in x0.
-void emit_operator_call(char^ op, int lt) {
-    int sk = simd_kind(lt);
+void emit_operator_call(char^ op, i64 lt) {
+    i64 sk = simd_kind(lt);
     if sk != 0 {
         emit_simd_op(op, lt, sk);
         return;
@@ -5133,7 +5133,7 @@ void emit_operator_call(char^ op, int lt) {
     str_copy(@fn, @sname + (lt - 100) * 64, 64);
     append_text(@fn, "__");
     append_text(@fn, @mname);
-    int fi = find_func(@fn);
+    i64 fi = find_func(@fn);
     if fi < 0 || fop[fi] == 0 {
         if pass_no >= 2 {
             char m[300];
@@ -5167,11 +5167,11 @@ void emit_operator_call(char^ op, int lt) {
 }
 
 // -v where v is a struct: the call  v.neg()  of a method declared with the word `operator`; x0 = the address of v
-void emit_unary_operator(int lt) {
+void emit_unary_operator(i64 lt) {
     char fn[256];
     str_copy(@fn, @sname + (lt - 100) * 64, 64);
     append_text(@fn, "__neg");
-    int fi = find_func(@fn);
+    i64 fi = find_func(@fn);
     if fi < 0 || fop[fi] == 0 {
         if pass_no >= 2 {
             char m[300];
@@ -5194,14 +5194,14 @@ void emit_unary_operator(int lt) {
     gen_call();
 }
 
-int stash_depth;             // how many left operands wait in registers x10, x11, ... now
+i64 stash_depth;             // how many left operands wait in registers x10, x11, ... now
 
 // the level of the binary operator that starts at offset o of the text ahead (1 * / %, 2 + -, 3 shifts, 4 &, 5 xor, 6 |, 7 < > <= >=,
 // 8 == !=, 9 &&, 10 ||); 99 if there is none (a character that ends an operand); its length goes to op_len
-int op_len;
-int op_level_at(int o) {
-    int c = lc(o);
-    int d = lc(o + 1);
+i64 op_len;
+i64 op_level_at(i64 o) {
+    i64 c = lc(o);
+    i64 d = lc(o + 1);
     op_len = 1;
     if c == '*' || c == '/' || c == '%' { return 1; }
     if c == '+' || c == '-' { return 2; }
@@ -5235,13 +5235,13 @@ int op_level_at(int o) {
 // lvl is the level of the parser of the right operand (see op_level_at: the operators of a lower level belong to the right operand).
 // the text at offset o (just after a "(") starts a group or a cast that is safe: a number, a sign, a nested group, a type
 // name (a cast) or a plain variable (a whole number, a float, an element of an array of those)
-bool pure_group_ok(int o) {
+bool pure_group_ok(i64 o) {
     while is_space(lc(o)) { o += 1; }
-    int c = lc(o);
+    i64 c = lc(o);
     if is_digit(c) || c == '-' || c == '(' || c == '!' || c == '~' { return true; }
     if !is_letter(c) && c != '_' { return false; }
     char w[64];
-    int n = 0;
+    i64 n = 0;
     while (is_letter(lc(o)) || is_digit(lc(o)) || lc(o) == '_') && n < 62 {
         w[n] = lc(o);
         n += 1;
@@ -5257,8 +5257,8 @@ bool pure_group_ok(int o) {
 }
 
 // the raw text at offset o is the rest of a path  [index].field.field  that starts in the struct st: does it end in a plain number field?
-bool pure_chain_ok(int st, int o) {
-    int depth = 0;
+bool pure_chain_ok(i64 st, i64 o) {
+    i64 depth = 0;
     while is_space(lc(o)) { o += 1; }
     if lc(o) == '[' {
         depth = 1;
@@ -5271,20 +5271,20 @@ bool pure_chain_ok(int st, int o) {
         if depth != 0 { return false; }
     }
     if lc(o) == '^' { o += 1; }
-    int guard = 0;
+    i64 guard = 0;
     while guard < 6 {
         guard += 1;
         if lc(o) != '.' || !is_letter(lc(o + 1)) { return false; }
         o += 1;
         char fnm[64];
-        int n = 0;
+        i64 n = 0;
         while (is_letter(lc(o)) || is_digit(lc(o)) || lc(o) == '_') && n < 62 {
             fnm[n] = lc(o);
             n += 1;
             o += 1;
         }
         fnm[n] = 0;
-        int f = find_field(st, @fnm);
+        i64 f = find_field(st, @fnm);
         if f < 0 { return false; }
         while is_space(lc(o)) { o += 1; }
         if lc(o) == '(' || lc(o) == '[' { return false; }
@@ -5300,12 +5300,12 @@ bool pure_chain_ok(int st, int o) {
     return false;
 }
 
-bool pure_right_ahead(int lvl) {
-    int pd0 = 0;
-    int start0 = 0;
+bool pure_right_ahead(i64 lvl) {
+    i64 pd0 = 0;
+    i64 start0 = 0;
     if tok_kind == T_IDENT && (str_eq(@tok_text, "__fsqrt") || str_eq(@tok_text, "__ffloor") || str_eq(@tok_text, "__fceil") || str_eq(@tok_text, "__ftrunc")) && !lookup_var(@tok_text) {
         // an intrinsic that is one instruction: its argument is looked at like a group
-        int q0 = 0;
+        i64 q0 = 0;
         while is_space(lc(q0)) { q0 += 1; }
         if lc(q0) != '(' || !pure_group_ok(q0 + 1) { return false; }
         pd0 = 1;
@@ -5314,7 +5314,7 @@ bool pure_right_ahead(int lvl) {
         // a number (a float is a constant now)
     } else if tok_kind == T_IDENT {
         if !lookup_var(@tok_text) { return false; }
-        int cst = 0 - 1;
+        i64 cst = 0 - 1;
         if v_kind == 1 && v_elem >= 16 && v_elem < 400 { cst = v_elem - 16; }
         else if v_kind == 0 && v_ptr >= 16 && v_ptr < 400 && v_tid >= 0 && v_tid < 98 { cst = v_ptr - 16; }
         else if v_kind == 0 && v_tid >= 100 && v_tid < 400 && v_ptr == 0 { cst = v_tid - 100; }
@@ -5334,33 +5334,33 @@ bool pure_right_ahead(int lvl) {
     return pure_raw_ahead2(lvl, pd0, start0);
 }
 
-bool pure_raw_ahead(int lvl) {
+bool pure_raw_ahead(i64 lvl) {
     return pure_raw_ahead2(lvl, 0, 0);
 }
 
 // the same for the raw text that follows the current token (nothing of it is read yet): is it free of calls, parentheses, strings
 // and anything else that could change a variable or use the registers of the stash, up to the end of the operand that the
 // parser of level lvl reads (or up to ; ) , { } or an unmatched ] )?
-bool pure_raw_ahead2(int lvl, int pd, int o0) {
-    int o = o0;
-    int bd = 0;
+bool pure_raw_ahead2(i64 lvl, i64 pd, i64 o0) {
+    i64 o = o0;
+    i64 bd = 0;
     while o < 240 {
         while is_space(lc(o)) { o += 1; }
-        int c = lc(o);
-        int d = lc(o + 1);
+        i64 c = lc(o);
+        i64 d = lc(o + 1);
         if c == 0 { return false; }
         if c == '(' && o > 0 {
             // a group or a cast, unless it follows a name or a ] (then it is a call)
-            int pc = o - 1;
+            i64 pc = o - 1;
             while pc > 0 && is_space(lc(pc)) { pc -= 1; }
-            int pch = lc(pc);
+            i64 pch = lc(pc);
             if pch == ']' { return false; }
             if is_letter(pch) || is_digit(pch) || pch == '_' {
                 // a call, except the intrinsics that are one instruction (their argument is looked at like a group)
-                int ws = pc;
+                i64 ws = pc;
                 while ws > 0 && (is_letter(lc(ws - 1)) || is_digit(lc(ws - 1)) || lc(ws - 1) == '_') { ws -= 1; }
                 char wd[16];
-                int wn = 0;
+                i64 wn = 0;
                 while ws <= pc && wn < 15 {
                     wd[wn] = lc(ws);
                     wn += 1;
@@ -5399,7 +5399,7 @@ bool pure_raw_ahead2(int lvl, int pd, int o0) {
         } else if c == '/' && (d == '/' || d == '*') {
             return false;
         } else if is_letter(c) || is_digit(c) || c == '_' {
-            int nl0 = 99;
+            i64 nl0 = 99;
             if bd == 0 { nl0 = op_level_at(o); }
             if nl0 != 99 && !(is_letter(lc(o - 1)) || is_digit(lc(o - 1))) {
                 if nl0 >= lvl && pd == 0 { return true; }
@@ -5408,7 +5408,7 @@ bool pure_raw_ahead2(int lvl, int pd, int o0) {
                 while is_letter(lc(o)) || is_digit(lc(o)) || lc(o) == '_' { o += 1; }
             }
         } else {
-            int nl = op_level_at(o);
+            i64 nl = op_level_at(o);
             if nl == 99 {
                 if c == '-' || c == '!' || c == '~' { o += 1; continue; }
                 return false;                                            // ( " : @ ? ' or something else: do not guess
@@ -5426,9 +5426,9 @@ bool pure_raw_ahead2(int lvl, int pd, int o0) {
 // the left operand of a binary operator: kept in a register (x10, x11, ...) if the right operand is made of plain numbers and
 // variables only, else pushed on the stack. Returns the number of the register, or 0 for the stack. The left value must be a plain
 // number, a bool, an enum, a float or a pointer (lt is its type).
-int stash_left(int lt, int lvl) {
+i64 stash_left(i64 lt, i64 lvl) {
     if lt >= 0 && lt != 80 && lt != 99 && lt < 98 && stash_depth < 5 && pure_right_ahead(lvl) {
-        int r = 10 + stash_depth;
+        i64 r = 10 + stash_depth;
         stash_depth += 1;
         if lt == 91 {
             // a double waits in a floating point register (d16, d17, ...): no trip through memory, and the optimiser can use it
@@ -5447,7 +5447,7 @@ int stash_left(int lt, int lvl) {
 }
 
 // x0 = the right operand, the left one is in the register st (or on the stack if st == 0): leaves x0 = left, x1 = right
-void take_operands_s(int st) {
+void take_operands_s(i64 st) {
     if st >= 100 {
         // a double on the left (in d16 ..): the two operands go to d0 and d1 straight (fp_binop and fp_compare see fp_in_d)
         rv_valid = 0;
@@ -5473,30 +5473,30 @@ void take_operands_s(int st) {
 }
 
 // the last two lines are "mov xS, x0" and "mov x0, N" / "ldr x0, [x29, #N]": they become "mov x1, N" / "ldr x1, [x29, #N]"
-bool fuse_right_into_x1(int st) {
-    int e = out_len;
+bool fuse_right_into_x1(i64 st) {
+    i64 e = out_len;
     if e < 24 || out_buf[e - 1] != 10 { return false; }
-    int ls = e - 1;
+    i64 ls = e - 1;
     while ls > 0 && out_buf[ls - 1] != 10 { ls -= 1; }
     if ls < 2 { return false; }
-    int ps = ls - 1;
+    i64 ps = ls - 1;
     while ps > 0 && out_buf[ps - 1] != 10 { ps -= 1; }
     // the line before: mov xS, x0
     char^ want = "mov x";
-    int i = 0;
+    i64 i = 0;
     while want[i] != 0 {
         if out_buf[ps + i] != want[i] { return false; }
         i += 1;
     }
-    int k = ps + i;
-    int rn = 0;
+    i64 k = ps + i;
+    i64 rn = 0;
     while out_buf[k] >= '0' && out_buf[k] <= '9' {
         rn = rn * 10 + (out_buf[k] - '0');
         k += 1;
     }
     if rn != st { return false; }
     char^ tail = ", x0";
-    int j = 0;
+    i64 j = 0;
     while tail[j] != 0 {
         if out_buf[k + j] != tail[j] { return false; }
         j += 1;
@@ -5509,8 +5509,8 @@ bool fuse_right_into_x1(int st) {
     // do not take a "mov x0, x..." (a register copy): only numbers
     if is_mov && out_buf[ls + 8] == 'x' { return false; }
     // copy the last line with x1 instead of x0, over the line before
-    int n = e - ls;
-    int t = 0;
+    i64 n = e - ls;
+    i64 t = 0;
     while t < n {
         out_buf[ps + t] = out_buf[ls + t];
         t += 1;
@@ -5522,15 +5522,15 @@ bool fuse_right_into_x1(int st) {
 
 void parse_mul() {
     parse_unary();
-    int mlw = ex_w;
-    int mlt = ex_ty;
+    i64 mlw = ex_w;
+    i64 mlt = ex_ty;
     while tok_is("*") || tok_is("/") || tok_is("%") {
         char op[8];
         str_copy(@op, @tok_text, 8);
         next();
-        int st = stash_left(mlt, 1);
-        int rhs_lit = 0;
-        int rhs_val = 0;
+        i64 st = stash_left(mlt, 1);
+        i64 rhs_lit = 0;
+        i64 rhs_val = 0;
         if tok_kind == T_NUM && tok_float == 0 && tok_num != 0 {
             rhs_lit = 1;
             rhs_val = tok_num;
@@ -5543,7 +5543,7 @@ void parse_mul() {
             mlw = 8;
         } else if ex_ty >= 100 && ex_ty < 1000 && str_eq(@op, "*") && mlt < 100 {
             // 2.0 * v : the same as v * 2.0 (the product of a number and a vector does not depend on the order): v.mul(2.0)
-            int st_ty = ex_ty;                            // the struct
+            i64 st_ty = ex_ty;                            // the struct
             emit_line("ldr x1, [sp, #0]");               // the number: x1 = the left value, x0 = the struct
             emit_line("str x0, [sp, #0]");               // [sp] = the struct (self)
             emit_line("mov x0, x1");                     // x0 = the number: the right operand of v.mul(number)
@@ -5555,14 +5555,14 @@ void parse_mul() {
             die("a number on the left of / and a struct on the right: write the struct first (v / 2.0)");
         } else if is_float(mlt) || is_float(ex_ty) {
             if str_eq(@op, "%") { die_help("% does not work on floats", "cast to int first, or use Math::fmod"); }
-            int mrt = ex_ty;
+            i64 mrt = ex_ty;
             take_operands_s(st);
             mlt = fp_binop(@op, mlt, mrt);
             ex_ty = mlt;
             mlw = 8;
             ex_w = 8;
         } else {
-            int mlt_t = bin_type(mlt, ex_ty);
+            i64 mlt_t = bin_type(mlt, ex_ty);
             mlt = mlt_t;
             ex_ty = mlt_t;
             uns_op = 0;
@@ -5581,13 +5581,13 @@ void parse_mul() {
 
 void parse_add() {
     parse_mul();
-    int alw = ex_w;
-    int alt = ex_ty;
+    i64 alw = ex_w;
+    i64 alt = ex_ty;
     while tok_is("+") || tok_is("-") {
         char aop[8];
         str_copy(@aop, @tok_text, 8);
         next();
-        int st = stash_left(alt, 2);
+        i64 st = stash_left(alt, 2);
         parse_mul();
         if alt >= 100 && alt < 1000 {
             emit_operator_call(@aop, alt);
@@ -5598,8 +5598,8 @@ void parse_add() {
         } else if alt == 80 || ex_ty == 80 {
             // String + String / text / char
             if !str_eq(@aop, "+") { die("a String can only be joined with +"); }
-            int kb = str_kind();
-            int ka = 0;
+            i64 kb = str_kind();
+            i64 ka = 0;
             if alt == 80 { ka = 1; } else if alw == 2 { ka = 2; }
             emit_line("mov x2, x0");
             emit_line("ldr x0, [sp, #0]");
@@ -5611,14 +5611,14 @@ void parse_add() {
             alt = 80;
             alw = 8;
         } else if is_float(alt) || is_float(ex_ty) {
-            int art = ex_ty;
+            i64 art = ex_ty;
             take_operands_s(st);
             alt = fp_binop(@aop, alt, art);
             ex_ty = alt;
             alw = 8;
             ex_w = 8;
         } else {
-            int alt_t = bin_type(alt, ex_ty);
+            i64 alt_t = bin_type(alt, ex_ty);
             alt = alt_t;
             ex_ty = alt_t;
             uns_op = 0;
@@ -5633,15 +5633,15 @@ void parse_add() {
 
 void parse_shift() {
     parse_add();
-    int slw = ex_w;
-    int slt = ex_ty;
+    i64 slw = ex_w;
+    i64 slt = ex_ty;
     while (tok_is("<<") || tok_is(">>")) && in_cout == 0 || tok_is("shl") || tok_is("shr") {
         char sop[8];
         str_copy(@sop, @tok_text, 8);
         next();
-        int st = stash_left(slt, 3);
+        i64 st = stash_left(slt, 3);
         parse_add();
-        int slt_t = shift_type(slt, ex_ty);
+        i64 slt_t = shift_type(slt, ex_ty);
         slt = slt_t;
         ex_ty = slt_t;
         uns_op = 0;
@@ -5655,13 +5655,13 @@ void parse_shift() {
 
 void parse_bitand() {
     parse_shift();
-    int blw = ex_w;
-    int blt = ex_ty;
+    i64 blw = ex_w;
+    i64 blt = ex_ty;
     while tok_is("&") {
         next();
-        int st = stash_left(blt, 4);
+        i64 st = stash_left(blt, 4);
         parse_shift();
-        int blt_t = bin_type(blt, ex_ty);
+        i64 blt_t = bin_type(blt, ex_ty);
         blt = blt_t;
         ex_ty = blt_t;
         uns_op = 0;
@@ -5675,13 +5675,13 @@ void parse_bitand() {
 
 void parse_bitxor() {
     parse_bitand();
-    int xlw = ex_w;
-    int xlt = ex_ty;
+    i64 xlw = ex_w;
+    i64 xlt = ex_ty;
     while tok_is("xor") {
         next();
-        int st = stash_left(xlt, 5);
+        i64 st = stash_left(xlt, 5);
         parse_bitand();
-        int xlt_t = bin_type(xlt, ex_ty);
+        i64 xlt_t = bin_type(xlt, ex_ty);
         xlt = xlt_t;
         ex_ty = xlt_t;
         uns_op = 0;
@@ -5695,13 +5695,13 @@ void parse_bitxor() {
 
 void parse_bitor() {
     parse_bitxor();
-    int olw = ex_w;
-    int olt = ex_ty;
+    i64 olw = ex_w;
+    i64 olt = ex_ty;
     while tok_is("|") {
         next();
-        int st = stash_left(olt, 6);
+        i64 st = stash_left(olt, 6);
         parse_bitxor();
-        int olt_t = bin_type(olt, ex_ty);
+        i64 olt_t = bin_type(olt, ex_ty);
         olt = olt_t;
         ex_ty = olt_t;
         uns_op = 0;
@@ -5715,7 +5715,7 @@ void parse_bitor() {
 
 // x0 = (left cond right): 1 or 0
 void compare(char^ cond) {
-    int ld = new_label();
+    i64 ld = new_label();
     emit_line("cmp x0, x1");
     emit_line("mov x0, 1");
     jump_if(cond, ld);
@@ -5728,17 +5728,17 @@ void parse_relational() {
     while tok_is("<") || tok_is(">") || tok_is("<=") || tok_is(">=") {
         char rel[4];
         str_copy(@rel, @tok_text, 4);
-        int rel_lt = ex_ty;
-        int rel_lw = ex_w;
+        i64 rel_lt = ex_ty;
+        i64 rel_lw = ex_w;
         if !is_float(rel_lt) && rel_lt != 80 { need_num(ex_ty); }
         next();
-        int st = stash_left(rel_lt, 7);
+        i64 st = stash_left(rel_lt, 7);
         parse_bitor();
-        int rel_rt = ex_ty;
+        i64 rel_rt = ex_ty;
         if rel_lt == 80 || rel_rt == 80 || (rel_lw == 9 && ex_w == 9) {
             // String < String (or a text, or a char): by the codes of the bytes
-            int kb = str_kind();
-            int ka = 0;
+            i64 kb = str_kind();
+            i64 ka = 0;
             if rel_lt == 80 { ka = 1; } else if rel_lw == 2 { ka = 2; }
             emit_line("mov x2, x0");
             emit_line("ldr x0, [sp, #0]");
@@ -5781,9 +5781,9 @@ void parse_relational() {
 }
 
 // == and != need two values of the same kind (the literal 0/1 fits a number or a bool)
-void check_comparable(int a, int b) {
+void check_comparable(i64 a, i64 b) {
     if pass_no < 2 { return; }
-    int ok = 0;
+    i64 ok = 0;
     if is_numeric(a) && is_numeric(b) && num_compat(a, b) { ok = 1; }
     if a == 99 && (b == 99 || b == 97) { ok = 1; }
     if b == 99 && a == 97 { ok = 1; }
@@ -5800,12 +5800,12 @@ void parse_equality() {
     while tok_is("==") || tok_is("!=") {
         char eqop[4];
         str_copy(@eqop, @tok_text, 4);
-        int eq_left = ex_ty;
-        int eq_lw = ex_w;
+        i64 eq_left = ex_ty;
+        i64 eq_lw = ex_w;
         next();
-        int st = stash_left(eq_left, 8);
+        i64 st = stash_left(eq_left, 8);
         parse_relational();
-        int eq_right = ex_ty;
+        i64 eq_right = ex_ty;
         if eq_left >= 100 && eq_left < 1000 {
             emit_operator_call(@eqop, eq_left);
             ex_w = 8;
@@ -5813,8 +5813,8 @@ void parse_equality() {
             rv_valid = 0;
         } else if eq_left == 80 || eq_right == 80 {
             // String == String / text
-            int kb = str_kind();
-            int ka = 0;
+            i64 kb = str_kind();
+            i64 ka = 0;
             if eq_left == 80 { ka = 1; } else if eq_lw == 2 { ka = 2; }
             emit_line("mov x2, x0");
             emit_line("ldr x0, [sp, #0]");
@@ -5849,8 +5849,8 @@ void parse_equality() {
 void parse_land() {
     parse_equality();
     if tok_is("&&") {
-        int lfalse = new_label();
-        int lend = new_label();
+        i64 lfalse = new_label();
+        i64 lend = new_label();
         while tok_is("&&") {
             rv_valid = 0;
             need_bool();
@@ -5876,12 +5876,12 @@ void parse_land() {
 
 // a || b : the right side only runs if the left side is false
 void parse_expr() {
-    int saved_cout = in_cout;
+    i64 saved_cout = in_cout;
     in_cout = 0;
     parse_land();
     if tok_is("||") {
-        int ltrue = new_label();
-        int lend2 = new_label();
+        i64 ltrue = new_label();
+        i64 lend2 = new_label();
         while tok_is("||") {
             rv_valid = 0;
             need_bool();
@@ -5908,7 +5908,7 @@ void parse_expr() {
 
 // the routines S__free_arr of the structs that need one
 void emit_free_thunks() {
-    int i = 0;
+    i64 i = 0;
     while i < scount {
         if thunk_need[i] == 1 {
             char tn[128];

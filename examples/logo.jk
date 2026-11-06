@@ -33,7 +33,7 @@ double j_shape(double x, double y) {
 }
 
 void main() {
-    int frames = 0;
+    i64 frames = 0;
     String[] args = Env::args();
     if args.len > 1 {
         switch Num::parse_int(args[1]) {
@@ -44,20 +44,20 @@ void main() {
             }
         }
     }
-    int w = 64;                                               // a small picture of a fixed size: 64 x 40 dots
-    int h = 40;                                               // (64 columns, 20 rows of text; about 25 KB of memory)
+    i64 w = 64;                                               // a small picture of a fixed size: 64 x 40 dots
+    i64 h = 40;                                               // (64 columns, 20 rows of text; about 25 KB of memory)
     Screen s = Screen::make(w, h);
     s.begin();
     double side = (double)Math::min_int(w, s.h);               // the picture is as big as the short side
     double cxs = (double)w / 2.0;
     double cys = (double)s.h / 2.0;
     // the stars: fixed places, each with its own speed and phase of twinkling
-    int star_n = 90;
+    i64 star_n = 90;
     double star_x[90];
     double star_y[90];
     double star_f[90];
     double star_p[90];
-    int seed = 4242;
+    i64 seed = 4242;
     for i in 0..star_n {
         seed = (seed * 1103515245 + 12345) & 2147483647;
         star_x[i] = (double)((seed >> 8) % 1000) / 1000.0 * (double)w;
@@ -70,20 +70,20 @@ void main() {
     }
     mat3 lean = mat3::rotate_x(Math::radians(45.0));          // the ring leans 45 degrees towards us
     mat3 slant = mat3::rotate_z(Math::radians(-22.0));        // and a little sideways
-    int frame = 0;
-    int t0 = Time::mono_ns();
+    i64 frame = 0;
+    i64 t0 = Time::mono_ns();
     while frames == 0 || frame < frames {
         double t = (double)frame / 24.0;                      // seconds
         s.clear(2, 3, 10);
         for i in 0..star_n {
             double tw = 0.5 + 0.5 * Math::sin(t * star_f[i] + star_p[i]);        // 0..1
-            int v = (int)(40.0 + 215.0 * tw * tw);
-            s.add((int)star_x[i], (int)star_y[i], v * 8 / 10, v * 9 / 10, v);
+            i64 v = (i64)(40.0 + 215.0 * tw * tw);
+            s.add((i64)star_x[i], (i64)star_y[i], v * 8 / 10, v * 9 / 10, v);
             if tw > 0.93 {                                                       // a bright star has little rays
-                s.add((int)star_x[i] + 1, (int)star_y[i], v / 4, v / 4, v / 3);
-                s.add((int)star_x[i] - 1, (int)star_y[i], v / 4, v / 4, v / 3);
-                s.add((int)star_x[i], (int)star_y[i] + 1, v / 4, v / 4, v / 3);
-                s.add((int)star_x[i], (int)star_y[i] - 1, v / 4, v / 4, v / 3);
+                s.add((i64)star_x[i] + 1, (i64)star_y[i], v / 4, v / 4, v / 3);
+                s.add((i64)star_x[i] - 1, (i64)star_y[i], v / 4, v / 4, v / 3);
+                s.add((i64)star_x[i], (i64)star_y[i] + 1, v / 4, v / 4, v / 3);
+                s.add((i64)star_x[i], (i64)star_y[i] - 1, v / 4, v / 4, v / 3);
             }
         }
         // the ring: points on a circle, leaned, then turned round the up axis; z > 0 is behind the letter
@@ -100,9 +100,9 @@ void main() {
                         double l = j_shape(nx, ny);
                         if l > 0.0 {
                             double k = (ny + 0.9) / 1.8;                      // 0 at the top, 1 at the bottom
-                            int r = (int)((90.0 + 90.0 * k) * l);
-                            int g = (int)((225.0 - 110.0 * k) * l);
-                            int b = (int)(255.0 * l);
+                            i64 r = (i64)((90.0 + 90.0 * k) * l);
+                            i64 g = (i64)((225.0 - 110.0 * k) * l);
+                            i64 b = (i64)(255.0 * l);
                             s.set(x, y, r, g, b);
                         }
                     }
@@ -115,16 +115,16 @@ void main() {
                 bool behind = q.z > 0.0;
                 if (pass == 0 && behind) || (pass == 1 && !behind) {
                     double persp = 1.0 / (1.0 + 0.25 * q.z);
-                    int px = (int)(cxs + q.x * persp * side * 0.46);
-                    int py = (int)(cys + q.y * persp * side * 0.46);
+                    i64 px = (i64)(cxs + q.x * persp * side * 0.46);
+                    i64 py = (i64)(cys + q.y * persp * side * 0.46);
                     double depth = 0.5 - 0.5 * q.z;                       // near = bright
                     // two beads run round the ring (the ring is turning), the rest of it is calm
                     double bead = 0.0;
                     double da = Math::sin((a - t * 2.2) * 0.5);
                     if da * da > 0.985 { bead = 1.0; }
-                    int v = (int)(70.0 + 120.0 * depth + 65.0 * bead);
-                    int rr = v * 7 / 10;
-                    int gg = v * 85 / 100;
+                    i64 v = (i64)(70.0 + 120.0 * depth + 65.0 * bead);
+                    i64 rr = v * 7 / 10;
+                    i64 gg = v * 85 / 100;
                     s.add(px, py, rr, gg, v);
                     if depth > 0.55 {
                         s.add(px + 1, py, rr / 3, gg / 3, v / 3);
@@ -139,8 +139,8 @@ void main() {
         if frames == 0 && Term::key_pressed() { break; }
         frame += 1;
         // 24 frames a second: wait until the frame's time has come
-        int due = t0 + frame * 41666666;
-        int now = Time::mono_ns();
+        i64 due = t0 + frame * 41666666;
+        i64 now = Time::mono_ns();
         if due > now { Time::sleep_ms((due - now) / 1000000); }
     }
     s.end();

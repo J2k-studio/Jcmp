@@ -4,12 +4,12 @@ using stdlib;
 
 struct Player {
     String name;
-    int score;
-    void add(self, int points) { self.score += points; }
+    i64 score;
+    void add(self, i64 points) { self.score += points; }
     String describe(self) { return self.name + ": " + str(self.score); }
 }
 
-int main() {
+i64 main() {
     Player[] ps = arr(4);
     String[] names = arr(3);
     names.push("Mali"); names.push("Somchai"); names.push("Nok");

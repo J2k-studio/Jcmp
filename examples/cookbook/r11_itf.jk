@@ -4,22 +4,22 @@ using stdlib;
 
 itf Animal {
     String sound(self);
-    int legs(self);
+    i64 legs(self);
 }
 struct Dog impl Animal {
     void init(self) { }
     String sound(self) { return "woof"; }
-    int legs(self) { return 4; }
+    i64 legs(self) { return 4; }
 }
 struct Bird impl Animal {
     void init(self) { }
     String sound(self) { return "tweet"; }
-    int legs(self) { return 2; }
+    i64 legs(self) { return 2; }
 }
 
 void introduce(Animal^ a) { jout << a^.sound() << " on " << a^.legs() << " legs\n"; }
 
-int main() {
+i64 main() {
     Dog d;
     Bird b;
     introduce(@d);

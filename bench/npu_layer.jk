@@ -2,9 +2,9 @@
 #import <npu>
 #import <neuron>
 // a layer with fixed weights: the NPU against the CPU (Tensor32.matmul) for m rows of x:   npu_layer [m k n]   (default 64 256 256)
-int main() {
+i64 main() {
     String[] av = Env::args();
-    int m = 64; int k = 256; int n = 256;
+    i64 m = 64; i64 k = 256; i64 n = 256;
     if av.len > 3 { m = av[1].to_int(); k = av[2].to_int(); n = av[3].to_int(); }
     if !Npu::available() { jout << "no NPU here\n"; return 1; }
     float^ w = (float^)Mem::alloc(n * k * 4);
@@ -12,25 +12,25 @@ int main() {
     float^ y = (float^)Mem::alloc(m * n * 4);
     for i in 0..n * k { w[i] = (float)(i % 5) * 0.25 - 0.5; }
     for i in 0..m * k { x[i] = (float)(i % 7) * 0.25; }
-    int t0 = Time::now_ms();
+    i64 t0 = Time::now_ms();
     NpuLinear l = NpuLinear::make(w, null, m, k, n);
-    int t1 = Time::now_ms();
+    i64 t1 = Time::now_ms();
     if !l.ok { jout << "the NPU refused the model, code " << l.code << "\n"; return 1; }
     l.run(x, y);
-    int t2 = Time::now_ms();
+    i64 t2 = Time::now_ms();
     for r in 0..20 { l.run(x, y); }
-    int t3 = Time::now_ms();
+    i64 t3 = Time::now_ms();
     jout << "NPU: model " << (t1 - t0) << " ms, first run " << (t2 - t1) << " ms, then " << (double)(t3 - t2) / 20.0 << " ms a product\n";
-    int[] sa = arr(2); sa.push(m); sa.push(k);
-    int[] sb = arr(2); sb.push(k); sb.push(n);
+    i64[] sa = arr(2); sa.push(m); sa.push(k);
+    i64[] sb = arr(2); sb.push(k); sb.push(n);
     Tensor32 a = Tensor32::make(sa);
     Tensor32 b = Tensor32::make(sb);
     for i in 0..m * k { a.d[i] = x[i]; }
     for r in 0..k { for c in 0..n { b.d[r * n + c] = w[c * k + r]; } }
     Tensor32 cc = a.matmul(b);
-    int t4 = Time::now_ms();
+    i64 t4 = Time::now_ms();
     for r in 0..20 { cc = a.matmul(b); }
-    int t5 = Time::now_ms();
+    i64 t5 = Time::now_ms();
     jout << "CPU: " << (double)(t5 - t4) / 20.0 << " ms a product\n";
     return 0;
 }

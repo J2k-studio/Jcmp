@@ -21,40 +21,40 @@
 char gpu_tio[64];
 bool gpu_raw;
 
-int gpu_byte(int ms) {
+i64 gpu_byte(i64 ms) {
     if !Input::ready(ms) { return 0 - 1; }
     char b[2];
-    int n = Sys::read(0, @b, 1);
+    i64 n = Sys::read(0, @b, 1);
     if n <= 0 { return 0 - 2; }
     return b[0] & 255;
 }
 
 struct Gpu {
-    int w;
-    int h;
-    int fd;
+    i64 w;
+    i64 h;
+    i64 fd;
     String path;
     String renderer;
-    int[] cmd;
+    i64[] cmd;
     char^ buf;
-    int buf_cap;
+    i64 buf_cap;
     bool good;
     bool alive;
-    int frame;
-    int last_ms;
-    int target_ms;
+    i64 frame;
+    i64 last_ms;
+    i64 target_ms;
     double dt;
-    int touch_x;
-    int touch_y;
+    i64 touch_x;
+    i64 touch_y;
     bool touch_down;
     bool touch_hit;
-    int[] key_at;
-    int[] key_hit;
+    i64[] key_at;
+    i64[] key_hit;
 
-    static int rgb(int r, int g, int b) { return 0xff000000 | ((r & 255) << 16) | ((g & 255) << 8) | (b & 255); }
-    static int rgba(int r, int g, int b, int a) { return ((a & 255) << 24) | ((r & 255) << 16) | ((g & 255) << 8) | (b & 255); }
+    static i64 rgb(i64 r, i64 g, i64 b) { return 0xff000000 | ((r & 255) << 16) | ((g & 255) << 8) | (b & 255); }
+    static i64 rgba(i64 r, i64 g, i64 b, i64 a) { return ((a & 255) << 24) | ((r & 255) << 16) | ((g & 255) << 8) | (b & 255); }
 
-    static Gpu open(int w, int h) {
+    static Gpu open(i64 w, i64 h) {
         Gpu g;
         g.w = w;
         g.h = h;
@@ -90,11 +90,11 @@ struct Gpu {
         g.buf_cap = 65536;
         g.buf = (char^)Mem::alloc(g.buf_cap);
         Sys::write(g.fd, g.buf, 4);
-        Sys::call(29, 0, 21505, (int)@gpu_tio, 0, 0, 0);
+        Sys::call(29, 0, 21505, (i64)@gpu_tio, 0, 0, 0);
         char r[64];
         for i in 0..64 { r[i] = gpu_tio[i]; }
         r[12] = r[12] & 244;
-        Sys::call(29, 0, 21506, (int)@r, 0, 0, 0);
+        Sys::call(29, 0, 21506, (i64)@r, 0, 0, 0);
         gpu_raw = true;
         jout << "\e[?1049h\e[?25l\e]7777;gpu;open;" << w << ";" << h << ";" << g.path << "\a";
         g.good = true;
@@ -104,9 +104,9 @@ struct Gpu {
     bool ok(self) { return self.good; }
     bool running(self) { return self.alive; }
     void quit(self) { self.alive = false; }
-    void set_fps(self, int fps) { if fps < 1 { fps = 1; } self.target_ms = 1000 / fps; }
+    void set_fps(self, i64 fps) { if fps < 1 { fps = 1; } self.target_ms = 1000 / fps; }
 
-    void load(self, int id, String file) {
+    void load(self, i64 id, String file) {
         if !self.good { return; }
         String p = file;
         if !p.starts_with("/") {
@@ -124,55 +124,55 @@ struct Gpu {
         jout << "\e]7777;gpu;tex;" << id << ";" << p << "\a";
     }
 
-    void clear(self, int argb) { self.cmd.push(1); self.cmd.push(argb); }
-    void tri(self, int x0, int y0, int x1, int y1, int x2, int y2, int argb) {
+    void clear(self, i64 argb) { self.cmd.push(1); self.cmd.push(argb); }
+    void tri(self, i64 x0, i64 y0, i64 x1, i64 y1, i64 x2, i64 y2, i64 argb) {
         self.cmd.push(2); self.cmd.push(x0); self.cmd.push(y0); self.cmd.push(x1); self.cmd.push(y1); self.cmd.push(x2); self.cmd.push(y2); self.cmd.push(argb);
     }
-    void rect(self, int x, int y, int rw, int rh, int argb) {
+    void rect(self, i64 x, i64 y, i64 rw, i64 rh, i64 argb) {
         self.cmd.push(3); self.cmd.push(x); self.cmd.push(y); self.cmd.push(rw); self.cmd.push(rh); self.cmd.push(argb);
     }
-    void tri_colors(self, int x0, int y0, int c0, int x1, int y1, int c1, int x2, int y2, int c2) {
+    void tri_colors(self, i64 x0, i64 y0, i64 c0, i64 x1, i64 y1, i64 c1, i64 x2, i64 y2, i64 c2) {
         self.cmd.push(4); self.cmd.push(x0); self.cmd.push(y0); self.cmd.push(c0); self.cmd.push(x1); self.cmd.push(y1); self.cmd.push(c1); self.cmd.push(x2); self.cmd.push(y2); self.cmd.push(c2);
     }
-    void image(self, int tex, int x, int y, int iw, int ih, int tint) {
+    void image(self, i64 tex, i64 x, i64 y, i64 iw, i64 ih, i64 tint) {
         self.cmd.push(5); self.cmd.push(tex); self.cmd.push(x); self.cmd.push(y); self.cmd.push(iw); self.cmd.push(ih); self.cmd.push(tint);
     }
     // a part of the picture: u0 v0 u1 v1 in millionths (0 .. 1000000)
-    void image_part(self, int tex, int x, int y, int iw, int ih, int u0, int v0, int u1, int v1, int tint) {
+    void image_part(self, i64 tex, i64 x, i64 y, i64 iw, i64 ih, i64 u0, i64 v0, i64 u1, i64 v1, i64 tint) {
         self.cmd.push(6); self.cmd.push(tex); self.cmd.push(x); self.cmd.push(y); self.cmd.push(iw); self.cmd.push(ih);
         self.cmd.push(u0); self.cmd.push(v0); self.cmd.push(u1); self.cmd.push(v1); self.cmd.push(tint);
     }
-    void line(self, int x0, int y0, int x1, int y1, int width, int argb) {
+    void line(self, i64 x0, i64 y0, i64 x1, i64 y1, i64 width, i64 argb) {
         self.cmd.push(7); self.cmd.push(x0); self.cmd.push(y0); self.cmd.push(x1); self.cmd.push(y1); self.cmd.push(width); self.cmd.push(argb);
     }
-    void circle(self, int cx, int cy, int r, int argb) {                 // a fan of triangles
-        int steps = 24;
+    void circle(self, i64 cx, i64 cy, i64 r, i64 argb) {                 // a fan of triangles
+        i64 steps = 24;
         if r > 20 { steps = 48; }
-        int px = cx + r;
-        int py = cy;
+        i64 px = cx + r;
+        i64 py = cy;
         for i in 1..steps + 1 {
             double a = 6.283185307 * (double)i / (double)steps;
-            int nx = cx + (int)((double)r * Math::cos(a));
-            int ny = cy + (int)((double)r * Math::sin(a));
+            i64 nx = cx + (i64)((double)r * Math::cos(a));
+            i64 ny = cy + (i64)((double)r * Math::sin(a));
             self.tri(cx, cy, px, py, nx, ny, argb);
             px = nx;
             py = ny;
         }
     }
 
-    void note_key(self, int k, int now) {
+    void note_key(self, i64 k, i64 now) {
         if k < 0 || k >= 512 { return; }
         self.key_at[k] = now;
         self.key_hit[k] = 1;
     }
-    bool hit(self, int k) { return k >= 0 && k < 512 && self.key_hit[k] == 1; }
-    bool held(self, int k) { return k >= 0 && k < 512 && Time::now_ms() - self.key_at[k] < 180; }
+    bool hit(self, i64 k) { return k >= 0 && k < 512 && self.key_hit[k] == 1; }
+    bool held(self, i64 k) { return k >= 0 && k < 512 && Time::now_ms() - self.key_at[k] < 180; }
     bool touching(self) { return self.touch_down; }
     bool tapped(self) { return self.touch_hit; }
 
     // touches, keys and the time since the last picture
     void begin(self) {
-        int now = Time::now_ms();
+        i64 now = Time::now_ms();
         self.dt = (double)(now - self.last_ms) / 1000.0;
         if self.dt > 0.1 { self.dt = 0.1; }
         self.last_ms = now;
@@ -180,19 +180,19 @@ struct Gpu {
         self.touch_hit = false;
         if !self.good { return; }
         while Input::ready(0) {
-            int c = gpu_byte(0);
+            i64 c = gpu_byte(0);
             if c < 0 { break; }
             if c == 3 { self.alive = false; continue; }
             if c == 27 {
-                int d = gpu_byte(8);
+                i64 d = gpu_byte(8);
                 if d < 0 { self.note_key(27, now); self.alive = false; continue; }
                 if d == 91 || d == 79 {
-                    int e = gpu_byte(8);
+                    i64 e = gpu_byte(8);
                     if e == 65 { self.note_key(257, now); } else if e == 66 { self.note_key(258, now); } else if e == 67 { self.note_key(259, now); } else if e == 68 { self.note_key(260, now); }
                     else { while e >= 48 && e <= 59 { e = gpu_byte(8); } }
                 } else if d == 93 {
                     String m = "";
-                    int e = gpu_byte(30);
+                    i64 e = gpu_byte(30);
                     while e >= 0 && e != 7 && e != 27 { m.push((char)e); e = gpu_byte(30); }
                     if e == 27 { gpu_byte(8); }
                     String[] pm = m.split(";");
@@ -213,8 +213,8 @@ struct Gpu {
     // sends the picture (the commands since the last end()) to the chip and waits for the next turn
     void end(self) {
         if self.good {
-            int n = self.cmd.len;
-            int need = (n + 1) * 4;
+            i64 n = self.cmd.len;
+            i64 need = (n + 1) * 4;
             if need > self.buf_cap {
                 self.buf_cap = need + 65536;
                 self.buf = (char^)Mem::alloc(self.buf_cap);
@@ -224,7 +224,7 @@ struct Gpu {
             self.buf[2] = (char)((n >> 16) & 255);
             self.buf[3] = (char)((n >> 24) & 255);
             for i in 0..n {
-                int v = self.cmd[i];
+                i64 v = self.cmd[i];
                 self.buf[4 + i * 4] = (char)(v & 255);
                 self.buf[5 + i * 4] = (char)((v >> 8) & 255);
                 self.buf[6 + i * 4] = (char)((v >> 16) & 255);
@@ -236,7 +236,7 @@ struct Gpu {
             self.cmd = arr(1024);
         }
         self.frame += 1;
-        int spent = Time::now_ms() - self.last_ms;
+        i64 spent = Time::now_ms() - self.last_ms;
         if spent < self.target_ms && self.good { Time::sleep_ms(self.target_ms - spent); }
     }
 
@@ -245,7 +245,7 @@ struct Gpu {
             jout << "\e]7777;gpu;close\a\e[0m\e[?25h\e[?1049l";
             Sys::close(self.fd);
             Fs::remove(self.path);
-            if gpu_raw { Sys::call(29, 0, 21506, (int)@gpu_tio, 0, 0, 0); gpu_raw = false; }
+            if gpu_raw { Sys::call(29, 0, 21506, (i64)@gpu_tio, 0, 0, 0); gpu_raw = false; }
             self.good = false;
         }
         self.alive = false;
@@ -257,23 +257,23 @@ struct Gpu {
 //   Gpu g = Gpu::open(320, 180);   AppCanvas c; c.init(); c.g = @g;      Canvas2d^ cv = @c;     (begin / end are the loop of the Gpu: g.begin(), g.end())
 struct AppCanvas impl Canvas2d {
     Gpu^ g;
-    int next_pic;
+    i64 next_pic;
     void init(self) { self.next_pic = 1; }
     void begin(self) { }
-    void clear(self, int argb) { self.g^.clear(argb); }
-    void rect(self, double x, double y, double w, double h, int argb) { self.g^.rect((int)x, (int)y, (int)w, (int)h, argb); }
-    void tri(self, double x0, double y0, double x1, double y1, double x2, double y2, int argb) { self.g^.tri((int)x0, (int)y0, (int)x1, (int)y1, (int)x2, (int)y2, argb); }
-    void line(self, double x0, double y0, double x1, double y1, double width, int argb) { self.g^.line((int)x0, (int)y0, (int)x1, (int)y1, (int)width, argb); }
-    void circle(self, double cx, double cy, double r, int argb) { self.g^.circle((int)cx, (int)cy, (int)r, argb); }
+    void clear(self, i64 argb) { self.g^.clear(argb); }
+    void rect(self, double x, double y, double w, double h, i64 argb) { self.g^.rect((i64)x, (i64)y, (i64)w, (i64)h, argb); }
+    void tri(self, double x0, double y0, double x1, double y1, double x2, double y2, i64 argb) { self.g^.tri((i64)x0, (i64)y0, (i64)x1, (i64)y1, (i64)x2, (i64)y2, argb); }
+    void line(self, double x0, double y0, double x1, double y1, double width, i64 argb) { self.g^.line((i64)x0, (i64)y0, (i64)x1, (i64)y1, (i64)width, argb); }
+    void circle(self, double cx, double cy, double r, i64 argb) { self.g^.circle((i64)cx, (i64)cy, (i64)r, argb); }
     void end(self) { }
     bool has_instancing(self) { return false; }
     bool has_shaders(self) { return false; }
     // the pictures are loaded by the app: the picture number is the one of g.load(id, file)
-    int load(self, String path) {
-        int id = self.next_pic;
+    i64 load(self, String path) {
+        i64 id = self.next_pic;
         self.next_pic += 1;
         self.g^.load(id, path);
         return id;
     }
-    void image(self, int pic, double x, double y, double w, double h, int tint) { self.g^.image(pic, (int)x, (int)y, (int)w, (int)h, tint); }
+    void image(self, i64 pic, double x, double y, double w, double h, i64 tint) { self.g^.image(pic, (i64)x, (i64)y, (i64)w, (i64)h, tint); }
 }

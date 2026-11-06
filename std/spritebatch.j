@@ -9,18 +9,18 @@
 // The atlas keeps the sprites in one Sprite (a.sheet), so a graphics chip can take it as ONE texture and the batch is one draw call.
 
 struct Atlas {
-    int w;
-    int h;
+    i64 w;
+    i64 h;
     Sprite sheet;
-    int[] rx;
-    int[] ry;
-    int[] rw;
-    int[] rh;
-    int pen_x;
-    int pen_y;
-    int row_h;
+    i64[] rx;
+    i64[] ry;
+    i64[] rw;
+    i64[] rh;
+    i64 pen_x;
+    i64 pen_y;
+    i64 row_h;
 
-    static Atlas make(int w, int h) {
+    static Atlas make(i64 w, i64 h) {
         Atlas a;
         a.w = w;
         a.h = h;
@@ -38,14 +38,14 @@ struct Atlas {
         return a;
     }
 
-    int count(self) { return self.rx.len; }
+    i64 count(self) { return self.rx.len; }
 
     // packs a sprite; the number of it, or -1 when there is no room
-    int add(self, Sprite s) {
+    i64 add(self, Sprite s) {
         if s.w > self.w || s.h > self.h { return -1; }
-        int px = self.pen_x;
-        int py = self.pen_y;
-        int rh = self.row_h;
+        i64 px = self.pen_x;
+        i64 py = self.pen_y;
+        i64 rh = self.row_h;
         if px + s.w > self.w {
             px = 0;
             py += rh;
@@ -72,14 +72,14 @@ struct Atlas {
 
 struct SpriteBatch {
     Atlas atlas;
-    int[] items;                  // 5 numbers a sprite: layer, id, x, y, flip
-    int count;
-    int drawn;
+    i64[] items;                  // 5 numbers a sprite: layer, id, x, y, flip
+    i64 count;
+    i64 drawn;
     bool has_view;
-    int vx;
-    int vy;
-    int vw;
-    int vh;
+    i64 vx;
+    i64 vy;
+    i64 vw;
+    i64 vh;
 
     static SpriteBatch make(Atlas a) {
         SpriteBatch b;
@@ -92,7 +92,7 @@ struct SpriteBatch {
     }
 
     // only sprites that touch this window are kept
-    void view(self, int x, int y, int w, int h) {
+    void view(self, i64 x, i64 y, i64 w, i64 h) {
         self.has_view = true;
         self.vx = x;
         self.vy = y;
@@ -100,9 +100,9 @@ struct SpriteBatch {
         self.vh = h;
     }
 
-    void add(self, int id, int x, int y, int layer) { self.add_flip(id, x, y, layer, false); }
+    void add(self, i64 id, i64 x, i64 y, i64 layer) { self.add_flip(id, x, y, layer, false); }
 
-    void add_flip(self, int id, int x, int y, int layer, bool flip) {
+    void add_flip(self, i64 id, i64 x, i64 y, i64 layer, bool flip) {
         if id < 0 || id >= self.atlas.rx.len { return; }
         if layer < 0 { layer = 0; }
         if layer > 15 { layer = 15; }
@@ -123,26 +123,26 @@ struct SpriteBatch {
     }
 
     // the order of drawing: layer by layer, inside a layer as added (a counting sort)
-    int[] order(self) {
-        int[] start = arr(17);
+    i64[] order(self) {
+        i64[] start = arr(17);
         for l in 0..17 { start.push(0); }
         for i in 0..self.count { start[self.items[i * 5] + 1] += 1; }
         for l in 1..17 { start[l] += start[l - 1]; }
-        int[] o = arr(self.count + 1);
+        i64[] o = arr(self.count + 1);
         for i in 0..self.count { o.push(0); }
         for i in 0..self.count {
-            int l = self.items[i * 5];
+            i64 l = self.items[i * 5];
             o[start[l]] = i;
             start[l] += 1;
         }
         return o;
     }
 
-    void flush_to(self, int[] dst, int dw, int dh) {
-        int[] o = self.order();
+    void flush_to(self, i64[] dst, i64 dw, i64 dh) {
+        i64[] o = self.order();
         for k in 0..self.count {
-            int i = o[k] * 5;
-            int id = self.items[i + 1];
+            i64 i = o[k] * 5;
+            i64 id = self.items[i + 1];
             self.atlas.sheet.blit_part(dst, dw, dh, self.atlas.rx[id], self.atlas.ry[id], self.atlas.rw[id], self.atlas.rh[id], self.items[i + 2], self.items[i + 3], self.items[i + 4] == 1);
         }
         self.drawn = self.count;

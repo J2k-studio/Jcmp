@@ -15,7 +15,7 @@ struct mat3 {
         for i in 0..9 { r.m[i] = 0.0; }
         return r;
     }
-    double get(self, int row, int col) { return self.m[row * 3 + col]; }
+    double get(self, i64 row, i64 col) { return self.m[row * 3 + col]; }
     operator mat3 mul(self, mat3 o) {
         mat3 r;
         for i in 0..3 {
@@ -103,7 +103,7 @@ struct mat4 {
         for i in 0..16 { r.m[i] = 0.0; }
         return r;
     }
-    double get(self, int row, int col) { return self.m[row * 4 + col]; }
+    double get(self, i64 row, i64 col) { return self.m[row * 4 + col]; }
     operator mat4 mul(self, mat4 o) {
         mat4 r;
         for i in 0..4 {

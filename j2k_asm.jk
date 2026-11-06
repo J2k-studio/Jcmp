@@ -13,9 +13,9 @@ void main() {
         syscall(64, 2, @usage, 40);
         syscall(93, 1);
     }
-    int fd = syscall(56, -100, arg(1), 0, 0);
+    i64 fd = syscall(56, -100, arg(1), 0, 0);
     if fd < 0 { as_fail(); }
-    int len = syscall(63, fd, @as_src, 16777215);
+    i64 len = syscall(63, fd, @as_src, 16777215);
     if len < 0 || len >= 16777215 { as_fail(); }
     syscall(57, fd);
     as_assemble(len);

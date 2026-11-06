@@ -2,14 +2,14 @@
 struct Env {
     // the value of an environment variable
     static Option<String> get(String name) {
-        int^ gg0 = (int^)__gl();
+        i64^ gg0 = (i64^)__gl();
         if gg0[0] == 0 { return Option<String>::None; }        // a shared library (-l) has no start of a program: no arguments, no environment
-        int i = argc() + 1;
-        int nl = name.len;
+        i64 i = argc() + 1;
+        i64 nl = name.len;
         char^ nm = name.c();
         while arg(i) != null {
             char^ e = arg(i);
-            int k = 0;
+            i64 k = 0;
             while k < nl && e[k] == nm[k] { k += 1; }
             if k == nl && e[k] == '=' {
                 String v = "";
@@ -22,7 +22,7 @@ struct Env {
     }
     // the arguments of the program (the first one is the program itself)
     static String[] args() {
-        int^ gg0 = (int^)__gl();
+        i64^ gg0 = (i64^)__gl();
         if gg0[0] == 0 { String[] none = arr(1); return none; }        // a shared library (-l) has no start of a program: no arguments, no environment
         String[] r = arr(argc() + 1);
         for i in 0..argc() {
@@ -39,19 +39,19 @@ struct Env {
 //   String text = Proc::output("echo", args)?;    (the output is returned as text)
 struct Proc {
     // starts a child (stdout to wfd when wfd >= 0); returns its id, or a negative error number
-    static int launch(String cmd, String[] args, int wfd) {
-        int na = args.len;
-        int^ argv = (int^)Mem::alloc(8 * (na + 2));
-        argv[0] = (int)cmd.c();
-        for i in 0..na { argv[i + 1] = (int)args[i].c(); }
+    static i64 launch(String cmd, String[] args, i64 wfd) {
+        i64 na = args.len;
+        i64^ argv = (i64^)Mem::alloc(8 * (na + 2));
+        argv[0] = (i64)cmd.c();
+        for i in 0..na { argv[i + 1] = (i64)args[i].c(); }
         argv[na + 1] = 0;
-        int ne = 0;
-        int^ gg1 = (int^)__gl();
+        i64 ne = 0;
+        i64^ gg1 = (i64^)__gl();
         while gg1[0] != 0 && arg(argc() + 1 + ne) != null { ne += 1; }
-        int^ envp = (int^)Mem::alloc(8 * (ne + 1));
-        for i in 0..ne { envp[i] = (int)arg(argc() + 1 + i); }
+        i64^ envp = (i64^)Mem::alloc(8 * (ne + 1));
+        for i in 0..ne { envp[i] = (i64)arg(argc() + 1 + i); }
         envp[ne] = 0;
-        int pid = Sys::fork();
+        i64 pid = Sys::fork();
         if pid == 0 {
             if wfd >= 0 { Sys::dup2(wfd, 1); }
             bool slash = false;
@@ -64,7 +64,7 @@ struct Proc {
                     Option::Some(p): path.append(p.c());
                     Option::None: path.append("/usr/bin:/bin");
                 }
-                int start = 0;
+                i64 start = 0;
                 for i in 0..path.len + 1 {
                     if i == path.len || path[i] == ':' {
                         String full = path.slice(start, i) + "/" + cmd;
@@ -80,27 +80,27 @@ struct Proc {
         return pid;
     }
     // waits for the child; its exit code (128 + the signal if it was killed)
-    static int finish(int pid) {
-        int status = 0;
+    static i64 finish(i64 pid) {
+        i64 status = 0;
         Sys::wait(pid, @status);
-        int sig = status & 127;
+        i64 sig = status & 127;
         if sig != 0 { return 128 + sig; }
         return (status >> 8) & 255;
     }
     // runs a program and waits for it; its exit code (127 if it could not be started)
-    static Result<int, Error> run(String cmd, String[] args) {
-        int pid = Proc::launch(cmd, args, -1);
-        if pid < 0 { return Result<int, Error>::Err(Error::make(ErrorKind::Other, "cannot start " + cmd)); }
-        return Result<int, Error>::Ok(Proc::finish(pid));
+    static Result<i64, Error> run(String cmd, String[] args) {
+        i64 pid = Proc::launch(cmd, args, -1);
+        if pid < 0 { return Result<i64, Error>::Err(Error::make(ErrorKind::Other, "cannot start " + cmd)); }
+        return Result<i64, Error>::Ok(Proc::finish(pid));
     }
     // runs a program, waits for it and returns what it wrote to its output
     static Result<String, Error> output(String cmd, String[] args) {
-        int fds[1];
-        int rc = Sys::pipe(@fds);
+        i64 fds[1];
+        i64 rc = Sys::pipe(@fds);
         if rc < 0 { return Result<String, Error>::Err(Error::make(ErrorKind::Io, "cannot make a pipe")); }
-        int rfd = fds[0] & 4294967295;
-        int wfd = fds[0] >> 32;
-        int pid = Proc::launch(cmd, args, wfd);
+        i64 rfd = fds[0] & 4294967295;
+        i64 wfd = fds[0] >> 32;
+        i64 pid = Proc::launch(cmd, args, wfd);
         Sys::close(wfd);
         if pid < 0 {
             Sys::close(rfd);
@@ -108,7 +108,7 @@ struct Proc {
         }
         String text = "";
         char buf[4096];
-        int n = Sys::read(rfd, @buf, 4095);
+        i64 n = Sys::read(rfd, @buf, 4095);
         while n > 0 {
             buf[n] = 0;
             text.append((char^)@buf);
@@ -124,20 +124,20 @@ struct Proc {
 //   int cols = Term::cols();   if Term::key_pressed() { break; }       (a line + Enter; Ctrl-C always stops a program)
 struct Term {
     // the number of columns (80 if it cannot be asked)
-    static int cols() {
+    static i64 cols() {
         char ws[8];
-        int rc = Sys::window_size(1, @ws);
+        i64 rc = Sys::window_size(1, @ws);
         if rc < 0 { return 80; }
-        int c = (ws[2] & 255) | ((ws[3] & 255) << 8);
+        i64 c = (ws[2] & 255) | ((ws[3] & 255) << 8);
         if c < 10 { return 80; }
         return c;
     }
     // the number of rows (24 if it cannot be asked)
-    static int rows() {
+    static i64 rows() {
         char ws[8];
-        int rc = Sys::window_size(1, @ws);
+        i64 rc = Sys::window_size(1, @ws);
         if rc < 0 { return 24; }
-        int r = (ws[0] & 255) | ((ws[1] & 255) << 8);
+        i64 r = (ws[0] & 255) | ((ws[1] & 255) << 8);
         if r < 5 { return 24; }
         return r;
     }
@@ -149,11 +149,11 @@ struct Term {
         for i in 0..8 { pfd[i] = 0; }
         for i in 0..16 { ts[i] = 0; }
         pfd[4] = 1;                                   // POLLIN on file 0
-        int rc = Sys::ppoll(@pfd, 1, @ts);
+        i64 rc = Sys::ppoll(@pfd, 1, @ts);
         if rc <= 0 { return false; }
         if (pfd[6] & 1) == 0 { return false; }
         char buf[256];
-        int n = Sys::read(0, @buf, 256);
+        i64 n = Sys::read(0, @buf, 256);
         return n > 0;                                 // 0 is the end of the input: no key
     }
 }
@@ -166,7 +166,7 @@ struct Input {
     static String line() {
         String r = "";
         char c[2];
-        int n = Sys::read(0, @c, 1);
+        i64 n = Sys::read(0, @c, 1);
         while n > 0 {
             if c[0] == 10 { return r; }
             c[1] = 0;
@@ -176,21 +176,21 @@ struct Input {
         return r;
     }
     // the line as a whole number (an error when it is not one)
-    static Result<int, Error> number() {
+    static Result<i64, Error> number() {
         String t = Input::line();
-        int i = 0;
+        i64 i = 0;
         bool neg = false;
         if t.len > 0 && t[0] == 45 { neg = true; i = 1; }
-        if i >= t.len { return Result<int, Error>::Err(Error::make(ErrorKind::Parse, "not a whole number: " + t)); }
-        int v = 0;
+        if i >= t.len { return Result<i64, Error>::Err(Error::make(ErrorKind::Parse, "not a whole number: " + t)); }
+        i64 v = 0;
         while i < t.len {
-            int d = t[i] - 48;
-            if d < 0 || d > 9 { return Result<int, Error>::Err(Error::make(ErrorKind::Parse, "not a whole number: " + t)); }
+            i64 d = t[i] - 48;
+            if d < 0 || d > 9 { return Result<i64, Error>::Err(Error::make(ErrorKind::Parse, "not a whole number: " + t)); }
             v = v * 10 + d;
             i += 1;
         }
         if neg { v = 0 - v; }
-        return Result<int, Error>::Ok(v);
+        return Result<i64, Error>::Ok(v);
     }
     // waits for Enter (the rest of the line is thrown away)
     static void enter() {
@@ -204,9 +204,9 @@ struct Input {
         return false;
     }
     // true when the file 0 has something to read within ms milliseconds (ms < 0: wait for ever)
-    static bool ready(int ms) {
-        int pfd[1];
-        int ts[2];
+    static bool ready(i64 ms) {
+        i64 pfd[1];
+        i64 ts[2];
         pfd[0] = 1 << 32;                               // fd 0, events POLLIN (the next 2 bytes), revents 0
         if ms >= 0 {
             ts[0] = ms / 1000;
@@ -218,11 +218,11 @@ struct Input {
     // one key without Enter and without an echo. A letter is its code; Escape is 27; the other keys are 257 up, 258 down, 259 right,
     // 260 left, 261 Home, 262 End, 263 Delete, 264 PageUp, 265 PageDown, 266 Insert, 270 .. 273 F1 .. F4; -1 at the end of the input.
     // When the input is not a terminal it is the next byte.
-    static int key() {
+    static i64 key() {
         return Input::key_wait(0 - 1);
     }
     // the same, but it waits at most ms milliseconds; -2 when no key was pressed in that time
-    static int key_wait(int ms) {
+    static i64 key_wait(i64 ms) {
         char t[64];
         bool tty = Sys::isatty(0) == 0;
         if tty {
@@ -234,10 +234,10 @@ struct Input {
             raw[22] = 0;                                // VTIME: no time limit
             syscall(29, 0, 21506, @raw);                // TCSETS
         }
-        int k = 0 - 2;
+        i64 k = 0 - 2;
         if ms < 0 || Input::ready(ms) {
             char b[4];
-            int n = Sys::read(0, @b, 1);
+            i64 n = Sys::read(0, @b, 1);
             k = 0 - 1;
             if n > 0 {
                 k = b[0] & 255;
@@ -253,7 +253,7 @@ struct Input {
                         else if e[0] == 72 { k = 261; }
                         else if e[0] == 70 { k = 262; }
                         else if e[0] >= 49 && e[0] <= 54 {
-                            int code = e[0] - 48;                    // ESC [ n ~
+                            i64 code = e[0] - 48;                    // ESC [ n ~
                             if Input::ready(40) { Sys::read(0, @e, 1); }
                             if code == 1 { k = 261; }
                             else if code == 2 { k = 266; }
@@ -310,20 +310,20 @@ struct __System {
         return fallback;
     }
     static String[] env_args() { return Env::args(); }
-    static int proc_run(String cmd, String[] args) { return Proc::run(cmd, args).take(); }
-    static Result<int, Error> proc_try_run(String cmd, String[] args) { return Proc::run(cmd, args); }
+    static i64 proc_run(String cmd, String[] args) { return Proc::run(cmd, args).take(); }
+    static Result<i64, Error> proc_try_run(String cmd, String[] args) { return Proc::run(cmd, args); }
     static String proc_output(String cmd, String[] args) { return Proc::output(cmd, args).take(); }
     static Result<String, Error> proc_try_output(String cmd, String[] args) { return Proc::output(cmd, args); }
-    static int term_cols() { return Term::cols(); }
-    static int term_rows() { return Term::rows(); }
+    static i64 term_cols() { return Term::cols(); }
+    static i64 term_rows() { return Term::rows(); }
     static bool term_key_pressed() { return Term::key_pressed(); }
     static String read_line() { return Input::line(); }
-    static int read_number() { return Input::number().take(); }
-    static Result<int, Error> read_try_number() { return Input::number(); }
+    static i64 read_number() { return Input::number().take(); }
+    static Result<i64, Error> read_try_number() { return Input::number(); }
     static void read_enter() { Input::enter(); }
     static bool read_yes(String question) { return Input::yes(question); }
-    static int read_key() { return Input::key(); }
-    static int read_key_timeout(int ms) { return Input::key_wait(ms); }
+    static i64 read_key() { return Input::key(); }
+    static i64 read_key_timeout(i64 ms) { return Input::key_wait(ms); }
     static String read_password() { return Input::password(); }
     static double read_decimal() { return Input::decimal(); }
 }

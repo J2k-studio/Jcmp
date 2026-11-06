@@ -15,22 +15,22 @@
 struct Mlp {
     Graph g;
     Linear[] layers;
-    int[] sizes;
-    int act;
-    int seed;
-    int batch;
+    i64[] sizes;
+    i64 act;
+    i64 seed;
+    i64 batch;
     double decay;
     double clip;
-    int every;
-    int cosine;
+    i64 every;
+    i64 cosine;
     double[] history;
 
-    static int RELU() { return 0; }
-    static int TANH() { return 1; }
-    static int SIGMOID() { return 2; }
-    static int GELU() { return 3; }
+    static i64 RELU() { return 0; }
+    static i64 TANH() { return 1; }
+    static i64 SIGMOID() { return 2; }
+    static i64 GELU() { return 3; }
 
-    static Mlp make(int[] sizes, int act, int seed) {
+    static Mlp make(i64[] sizes, i64 act, i64 seed) {
         Mlp n;
         n.g = Graph::make();
         n.layers = arr(8);
@@ -50,9 +50,9 @@ struct Mlp {
     }
 
     // the output node for the input node x
-    int forward(self, int x) {
-        int h = x;
-        int last = self.layers.len - 1;
+    i64 forward(self, i64 x) {
+        i64 h = x;
+        i64 last = self.layers.len - 1;
         for i in 0..self.layers.len {
             h = self.g.apply(self.layers[i], h);
             if i < last {
@@ -66,78 +66,78 @@ struct Mlp {
     }
 
     Tensor32 predict(self, Tensor32 x) {
-        int xi = self.g.input(x);
-        int o = self.forward(xi);
+        i64 xi = self.g.input(x);
+        i64 o = self.forward(xi);
         Tensor32 out = self.g.value(o).copy();
         self.g.clear();
         return out;
     }
 
     double loss_on(self, Tensor32 x, Tensor32 y) {
-        int xi = self.g.input(x);
-        int o = self.forward(xi);
-        int l = self.g.mse(o, y);
+        i64 xi = self.g.input(x);
+        i64 o = self.forward(xi);
+        i64 l = self.g.mse(o, y);
         double v = (double)self.g.value(l).d[0];
         self.g.clear();
         return v;
     }
 
-    int classify_row(self, Tensor32 x, int row) {
-        int[] one = arr(1);
+    i64 classify_row(self, Tensor32 x, i64 row) {
+        i64[] one = arr(1);
         one.push(row);
         Tensor32 r = x.gather(one);
         Tensor32 p = self.predict(r);
-        int best = 0;
+        i64 best = 0;
         for c in 1..p.cols() { if p.d[c] > p.d[best] { best = c; } }
         return best;
     }
 
-    double accuracy(self, Tensor32 x, int[] labels) {
+    double accuracy(self, Tensor32 x, i64[] labels) {
         Tensor32 p = self.predict(x);
-        int right = 0;
-        int rows = p.rows();
-        int cols = p.cols();
+        i64 right = 0;
+        i64 rows = p.rows();
+        i64 cols = p.cols();
         for r in 0..rows {
-            int best = 0;
+            i64 best = 0;
             for c in 1..cols { if p.d[r * cols + c] > p.d[r * cols + best] { best = c; } }
             if best == labels[r] { right += 1; }
         }
         return (double)right / (double)rows;
     }
 
-    double rate_at(self, int epoch, int epochs, double lr) {
+    double rate_at(self, i64 epoch, i64 epochs, double lr) {
         if self.cosine == 0 { return lr; }
         return Sched::cosine(epoch, epochs, 0, lr, lr * 0.1);
     }
 
     // mean squared error; y has the outputs of every row
-    double fit(self, Tensor32 x, Tensor32 y, int epochs, double lr) { return self.run(x, y, null_labels(), 0, epochs, lr); }
+    double fit(self, Tensor32 x, Tensor32 y, i64 epochs, double lr) { return self.run(x, y, null_labels(), 0, epochs, lr); }
 
     // softmax cross entropy; labels[r] is the class of row r
-    double fit_classes(self, Tensor32 x, int[] labels, int epochs, double lr) { return self.run(x, Tensor32::zeros(1, 1), labels, 1, epochs, lr); }
+    double fit_classes(self, Tensor32 x, i64[] labels, i64 epochs, double lr) { return self.run(x, Tensor32::zeros(1, 1), labels, 1, epochs, lr); }
 
-    double run(self, Tensor32 x, Tensor32 y, int[] labels, int kind, int epochs, double lr) {
-        int rows = x.rows();
+    double run(self, Tensor32 x, Tensor32 y, i64[] labels, i64 kind, i64 epochs, double lr) {
+        i64 rows = x.rows();
         double last = 0.0;
         self.history.clear();
         for e in 0..epochs {
-            int[] order = shuffled(rows, self.seed + e);
+            i64[] order = shuffled(rows, self.seed + e);
             double sum = 0.0;
-            int steps = 0;
-            int at = 0;
+            i64 steps = 0;
+            i64 at = 0;
             while at < rows {
-                int n = self.batch;
+                i64 n = self.batch;
                 if at + n > rows { n = rows - at; }
-                int[] idx = arr(n);
+                i64[] idx = arr(n);
                 for k in 0..n { idx.push(order[at + k]); }
                 Tensor32 xb = x.gather(idx);
-                int xi = self.g.input(xb);
-                int o = self.forward(xi);
-                int l = 0;
+                i64 xi = self.g.input(xb);
+                i64 o = self.forward(xi);
+                i64 l = 0;
                 if kind == 0 {
                     l = self.g.mse(o, y.gather(idx));
                 } else {
-                    int[] lb = arr(n);
+                    i64[] lb = arr(n);
                     for k in 0..n { lb.push(labels[idx[k]]); }
                     l = self.g.softmax_ce(o, lb);
                 }
@@ -169,13 +169,13 @@ struct Mlp {
     }
 
     static Mlp load(String path) {
-        int[] sizes = arr(8);
-        int act = 0;
+        i64[] sizes = arr(8);
+        i64 act = 0;
         switch Fs::read_text(path + ".cfg") {
             Result::Ok(text): {
                 String[] w = text.trim().split(" ");
                 act = w[0].to_int();
-                int n = w[1].to_int();
+                i64 n = w[1].to_int();
                 for i in 0..n { sizes.push(w[2 + i].to_int()); }
             }
             Result::Err(e): { }
@@ -186,4 +186,4 @@ struct Mlp {
     }
 }
 
-int[] null_labels() { int[] none = arr(1); return none; }
+i64[] null_labels() { i64[] none = arr(1); return none; }

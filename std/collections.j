@@ -4,17 +4,17 @@
 struct Map<K, V> {
     K[] keys;
     V[] vals;
-    int[] st;                  // 0 empty, 1 used, 2 deleted
-    int len;                   // how many keys
-    int used;                  // used + deleted places
+    i64[] st;                  // 0 empty, 1 used, 2 deleted
+    i64 len;                   // how many keys
+    i64 used;                  // used + deleted places
 
     // the place of key k, or -1
-    int find(self, K k) {
+    i64 find(self, K k) {
         if self.st == null { return -1; }
-        int mask = self.st.len - 1;
-        int i = __hash(k) & mask;
+        i64 mask = self.st.len - 1;
+        i64 i = __hash(k) & mask;
         while true {
-            int s = self.st[i];
+            i64 s = self.st[i];
             if s == 0 { return -1; }
             if s == 1 && self.keys[i] == k { return i; }
             i = (i + 1) & mask;
@@ -26,24 +26,24 @@ struct Map<K, V> {
     }
     // the value of key k (throws "key not found")
     V get(self, K k) {
-        int i = self.find(k);
+        i64 i = self.find(k);
         if i < 0 { throw "key not found"; }
         return self.vals[i];
     }
     // the value of key k as an Option: Some(value) or None
     Option<V> try_get(self, K k) {
-        int i = self.find(k);
+        i64 i = self.find(k);
         if i < 0 { return Option<V>::None; }
         return Option<V>::Some(self.vals[i]);
     }
     void put(self, K k, V v) {
         if self.st == null { self.rehash(8); }
         if (self.used + 1) * 4 > self.st.len * 3 { self.rehash(self.st.len * 2); }
-        int mask = self.st.len - 1;
-        int i = __hash(k) & mask;
-        int tomb = -1;
+        i64 mask = self.st.len - 1;
+        i64 i = __hash(k) & mask;
+        i64 tomb = -1;
         while true {
-            int s = self.st[i];
+            i64 s = self.st[i];
             if s == 0 { break; }
             if s == 2 && tomb < 0 { tomb = i; }
             if s == 1 && self.keys[i] == k {
@@ -64,16 +64,16 @@ struct Map<K, V> {
     }
     // true if key k was there
     bool remove(self, K k) {
-        int i = self.find(k);
+        i64 i = self.find(k);
         if i < 0 { return false; }
         self.st[i] = 2;
         self.len -= 1;
         return true;
     }
-    void rehash(self, int cap) {
+    void rehash(self, i64 cap) {
         K[] ok = self.keys;
         V[] ov = self.vals;
-        int[] os = self.st;
+        i64[] os = self.st;
         self.keys = arr(cap);
         self.keys.resize(cap);
         self.vals = arr(cap);
@@ -121,16 +121,16 @@ struct Map<K, V> {
 
 struct Set<T> {
     T[] items;
-    int[] st;
-    int len;
-    int used;
+    i64[] st;
+    i64 len;
+    i64 used;
 
-    int find(self, T x) {
+    i64 find(self, T x) {
         if self.st == null { return -1; }
-        int mask = self.st.len - 1;
-        int i = __hash(x) & mask;
+        i64 mask = self.st.len - 1;
+        i64 i = __hash(x) & mask;
         while true {
-            int s = self.st[i];
+            i64 s = self.st[i];
             if s == 0 { return -1; }
             if s == 1 && self.items[i] == x { return i; }
             i = (i + 1) & mask;
@@ -145,8 +145,8 @@ struct Set<T> {
         if self.find(x) >= 0 { return false; }
         if self.st == null { self.rehash(8); }
         if (self.used + 1) * 4 > self.st.len * 3 { self.rehash(self.st.len * 2); }
-        int mask = self.st.len - 1;
-        int i = __hash(x) & mask;
+        i64 mask = self.st.len - 1;
+        i64 i = __hash(x) & mask;
         while self.st[i] == 1 { i = (i + 1) & mask; }
         if self.st[i] == 0 { self.used += 1; }
         self.items[i] = x;
@@ -155,15 +155,15 @@ struct Set<T> {
         return true;
     }
     bool remove(self, T x) {
-        int i = self.find(x);
+        i64 i = self.find(x);
         if i < 0 { return false; }
         self.st[i] = 2;
         self.len -= 1;
         return true;
     }
-    void rehash(self, int cap) {
+    void rehash(self, i64 cap) {
         T[] oi = self.items;
-        int[] os = self.st;
+        i64[] os = self.st;
         self.items = arr(cap);
         self.items.resize(cap);
         self.st = arr(cap);
@@ -200,21 +200,21 @@ struct Set<T> {
 // buffer of the same length) and takes n log n steps.
 
 void sort_by<T>(T[] a, bool(T, T)^ less) {
-    int n = a.len;
+    i64 n = a.len;
     if n < 2 { return; }
     T[] tmp = arr(n);
     tmp.resize(n);
-    int width = 1;
+    i64 width = 1;
     while width < n {
-        int lo = 0;
+        i64 lo = 0;
         while lo < n {
-            int mid = lo + width;
+            i64 mid = lo + width;
             if mid > n { mid = n; }
-            int hi = lo + width * 2;
+            i64 hi = lo + width * 2;
             if hi > n { hi = n; }
-            int i = lo;
-            int j = mid;
-            int k = lo;
+            i64 i = lo;
+            i64 j = mid;
+            i64 k = lo;
             while i < mid && j < hi {
                 if less(a[j], a[i]) {
                     tmp[k] = a[j];
@@ -236,30 +236,30 @@ void sort_by<T>(T[] a, bool(T, T)^ less) {
 }
 
 // the first place i of the sorted array a where a[i] >= x (a.len when there is none)
-int lower_bound<T>(T[] a, T x) {
-    int lo = 0;
-    int hi = a.len;
+i64 lower_bound<T>(T[] a, T x) {
+    i64 lo = 0;
+    i64 hi = a.len;
     while lo < hi {
-        int mid = lo + (hi - lo) / 2;
+        i64 mid = lo + (hi - lo) / 2;
         if a[mid] < x { lo = mid + 1; } else { hi = mid; }
     }
     return lo;
 }
 
 // the first place i where a[i] > x
-int upper_bound<T>(T[] a, T x) {
-    int lo = 0;
-    int hi = a.len;
+i64 upper_bound<T>(T[] a, T x) {
+    i64 lo = 0;
+    i64 hi = a.len;
     while lo < hi {
-        int mid = lo + (hi - lo) / 2;
+        i64 mid = lo + (hi - lo) / 2;
         if a[mid] <= x { lo = mid + 1; } else { hi = mid; }
     }
     return lo;
 }
 
 // the place of x in the sorted array a, or -1
-int binary_search<T>(T[] a, T x) {
-    int i = lower_bound<T>(a, x);
+i64 binary_search<T>(T[] a, T x) {
+    i64 i = lower_bound<T>(a, x);
     if i < a.len && a[i] == x { return i; }
     return -1;
 }
@@ -270,12 +270,12 @@ int binary_search<T>(T[] a, T x) {
 
 struct Queue<T> {
     T[] items;
-    int head;
-    int len;
+    i64 head;
+    i64 len;
 
     void push(self, T x) {
         if self.items == null { self.items = arr(8); self.items.resize(8); }
-        int cap = self.items.len;
+        i64 cap = self.items.len;
         if self.len == cap {
             T[] bigger = arr(cap * 2);
             bigger.resize(cap * 2);
@@ -308,12 +308,12 @@ struct Queue<T> {
 
 struct Deque<T> {
     T[] items;
-    int head;
-    int len;
+    i64 head;
+    i64 len;
 
     void grow(self) {
         if self.items == null { self.items = arr(8); self.items.resize(8); }
-        int cap = self.items.len;
+        i64 cap = self.items.len;
         if self.len == cap {
             T[] bigger = arr(cap * 2);
             bigger.resize(cap * 2);
@@ -325,13 +325,13 @@ struct Deque<T> {
     }
     void push_back(self, T x) {
         self.grow();
-        int cap = self.items.len;
+        i64 cap = self.items.len;
         self.items[(self.head + self.len) % cap] = x;
         self.len += 1;
     }
     void push_front(self, T x) {
         self.grow();
-        int cap = self.items.len;
+        i64 cap = self.items.len;
         self.head = (self.head + cap - 1) % cap;
         self.items[self.head] = x;
         self.len += 1;
@@ -357,7 +357,7 @@ struct Deque<T> {
         return self.items[(self.head + self.len) % self.items.len];
     }
     // the element number i from the front
-    T get(self, int i) {
+    T get(self, i64 i) {
         if i < 0 || i >= self.len { throw "index out of range"; }
         return self.items[(self.head + i) % self.items.len];
     }
@@ -370,15 +370,15 @@ struct Deque<T> {
 
 struct Heap<T> {
     T[] items;
-    int len;
+    i64 len;
 
     void push(self, T x) {
         if self.items == null { self.items = arr(8); }
         self.items.push(x);
-        int i = self.len;
+        i64 i = self.len;
         self.len += 1;
         while i > 0 {
-            int p = (i - 1) / 2;
+            i64 p = (i - 1) / 2;
             if self.items[i] < self.items[p] {
                 T t = self.items[i];
                 self.items[i] = self.items[p];
@@ -399,11 +399,11 @@ struct Heap<T> {
         self.len -= 1;
         self.items[0] = self.items[self.len];
         self.items.pop();
-        int i = 0;
+        i64 i = 0;
         bool go = true;
         while go {
-            int l = i * 2 + 1;
-            int m = i;
+            i64 l = i * 2 + 1;
+            i64 m = i;
             if l < self.len && self.items[l] < self.items[m] { m = l; }
             if l + 1 < self.len && self.items[l + 1] < self.items[m] { m = l + 1; }
             if m == i {
@@ -431,19 +431,19 @@ struct Heap<T> {
 
 struct Span<T> {
     T[] base;
-    int off;
-    int len;
+    i64 off;
+    i64 len;
 
-    T get(self, int i) {
+    T get(self, i64 i) {
         if i < 0 || i >= self.len { throw "span index out of range"; }
         return self.base[self.off + i];
     }
-    void set(self, int i, T x) {
+    void set(self, i64 i, T x) {
         if i < 0 || i >= self.len { throw "span index out of range"; }
         self.base[self.off + i] = x;
     }
     // the part lo .. hi of this span (a view of the same array)
-    Span<T> sub(self, int lo, int hi) {
+    Span<T> sub(self, i64 lo, i64 hi) {
         if lo < 0 || hi > self.len || lo > hi { throw "span range out of range"; }
         Span<T> r = {self.base, self.off + lo, hi - lo};
         return r;
@@ -456,7 +456,7 @@ struct Span<T> {
     }
 }
 
-Span<T> span<T>(T[] a, int lo, int hi) {
+Span<T> span<T>(T[] a, i64 lo, i64 hi) {
     if lo < 0 || hi > a.len || lo > hi { throw "span range out of range"; }
     Span<T> r = {a, lo, hi - lo};
     return r;

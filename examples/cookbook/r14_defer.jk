@@ -2,12 +2,12 @@
 #import <stdlib>
 using stdlib;
 
-int parse(String s) {
+i64 parse(String s) {
     if s.len == 0 { throw "empty text"; }
     return s.to_int();
 }
 
-int main() {
+i64 main() {
     String[] inputs = arr(2);
     inputs.push("41"); inputs.push("");
     for i in 0..inputs.len {

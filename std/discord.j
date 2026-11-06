@@ -33,8 +33,8 @@ struct DcMessages {
     DcMessage[] list;
     String last;                       // the id of the newest message in the list ("" when it is empty)
 
-    int count(self) { return self.list.len; }
-    DcMessage get(self, int i) { return self.list[i]; }
+    i64 count(self) { return self.list.len; }
+    DcMessage get(self, i64 i) { return self.list[i]; }
 }
 
 struct Discord {
@@ -66,7 +66,7 @@ struct Discord {
                 Result<JsonDoc, Error> pj = Json::parse(r.body);
                 switch pj {
                     Result::Ok(d): {
-                        int mn = d.get(0, "message");
+                        i64 mn = d.get(0, "message");
                         if mn >= 0 { why = "Discord: " + d.text(mn) + " (HTTP " + str(r.status) + ")"; }
                     }
                     Result::Err(e2): { }
@@ -79,18 +79,18 @@ struct Discord {
     }
 
     // a message of text to a channel
-    Result<int, Error> send(self, String channel, String text) {
+    Result<i64, Error> send(self, String channel, String text) {
         String body = "{\"content\":" + Json::quote(text) + "}";
         Result<String, Error> r = self.call("POST", "/channels/" + channel + "/messages", body);
         switch r {
-            Result::Ok(t): { return Result<int, Error>::Ok(1); }
-            Result::Err(e): { return Result<int, Error>::Err(Error::make(e.kind, e.message)); }
+            Result::Ok(t): { return Result<i64, Error>::Ok(1); }
+            Result::Err(e): { return Result<i64, Error>::Err(Error::make(e.kind, e.message)); }
         }
-        return Result<int, Error>::Ok(1);
+        return Result<i64, Error>::Ok(1);
     }
 
     // the messages of a channel after the message `after` (text; "" for the newest ones), at most `limit` (1 to 100), the oldest first
-    Result<DcMessages, Error> messages(self, String channel, String after, int limit) {
+    Result<DcMessages, Error> messages(self, String channel, String after, i64 limit) {
         String path = "/channels/" + channel + "/messages?limit=" + str(limit);
         if after.len > 0 { path = path + "&after=" + after; }
         Result<String, Error> r = self.call("GET", path, "");
@@ -102,24 +102,24 @@ struct Discord {
                         DcMessages ms;
                         ms.list = arr(4);
                         ms.last = after;
-                        int n = d.len(0);
-                        int i = n - 1;
+                        i64 n = d.len(0);
+                        i64 i = n - 1;
                         while i >= 0 {                                      // Discord gives the newest first: the list is turned over
-                            int node = d.at(0, i);
+                            i64 node = d.at(0, i);
                             DcMessage m;
                             m.id = "";
-                            int idn = d.get(node, "id");
+                            i64 idn = d.get(node, "id");
                             if idn >= 0 { m.id = d.text(idn); }
                             m.text = "";
-                            int tn = d.get(node, "content");
+                            i64 tn = d.get(node, "content");
                             if tn >= 0 { m.text = d.text(tn); }
                             m.author = "";
                             m.by_bot = false;
-                            int an = d.get(node, "author");
+                            i64 an = d.get(node, "author");
                             if an >= 0 {
-                                int un = d.get(an, "username");
+                                i64 un = d.get(an, "username");
                                 if un >= 0 { m.author = d.text(un); }
-                                int bn = d.get(an, "bot");
+                                i64 bn = d.get(an, "bot");
                                 if bn >= 0 { m.by_bot = d.boolean(bn); }
                             }
                             ms.list.push(m);
@@ -153,10 +153,10 @@ struct DcEvent {
 struct DiscordGateway {
     WebSocket ws;
     String token;
-    int intents;
-    int interval;                      // ms between heartbeats (0 until Discord says hello)
-    int next_beat;                     // the time (ms) of the next heartbeat
-    int seq;                           // the last sequence number seen (-1: none)
+    i64 intents;
+    i64 interval;                      // ms between heartbeats (0 until Discord says hello)
+    i64 next_beat;                     // the time (ms) of the next heartbeat
+    i64 seq;                           // the last sequence number seen (-1: none)
     bool identified;
 
     static DcEvent event(String kind) {
@@ -179,16 +179,16 @@ struct DiscordGateway {
     }
 
     // the next event, waiting at most wait_ms (the heartbeat is sent when it is due)
-    DcEvent next(self, int wait_ms) {
-        int deadline = Time::now_ms() + wait_ms;
+    DcEvent next(self, i64 wait_ms) {
+        i64 deadline = Time::now_ms() + wait_ms;
         while true {
-            int now = Time::now_ms();
+            i64 now = Time::now_ms();
             if self.interval > 0 && now >= self.next_beat { self.beat(); }
-            int left = deadline - now;
+            i64 left = deadline - now;
             if left < 0 { left = 0; }
-            int slice = left;
+            i64 slice = left;
             if self.interval > 0 {
-                int to_beat = self.next_beat - now;
+                i64 to_beat = self.next_beat - now;
                 if to_beat < 0 { to_beat = 0; }
                 if to_beat < slice { slice = to_beat; }
             }
@@ -198,24 +198,24 @@ struct DiscordGateway {
                 if Time::now_ms() >= deadline { return DiscordGateway::event(""); }
                 continue;
             }
-            int op = 0 - 1;
+            i64 op = 0 - 1;
             String t = "";
             String body = "";
-            int sq = 0 - 1;
-            int hb = 0;
+            i64 sq = 0 - 1;
+            i64 hb = 0;
             Result<JsonDoc, Error> pj = Json::parse(m.text);
             switch pj {
                 Result::Ok(d): {
-                    int on = d.get(0, "op");
+                    i64 on = d.get(0, "op");
                     if on >= 0 { op = d.integer(on); }
-                    int tn = d.get(0, "t");
+                    i64 tn = d.get(0, "t");
                     if tn >= 0 && !d.is_null(tn) { t = d.text(tn) + ""; }
-                    int sn = d.get(0, "s");
+                    i64 sn = d.get(0, "s");
                     if sn >= 0 && !d.is_null(sn) { sq = d.integer(sn); }
-                    int dn = d.get(0, "d");
+                    i64 dn = d.get(0, "d");
                     if dn >= 0 {
                         body = d.dump(dn) + "";
-                        int hn = d.get(dn, "heartbeat_interval");
+                        i64 hn = d.get(dn, "heartbeat_interval");
                         if hn >= 0 { hb = d.integer(hn); }
                     }
                 }
@@ -242,17 +242,17 @@ struct DiscordGateway {
                 Result<JsonDoc, Error> pm = Json::parse(body);
                 switch pm {
                     Result::Ok(d2): {
-                        int idn = d2.get(0, "id");
+                        i64 idn = d2.get(0, "id");
                         if idn >= 0 { ev.id = d2.text(idn) + ""; }
-                        int chn = d2.get(0, "channel_id");
+                        i64 chn = d2.get(0, "channel_id");
                         if chn >= 0 { ev.channel = d2.text(chn) + ""; }
-                        int cn = d2.get(0, "content");
+                        i64 cn = d2.get(0, "content");
                         if cn >= 0 { ev.text = d2.text(cn) + ""; }
-                        int an = d2.get(0, "author");
+                        i64 an = d2.get(0, "author");
                         if an >= 0 {
-                            int un = d2.get(an, "username");
+                            i64 un = d2.get(an, "username");
                             if un >= 0 { ev.author = d2.text(un) + ""; }
-                            int bn = d2.get(an, "bot");
+                            i64 bn = d2.get(an, "bot");
                             if bn >= 0 { ev.by_bot = d2.boolean(bn); }
                         }
                     }
@@ -269,9 +269,9 @@ struct DiscordGateway {
 
 struct Gw {
     // servers (1), server messages (512), direct messages (4096) and the text of messages (32768)
-    static int intents() { return 1 + 512 + 4096 + 32768; }
+    static i64 intents() { return 1 + 512 + 4096 + 32768; }
 
-    static Result<DiscordGateway, Error> connect_at(String url, String token, int intents) {
+    static Result<DiscordGateway, Error> connect_at(String url, String token, i64 intents) {
         Result<WebSocket, Error> r = Ws::connect(url, "");
         switch r {
             Result::Ok(w): {
@@ -290,7 +290,7 @@ struct Gw {
         return Result<DiscordGateway, Error>::Err(Error::make(ErrorKind::Io, "connect failed"));
     }
 
-    static Result<DiscordGateway, Error> connect(String token, int intents) {
+    static Result<DiscordGateway, Error> connect(String token, i64 intents) {
         return Gw::connect_at("wss://gateway.discord.gg/?v=10&encoding=json", token, intents);
     }
 }

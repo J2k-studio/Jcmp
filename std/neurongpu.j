@@ -14,16 +14,16 @@ GpuBuffer ng_ga;
 GpuBuffer ng_gb;
 GpuBuffer ng_gc;
 GpuBuffer ng_gd;
-int ng_ready;
-int ng_cap_c;                 // the numbers the buffer of the result holds now
+i64 ng_ready;
+i64 ng_cap_c;                 // the numbers the buffer of the result holds now
 
-int ng_matmul(float^ a, float^ b, float^ c, int m, int k, int n) {
+i64 ng_matmul(float^ a, float^ b, float^ c, i64 m, i64 k, i64 n) {
     if ng_ready != 1 { return 0; }
     Floats fa;
-    fa.ptr = (int)a;
+    fa.ptr = (i64)a;
     fa.n = m * k;
     Floats fb;
-    fb.ptr = (int)b;
+    fb.ptr = (i64)b;
     fb.n = k * n;
     Floats fd = Floats::make(4);
     fd.set(0, (float)m);
@@ -36,7 +36,7 @@ int ng_matmul(float^ a, float^ b, float^ c, int m, int k, int n) {
     Mem::free((void^)fd.ptr);
     if m * n > ng_cap_c {
         Floats fc;
-        fc.ptr = (int)c;
+        fc.ptr = (i64)c;
         fc.n = m * n;
         ng_gc.write(fc);
         ng_cap_c = m * n;
@@ -44,7 +44,7 @@ int ng_matmul(float^ a, float^ b, float^ c, int m, int k, int n) {
     ng_k.run((n + 15) / 16, (m + 15) / 16, 1);
     ng_gl.bind_buffer(37074, ng_gc.id);
     Native::call1(ng_gl.fn("glMemoryBarrier"), 0xffffffff);
-    int mapped = Native::call4(ng_gl.fn("glMapBufferRange"), 37074, 0, m * n * 4, 1);
+    i64 mapped = Native::call4(ng_gl.fn("glMapBufferRange"), 37074, 0, m * n * 4, 1);
     if mapped == 0 { return 0; }
     float^ src = (float^)mapped;
     for i in 0..m * n { c[i] = src[i]; }
@@ -53,7 +53,7 @@ int ng_matmul(float^ a, float^ b, float^ c, int m, int k, int n) {
 }
 
 struct NeuronGpu {
-    static bool enable(int min_work) {
+    static bool enable(i64 min_work) {
         if ng_ready != 1 {
             ng_gl = Gl::open(64, 64, 3, 1);
             if !ng_gl.ok { return false; }

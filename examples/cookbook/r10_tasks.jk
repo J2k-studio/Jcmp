@@ -4,23 +4,23 @@
 #import <tasks>
 using stdlib;
 
-int square(void^ arg) {
-    int n = (int)arg;
+i64 square(void^ arg) {
+    i64 n = (i64)arg;
     return n * n;
 }
 
-int main() {
+i64 main() {
     Task a = Task::run(square, (void^)12);
     Task b = Task::run(square, (void^)7);
     jout << a.wait() + b.wait() << "\n";
-    Channel<int> c = Channel<int>::make();
+    Channel<i64> c = Channel<i64>::make();
     c.send(5);
     c.send(6);
     c.close();
-    int sum = 0;
+    i64 sum = 0;
     bool got = true;
     while got {
-        int v = c.try_receive(@got);
+        i64 v = c.try_receive(@got);
         if got { sum += v; }
     }
     jout << sum << "\n";

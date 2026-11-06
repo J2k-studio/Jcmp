@@ -9,14 +9,14 @@
 // own stack, so that memory stays until the program ends.
 
 struct Mutex {
-    int state;                         // 0 free, 1 taken, 2 taken and somebody waits
+    i64 state;                         // 0 free, 1 taken, 2 taken and somebody waits
 
     void init(self) {
         self.state = 0;
     }
     void lock(self) {
-        int^ w = @self.state;
-        int c = __cas(w, 0, 1);
+        i64^ w = @self.state;
+        i64 c = __cas(w, 0, 1);
         if c == 0 { return; }
         if c != 2 { c = __xchg(w, 2); }
         while c != 0 {
@@ -25,36 +25,36 @@ struct Mutex {
         }
     }
     void unlock(self) {
-        int^ w = @self.state;
-        int old = __xchg(w, 0);
+        i64^ w = @self.state;
+        i64 old = __xchg(w, 0);
         if old == 2 { Sys::futex(w, 129, 1); }     // futex wake: one waiter
     }
     // true if the lock was free and is now yours
     bool try_lock(self) {
-        int^ w = @self.state;
+        i64^ w = @self.state;
         return __cas(w, 0, 1) == 0;
     }
 }
 
 struct Thread {
-    int^ cb;                           // [0] thread id (the kernel makes it 0 when the thread ends), [1] stack, [2] size, [3] detached
+    i64^ cb;                           // [0] thread id (the kernel makes it 0 when the thread ends), [1] stack, [2] size, [3] detached
 
     // start function(arg) in a new thread
     static Thread create(void(void^)^ f, void^ arg) {
-        int size = 1048576;
+        i64 size = 1048576;
         void^ stack = Sys::mmap(size);                         // the stack (zeroed)
         if stack == null { throw "cannot create the thread: no memory for its stack"; }
-        int base = (int)stack;
-        int^ cb = (int^)Mem::alloc(32);
-        if (int)cb == 0 { throw "cannot create the thread: out of memory"; }
+        i64 base = (i64)stack;
+        i64^ cb = (i64^)Mem::alloc(32);
+        if (i64)cb == 0 { throw "cannot create the thread: out of memory"; }
         cb[0] = 0;                                             // the kernel writes the thread id into the low 4 bytes and clears them at the end: the rest must be 0
         cb[1] = base;
         cb[2] = size;
         cb[3] = 0;
-        int block = base + size - 1024;                        // the thread's own block (try/catch state) at the top
+        i64 block = base + size - 1024;                        // the thread's own block (try/catch state) at the top
         std_mt = 1;                                            // from now on the heap is locked
         __out_unbuffer();
-        int tid = __thread_start(f, arg, block, (int)cb, block);
+        i64 tid = __thread_start(f, arg, block, (i64)cb, block);
         if tid < 0 {
             Sys::munmap((void^)base, size);
             Mem::free(cb);
@@ -66,8 +66,8 @@ struct Thread {
     }
     // wait until the thread has ended
     void join(self) {
-        int^ cb = self.cb;
-        if (int)cb == 0 { throw "join: this is not a running or finished thread"; }
+        i64^ cb = self.cb;
+        if (i64)cb == 0 { throw "join: this is not a running or finished thread"; }
         if cb[3] != 0 { throw "cannot join a detached thread"; }
         while cb[0] != 0 {
             Sys::futex(cb, 0, cb[0]);                // futex wait (not the private kind: the kernel wakes the shared one at thread exit)
@@ -78,19 +78,19 @@ struct Thread {
     }
     // let the thread run on its own; it cannot be joined any more
     void detach(self) {
-        int^ cb = self.cb;
-        if (int)cb == 0 { throw "detach: this is not a thread"; }
+        i64^ cb = self.cb;
+        if (i64)cb == 0 { throw "detach: this is not a thread"; }
         if cb[3] != 0 { throw "the thread is already detached"; }
         cb[3] = 1;
     }
     bool is_running(self) {
-        int^ cb = self.cb;
-        if (int)cb == 0 { return false; }
+        i64^ cb = self.cb;
+        if (i64)cb == 0 { return false; }
         return cb[0] != 0;
     }
     // pause the calling thread for ms milliseconds
-    static void sleep(int ms) {
-        int ts[2];
+    static void sleep(i64 ms) {
+        i64 ts[2];
         ts[0] = ms / 1000;
         ts[1] = ms % 1000 * 1000000;
         Sys::nanosleep(@ts);
@@ -98,7 +98,7 @@ struct Thread {
     static void yield() {
         Sys::yield();
     }
-    static int id() {
+    static i64 id() {
         return Sys::gettid();
     }
 }

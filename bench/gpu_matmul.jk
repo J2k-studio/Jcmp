@@ -3,13 +3,13 @@
 #import <compute>
 // the Mali-G76 against the CPU: n x n times n x n on the GPU (a compute shader, tiles of 16 x 16), the numbers stay on the chip between runs
 //   jcmp -dyn bench/gpu_matmul.jk -o gm && ./gm
-int main() {
+i64 main() {
     Gl gl = Gl::open(64, 64, 3, 1);
     if !gl.ok { jout << "no GL: " << gl.log << "\n"; return 1; }
-    int[] sizes = arr(4);
+    i64[] sizes = arr(4);
     sizes.push(128); sizes.push(256); sizes.push(512); sizes.push(1024);
     for q in 0..4 {
-        int n = sizes[q];
+        i64 n = sizes[q];
         String src = "#version 310 es\nprecision highp float;\nlayout(local_size_x = 16, local_size_y = 16) in;\n";
         src = src + "layout(std430, binding = 0) readonly buffer A { float a[]; };\nlayout(std430, binding = 1) readonly buffer B { float b[]; };\nlayout(std430, binding = 2) buffer C { float c[]; };\n";
         src = src + "shared float ta[16][16];\nshared float tb[16][16];\nconst uint N = " + str(n) + "u;\n";
@@ -27,12 +27,12 @@ int main() {
         GpuBuffer gc = GpuBuffer::make(gl, 2, fc);
         k.run(n / 16, n / 16, 1);
         Floats warm = gc.read();                              // the first run and its compile are not counted
-        int reps = 3;
+        i64 reps = 3;
         if n <= 256 { reps = 20; }
-        int t0 = Time::now_ms();
+        i64 t0 = Time::now_ms();
         for r in 0..reps { k.run(n / 16, n / 16, 1); }
         Floats out = gc.read();                               // reading waits for the GPU to finish
-        int t1 = Time::now_ms();
+        i64 t1 = Time::now_ms();
         double ms = (double)(t1 - t0) / (double)reps;
         double gf = 2.0 * (double)n * (double)n * (double)n / (ms * 1000000.0);
         // one number checked against the CPU

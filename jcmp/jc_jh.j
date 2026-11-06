@@ -7,11 +7,11 @@
 char jh_in[4194304];
 char jh_out[2097152];
 char jh_pend[262144];
-int jh_n;                      // the length of the source
-int jh_o;                      // the length of the interface
-int jh_p;                      // the length of the text that waits (pend)
+i64 jh_n;                      // the length of the source
+i64 jh_o;                      // the length of the interface
+i64 jh_p;                      // the length of the text that waits (pend)
 
-void jh_put(int c) {
+void jh_put(i64 c) {
     if jh_o < 2097000 {
         jh_out[jh_o] = c;
         jh_o += 1;
@@ -19,14 +19,14 @@ void jh_put(int c) {
 }
 
 void jh_puts(char^ t) {
-    int k = 0;
+    i64 k = 0;
     while t[k] != 0 {
         jh_put(t[k]);
         k += 1;
     }
 }
 
-void jh_pend_add(int c) {
+void jh_pend_add(i64 c) {
     if jh_p < 262000 {
         jh_pend[jh_p] = c;
         jh_p += 1;
@@ -36,21 +36,21 @@ void jh_pend_add(int c) {
 // the text that waits goes to the interface; extra is added after it (";" for a function whose body is left out)
 void jh_flush(char^ extra) {
     // the end of the text: no blanks
-    int e = jh_p;
+    i64 e = jh_p;
     while e > 0 && (jh_pend[e - 1] == ' ' || jh_pend[e - 1] == 9 || jh_pend[e - 1] == 10 || jh_pend[e - 1] == 13) { e -= 1; }
     // the start: at most one empty line before it
-    int s = 0;
-    int nl = 0;
+    i64 s = 0;
+    i64 nl = 0;
     while s < e && (jh_pend[s] == ' ' || jh_pend[s] == 9 || jh_pend[s] == 10 || jh_pend[s] == 13) {
         if jh_pend[s] == 10 { nl += 1; }
         s += 1;
     }
     // keep the indentation of the first line
-    int back = s;
+    i64 back = s;
     while back > 0 && jh_pend[back - 1] != 10 { back -= 1; }
     if e > s {
         if nl > 1 && jh_o > 0 { jh_put(10); }
-        int k = back;
+        i64 k = back;
         while k < e {
             jh_put(jh_pend[k]);
             k += 1;
@@ -63,9 +63,9 @@ void jh_flush(char^ extra) {
 
 // the first word of the waiting text, after blanks and comments: is it struct / enum / union / class ?
 bool jh_pend_is_type() {
-    int k = 0;
+    i64 k = 0;
     while k < jh_p {
-        int c = jh_pend[k];
+        i64 c = jh_pend[k];
         if c == ' ' || c == 9 || c == 10 || c == 13 { k += 1; }
         else if c == '/' && k + 1 < jh_p && jh_pend[k + 1] == '/' {
             while k < jh_p && jh_pend[k] != 10 { k += 1; }
@@ -76,7 +76,7 @@ bool jh_pend_is_type() {
         } else { break; }
     }
     char w[12];
-    int n = 0;
+    i64 n = 0;
     while k < jh_p && n < 10 && ((jh_pend[k] >= 'a' && jh_pend[k] <= 'z') || (jh_pend[k] >= 'A' && jh_pend[k] <= 'Z')) {
         w[n] = jh_pend[k];
         n += 1;
@@ -87,10 +87,10 @@ bool jh_pend_is_type() {
 }
 
 // i is at a { : the position after the matching }
-int jh_skip_body(int i) {
-    int depth = 0;
+i64 jh_skip_body(i64 i) {
+    i64 depth = 0;
     while i < jh_n {
-        int c = jh_in[i];
+        i64 c = jh_in[i];
         if c == '"' {
             i += 1;
             while i < jh_n && jh_in[i] != '"' {
@@ -121,9 +121,9 @@ int jh_skip_body(int i) {
     return i;
 }
 
-int jh_hash(char^ b, int n) {
-    int h = 1469598103934665603;
-    int i = 0;
+i64 jh_hash(char^ b, i64 n) {
+    i64 h = 1469598103934665603;
+    i64 i = 0;
     while i < n {
         h = (h xor (b[i] & 255)) * 1099511628211;
         i += 1;
@@ -135,11 +135,11 @@ int jh_hash(char^ b, int n) {
 void jh_make() {
     jh_o = 0;
     jh_p = 0;
-    int depth = 0;
-    int i = 0;
+    i64 depth = 0;
+    i64 i = 0;
     bool line_start = true;
     while i < jh_n {
-        int c = jh_in[i];
+        i64 c = jh_in[i];
         // a directive at the start of a line, at the top: copied as it is
         if c == '#' && depth == 0 && line_start && jh_p == 0 {
             while i < jh_n && jh_in[i] != 10 {
@@ -171,7 +171,7 @@ void jh_make() {
             continue;
         }
         if c == '"' || c == 39 {
-            int q = c;
+            i64 q = c;
             jh_pend_add(c);
             i += 1;
             while i < jh_n && jh_in[i] != q {
@@ -224,8 +224,8 @@ void jh_run(char^ path, char^ out) {
     if jh_n < 0 { die_file(path); }
     jh_in[jh_n] = 0;
     jh_make();
-    int src = jh_hash(@jh_in, jh_n);
-    int itf = jh_hash(@jh_out, jh_o);
+    i64 src = jh_hash(@jh_in, jh_n);
+    i64 itf = jh_hash(@jh_out, jh_o);
     char head[200];
     head[0] = 0;
     append_text(@head, "// jh 1  compiler ");
@@ -244,11 +244,11 @@ void jh_run(char^ path, char^ out) {
         write_out(@head);
         syscall(64, 1, @jh_out, jh_o);
     } else {
-        int hl = str_len(@head);
-        int k = 0;
+        i64 hl = str_len(@head);
+        i64 k = 0;
         while k < jh_o && hl + k < 190 { k += 1; }
         // the head and the text are written into one file
-        int fd = syscall(56, -100, out, 577, 420);
+        i64 fd = syscall(56, -100, out, 577, 420);
         if fd < 0 { die_file(out); }
         syscall(64, fd, @head, hl);
         syscall(64, fd, @jh_out, jh_o);

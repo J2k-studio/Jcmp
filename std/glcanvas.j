@@ -11,29 +11,29 @@
 
 struct GlCanvas impl Canvas2d {
     Gl gl;
-    int prog;
-    int vao;
-    int vbo;
-    int loc_size;
+    i64 prog;
+    i64 vao;
+    i64 vbo;
+    i64 loc_size;
     Floats buf;
-    int n;                          // floats in the batch
-    int draws;                      // draw calls made by the last end()
+    i64 n;                          // floats in the batch
+    i64 draws;                      // draw calls made by the last end()
     double w;
     double h;
     bool ready;
-    int clear_color;
+    i64 clear_color;
     bool wants_clear;
     bool es3;                       // false: OpenGL ES 2 (no vertex arrays, GLSL 100)
-    int prog_tex;                   // the shader of the pictures
-    int vbo_tex;
-    int loc_tex_size;
-    int loc_tex_tint;
-    int loc_tex_sampler;
-    int[] pics;                     // picture number -> GL texture
-    int a_pos;                      // the places of the attributes (ES 2 gives them out itself)
-    int a_col;
-    int t_pos;
-    int t_uv;
+    i64 prog_tex;                   // the shader of the pictures
+    i64 vbo_tex;
+    i64 loc_tex_size;
+    i64 loc_tex_tint;
+    i64 loc_tex_sampler;
+    i64[] pics;                     // picture number -> GL texture
+    i64 a_pos;                      // the places of the attributes (ES 2 gives them out itself)
+    i64 a_col;
+    i64 t_pos;
+    i64 t_uv;
 
     void init(self) {
         self.n = 0;
@@ -100,7 +100,7 @@ struct GlCanvas impl Canvas2d {
     }
 
     // one vertex: x, y, r, g, b, a (the colour as numbers from 0 to 1)
-    void vertex(self, double x, double y, int argb) {
+    void vertex(self, double x, double y, i64 argb) {
         if self.n + 6 > self.buf.n { self.flush(); }
         double a = (double)((argb >> 24) & 255) / 255.0;
         double r = (double)((argb >> 16) & 255) / 255.0;
@@ -133,9 +133,9 @@ struct GlCanvas impl Canvas2d {
     void begin(self) {
         self.n = 0;
         self.draws = 0;
-        self.gl.viewport(0, 0, (int)self.w, (int)self.h);
+        self.gl.viewport(0, 0, (i64)self.w, (i64)self.h);
     }
-    void clear(self, int argb) {
+    void clear(self, i64 argb) {
         self.flush();
         double a = (double)((argb >> 24) & 255) / 255.0;
         double r = (double)((argb >> 16) & 255) / 255.0;
@@ -144,7 +144,7 @@ struct GlCanvas impl Canvas2d {
         self.gl.clear_color(r, g, b, a);
         self.gl.clear_color_buffer();
     }
-    void rect(self, double x, double y, double w, double h, int argb) {
+    void rect(self, double x, double y, double w, double h, i64 argb) {
         self.vertex(x, y, argb);
         self.vertex(x + w, y, argb);
         self.vertex(x + w, y + h, argb);
@@ -152,13 +152,13 @@ struct GlCanvas impl Canvas2d {
         self.vertex(x + w, y + h, argb);
         self.vertex(x, y + h, argb);
     }
-    void tri(self, double x0, double y0, double x1, double y1, double x2, double y2, int argb) {
+    void tri(self, double x0, double y0, double x1, double y1, double x2, double y2, i64 argb) {
         self.vertex(x0, y0, argb);
         self.vertex(x1, y1, argb);
         self.vertex(x2, y2, argb);
     }
     // a line of the given width: a thin rectangle along the line
-    void line(self, double x0, double y0, double x1, double y1, double width, int argb) {
+    void line(self, double x0, double y0, double x1, double y1, double width, i64 argb) {
         double dx = x1 - x0;
         double dy = y1 - y0;
         double len = Math::sqrt(dx * dx + dy * dy);
@@ -173,7 +173,7 @@ struct GlCanvas impl Canvas2d {
         self.vertex(x0 - nx, y0 - ny, argb);
     }
     // a fan of 32 triangles
-    void circle(self, double cx, double cy, double r, int argb) {
+    void circle(self, double cx, double cy, double r, i64 argb) {
         double step = 6.283185307179586 / 32.0;
         for i in 0..32 {
             double a0 = step * (double)i;
@@ -188,25 +188,25 @@ struct GlCanvas impl Canvas2d {
     bool has_shaders(self) { return true; }
 
     // a PNG file becomes a picture number (-1 when the file cannot be read)
-    int load(self, String path) {
+    i64 load(self, String path) {
         Result<String, Error> r = Fs::read_bytes(path);
         if !r.is_ok() { return 0 - 1; }
         String data = r.take();
         bool good = false;
         Image im = Png::decode(data, @good);
         if !good { return 0 - 1; }
-        int tex = self.gl.make_texture(im.w, im.h, im.px, true);
+        i64 tex = self.gl.make_texture(im.w, im.h, im.px, true);
         self.pics.push(tex);
         return self.pics.len - 1;
     }
 
     // the picture in the box (x, y, w, h); drawn at once (the shapes before it are drawn first, so the order is kept)
-    void image(self, int pic, double x, double y, double w, double h, int tint) {
+    void image(self, i64 pic, double x, double y, double w, double h, i64 tint) {
         self.image_rot(pic, x + w * 0.5, y + h * 0.5, w, h, 0.0, tint);
     }
 
     // the picture in a box of w x h dots whose middle is (cx, cy), turned by `angle` radians (clockwise on the screen, about the middle)
-    void image_rot(self, int pic, double cx, double cy, double w, double h, double angle, int tint) {
+    void image_rot(self, i64 pic, double cx, double cy, double w, double h, double angle, i64 tint) {
         if pic <= 0 || pic >= self.pics.len || !self.ready { return; }
         self.flush();
         Floats q = Floats::make(24);

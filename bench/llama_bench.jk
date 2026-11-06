@@ -15,28 +15,28 @@ String status_value(String key) {
 void main() {
     String[] a = Env::args();
     if a.len < 2 { jout << "usage: llama_bench model.gguf [new tokens]\n"; return; }
-    int count = 64;
+    i64 count = 64;
     if a.len >= 3 { count = a[2].to_int(); }
-    int t0 = Time::now_ms();
+    i64 t0 = Time::now_ms();
     switch Lm::load(a[1]) {
         Result::Ok(m): {
-            int t1 = Time::now_ms();
+            i64 t1 = Time::now_ms();
             jout << "model: " << m.embd << " wide, " << m.layers << " layers, " << m.heads << " heads (" << m.kv_heads << " kv), vocab " << m.vocab << "\n";
             jout << "load: " << (t1 - t0) << " ms, memory after load: " << status_value("VmRSS:") << "\n";
-            int[] ids = m.encode("Once upon a time");
+            i64[] ids = m.encode("Once upon a time");
             m.reset();
-            int p0 = Time::now_ms();
+            i64 p0 = Time::now_ms();
             Tensor32 lg = Tensor32::zeros(1, 1);
             for i in 0..ids.len { lg = m.step(ids[i]); }
-            int p1 = Time::now_ms();
-            int made = 0;
+            i64 p1 = Time::now_ms();
+            i64 made = 0;
             for k in 0..count {
                 if m.pos >= m.ctx { break; }
-                int t = m.sample(lg, 0.0, 0, 1.0);
+                i64 t = m.sample(lg, 0.0, 0, 1.0);
                 lg = m.step(t);
                 made += 1;
             }
-            int p2 = Time::now_ms();
+            i64 p2 = Time::now_ms();
             double dp = (double)(p1 - p0);
             double dg = (double)(p2 - p1);
             if dp < 1.0 { dp = 1.0; }

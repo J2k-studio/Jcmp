@@ -15,11 +15,11 @@ struct f64x2 {
 
     // f64x2::load(a, i) is the pair a[i], a[i + 1] in one 16-byte load; v.store(a, i) writes it back (the compiler makes the
     // instruction; these bodies say what it means)
-    static f64x2 load(double^ p, int i) {
+    static f64x2 load(double^ p, i64 i) {
         f64x2 r = {p[i], p[i + 1]};
         return r;
     }
-    void store(self, double^ p, int i) {
+    void store(self, double^ p, i64 i) {
         p[i] = self.x;
         p[i + 1] = self.y;
     }
@@ -30,20 +30,20 @@ struct f64x2 {
 }
 
 struct i64x2 {
-    int x;
-    int y;
+    i64 x;
+    i64 y;
 
-    static i64x2 load(int^ p, int i) {
+    static i64x2 load(i64^ p, i64 i) {
         i64x2 r = {p[i], p[i + 1]};
         return r;
     }
-    void store(self, int^ p, int i) {
+    void store(self, i64^ p, i64 i) {
         p[i] = self.x;
         p[i + 1] = self.y;
     }
-    int sum(self) { return self.x + self.y; }
-    int min(self) { if self.y < self.x { return self.y; } return self.x; }
-    int max(self) { if self.y > self.x { return self.y; } return self.x; }
+    i64 sum(self) { return self.x + self.y; }
+    i64 min(self) { if self.y < self.x { return self.y; } return self.x; }
+    i64 max(self) { if self.y > self.x { return self.y; } return self.x; }
 }
 
 struct f32x4 {
@@ -52,11 +52,11 @@ struct f32x4 {
     float z;
     float w;
 
-    static f32x4 load(float^ p, int i) {
+    static f32x4 load(float^ p, i64 i) {
         f32x4 r = {p[i], p[i + 1], p[i + 2], p[i + 3]};
         return r;
     }
-    void store(self, float^ p, int i) {
+    void store(self, float^ p, i64 i) {
         p[i] = self.x;
         p[i + 1] = self.y;
         p[i + 2] = self.z;
@@ -88,11 +88,11 @@ struct i32x4 {
     i32 z;
     i32 w;
 
-    static i32x4 load(i32^ p, int i) {
+    static i32x4 load(i32^ p, i64 i) {
         i32x4 r = {p[i], p[i + 1], p[i + 2], p[i + 3]};
         return r;
     }
-    void store(self, i32^ p, int i) {
+    void store(self, i32^ p, i64 i) {
         p[i] = self.x;
         p[i + 1] = self.y;
         p[i + 2] = self.z;
@@ -125,11 +125,11 @@ struct i8x16 {
     i8 l0; i8 l1; i8 l2; i8 l3; i8 l4; i8 l5; i8 l6; i8 l7;
     i8 l8; i8 l9; i8 l10; i8 l11; i8 l12; i8 l13; i8 l14; i8 l15;
 
-    static i8x16 load(i8^ p, int i) {
+    static i8x16 load(i8^ p, i64 i) {
         i8x16 r = {p[i], p[i + 1], p[i + 2], p[i + 3], p[i + 4], p[i + 5], p[i + 6], p[i + 7], p[i + 8], p[i + 9], p[i + 10], p[i + 11], p[i + 12], p[i + 13], p[i + 14], p[i + 15]};
         return r;
     }
-    void store(self, i8^ p, int i) {
+    void store(self, i8^ p, i64 i) {
         p[i] = self.l0; p[i + 1] = self.l1; p[i + 2] = self.l2; p[i + 3] = self.l3;
         p[i + 4] = self.l4; p[i + 5] = self.l5; p[i + 6] = self.l6; p[i + 7] = self.l7;
         p[i + 8] = self.l8; p[i + 9] = self.l9; p[i + 10] = self.l10; p[i + 11] = self.l11;

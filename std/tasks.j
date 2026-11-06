@@ -10,23 +10,23 @@
 // A task must not throw out of its function (catch inside). A Channel is a handle: copies of it share the queue.
 
 void task_main(void^ arg) {
-    int^ b = (int^)arg;                                  // [0] function, [1] argument, [2] result, [3] done
-    int(void^)^ f = (int(void^)^)b[0];
-    int r = f((void^)b[1]);
+    i64^ b = (i64^)arg;                                  // [0] function, [1] argument, [2] result, [3] done
+    i64(void^)^ f = (i64(void^)^)b[0];
+    i64 r = f((void^)b[1]);
     b[2] = r;
     Atomic::add(@b[3], 1);
 }
 
 struct Task {
-    int^ blk;
+    i64^ blk;
     Thread th;
     bool waited;
 
-    static Task run(int(void^)^ f, void^ arg) {
+    static Task run(i64(void^)^ f, void^ arg) {
         Task t;
-        t.blk = (int^)Mem::alloc(32);
-        t.blk[0] = (int)f;
-        t.blk[1] = (int)arg;
+        t.blk = (i64^)Mem::alloc(32);
+        t.blk[0] = (i64)f;
+        t.blk[1] = (i64)arg;
         t.blk[2] = 0;
         t.blk[3] = 0;
         t.waited = false;
@@ -37,7 +37,7 @@ struct Task {
     bool ready(self) { return self.blk[3] != 0; }
 
     // the value of the function; waits for it
-    int wait(self) {
+    i64 wait(self) {
         if !self.waited {
             self.th.join();
             self.waited = true;
@@ -47,23 +47,23 @@ struct Task {
 }
 
 struct Channel<T> {
-    int^ state;                  // [0] mutex, [1] closed
+    i64^ state;                  // [0] mutex, [1] closed
     T[] items;
-    int^ head;                   // [0] index of the next item to read
+    i64^ head;                   // [0] index of the next item to read
 
     static Channel<T> make() {
         Channel<T> c;
-        c.state = (int^)Mem::alloc(16);
+        c.state = (i64^)Mem::alloc(16);
         c.state[0] = 0;
         c.state[1] = 0;
         c.items = arr(16);
-        c.head = (int^)Mem::alloc(8);
+        c.head = (i64^)Mem::alloc(8);
         c.head[0] = 0;
         return c;
     }
 
     void send(self, T v) {
-        int^ w = @self.state[0];
+        i64^ w = @self.state[0];
         while __cas(w, 0, 1) != 0 { Thread::yield(); }
         if self.state[1] == 0 { self.items.push(v); }
         __xchg(w, 0);
@@ -72,7 +72,7 @@ struct Channel<T> {
     T try_receive(self, bool^ got) {
         T zero;
         Mem::set(@zero, 0, sizeof(T));
-        int^ w = @self.state[0];
+        i64^ w = @self.state[0];
         while __cas(w, 0, 1) != 0 { Thread::yield(); }
         if self.head[0] < self.items.len {
             T v = self.items[self.head[0]];

@@ -3,22 +3,22 @@
 //   Fmt::hex(255) -> "ff"      Fmt::bin(5) -> "101"      Fmt::percent(0.256, 1) -> "25.6%"      Fmt::bytes(1536) -> "1.5 KB"
 struct Fmt {
     // s with c added on the left until it has `width` characters (a longer text stays as it is)
-    static String pad_left(String s, int width, char c) {
+    static String pad_left(String s, i64 width, char c) {
         String r = "";
-        int n = width - s.len;
+        i64 n = width - s.len;
         for i in 0..n { r.push(c); }
         r += s;
         return r;
     }
     // s with c added on the right
-    static String pad_right(String s, int width, char c) {
+    static String pad_right(String s, i64 width, char c) {
         String r = s;
-        int n = width - s.len;
+        i64 n = width - s.len;
         for i in 0..n { r.push(c); }
         return r;
     }
     // the number x with exactly `digits` digits after the point (0 .. 15), rounded half away from zero
-    static String fixed(double x, int digits) {
+    static String fixed(double x, i64 digits) {
         if digits < 0 { digits = 0; }
         if digits > 15 { digits = 15; }
         bool neg = x < 0.0;
@@ -28,8 +28,8 @@ struct Fmt {
         for i in 0..digits { scale = scale * 10.0; }
         double r = v * scale + 0.5;
         if r >= 9.0e18 { return str(x); }
-        int n = (int)r;
-        int sc = (int)scale;
+        i64 n = (i64)r;
+        i64 sc = (i64)scale;
         String s = str(n / sc);
         if digits > 0 {
             String f = str(n % sc);
@@ -40,43 +40,43 @@ struct Fmt {
         return s;
     }
     // the digits of n (n >= 0) in the base b (2 .. 16)
-    static String base(int n, int b) {
+    static String base(i64 n, i64 b) {
         if n == 0 { return "0"; }
         String digits = "0123456789abcdef";
         String r = "";
-        int v = n;
+        i64 v = n;
         while v > 0 {
             r.push(digits[v % b]);
             v = v / b;
         }
         String out = "";
-        int i = r.len - 1;
+        i64 i = r.len - 1;
         while i >= 0 {
             out.push(r[i]);
             i -= 1;
         }
         return out;
     }
-    static String hex(int n) {
+    static String hex(i64 n) {
         if n < 0 { return "-" + Fmt::base(0 - n, 16); }
         return Fmt::base(n, 16);
     }
-    static String bin(int n) {
+    static String bin(i64 n) {
         if n < 0 { return "-" + Fmt::base(0 - n, 2); }
         return Fmt::base(n, 2);
     }
     // 1234567 -> "1,234,567"
-    static String thousands(int n) {
+    static String thousands(i64 n) {
         String s = str(n);
         bool neg = false;
-        int start = 0;
+        i64 start = 0;
         if s.len > 0 && s[0] == '-' {
             neg = true;
             start = 1;
         }
         String r = "";
-        int count = 0;
-        int i = s.len - 1;
+        i64 count = 0;
+        i64 i = s.len - 1;
         while i >= start {
             if count > 0 && count % 3 == 0 { r.push(','); }
             r.push(s[i]);
@@ -85,7 +85,7 @@ struct Fmt {
         }
         String out = "";
         if neg { out.push('-'); }
-        int j = r.len - 1;
+        i64 j = r.len - 1;
         while j >= 0 {
             out.push(r[j]);
             j -= 1;
@@ -93,11 +93,11 @@ struct Fmt {
         return out;
     }
     // 0.256 -> "25.6%"
-    static String percent(double ratio, int digits) {
+    static String percent(double ratio, i64 digits) {
         return Fmt::fixed(ratio * 100.0, digits) + "%";
     }
     // a size in bytes: 1536 -> "1.5 KB"
-    static String bytes(int n) {
+    static String bytes(i64 n) {
         if n < 1024 { return str(n) + " B"; }
         double v = (double)n;
         String unit = "KB";
@@ -116,8 +116,8 @@ struct Fmt {
 
 // The short names for  jout << ...  (owner's decision 2026-11-03, syntax-design 107): no new syntax, only functions.
 //   jout << fmt(3.14159, 2) << " " << tohex(255) << " [" << pad("ab", 5) << "] [" << padl("7", 3) << "]\n";     -> 3.14 ff [ab   ] [  7]
-String fmt(double x, int digits) { return Fmt::fixed(x, digits); }
-String tohex(int n) { return Fmt::hex(n); }
-String tobin(int n) { return Fmt::bin(n); }
-String pad(String s, int width) { return Fmt::pad_right(s, width, ' '); }
-String padl(String s, int width) { return Fmt::pad_left(s, width, ' '); }
+String fmt(double x, i64 digits) { return Fmt::fixed(x, digits); }
+String tohex(i64 n) { return Fmt::hex(n); }
+String tobin(i64 n) { return Fmt::bin(n); }
+String pad(String s, i64 width) { return Fmt::pad_right(s, width, ' '); }
+String padl(String s, i64 width) { return Fmt::pad_left(s, width, ' '); }

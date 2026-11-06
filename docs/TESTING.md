@@ -106,6 +106,8 @@ compiler compiling itself, the size of the assembler text (exact: a bigger numbe
 runs (it fails when more than 30 % slower than `tools/bench/baseline.txt`; `TOL=` changes the limit). `--update`
 writes a new baseline, on purpose only.
 
+`tools/bench/gate.sh` runs the whole table of `tools/bench/run.sh` and fails when a program is slower than 1.5 times gcc -O2 (the known exceptions are listed in the script). `tools/bench/run.sh` also compares the exit code with the C program (not for the float programs nbody and mandel, where fma contraction changes the rounding) and appends the times to `tools/bench/history.txt`. Run the gate before every release: a slowdown of the `arrays` benchmark (5 times) once passed unnoticed for three releases.
+
 ## 6. Documents
 
 * `python3 tools/doccheck.py FILE --jcmp bin/jcmp`: each block that starts with a line ` ```jk ` and has a `main`

@@ -7,61 +7,61 @@
 // the named file and goes back to the importing file when it ends.
 
 // ----------------------------------------------------- token kinds (as data)
-int T_EOF = 0;
-int T_IDENT = 1;
-int T_NUM = 2;
-int T_STR = 3;
-int T_OP = 4;
+i64 T_EOF = 0;
+i64 T_IDENT = 1;
+i64 T_NUM = 2;
+i64 T_STR = 3;
+i64 T_OP = 4;
 
 // ------------------------------------------------------------ source buffers
 // 16 nested files, each in its own 512 KB slice of src_bufs
 char src_bufs[8388608];
-int cur_base;                // start of the current file's slice
-int cur_len;
-int cur_pos;
-int cur_line;
-int cur_line_start;
-int lx_depth;                // 0 = the main file
-int stk_pos[16];             // saved positions of the files below the current one
-int stk_line[16];
-int stk_ls[16];
-int stk_len[16];            // the length of the file below (so that returning to it does not need a scan of its whole text)
+i64 cur_base;                // start of the current file's slice
+i64 cur_len;
+i64 cur_pos;
+i64 cur_line;
+i64 cur_line_start;
+i64 lx_depth;                // 0 = the main file
+i64 stk_pos[16];             // saved positions of the files below the current one
+i64 stk_line[16];
+i64 stk_ls[16];
+i64 stk_len[16];            // the length of the file below (so that returning to it does not need a scan of its whole text)
 char lvl_name[2048];         // path of the file at each level (16 x 128)
 char inc_names[65536];        // paths already imported (64 x 128)
-int inc_count;
-int lvl_inst[16];            // 1 = the level is the text of a generic instance: its end is an end of items, not a return to the file below
-int mt_pending;              // 1 after #multithread until the for loop it belongs to is parsed
-int cpu_loaded;              // 1 once `import cpu` has been read
-int simd_loaded;             // 1 once `import <simd>` has been read
-int lvl_lib[16];             // 1 for a level that is a built-in library (its warnings are not shown)
-int vector_loaded;           // 1 once `import <vector>` has been read
-int matrix_loaded;
-int quat_loaded;
-int cplx_loaded;
-int stats_loaded;
-int gfx_loaded;              // 1 once `#import <gfx>` has been read
-int canvas_loaded;
-int screen_loaded;
-int math_loaded;             // 1 once `#import <math>` has been read (using math::vector loads the parts)           // 1 once `import <matrix>` has been read
-int std_loaded;              // 1 once `import std` has been read
-int std_units;               // the units of the standard library that are read (bit n = unit n, see gen_std.sh): 511 = all
+i64 inc_count;
+i64 lvl_inst[16];            // 1 = the level is the text of a generic instance: its end is an end of items, not a return to the file below
+i64 mt_pending;              // 1 after #multithread until the for loop it belongs to is parsed
+i64 cpu_loaded;              // 1 once `import cpu` has been read
+i64 simd_loaded;             // 1 once `import <simd>` has been read
+i64 lvl_lib[16];             // 1 for a level that is a built-in library (its warnings are not shown)
+i64 vector_loaded;           // 1 once `import <vector>` has been read
+i64 matrix_loaded;
+i64 quat_loaded;
+i64 cplx_loaded;
+i64 stats_loaded;
+i64 gfx_loaded;              // 1 once `#import <gfx>` has been read
+i64 canvas_loaded;
+i64 screen_loaded;
+i64 math_loaded;             // 1 once `#import <math>` has been read (using math::vector loads the parts)           // 1 once `import <matrix>` has been read
+i64 std_loaded;              // 1 once `import std` has been read
+i64 std_units;               // the units of the standard library that are read (bit n = unit n, see gen_std.sh): 511 = all
 
 // ---------------------------------------------------------------- #define
 char def_name[131072];         // 256 names x 64
 char def_val[524288];         // 256 values x 256
-int def_count;
-int reserve_mask;            // #reserve x18, x19 ...: bit n = register xn is never used by the compiler (x18, x19 .. x25)
+i64 def_count;
+i64 reserve_mask;            // #reserve x18, x19 ...: bit n = register xn is never used by the compiler (x18, x19 .. x25)
 
 // a #define whose text is an arithmetic expression of several tokens (`2+3`, `N * 4 - 1`) is kept in parentheses, so that `N * 2` is
 // `(2+3) * 2`, as everybody reads it (owner, 2026-10-15). Texts that are not an expression (a type, an argument list, a statement, a
 // string, an assignment) stay as written.
-bool define_is_expr(char^ s, int n) {
+bool define_is_expr(char^ s, i64 n) {
     if n < 3 { return false; }
     bool has_op = false;
-    int depth = 0;
-    int i = 0;
+    i64 depth = 0;
+    i64 i = 0;
     while i < n {
-        int c = s[i];
+        i64 c = s[i];
         if c == ',' || c == ';' || c == '{' || c == '}' || c == '"' || c == 39 || c == '=' || c == '[' || c == ']' || c == '#' || c == '@' || c == '^' || c == ':' || c == '?' { return false; }
         if c == '(' { depth += 1; }
         if c == ')' { depth -= 1; if depth < 0 { return false; } }
@@ -72,8 +72,8 @@ bool define_is_expr(char^ s, int n) {
     if depth != 0 || !has_op { return false; }
     // the first word must not be a keyword of a statement
     char w[16];
-    int k = 0;
-    int j = 0;
+    i64 k = 0;
+    i64 j = 0;
     while j < n && (s[j] == ' ' || s[j] == 9) { j += 1; }
     while j < n && k < 15 && ((s[j] >= 'a' && s[j] <= 'z') || (s[j] >= 'A' && s[j] <= 'Z') || s[j] == '_') {
         w[k] = s[j];
@@ -85,8 +85,8 @@ bool define_is_expr(char^ s, int n) {
     return true;
 }
 
-int find_define(char^ name) {
-    int i = 0;
+i64 find_define(char^ name) {
+    i64 i = 0;
     while i < def_count {
         if str_eq(@def_name + i * 64, name) { return i; }
         i += 1;
@@ -95,20 +95,20 @@ int find_define(char^ name) {
 }
 
 // ------------------------------------------------------------- the token
-int tok_kind;
+i64 tok_kind;
 char tok_text[256];          // identifier / operator text
-int tok_num;                 // number or character value
-int tok_float;               // 1 if the number is a float literal: value = tok_mant * 10^tok_exp
-int tok_mant;
-int tok_exp;
-int tok_char;                // 1 if the number was written as a character literal
+i64 tok_num;                 // number or character value
+i64 tok_float;               // 1 if the number is a float literal: value = tok_mant * 10^tok_exp
+i64 tok_mant;
+i64 tok_exp;
+i64 tok_char;                // 1 if the number was written as a character literal
 char tok_str[1024];          // string literal, decoded
-int tok_str_len;
+i64 tok_str_len;
 
 // -------------------------------------------------------------- characters
 
-int lc(int off) {
-    int p = cur_pos + off;
+i64 lc(i64 off) {
+    i64 p = cur_pos + off;
     if p < cur_len { return src_bufs[cur_base + p]; }
     return 0;
 }
@@ -123,8 +123,8 @@ void adv() {
     }
 }
 
-int err_base;                // where the source of the error position is
-int err_ls;
+i64 err_base;                // where the source of the error position is
+i64 err_ls;
 
 void mark_pos() {
     err_line = cur_line;
@@ -162,15 +162,15 @@ void begin_msg(char^ kind) {
 void end_msg() {
     color_reset();
     write_err("\n");
-    int a = err_base + err_ls;
-    int e = a;
+    i64 a = err_base + err_ls;
+    i64 e = a;
     while src_bufs[e] != 0 && src_bufs[e] != 10 { e += 1; }
     if e > a {
         // "  12 | source line" and "     | ^" under the column
         char num[24];
         num[0] = 0;
         append_int(@num, err_line);
-        int w = str_len(@num);
+        i64 w = str_len(@num);
         set_color("[36m");
         write_err(" ");
         write_err(@num);
@@ -180,14 +180,14 @@ void end_msg() {
         write_err("\n");
         set_color("[36m");
         write_err(" ");
-        int g = 0;
+        i64 g = 0;
         while g < w {
             write_err(" ");
             g += 1;
         }
         write_err(" | ");
         color_reset();
-        int k = 0;
+        i64 k = 0;
         while k < err_col - 1 && k < e - a {
             if src_bufs[a + k] == 9 { write_err("\t"); } else { write_err(" "); }
             k += 1;
@@ -200,7 +200,7 @@ void end_msg() {
 }
 
 // errors that the compiler survived (a missing ';'): counted in pass 1, all of them are shown, then the compiler stops
-int err_count;
+i64 err_count;
 void err_summary() {
     if err_count == 0 { return; }
     msg_kind = 1;
@@ -214,7 +214,7 @@ void err_summary() {
 // the end of every error message: with the recovery on (passes 1 and 2) the error is counted and thrown to the loop that reads
 // statements and items, which skips to the next one and goes on (so that all the mistakes of a file are shown, at most 20);
 // otherwise the summary is written and the compiler stops
-int recover_on;
+i64 recover_on;
 void die_end() {
     err_count += 1;
     if recover_on == 1 && err_count < 20 { throw "error already written"; }
@@ -302,27 +302,27 @@ void die_found(char^ what, char^ help) {
 
 // the closest known name to `name` (at most 1 edit away, 2 for names of 5+ letters): in sug_buf, 1 if there is one
 char sug_buf[64];
-int sug_best;                // the distance of the best one so far
-int sug_row[130];
-int edit_distance(char^ a, char^ b) {
-    int la = str_len(a);
-    int lb = str_len(b);
+i64 sug_best;                // the distance of the best one so far
+i64 sug_row[130];
+i64 edit_distance(char^ a, char^ b) {
+    i64 la = str_len(a);
+    i64 lb = str_len(b);
     if la > 62 || lb > 62 { return 99; }
-    int j = 0;
+    i64 j = 0;
     while j <= lb {
         sug_row[j] = j;
         j += 1;
     }
-    int i = 1;
+    i64 i = 1;
     while i <= la {
-        int prev = sug_row[0];
+        i64 prev = sug_row[0];
         sug_row[0] = i;
         j = 1;
         while j <= lb {
-            int cur = sug_row[j];
-            int cost = 1;
+            i64 cur = sug_row[j];
+            i64 cost = 1;
             if a[i - 1] == b[j - 1] { cost = 0; }
-            int best = prev + cost;
+            i64 best = prev + cost;
             if sug_row[j] + 1 < best { best = sug_row[j] + 1; }
             if sug_row[j - 1] + 1 < best { best = sug_row[j - 1] + 1; }
             sug_row[j] = best;
@@ -337,9 +337,9 @@ int edit_distance(char^ a, char^ b) {
 // offer one candidate (called for each known name)
 void sug_try(char^ name, char^ cand) {
     if cand[0] == 0 || cand[0] == '_' { return; }
-    int lim = 1;
+    i64 lim = 1;
     if str_len(name) >= 5 { lim = 2; }
-    int d = edit_distance(name, cand);
+    i64 d = edit_distance(name, cand);
     if d == 0 || d > lim { return; }
     if d < sug_best {
         sug_best = d;
@@ -348,15 +348,15 @@ void sug_try(char^ name, char^ cand) {
 }
 
 // die with a name in the message:  error: msg 'name'
-int in_lambda;               // 1 while the function being compiled is a lambda
+i64 in_lambda;               // 1 while the function being compiled is a lambda
 void die_name(char^ msg, char^ name) {
     begin_msg("error");
     bool as_type = false;
     if str_eq(msg, "unknown name") && cur_pos < cur_len {
         // `Name other` is a declaration: the word is a type that does not exist
-        int sp = cur_pos;
+        i64 sp = cur_pos;
         while sp < cur_len && (src_bufs[cur_base + sp] == ' ' || src_bufs[cur_base + sp] == 9) { sp += 1; }
-        int c = src_bufs[cur_base + sp];
+        i64 c = src_bufs[cur_base + sp];
         if sp < cur_len && sp > cur_pos && ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_') { as_type = true; }
     }
     // the parser has read the next word already: `Foo f;` stops at `f`
@@ -413,9 +413,9 @@ void die_no_main(char^ path) {
 }
 
 // text += the decimal digits of v (v >= 0)
-void append_int(char^ dst, int v) {
+void append_int(char^ dst, i64 v) {
     char tmp[24];
-    int n = 0;
+    i64 n = 0;
     if v == 0 {
         tmp[0] = '0';
         n = 1;
@@ -425,7 +425,7 @@ void append_int(char^ dst, int v) {
         v = v / 10;
         n += 1;
     }
-    int at = str_len(dst);
+    i64 at = str_len(dst);
     while n > 0 {
         n -= 1;
         dst[at] = tmp[n];
@@ -435,8 +435,8 @@ void append_int(char^ dst, int v) {
 }
 
 void append_text(char^ dst, char^ more) {
-    int at = str_len(dst);
-    int k = 0;
+    i64 at = str_len(dst);
+    i64 k = 0;
     while more[k] != 0 {
         dst[at] = more[k];
         at += 1;
@@ -467,14 +467,14 @@ void warn(char^ msg, char^ flag) {
     warn_count += 1;
 }
 
-void set_err_file(int level) {
+void set_err_file(i64 level) {
     str_copy(@err_file, @lvl_name + level * 128, 128);
 }
 
 // blanks, // comments and /* comments */
 void skip_blanks() {
     while cur_pos < cur_len {
-        int c = lc(0);
+        i64 c = lc(0);
         if is_space(c) {
             adv();
         } else if c == '/' && lc(1) == '/' {
@@ -493,19 +493,19 @@ void skip_blanks() {
 
 // ---------------------------------------------------------- files / imports
 
-int tok_seq;                 // counts the tokens read (a literal followed by ']' is one step)
-int ro_block;                // 1 between #pragma read begin and end
-int ro_next;                 // 1: the next global variable is read-only
-int ro_file;                 // bit d: the file at depth d has #pragma read as its first line
-int lvl_seq0[16];            // tok_seq when the file at this depth was entered
+i64 tok_seq;                 // counts the tokens read (a literal followed by ']' is one step)
+i64 ro_block;                // 1 between #pragma read begin and end
+i64 ro_next;                 // 1: the next global variable is read-only
+i64 ro_file;                 // bit d: the file at depth d has #pragma read as its first line
+i64 lvl_seq0[16];            // tok_seq when the file at this depth was entered
 
 // the files of the folder of `path` that are named almost like it: the closest in sug_buf (with the folder in front)
 void sug_files(char^ path) {
     char dir[256];
     char base[128];
-    int n = str_len(path);
-    int slash = 0 - 1;
-    int i = 0;
+    i64 n = str_len(path);
+    i64 slash = 0 - 1;
+    i64 i = 0;
     while i < n { if path[i] == '/' { slash = i; } i += 1; }
     if slash < 0 {
         dir[0] = '.';
@@ -517,22 +517,22 @@ void sug_files(char^ path) {
         if slash == 0 { dir[0] = '/'; dir[1] = 0; }
         str_copy(@base, path + slash + 1, 128);
     }
-    int fd = syscall(56, -100, @dir, 0, 0);
+    i64 fd = syscall(56, -100, @dir, 0, 0);
     if fd < 0 { return; }
     char ents[4096];
-    int guard = 0;
+    i64 guard = 0;
     while guard < 64 {
     guard += 1;
-    int got = syscall(61, fd, @ents, 4096);
+    i64 got = syscall(61, fd, @ents, 4096);
     if got <= 0 { break; }
-    int off = 0;
+    i64 off = 0;
     while off < got {
-        int reclen = (ents[off + 16] & 255) | ((ents[off + 17] & 255) << 8);
+        i64 reclen = (ents[off + 16] & 255) | ((ents[off + 17] & 255) << 8);
         char^ nm = @ents[off + 19];
         if nm[0] != '.' {
             // the name with or without the ending .jk
             sug_try(@base, nm);
-            int ln = str_len(nm);
+            i64 ln = str_len(nm);
             if ln > 3 && nm[ln - 3] == '.' && nm[ln - 2] == 'j' && nm[ln - 1] == 'k' {
                 char stem[128];
                 str_copy(@stem, nm, 128);
@@ -550,7 +550,7 @@ void sug_files(char^ path) {
         char whole[256];
         str_copy(@whole, path, 256);
         whole[slash + 1] = 0;
-        int wl = str_len(@whole);
+        i64 wl = str_len(@whole);
         str_copy(@whole + wl, @sug_buf, 256 - wl);
         str_copy(@sug_buf, @whole, 64);
     }
@@ -562,7 +562,7 @@ void die_file(char^ path) {
     write_err("cannot read file '");
     write_err(path);
     write_err("': ");
-    int e = file_errno;
+    i64 e = file_errno;
     if e == 2 { write_err("there is no file with this name"); }
     else if e == 13 { write_err("permission denied (no right to read it)"); }
     else if e == 21 { write_err("this is a folder, not a file"); }
@@ -580,7 +580,7 @@ void die_file(char^ path) {
         write_err("'?\n");
     } else if e == 2 {
         char cwd[256];
-        int cl = syscall(17, @cwd, 256);
+        i64 cl = syscall(17, @cwd, 256);
         write_err("  help: check the spelling; looked in the folder ");
         if cl > 0 { write_err("'"); write_err(@cwd); write_err("'"); } else { write_err("(this one)"); }
         write_err("\n");
@@ -588,6 +588,52 @@ void die_file(char^ path) {
         write_err("  help: give the program file, for example main.jk\n");
     }
     die_end();
+}
+
+// i64 is another name of int while int is 64 bits (owner's decision 2026-11-06, docs/syntax-design.md 110). The word is changed in the text of the source
+// (both have 3 letters, so no position moves) so that generic instances, error lines and everything that reads the raw text see one name.
+// Not in comments, strings or characters. Removed on the day int becomes 32 bits and i64 a type of its own.
+i64 alias_on = 1;                // 0 for -showlib: the text is shown as it is written
+void alias_i64(char^ b, i64 n) {
+    if alias_on == 0 { return; }
+    i64 i = 0;
+    while i < n {
+        char c = b[i];
+        if c == '/' && i + 1 < n && b[i + 1] == '/' {
+            while i < n && b[i] != 10 { i += 1; }
+            continue;
+        }
+        if c == '/' && i + 1 < n && b[i + 1] == '*' {
+            i += 2;
+            while i + 1 < n && !(b[i] == '*' && b[i + 1] == '/') { i += 1; }
+            i += 2;
+            continue;
+        }
+        if c == '"' || c == 39 {
+            char q = c;
+            i += 1;
+            while i < n && b[i] != q && b[i] != 10 {
+                if b[i] == 92 { i += 1; }
+                i += 1;
+            }
+            i += 1;
+            continue;
+        }
+        if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_' {
+            i64 j = i;
+            while j < n && ((b[j] >= 'a' && b[j] <= 'z') || (b[j] >= 'A' && b[j] <= 'Z') || b[j] == '_' || (b[j] >= '0' && b[j] <= '9')) { j += 1; }
+            if j - i == 3 && b[i] == 'i' && b[i + 1] == '6' && b[i + 2] == '4' {
+                b[i + 1] = 'n';
+                b[i + 2] = 't';
+            } else if j - i == 3 && b[i] == 'i' && b[i + 1] == 'n' && b[i + 2] == 't' {
+                b[i + 1] = '3';
+                b[i + 2] = '2';
+            }
+            i = j;
+            continue;
+        }
+        i += 1;
+    }
 }
 
 // make `path` the current file (a new level); the old one is saved
@@ -603,8 +649,9 @@ void push_file(char^ path) {
     ro_file = ro_file & ~(1 << lx_depth);
     cur_base = lx_depth * 524288;
     str_copy(@lvl_name + lx_depth * 128, path, 128);
-    int n = read_file(path, @src_bufs + cur_base, 524288);
+    i64 n = read_file(path, @src_bufs + cur_base, 524288);
     if n < 0 { die_file(path); }
+    alias_i64(@src_bufs + cur_base, n);
     cur_len = n;
     cur_pos = 0;
     cur_line = 1;
@@ -632,7 +679,7 @@ void push_macro(char^ text) {
 
 // the text of a generic instance becomes a new level; at its end next() gives T_EOF
 // and the caller pops it (pop_file)
-void push_text(char^ text, int n, char^ file, int line) {
+void push_text(char^ text, i64 n, char^ file, i64 line) {
     if lx_depth >= 15 { die("generic instances nested too deeply"); }
     stk_pos[lx_depth] = cur_pos;
     stk_line[lx_depth] = cur_line;
@@ -642,7 +689,7 @@ void push_text(char^ text, int n, char^ file, int line) {
     lvl_lib[lx_depth] = 0;
     cur_base = lx_depth * 524288;
     str_copy(@lvl_name + lx_depth * 128, file, 128);
-    int i = 0;
+    i64 i = 0;
     while i < n {
         src_bufs[cur_base + i] = text[i];
         i += 1;
@@ -693,7 +740,8 @@ void lex_init(char^ path) {
     ro_file = 0;
     lvl_seq0[0] = 0;
     str_copy(@lvl_name, path, 128);
-    int n = read_file(path, @src_bufs, 524288);
+    i64 n = read_file(path, @src_bufs, 524288);
+    if n > 0 { alias_i64(@src_bufs, n); }
     if n < 0 { die_file(path); }
     cur_len = n;
     cur_pos = 0;
@@ -711,7 +759,7 @@ void lex_init(char^ path) {
 // The compiler and its library are one pair (docs/roadmap-1.0.md): the files of the library are the text that is inside the compiler,
 // and a folder `Library` with the file VERSION is used when it is found (JCMP_LIB, Library next to the compiler, ../Library/jcmp next to it).
 // The version in lib/VERSION must be the version of the compiler; if not, the compiler stops and says what to do.
-int lib_external;                // 1: read the library from files in lib_dir, 0: from the text inside the compiler
+i64 lib_external;                // 1: read the library from files in lib_dir, 0: from the text inside the compiler
 char lib_dir[256];
 
 bool lib_has_version(char^ dir) {
@@ -730,10 +778,10 @@ bool lib_find_dir() {
         return true;
     }
     char exe[256];
-    int en = syscall(78, -100, "/proc/self/exe", @exe, 200);
+    i64 en = syscall(78, -100, "/proc/self/exe", @exe, 200);
     if en <= 0 { return false; }
     exe[en] = 0;
-    int cut = en;
+    i64 cut = en;
     while cut > 0 && exe[cut - 1] != '/' { cut -= 1; }
     if cut <= 0 { return false; }
     exe[cut - 1] = 0;
@@ -758,7 +806,7 @@ void lib_init(char^ ver) {
     str_copy(@vp, @lib_dir, 250);
     append_text(@vp, "/VERSION");
     char vb[64];
-    int vn = read_file(@vp, @vb, 60);
+    i64 vn = read_file(@vp, @vb, 60);
     if vn <= 0 {
         begin_msg("error");
         write_err("the folder of the library has no VERSION file: ");
@@ -792,10 +840,10 @@ void lib_init(char^ ver) {
 // The script comes from JCMP_INSTALL_URL (a mirror, or a file: address for tests) or from the public repository.
 void self_update(char^ version) {
     char exe[256];
-    int en = syscall(78, -100, "/proc/self/exe", @exe, 250);
+    i64 en = syscall(78, -100, "/proc/self/exe", @exe, 250);
     if en <= 0 { write_err("jcmp: -update cannot find where the compiler is\n"); syscall(93, 1); }
     exe[en] = 0;
-    int cut = en;
+    i64 cut = en;
     while cut > 0 && exe[cut - 1] != '/' { cut -= 1; }
     if cut <= 1 { write_err("jcmp: -update cannot find the folder of the compiler\n"); syscall(93, 1); }
     exe[cut - 1] = 0;
@@ -820,7 +868,7 @@ void self_update(char^ version) {
         append_text(@script, version);
         append_text(@script, "'");
     }
-    int k = 0;
+    i64 k = 0;
     while script[k] != 0 {
         if script[k] == 10 { write_err("jcmp: -update: a name has a line break in it\n"); syscall(93, 1); }
         k += 1;
@@ -829,19 +877,19 @@ void self_update(char^ version) {
     char^ prefix = env_get("PREFIX");
     char shp[200];
     shp[0] = 0;
-    int ne = 0;
+    i64 ne = 0;
     while arg(argc() + 1 + ne) != null { ne += 1; }
-    int envp[200];
+    i64 envp[200];
     if ne > 190 { ne = 190; }
-    int ei = 0;
-    while ei < ne { envp[ei] = (int)arg(argc() + 1 + ei); ei += 1; }
+    i64 ei = 0;
+    while ei < ne { envp[ei] = (i64)arg(argc() + 1 + ei); ei += 1; }
     envp[ne] = 0;
-    int av[6];
-    av[0] = (int)"sh";
-    av[1] = (int)"-c";
-    av[2] = (int)@script;
+    i64 av[6];
+    av[0] = (i64)"sh";
+    av[1] = (i64)"-c";
+    av[2] = (i64)@script;
     av[3] = 0;
-    int pid = syscall(220, 17, 0, 0, 0, 0);
+    i64 pid = syscall(220, 17, 0, 0, 0, 0);
     if pid == 0 {
         if prefix != null && str_len(prefix) < 150 {
             str_copy(@shp, prefix, 150);
@@ -853,7 +901,7 @@ void self_update(char^ version) {
         syscall(221, "/usr/bin/sh", @av, @envp);
         syscall(93, 127);
     }
-    int status = 0;
+    i64 status = 0;
     syscall(260, pid, @status, 0, 0);
     if status != 0 { write_err("jcmp: -update failed; nothing was changed unless the lines above say so\n"); syscall(93, 1); }
     syscall(93, 0);
@@ -878,8 +926,8 @@ void ext_put(char^ name) {
     append_text(@fp, "/");
     append_text(@fp, name);
     append_text(@fp, ".j");
-    int room = 524288 - cur_len - 4;
-    int n = read_file(@fp, @src_bufs + cur_base + cur_len, room);
+    i64 room = 524288 - cur_len - 4;
+    i64 n = read_file(@fp, @src_bufs + cur_base + cur_len, room);
     if n < 0 {
         begin_msg("error");
         write_err("a file of the library cannot be read: ");
@@ -890,6 +938,7 @@ void ext_put(char^ name) {
         err_summary();
         syscall(93, 1);
     }
+    alias_i64(@src_bufs + cur_base + cur_len, n);
     cur_len += n;
 }
 
@@ -928,8 +977,9 @@ void push_lib(char^ name) {
     lvl_lib[lx_depth] = 1;
     cur_base = lx_depth * 524288;
     cur_len = 0;
-    int n = read_file(@path, @src_bufs + cur_base, 524000);
+    i64 n = read_file(@path, @src_bufs + cur_base, 524000);
     if n < 0 { die_file(@path); }
+    alias_i64(@src_bufs + cur_base, n);
     cur_len = n;
     src_bufs[cur_base + cur_len] = 0;
     cur_pos = 0;
@@ -938,7 +988,7 @@ void push_lib(char^ name) {
 }
 
 void put(char^ text) {
-    int i = 0;
+    i64 i = 0;
     while text[i] != 0 {
         src_bufs[cur_base + cur_len] = text[i];
         cur_len += 1;
@@ -950,7 +1000,7 @@ void put(char^ text) {
 
 // p[0..n) is a path without its extension: try ".j" then ".jk"; the one that
 // exists is left in p (if neither exists p ends in ".j")
-bool try_ext(char^ p, int n) {
+bool try_ext(char^ p, i64 n) {
     p[n] = '.';
     p[n + 1] = 'j';
     p[n + 2] = 0;
@@ -963,7 +1013,7 @@ bool try_ext(char^ p, int n) {
 }
 
 bool file_exists(char^ p) {
-    int fd = syscall(56, -100, p, 0, 0);
+    i64 fd = syscall(56, -100, p, 0, 0);
     if fd < 0 { return false; }
     syscall(57, fd);
     return true;
@@ -971,11 +1021,11 @@ bool file_exists(char^ p) {
 
 // the value of an environment variable (the strings after the arguments of the program), or null
 char^ env_get(char^ name) {
-    int i = argc() + 1;
-    int nl = str_len(name);
+    i64 i = argc() + 1;
+    i64 nl = str_len(name);
     while arg(i) != null {
         char^ e = arg(i);
-        int k = 0;
+        i64 k = 0;
         while k < nl && e[k] == name[k] { k += 1; }
         if k == nl && e[k] == '=' { return e + nl + 1; }
         i += 1;
@@ -986,14 +1036,14 @@ char^ env_get(char^ name) {
 // dir/rel.j or dir/rel.jk, or dir/rel/last.j(k) where last is the last part of rel (a package folder);
 // the path that exists is left in out
 bool try_lib_dir(char^ dir, char^ rel, char^ out) {
-    int n = str_len(dir);
+    i64 n = str_len(dir);
     if n == 0 || n > 150 { return false; }
     str_copy(out, dir, 256);
     out[n] = '/';
     n += 1;
-    int r = str_len(rel);
+    i64 r = str_len(rel);
     if n + r > 240 { return false; }
-    int k = 0;
+    i64 k = 0;
     while k < r {
         out[n + k] = rel[k];
         k += 1;
@@ -1001,7 +1051,7 @@ bool try_lib_dir(char^ dir, char^ rel, char^ out) {
     n += r;
     out[n] = 0;
     if try_ext(out, n) { return true; }
-    int last = 0;
+    i64 last = 0;
     k = 0;
     while k < r {
         if rel[k] == '/' { last = k + 1; }
@@ -1026,9 +1076,9 @@ bool find_library(char^ rel, char^ out) {
     char^ jp = env_get("J2K_PATH");
     if jp != null {
         char one[256];
-        int p = 0;
+        i64 p = 0;
         while true {
-            int n = 0;
+            i64 n = 0;
             while jp[p] != 0 && jp[p] != ':' && n < 250 {
                 one[n] = jp[p];
                 n += 1;
@@ -1048,10 +1098,10 @@ bool find_library(char^ rel, char^ out) {
         if try_lib_dir(@hd, rel, out) { return true; }
     }
     char exe[256];
-    int en = syscall(78, -100, "/proc/self/exe", @exe, 200);
+    i64 en = syscall(78, -100, "/proc/self/exe", @exe, 200);
     if en > 0 {
         exe[en] = 0;
-        int cut = en;
+        i64 cut = en;
         while cut > 0 && exe[cut - 1] != '/' { cut -= 1; }
         if cut > 0 {
             exe[cut - 1] = 0;
@@ -1064,13 +1114,13 @@ bool find_library(char^ rel, char^ out) {
     return false;
 }
 
-int import_bare_warned;
-int import_hash;             // 1 if the last word import was written with its # (#import)
-int import_warned;           // 1 after the warning about a library written without < >
+i64 import_bare_warned;
+i64 import_hash;             // 1 if the last word import was written with its # (#import)
+i64 import_warned;           // 1 after the warning about a library written without < >
 
 // switch to the file at path (once)
 void import_file(char^ path) {
-    int j = 0;
+    i64 j = 0;
     while j < inc_count {
         if str_eq(@inc_names + j * 128, path) {
             next();                      // already imported: skip it
@@ -1090,13 +1140,13 @@ void import_file(char^ path) {
 void using_math() {
     if math_loaded == 0 { die("using math needs  #import <math>  first"); }
     skip_blanks();
-    int want = 31;                                   // all the parts: 1 vector, 2 matrix, 4 quat, 8 complex, 16 stats
+    i64 want = 31;                                   // all the parts: 1 vector, 2 matrix, 4 quat, 8 complex, 16 stats
     if lc(0) == ':' && lc(1) == ':' {
         adv();
         adv();
         skip_blanks();
         char part[32];
-        int n = 0;
+        i64 n = 0;
         while is_letter(lc(0)) && n < 30 {
             part[n] = lc(0);
             n += 1;
@@ -1139,14 +1189,14 @@ void using_math() {
 // using gfx::canvas : like using_math (the current token is `gfx`)
 void using_gfx() {
     if gfx_loaded == 0 { die("using gfx needs  #import <gfx>  first"); }
-    int want = 3;                                    // 1 canvas, 2 screen, 3 both
+    i64 want = 3;                                    // 1 canvas, 2 screen, 3 both
     skip_blanks();
     if lc(0) == ':' && lc(1) == ':' {
         adv();
         adv();
         skip_blanks();
         char part[32];
-        int n = 0;
+        i64 n = 0;
         while is_letter(lc(0)) && n < 30 {
             part[n] = lc(0);
             n += 1;
@@ -1176,8 +1226,8 @@ void using_gfx() {
 }
 
 // the units of the mask that are not read yet become a new "file" (read next)
-void std_load(int mask) {
-    int need = mask - (mask & std_units);
+void std_load(i64 mask) {
+    i64 need = mask - (mask & std_units);
     if need == 0 { return; }
     std_units = std_units | need;
     std_loaded = 1;
@@ -1185,7 +1235,7 @@ void std_load(int mask) {
 }
 
 // the mask of a category of the standard library (0: it is not one): the units it needs are in it
-int std_category(char^ name) {
+i64 std_category(char^ name) {
     if str_eq(name, "core") { return 1; }
     if str_eq(name, "number") { return 3; }
     if str_eq(name, "text") { return 5; }
@@ -1201,7 +1251,8 @@ int std_category(char^ name) {
 // the library `name` (with / for the dots) is loaded: the built-in ones (stdlib, cpu), else a file found by find_library
 // jcmp -showlib NAME: the source of a library that is inside the compiler, written to the standard output (1: shown, 0: no such library)
 bool show_library(char^ name) {
-    int mask = std_category(name);
+    alias_on = 0;
+    i64 mask = std_category(name);
     if str_eq(name, "stdlib") || str_eq(name, "std") || str_eq(name, "math") || str_eq(name, "gfx") { mask = 511; }
     if mask != 0 {
         push_std_units(mask);
@@ -1274,10 +1325,10 @@ void lex_import() {
         next();
         char lname[200];
         char lrel[200];
-        int ln = 0;
+        i64 ln = 0;
         while true {
             if tok_kind != T_IDENT { die("a library name was expected after import <"); }
-            int w = 0;
+            i64 w = 0;
             while tok_text[w] != 0 && ln < 190 {
                 lname[ln] = tok_text[w];
                 lrel[ln] = tok_text[w];
@@ -1311,16 +1362,16 @@ void lex_import() {
     }
     if tok_kind != T_STR { die("import needs a library in < > or a file name in quotes"); }
     char path[256];
-    int n = 0;
-    int i = 0;
+    i64 n = 0;
+    i64 i = 0;
     if tok_str[0] == '.' && tok_str[1] == '/' {
         path[0] = '/';
         n = 1;
         i = 2;
     } else {
         // the folder of the importing file
-        int last = -1;
-        int k = 0;
+        i64 last = -1;
+        i64 k = 0;
         while lvl_name[lx_depth * 128 + k] != 0 {
             if lvl_name[lx_depth * 128 + k] == '/' { last = k; }
             k += 1;
@@ -1332,7 +1383,7 @@ void lex_import() {
             k += 1;
         }
     }
-    int name_n = n;                      // where the imported name starts in path
+    i64 name_n = n;                      // where the imported name starts in path
     while tok_str[i] != 0 {
         if n >= 250 { die("import path too long"); }
         if tok_str[i] == '.' {
@@ -1348,14 +1399,14 @@ void lex_import() {
     if !found && inc_dir[0] != 0 && tok_str[0] != '.' {
         // not next to the importing file: look in the -I directory
         char alt[256];
-        int an = 0;
+        i64 an = 0;
         while inc_dir[an] != 0 && an < 200 {
             alt[an] = inc_dir[an];
             an += 1;
         }
         alt[an] = '/';
         an += 1;
-        int ak = name_n;
+        i64 ak = name_n;
         while ak < n && an < 250 {
             alt[an] = path[ak];
             an += 1;
@@ -1370,7 +1421,7 @@ void lex_import() {
         append_text(@nm, "' (looked for ");
         append_text(@nm, @path + name_n);
         append_text(@nm, " and the same with .jk, next to this file and in the -I folder)");
-        int sl = str_len(@tok_str);
+        i64 sl = str_len(@tok_str);
         if (sl > 3 && tok_str[sl - 3] == '.' && tok_str[sl - 2] == 'j' && tok_str[sl - 1] == 'k') || (sl > 2 && tok_str[sl - 2] == '.' && tok_str[sl - 1] == 'j') {
             die_help(@nm, "a name in quotes has no extension: write  #import \"name\"  (a dot in it means a folder)");
         }
@@ -1382,8 +1433,8 @@ void lex_import() {
 // ----------------------------------------------------------------- tokens
 
 // one escape sequence after a backslash (the backslash is already consumed)
-int read_escape() {
-    int c = lc(0);
+i64 read_escape() {
+    i64 c = lc(0);
     adv();
     if c == 'n' { return 10; }
     if c == 't' { return 9; }
@@ -1397,11 +1448,11 @@ int read_escape() {
     if c == 'b' { return 8; }
     if c == 'x' {
         // \xHH: a byte by two hexadecimal digits
-        int hv = 0;
-        int hn = 0;
+        i64 hv = 0;
+        i64 hn = 0;
         while hn < 2 {
-            int hc = lc(0);
-            int hd = 0 - 1;
+            i64 hc = lc(0);
+            i64 hd = 0 - 1;
             if hc >= '0' && hc <= '9' { hd = hc - '0'; }
             else if hc >= 'a' && hc <= 'f' { hd = hc - 'a' + 10; }
             else if hc >= 'A' && hc <= 'F' { hd = hc - 'A' + 10; }
@@ -1414,7 +1465,7 @@ int read_escape() {
     }
     char em[80];
     str_copy(@em, "unknown escape sequence: a backslash followed by '", 80);
-    int el = str_len(@em);
+    i64 el = str_len(@em);
     em[el] = c;
     em[el + 1] = 0;
     append_text(@em, "' (the known ones are \\n \\t \\r \\0 \\e \\a \\b \\xHH \\\\ \\' \\\")");
@@ -1423,23 +1474,23 @@ int read_escape() {
 }
 
 
-int prev_tok_line;           // the line of the token before the current one
-int prev_end_line;           // where that token ended
-int prev_end_col;
-int prev_end_base;
-int prev_end_ls;
+i64 prev_tok_line;           // the line of the token before the current one
+i64 prev_end_line;           // where that token ended
+i64 prev_end_col;
+i64 prev_end_base;
+i64 prev_end_ls;
 
 // a[lo..hi] (a name directly followed by brackets with .. at the top level of them, on one line) is written span(a, lo, hi) in the text
 // (a view of a part of an array: Span<T> of the standard library). The name is the one just read (wn characters before cur_pos).
-int slice_start;
-bool slice_rewrite(int wn) {
+i64 slice_start;
+bool slice_rewrite(i64 wn) {
     if str_eq(@tok_text, "alloc") || str_eq(@tok_text, "alloc0") || str_eq(@tok_text, "free") || str_eq(@tok_text, "grow") || str_eq(@tok_text, "arr") { return false; }
-    int p = cur_pos + 1;
-    int depth = 0;
-    int dots = 0 - 1;
-    int close = 0 - 1;
+    i64 p = cur_pos + 1;
+    i64 depth = 0;
+    i64 dots = 0 - 1;
+    i64 close = 0 - 1;
     while p < cur_len && close < 0 {
-        int c = src_bufs[cur_base + p];
+        i64 c = src_bufs[cur_base + p];
         if c == 10 || c == ';' || c == '{' || c == '}' || c == '"' || c == 39 { return false; }
         if c == '(' || c == '[' { depth += 1; }
         else if c == ')' { depth -= 1; if depth < 0 { return false; } }
@@ -1451,22 +1502,22 @@ bool slice_rewrite(int wn) {
         p += 1;
     }
     if close < 0 || dots < 0 { return false; }
-    int nstart = cur_pos - wn;
-    int lo_a = cur_pos + 1;
-    int lo_n = dots - lo_a;
-    int hi_a = dots + 2;
-    int hi_n = close - hi_a;
+    i64 nstart = cur_pos - wn;
+    i64 lo_a = cur_pos + 1;
+    i64 lo_n = dots - lo_a;
+    i64 hi_a = dots + 2;
+    i64 hi_n = close - hi_a;
     if lo_n <= 0 || hi_n <= 0 { return false; }
-    int newlen = 5 + wn + 1 + lo_n + 1 + hi_n + 1;          // span( name , lo , hi )
-    int oldlen = close + 1 - nstart;
-    int delta = newlen - oldlen;
+    i64 newlen = 5 + wn + 1 + lo_n + 1 + hi_n + 1;          // span( name , lo , hi )
+    i64 oldlen = close + 1 - nstart;
+    i64 delta = newlen - oldlen;
     if cur_len + delta + 2 >= 524288 { return false; }
     // the new text in a temporary place, then the rest of the file is moved
     char tmp[1100];
     if newlen >= 1090 { return false; }
-    int q = 0;
+    i64 q = 0;
     tmp[q] = 's'; tmp[q + 1] = 'p'; tmp[q + 2] = 'a'; tmp[q + 3] = 'n'; tmp[q + 4] = '('; q += 5;
-    int k = 0;
+    i64 k = 0;
     while k < wn { tmp[q] = tok_text[k]; q += 1; k += 1; }
     tmp[q] = ','; q += 1;
     k = 0;
@@ -1475,15 +1526,15 @@ bool slice_rewrite(int wn) {
     k = 0;
     while k < hi_n { tmp[q] = src_bufs[cur_base + hi_a + k]; q += 1; k += 1; }
     tmp[q] = ')'; q += 1;
-    int tail = cur_len - (close + 1) + 1;                    // with the byte after the end of the file
+    i64 tail = cur_len - (close + 1) + 1;                    // with the byte after the end of the file
     if delta > 0 {
-        int m = tail - 1;
+        i64 m = tail - 1;
         while m >= 0 {
             src_bufs[cur_base + close + 1 + delta + m] = src_bufs[cur_base + close + 1 + m];
             m -= 1;
         }
     } else if delta < 0 {
-        int m2 = 0;
+        i64 m2 = 0;
         while m2 < tail {
             src_bufs[cur_base + close + 1 + delta + m2] = src_bufs[cur_base + close + 1 + m2];
             m2 += 1;
@@ -1501,24 +1552,24 @@ bool slice_rewrite(int wn) {
 // and read again (a {{ is a { and a }} is a }). Only a text that has a {name or {( ... } or a {{ / }} is changed. cur_pos is at the opening quote.
 char interp_tmp[4096];
 bool interp_rewrite() {
-    int base = cur_base;
-    int p = cur_pos + 1;
-    int found = 0;
+    i64 base = cur_base;
+    i64 p = cur_pos + 1;
+    i64 found = 0;
     // 1. find the end of the text on this line and see whether there is anything to do
     while true {
         if p >= cur_len { return false; }
-        int c = src_bufs[base + p];
+        i64 c = src_bufs[base + p];
         if c == 10 { return false; }
         if c == '"' { break; }
         if c == 92 { p += 2; continue; }
         if c == '{' {
-            int n1 = src_bufs[base + p + 1];
+            i64 n1 = src_bufs[base + p + 1];
             if n1 == '{' { found = 1; p += 2; continue; }
             if is_letter(n1) || n1 == '(' {
-                int d = 1;
-                int e = p + 1;
+                i64 d = 1;
+                i64 e = p + 1;
                 while e < cur_len && d > 0 {
-                    int ec = src_bufs[base + e];
+                    i64 ec = src_bufs[base + e];
                     if ec == 10 || ec == '"' { return false; }
                     if ec == '{' { d += 1; }
                     if ec == '}' { d -= 1; }
@@ -1534,26 +1585,26 @@ bool interp_rewrite() {
         p += 1;
     }
     if found == 0 { return false; }
-    int close = p;
+    i64 close = p;
     // 2. build the new text
-    int q = 0;
-    int parts = 0;
-    int lit_open = 0;              // 1 while a "..." piece is being written
+    i64 q = 0;
+    i64 parts = 0;
+    i64 lit_open = 0;              // 1 while a "..." piece is being written
     interp_tmp[q] = '('; q += 1;
     p = cur_pos + 1;
     while p < close {
         if q > 4000 { return false; }
-        int c2 = src_bufs[base + p];
+        i64 c2 = src_bufs[base + p];
         if c2 == 92 {
             if lit_open == 0 { if parts > 0 { interp_tmp[q] = ' '; interp_tmp[q + 1] = '+'; interp_tmp[q + 2] = ' '; q += 3; } interp_tmp[q] = '"'; q += 1; lit_open = 1; parts += 1; }
             interp_tmp[q] = c2; interp_tmp[q + 1] = src_bufs[base + p + 1]; q += 2; p += 2;
             continue;
         }
         if c2 == '{' && src_bufs[base + p + 1] != '{' {
-            int d2 = 1;
-            int e2 = p + 1;
+            i64 d2 = 1;
+            i64 e2 = p + 1;
             while d2 > 0 {
-                int ec2 = src_bufs[base + e2];
+                i64 ec2 = src_bufs[base + e2];
                 if ec2 == '{' { d2 += 1; }
                 if ec2 == '}' { d2 -= 1; }
                 e2 += 1;
@@ -1561,7 +1612,7 @@ bool interp_rewrite() {
             if lit_open == 1 { interp_tmp[q] = '"'; q += 1; lit_open = 0; }
             if parts > 0 { interp_tmp[q] = ' '; interp_tmp[q + 1] = '+'; interp_tmp[q + 2] = ' '; q += 3; }
             interp_tmp[q] = 's'; interp_tmp[q + 1] = 't'; interp_tmp[q + 2] = 'r'; interp_tmp[q + 3] = '('; q += 4;
-            int k = p + 1;
+            i64 k = p + 1;
             while k < e2 - 1 { interp_tmp[q] = src_bufs[base + k]; q += 1; k += 1; if q > 4000 { return false; } }
             interp_tmp[q] = ')'; q += 1;
             parts += 1;
@@ -1573,7 +1624,7 @@ bool interp_rewrite() {
             interp_tmp[q] = '"'; q += 1; lit_open = 1; parts += 1;
         }
         if (c2 == '{' || c2 == '}') && src_bufs[base + p + 1] == c2 { p += 1; }       // {{ and }} are one brace
-        int lc2 = src_bufs[base + p];
+        i64 lc2 = src_bufs[base + p];
         if lc2 == '{' || lc2 == '}' {                       // a brace in the new text is written \x7b / \x7d, so that the text is not read as an interpolation again
             interp_tmp[q] = 92; interp_tmp[q + 1] = 'x'; interp_tmp[q + 2] = '7'; q += 3;
             if lc2 == '{' { interp_tmp[q] = 'b'; } else { interp_tmp[q] = 'd'; }
@@ -1586,18 +1637,18 @@ bool interp_rewrite() {
     if parts == 0 { interp_tmp[q] = '"'; interp_tmp[q + 1] = '"'; q += 2; }
     interp_tmp[q] = ')'; q += 1;
     // 3. put it in the place of the text and move the rest of the file
-    int oldlen = close + 1 - cur_pos;
-    int delta = q - oldlen;
+    i64 oldlen = close + 1 - cur_pos;
+    i64 delta = q - oldlen;
     if cur_len + delta + 2 >= 524288 { return false; }
-    int tail = cur_len - (close + 1) + 1;
+    i64 tail = cur_len - (close + 1) + 1;
     if delta > 0 {
-        int m = tail - 1;
+        i64 m = tail - 1;
         while m >= 0 { src_bufs[base + close + 1 + delta + m] = src_bufs[base + close + 1 + m]; m -= 1; }
     } else if delta < 0 {
-        int m2 = 0;
+        i64 m2 = 0;
         while m2 < tail { src_bufs[base + close + 1 + delta + m2] = src_bufs[base + close + 1 + m2]; m2 += 1; }
     }
-    int w = 0;
+    i64 w = 0;
     while w < q { src_bufs[base + cur_pos + w] = interp_tmp[w]; w += 1; }
     cur_len += delta;
     return true;
@@ -1628,11 +1679,11 @@ void next() {
         pop_file();
     }
     mark_pos();
-    int c = lc(0);
+    i64 c = lc(0);
     if c == '#' {
         adv();
         char dw[16];
-        int dn = 0;
+        i64 dn = 0;
         while is_letter(lc(0)) && dn < 15 {
             dw[dn] = lc(0);
             dn += 1;
@@ -1643,7 +1694,7 @@ void next() {
             // #!library : a marker of the whole file (the raw mode); the rest of the line is ignored
             adv();
             char mk[16];
-            int mn = 0;
+            i64 mn = 0;
             while is_letter(lc(0)) && mn < 15 {
                 mk[mn] = lc(0);
                 mn += 1;
@@ -1667,13 +1718,13 @@ void next() {
             // #pragma read | readonly [begin | end]: data that must not change (docs/syntax-design.md 70)
             while lc(0) == 32 || lc(0) == 9 { adv(); }
             char pw[16];
-            int pn = 0;
+            i64 pn = 0;
             while is_letter(lc(0)) && pn < 15 { pw[pn] = lc(0); pn += 1; adv(); }
             pw[pn] = 0;
             if !(str_eq(@pw, "read") || str_eq(@pw, "readonly")) { die("unknown #pragma (the known one is  #pragma read , also  #pragma readonly )"); }
             while lc(0) == 32 || lc(0) == 9 { adv(); }
             char pm[16];
-            int pk = 0;
+            i64 pk = 0;
             while is_letter(lc(0)) && pk < 15 { pm[pk] = lc(0); pk += 1; adv(); }
             pm[pk] = 0;
             if str_eq(@pm, "begin") { ro_block = 1; }
@@ -1694,7 +1745,7 @@ void next() {
             // #require cpu "crc32" : the program needs this extension of the CPU (Cpu::crc32 ... work only then)
             while lc(0) == 32 || lc(0) == 9 { adv(); }
             char rw[32];
-            int rk = 0;
+            i64 rk = 0;
             while is_letter(lc(0)) && rk < 30 { rw[rk] = lc(0); rk += 1; adv(); }
             rw[rk] = 0;
             if !str_eq(@rw, "cpu") { die("after #require can follow:  cpu \"name\"  (the known name is crc32)"); }
@@ -1702,7 +1753,7 @@ void next() {
             if lc(0) != '"' { die("write  #require cpu \"crc32\"  (the name of the extension in quotes)"); }
             adv();
             char rn[32];
-            int rl = 0;
+            i64 rl = 0;
             while lc(0) != '"' && lc(0) != 10 && lc(0) != 0 && rl < 30 { rn[rl] = lc(0); rl += 1; adv(); }
             rn[rl] = 0;
             if lc(0) != '"' { die("the name of the extension needs a closing quote"); }
@@ -1718,7 +1769,7 @@ void next() {
             // #expect instructions <= N : the next function must be made of N instructions or fewer (the compiler stops when it is not)
             while lc(0) == 32 || lc(0) == 9 { adv(); }
             char ew[32];
-            int ek = 0;
+            i64 ek = 0;
             while is_letter(lc(0)) && ek < 30 {
                 ew[ek] = lc(0);
                 ek += 1;
@@ -1732,8 +1783,8 @@ void next() {
             if lc(0) != '=' { die("write  #expect instructions <= N  (a number after <=)"); }
             adv();
             while lc(0) == 32 || lc(0) == 9 { adv(); }
-            int en = 0;
-            int ed = 0;
+            i64 en = 0;
+            i64 ed = 0;
             while is_digit(lc(0)) {
                 en = en * 10 + (lc(0) - '0');
                 ed += 1;
@@ -1751,7 +1802,7 @@ void next() {
             // #allow syscall : this program calls the system by number on purpose (no warning about syscall(...))
             while lc(0) == 32 || lc(0) == 9 { adv(); }
             char aw[32];
-            int ak = 0;
+            i64 ak = 0;
             while is_letter(lc(0)) && ak < 30 {
                 aw[ak] = lc(0);
                 ak += 1;
@@ -1770,8 +1821,8 @@ void next() {
                 while lc(0) == 32 || lc(0) == 9 { adv(); }
                 if lc(0) != 'x' { die("#reserve takes registers: #reserve x18, x19"); }
                 adv();
-                int rn = 0;
-                int rd = 0;
+                i64 rn = 0;
+                i64 rd = 0;
                 while is_digit(lc(0)) {
                     rn = rn * 10 + (lc(0) - '0');
                     rd += 1;
@@ -1789,8 +1840,8 @@ void next() {
         while lc(0) == 32 || lc(0) == 9 { adv(); }
         if !is_letter(lc(0)) { die_help("#define needs a name", "write #define NAME value"); }
         if def_count >= 2048 { die("too many #define names"); }
-        int di = def_count;
-        int dk = 0;
+        i64 di = def_count;
+        i64 dk = 0;
         while is_alnum(lc(0)) {
             if dk < 62 {
                 def_name[di * 64 + dk] = lc(0);
@@ -1800,7 +1851,7 @@ void next() {
         }
         def_name[di * 64 + dk] = 0;
         while lc(0) == 32 || lc(0) == 9 { adv(); }
-        int dv = 0;
+        i64 dv = 0;
         while cur_pos < cur_len && lc(0) != 10 && !(lc(0) == '/' && lc(1) == '/') {
             if dv < 250 {
                 def_val[di * 256 + dv] = lc(0);
@@ -1811,7 +1862,7 @@ void next() {
         while dv > 0 && (def_val[di * 256 + dv - 1] == 32 || def_val[di * 256 + dv - 1] == 9) { dv -= 1; }
         def_val[di * 256 + dv] = 0;
         if dv < 248 && define_is_expr(@def_val + di * 256, dv) {
-            int mv = dv;
+            i64 mv = dv;
             while mv > 0 {
                 def_val[di * 256 + mv] = def_val[di * 256 + mv - 1];
                 mv -= 1;
@@ -1829,7 +1880,7 @@ void next() {
         adv();
         adv();
         tok_kind = T_STR;
-        int rn = 0;
+        i64 rn = 0;
         while lc(0) != '"' {
             if cur_pos >= cur_len { die_help("unterminated string", "add the closing \" before the end of the line (a text cannot continue on the next line)"); }
             if rn >= 1000 { die_help("string literal too long", "split the text in two with +, or put it in a file and read it"); }
@@ -1843,7 +1894,7 @@ void next() {
         return;
     }
     if is_letter(c) {
-        int wn = 0;
+        i64 wn = 0;
         while is_alnum(lc(0)) {
             if wn >= 63 { die("name too long (63 characters at most)"); }
             tok_text[wn] = lc(0);
@@ -1856,6 +1907,8 @@ void next() {
         if wn == 4 && str_eq(@tok_text, "jout") { str_copy(@tok_text, "cout", 8); }
         else if wn == 3 && str_eq(@tok_text, "jin") { str_copy(@tok_text, "cin", 8); }
         else if wn == 4 && str_eq(@tok_text, "jerr") { str_copy(@tok_text, "cerr", 8); }
+        // i64 is another name of int while int is 64 bits (owner's decision 2026-11-06, docs/syntax-design.md 110): the same word to the compiler
+        else if wn == 3 && str_eq(@tok_text, "i64") { str_copy(@tok_text, "int", 8); }
         if lc(0) == '[' && slice_rewrite(wn) {
             // a[lo..hi] became span(a, lo, hi): read it again from the start of the name
             cur_pos = slice_start;
@@ -1863,7 +1916,7 @@ void next() {
             return;
         }
         if wn == 6 && str_eq(@tok_text, "import") { import_hash = 0; }
-        int dfound = find_define(@tok_text);
+        i64 dfound = find_define(@tok_text);
         if dfound >= 0 {
             push_macro(@def_val + dfound * 256);
             next();
@@ -1911,9 +1964,9 @@ void next() {
                 adv();
             }
         } else {
-            int fm = 0;                                      // the first 18 digits, for a decimal number with a long whole part
-            int fextra = 0;                                  // the digits after those
-            int fnd = 0;
+            i64 fm = 0;                                      // the first 18 digits, for a decimal number with a long whole part
+            i64 fextra = 0;                                  // the digits after those
+            i64 fnd = 0;
             while is_digit(lc(0)) || (lc(0) == '_' && is_digit(lc(1))) {
                 if lc(0) == '_' {
                     adv();                                   // 1_000_000
@@ -1947,14 +2000,14 @@ void next() {
                 }
                 if lc(0) == 'e' || lc(0) == 'E' {
                     adv();
-                    int exp_sign = 1;
+                    i64 exp_sign = 1;
                     if lc(0) == '-' {
                         exp_sign = 0 - 1;
                         adv();
                     } else if lc(0) == '+' {
                         adv();
                     }
-                    int exp_val = 0;
+                    i64 exp_val = 0;
                     while is_digit(lc(0)) {
                         if exp_val < 1000 { exp_val = exp_val * 10 + (lc(0) - '0'); }
                         adv();
@@ -1970,10 +2023,10 @@ void next() {
         if interp_rewrite() { next(); return; }
         adv();
         tok_kind = T_STR;
-        int sn = 0;
+        i64 sn = 0;
         while lc(0) != '"' {
             if cur_pos >= cur_len { die_help("unterminated string", "add the closing \" before the end of the line (a text cannot continue on the next line)"); }
-            int sch = lc(0);
+            i64 sch = lc(0);
             adv();
             if sch == 92 { sch = read_escape(); }
             if sn >= 1000 { die_help("string literal too long", "split the text in two with +, or put it in a file and read it"); }
@@ -1985,8 +2038,8 @@ void next() {
         tok_str_len = sn;
         if sn >= 2 && tok_str[sn - 2] == '/' && tok_str[sn - 1] == 'n' {
             // "/n" or "text/n": a slash and the letter n (not a new line) unless the text is a path with more slashes
-            int sl = 0;
-            int sli = 0;
+            i64 sl = 0;
+            i64 sli = 0;
             while sli < sn { if tok_str[sli] == '/' { sl += 1; } sli += 1; }
             if sl == 1 { warn("this text ends with /n (a slash and the letter n): a new line is written \\n, with a backslash", "slash-n"); }
         }
@@ -1997,7 +2050,7 @@ void next() {
         tok_kind = T_NUM;
         tok_char = 1;
         tok_float = 0;
-        int cch = lc(0);
+        i64 cch = lc(0);
         adv();
         if cch == 92 { cch = read_escape(); }
         if lc(0) != 39 { die_help("unterminated character literal", "a character is written between single quotes: 'a'"); }
@@ -2007,9 +2060,9 @@ void next() {
     }
     // operators: longest match
     tok_kind = T_OP;
-    int c1 = lc(1);
-    int c2 = lc(2);
-    int len = 1;
+    i64 c1 = lc(1);
+    i64 c2 = lc(2);
+    i64 len = 1;
     if (c == '<' && c1 == '<' && c2 == '=') || (c == '>' && c1 == '>' && c2 == '=') {
         len = 3;
     } else if (c == '&' && c1 == '&') || (c == '|' && c1 == '|') || (c == '=' && c1 == '=') {
@@ -2027,7 +2080,7 @@ void next() {
     } else if c == '-' && c1 == '>' {
         len = 2;                         // ->  (a lambda)
     }
-    int k = 0;
+    i64 k = 0;
     while k < len {
         tok_text[k] = lc(0);
         adv();
@@ -2052,9 +2105,9 @@ bool accept(char^ s) {
     return false;
 }
 
-int soft_paren_line;         // the line where a missing ')' or ']' was reported: the ';' that follows is not reported again
+i64 soft_paren_line;         // the line where a missing ')' or ']' was reported: the ';' that follows is not reported again
 
-void missing_semicolon(int soft) {
+void missing_semicolon(i64 soft) {
     if soft == 1 && soft_paren_line == prev_tok_line { return; }
     char m[100];
     err_line = prev_end_line;            // the message points just after the last token of the line above
@@ -2077,10 +2130,10 @@ void expect(char^ s) {
         if (str_eq(s, ")") || str_eq(s, "]")) && err_line > prev_tok_line && prev_tok_line > 0 && pass_no == 1 {
             // a ')' or ']' missing at the end of a line: the same way
             char m2[100];
-            int sv_line = err_line;
-            int sv_col = err_col;
-            int sv_base = err_base;
-            int sv_ls = err_ls;
+            i64 sv_line = err_line;
+            i64 sv_col = err_col;
+            i64 sv_base = err_base;
+            i64 sv_ls = err_ls;
             err_line = prev_end_line;
             err_col = prev_end_col;
             err_base = prev_end_base;

@@ -15,16 +15,16 @@
 
 Gl glapp_gl_v;
 GlCanvas glapp_canvas_v;
-int glapp_w_v;
-int glapp_h_v;
-int glapp_started;
+i64 glapp_w_v;
+i64 glapp_h_v;
+i64 glapp_started;
 
 Gl glapp_gl() { return glapp_gl_v; }
 Canvas2d^ glapp_canvas() { return @glapp_canvas_v; }
-int glapp_w() { return glapp_w_v; }
-int glapp_h() { return glapp_h_v; }
+i64 glapp_w() { return glapp_w_v; }
+i64 glapp_h() { return glapp_h_v; }
 
-export int Java_com_j2k_gamerun_GameLib_init(int env, int cls, int w, int h) {
+export i64 Java_com_j2k_gamerun_GameLib_init(i64 env, i64 cls, i64 w, i64 h) {
     glapp_w_v = w;
     glapp_h_v = h;
     glapp_gl_v = Gl::attach(w, h);
@@ -37,7 +37,7 @@ export int Java_com_j2k_gamerun_GameLib_init(int env, int cls, int w, int h) {
     return 1;
 }
 
-export void Java_com_j2k_gamerun_GameLib_resize(int env, int cls, int w, int h) {
+export void Java_com_j2k_gamerun_GameLib_resize(i64 env, i64 cls, i64 w, i64 h) {
     glapp_w_v = w;
     glapp_h_v = h;
     if glapp_started == 0 { return; }
@@ -47,28 +47,28 @@ export void Java_com_j2k_gamerun_GameLib_resize(int env, int cls, int w, int h) 
     game_resize(w, h);
 }
 
-export void Java_com_j2k_gamerun_GameLib_frame(int env, int cls, int ms) {
+export void Java_com_j2k_gamerun_GameLib_frame(i64 env, i64 cls, i64 ms) {
     if glapp_started == 0 { return; }
     game_frame(ms);
 }
 
-export void Java_com_j2k_gamerun_GameLib_touch(int env, int cls, int action, int x, int y, int id) {
+export void Java_com_j2k_gamerun_GameLib_touch(i64 env, i64 cls, i64 action, i64 x, i64 y, i64 id) {
     if glapp_started == 0 { return; }
     game_touch(action, x, y, id);
 }
 
 // ---- text input (0.2.0): the app sends the typed characters, and asks every frame whether the soft keyboard should show
-void(int)^ glapp_key_fn;
-int glapp_kb_wanted;
+void(i64)^ glapp_key_fn;
+i64 glapp_kb_wanted;
 
-void glapp_on_key(void(int)^ f) { glapp_key_fn = f; }
+void glapp_on_key(void(i64)^ f) { glapp_key_fn = f; }
 void glapp_keyboard(bool on) { if on { glapp_kb_wanted = 1; } else { glapp_kb_wanted = 0; } }
 
-export void Java_com_j2k_gamerun_GameLib_key(int env, int cls, int ch) {
+export void Java_com_j2k_gamerun_GameLib_key(i64 env, i64 cls, i64 ch) {
     if glapp_started == 0 { return; }
     if glapp_key_fn != null { glapp_key_fn(ch); }
 }
 
-export int Java_com_j2k_gamerun_GameLib_wantsKeyboard(int env, int cls) {
+export i64 Java_com_j2k_gamerun_GameLib_wantsKeyboard(i64 env, i64 cls) {
     return glapp_kb_wanted;
 }

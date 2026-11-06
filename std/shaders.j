@@ -7,14 +7,14 @@
 // An include loop (a file that includes itself) stops at depth 8 with an error. The library needs no graphics chip: it only makes text.
 
 String shader_dir(String path) {
-    int cut = -1;
+    i64 cut = -1;
     for i in 0..path.len { if path[i] == '/' { cut = i; } }
     if cut < 0 { return ""; }
     return path.slice(0, cut + 1);
 }
 
 // the text of a file with the includes written in; err collects the first problem; names collects every file that was read
-String shader_expand(String path, int depth, String[] names, String[] err) {
+String shader_expand(String path, i64 depth, String[] names, String[] err) {
     if depth > 8 {
         if err.len == 0 { err.push("too many nested #include (a loop?) at " + path); }
         return "";
@@ -33,8 +33,8 @@ String shader_expand(String path, int depth, String[] names, String[] err) {
         String line = lines[i];
         String t = line.trim();
         if t.starts_with("#include") {
-            int a = -1;
-            int b = -1;
+            i64 a = -1;
+            i64 b = -1;
             for k in 0..t.len {
                 if t[k] == '"' { if a < 0 { a = k; } else { b = k; } }
             }

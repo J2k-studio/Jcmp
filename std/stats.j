@@ -33,13 +33,13 @@ struct Stats {
     static double stddev(double[] xs) { return Math::sqrt(Stats::variance(xs)); }
     // the middle value (the mean of the two middle ones if the number is even)
     static double median(double[] xs) {
-        int n = xs.len;
+        i64 n = xs.len;
         if n == 0 { return 0.0; }
         double[] c = arr(n);
         for i in 0..n { c.push(xs[i]); }
         for i in 1..n {
             double v = c[i];
-            int j = i - 1;
+            i64 j = i - 1;
             while j >= 0 && c[j] > v {
                 c[j + 1] = c[j];
                 j -= 1;

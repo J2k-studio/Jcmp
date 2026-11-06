@@ -8,9 +8,9 @@
 
 struct Profile {
     String[] names;
-    int[] calls_of;
-    int[] total_ns;
-    int frames;
+    i64[] calls_of;
+    i64[] total_ns;
+    i64 frames;
 
     static Profile make() {
         Profile p;
@@ -22,9 +22,9 @@ struct Profile {
     }
 
     // the start mark to give to stop()
-    int start(self) { return Time::mono_ns(); }
+    i64 start(self) { return Time::mono_ns(); }
 
-    int index(self, String name) {
+    i64 index(self, String name) {
         for i in 0..self.names.len {
             if self.names[i] == name { return i; }
         }
@@ -32,14 +32,14 @@ struct Profile {
     }
 
     // adds the time since the mark t to the timer `name`; returns that time in ns
-    int stop(self, String name, int t) {
-        int d = Time::mono_ns() - t;
+    i64 stop(self, String name, i64 t) {
+        i64 d = Time::mono_ns() - t;
         self.add_ns(name, d);
         return d;
     }
 
-    void add_ns(self, String name, int d) {
-        int i = self.index(name);
+    void add_ns(self, String name, i64 d) {
+        i64 i = self.index(name);
         if i < 0 {
             self.names.push(name + "");
             self.calls_of.push(0);
@@ -52,20 +52,20 @@ struct Profile {
 
     void frame(self) { self.frames += 1; }
 
-    int calls(self, String name) {
-        int i = self.index(name);
+    i64 calls(self, String name) {
+        i64 i = self.index(name);
         if i < 0 { return 0; }
         return self.calls_of[i];
     }
 
-    int total_us(self, String name) {
-        int i = self.index(name);
+    i64 total_us(self, String name) {
+        i64 i = self.index(name);
         if i < 0 { return 0; }
         return self.total_ns[i] / 1000;
     }
 
-    int average_us(self, String name) {
-        int i = self.index(name);
+    i64 average_us(self, String name) {
+        i64 i = self.index(name);
         if i < 0 || self.calls_of[i] == 0 { return 0; }
         return self.total_ns[i] / self.calls_of[i] / 1000;
     }
@@ -77,11 +77,11 @@ struct Profile {
 
     // one line a timer, in the order they were first used
     String report(self) {
-        int all = 0;
+        i64 all = 0;
         for i in 0..self.names.len { all += self.total_ns[i]; }
         String r = "timer            calls   total ms   avg us   share\n";
         for i in 0..self.names.len {
-            int share = 0;
+            i64 share = 0;
             if all > 0 { share = self.total_ns[i] * 100 / all; }
             r = r + self.names[i] + "  " + str(self.calls_of[i]) + "  " + str(self.total_ns[i] / 1000000) + "  " + str(self.average_us(self.names[i])) + "  " + str(share) + "%\n";
         }

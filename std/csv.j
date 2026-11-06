@@ -6,7 +6,7 @@ struct Csv {
         String[] out = arr(4);
         String cur = "";
         bool quoted = false;
-        int i = 0;
+        i64 i = 0;
         while i < line.len {
             char c = line[i];
             if quoted {

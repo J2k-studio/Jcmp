@@ -1,6 +1,6 @@
 #import <stdlib>
 #import <simd>
-void kernel(float^ fa, float^ fb, float^ fc, int n) {
+void kernel(float^ fa, float^ fb, float^ fc, i64 n) {
     for i in 0..n {
         for k in 0..n {
             float a = fa[i * n + k];

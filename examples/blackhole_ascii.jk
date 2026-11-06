@@ -45,10 +45,10 @@ double trace(double ex, double ey, double ez, double dx, double dy, double dz, d
         if r > 45.0 && (px * vx + py * vy + pz * vz) > 0.0 {
             if best > 0.0 { return best; }
             // away for ever: a star in that direction, or nothing
-            int i = (int)((vx + 2.0) * 70.0);
-            int j = (int)((vy + 2.0) * 70.0);
-            int k = (int)((vz + 2.0) * 70.0);
-            int h = (i * 73856093 xor j * 19349663 xor k * 83492791) & 65535;
+            i64 i = (i64)((vx + 2.0) * 70.0);
+            i64 j = (i64)((vy + 2.0) * 70.0);
+            i64 k = (i64)((vz + 2.0) * 70.0);
+            i64 h = (i * 73856093 xor j * 19349663 xor k * 83492791) & 65535;
             if h % 701 == 0 { return 3.0; }
             if h % 223 == 0 { return 2.0; }
             return 0.0;
@@ -86,7 +86,7 @@ double trace(double ex, double ey, double ez, double dx, double dy, double dz, d
 }
 
 void main() {
-    int frames = 0;                                           // 0: until Ctrl-C
+    i64 frames = 0;                                           // 0: until Ctrl-C
     String[] args = Env::args();
     if args.len > 1 {
         switch Num::parse_int(args[1]) {
@@ -98,11 +98,11 @@ void main() {
         }
     }
     String ramp = " .:-=+*#%@";
-    int W = 100;
-    int H = 37;
+    i64 W = 100;
+    i64 H = 37;
     Canvas c = Canvas::make(W, H);
     c.clear_screen();
-    int frame = 0;
+    i64 frame = 0;
     while frames == 0 || frame < frames {
         double t = (double)frame * 0.06;
         // the eye: above the plane of the disk, looking at the hole; it moves up and down slowly
@@ -113,7 +113,7 @@ void main() {
             for cx in 0..W {
                 // two rays for each character, one above the other, and their average
                 double sum = 0.0;
-                int star = 0;
+                i64 star = 0;
                 for sub in 0..2 {
                     double u = ((double)cx - (double)W / 2.0 + 0.5) / ((double)H * 2.0) * 1.5;
                     double v = ((double)cy - (double)H / 2.0 + 0.25 + (double)sub * 0.5) / (double)H * 1.5;
@@ -121,7 +121,7 @@ void main() {
                     vec3 d = look.mul_vec(d0.normalize());
                     double got = trace(eye.x, eye.y, eye.z, d.x, d.y, d.z, t);
                     if got >= 2.0 {
-                        star = (int)got;
+                        star = (i64)got;
                     } else {
                         sum += got;
                     }
@@ -129,7 +129,7 @@ void main() {
                 double light = sum / 2.0;
                 char ch = ' ';
                 if light > 0.06 {
-                    int k = (int)(light * 9.99);
+                    i64 k = (i64)(light * 9.99);
                     if k > 9 { k = 9; }
                     if k < 1 { k = 1; }
                     ch = ramp[k];

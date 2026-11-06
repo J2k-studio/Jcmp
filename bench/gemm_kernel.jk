@@ -4,8 +4,8 @@
 #import <time>
 // GFLOPS of nt_gemm (the 4 x 8 micro-kernel product of <neuron>) for a 512 x 512 float32 product, one thread and four threads. Best of 5 runs.
 // Compare with bench/dot.jk (dot products, the old way) and tools/bench/gemm/gemm.c (clang -O2). Needs the cores to be free: run it alone.
-int main() {
-    int n = 512;
+i64 main() {
+    i64 n = 512;
     float^ a = (float^)Mem::alloc(n * n * 4);
     float^ b = (float^)Mem::alloc(n * n * 4);
     float^ c = (float^)Mem::alloc(n * n * 4);
@@ -13,11 +13,11 @@ int main() {
     double flops = 2.0 * (double)n * (double)n * (double)n;
     for th in 1..5 {
         if th == 3 { continue; }
-        int best = 0;
+        i64 best = 0;
         for rep in 0..5 {
-            int t0 = Time::mono_ns();
+            i64 t0 = Time::mono_ns();
             nt_gemm(a, b, c, n, n, n, th);
-            int t1 = Time::mono_ns();
+            i64 t1 = Time::mono_ns();
             if best == 0 || t1 - t0 < best { best = t1 - t0; }
         }
         double ms = (double)best / 1000000.0;

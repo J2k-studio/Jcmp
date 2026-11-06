@@ -10,12 +10,12 @@
 #define LN 4096
 #define LCELLS (lg_w * lg_h)
 
-int lg_w;
-int lg_h;
+i64 lg_w;
+i64 lg_h;
 char lg_ch[LN];              // characters of the picture
-int lg_col[LN];              // the colour of each character (0xRRGGBB, grey), used if the terminal has 24-bit colour
+i64 lg_col[LN];              // the colour of each character (0xRRGGBB, grey), used if the terminal has 24-bit colour
 double lg_dep[LN];           // how far from the eye what is drawn in each cell is
-int lg_color_on;             // 1: use the colours
+i64 lg_color_on;             // 1: use the colours
 double lg_fx;                // the view: forward, right and up
 double lg_fy;
 double lg_fz;
@@ -32,10 +32,10 @@ double lg_vx;                // the result of lg_rot
 double lg_vy;
 double lg_vz;
 char lg_buf[131072];          // the text of one frame
-int lg_len;
+i64 lg_len;
 char lg_cap[600];            // five lines of text under the picture, 100 characters each
-int lg_cl[5];
-int lg_cn;
+i64 lg_cl[5];
+i64 lg_cn;
 double lg_crx[14];           // craters of the Moon: place on the surface and size
 double lg_cry[14];
 double lg_crz[14];
@@ -46,16 +46,16 @@ double lg_sf[60];
 double lg_sp[60];
 char lg_ramp2[96];
 char lg_ramp_m[16];          // the Moon is made of digits: 1 7 3 5 2 9 6 0 8 @           // a long ramp of characters from empty to dense: many steps of shade
-int lg_n2;
-int lg_nm;
-int lg_px;                   // 0: characters, 1: pixels in colour, 2: pixels in white, grey and black
-int lg_pt[LN];               // pixel mode: the colour of the top dot of each cell and of the bottom dot (0xRRGGBB)
-int lg_pbm[LN];
+i64 lg_n2;
+i64 lg_nm;
+i64 lg_px;                   // 0: characters, 1: pixels in colour, 2: pixels in white, grey and black
+i64 lg_pt[LN];               // pixel mode: the colour of the top dot of each cell and of the bottom dot (0xRRGGBB)
+i64 lg_pbm[LN];
 double lg_ar[2];             // the colour (red, green, blue, 0..1 each) added up from the rays of the top and of the bottom dot of one cell
 double lg_ag[2];
 double lg_ab[2];
-int lg_cols;                 // the size of the terminal, read once
-int lg_rows;
+i64 lg_cols;                 // the size of the terminal, read once
+i64 lg_rows;
 
 double lg_abs(double x) {
     if x < 0.0 { return 0.0 - x; }
@@ -81,7 +81,7 @@ double lg_sin(double x) {
     double x2 = x * x;
     double term = x;
     double sum = x;
-    int k = 1;
+    i64 k = 1;
     while k < 9 {
         term = 0.0 - term * x2 / (double)((2 * k) * (2 * k + 1));
         sum = sum + term;
@@ -134,7 +134,7 @@ double lg_j(double x, double y) {
 }
 
 void lg_text(char^ s) {
-    int i = 0;
+    i64 i = 0;
     while s[i] != 0 && lg_len < 130000 {
         lg_buf[lg_len] = s[i];
         lg_len += 1;
@@ -142,9 +142,9 @@ void lg_text(char^ s) {
     }
 }
 
-void lg_num(int v) {
+void lg_num(i64 v) {
     char d[24];
-    int n = 0;
+    i64 n = 0;
     if v == 0 {
         d[0] = '0';
         n = 1;
@@ -162,13 +162,13 @@ void lg_num(int v) {
 }
 
 // ---- the lines of text under the picture
-void lg_cbegin(int n) {
+void lg_cbegin(i64 n) {
     lg_cn = n;
     lg_cl[n] = 0;
 }
 
 void lg_ct(char^ s) {
-    int i = 0;
+    i64 i = 0;
     while s[i] != 0 && lg_cl[lg_cn] < 99 {
         lg_cap[lg_cn * 100 + lg_cl[lg_cn]] = s[i];
         lg_cl[lg_cn] += 1;
@@ -176,9 +176,9 @@ void lg_ct(char^ s) {
     }
 }
 
-void lg_cnum(int v) {
+void lg_cnum(i64 v) {
     char d[24];
-    int n = 0;
+    i64 n = 0;
     if v == 0 {
         d[0] = '0';
         n = 1;
@@ -200,10 +200,10 @@ void lg_cnum(int v) {
 // a number with one decimal: 12.3
 void lg_cdec(double v) {
     if v < 0.0 { v = 0.0; }
-    int w = (int)v;
+    i64 w = (i64)v;
     lg_cnum(w);
     lg_ct(".");
-    lg_cnum((int)((v - (double)w) * 10.0));
+    lg_cnum((i64)((v - (double)w) * 10.0));
 }
 
 // a time given in seconds: "12.0 s", or "5.5 min" from two minutes on, or "1.2 h"
@@ -224,13 +224,13 @@ void lg_cdur(double s) {
 void lg_cclock() {
     char ts[16];
     syscall(113, 0, @ts);
-    int sec = 0;
-    int k = 7;
+    i64 sec = 0;
+    i64 k = 7;
     while k >= 0 {
         sec = sec * 256 + (ts[k] & 255);
         k -= 1;
     }
-    int day = sec % 86400;
+    i64 day = sec % 86400;
     char t8[10];
     t8[0] = '0' + day / 36000;
     t8[1] = '0' + (day / 3600) % 10;
@@ -245,18 +245,18 @@ void lg_cclock() {
 }
 
 // YYYY-MM-DD HH:MM:SS (UTC) of a time given as seconds since 1970
-void lg_cdate(int sec) {
-    int days = sec / 86400;
-    int day = sec % 86400;
-    int z = days + 719468;                                  // the civil calendar from the number of days
-    int era = z / 146097;
-    int doe = z - era * 146097;
-    int yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
-    int y = yoe + era * 400;
-    int doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    int mp = (5 * doy + 2) / 153;
-    int d = doy - (153 * mp + 2) / 5 + 1;
-    int m = mp + 3;
+void lg_cdate(i64 sec) {
+    i64 days = sec / 86400;
+    i64 day = sec % 86400;
+    i64 z = days + 719468;                                  // the civil calendar from the number of days
+    i64 era = z / 146097;
+    i64 doe = z - era * 146097;
+    i64 yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+    i64 y = yoe + era * 400;
+    i64 doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    i64 mp = (5 * doy + 2) / 153;
+    i64 d = doy - (153 * mp + 2) / 5 + 1;
+    i64 m = mp + 3;
     if mp >= 10 { m = mp - 9; }
     if m <= 2 { y = y + 1; }
     char t[24];
@@ -284,11 +284,11 @@ void lg_cdate(int sec) {
 }
 
 // the seconds since 1970 now (the clock of the computer, UTC)
-int lg_unix() {
+i64 lg_unix() {
     char ts[16];
     syscall(113, 0, @ts);
-    int sec = 0;
-    int k = 7;
+    i64 sec = 0;
+    i64 k = 7;
     while k >= 0 {
         sec = sec * 256 + (ts[k] & 255);
         k -= 1;
@@ -298,7 +298,7 @@ int lg_unix() {
 
 void lg_find_color() {
     lg_color_on = 0;
-    int i = argc() + 1;
+    i64 i = argc() + 1;
     while arg(i) != null {
         char^ e = arg(i);
         if e[0] == 'C' && e[1] == 'O' && e[2] == 'L' && e[3] == 'O' && e[4] == 'R' && e[5] == 'T' && e[6] == 'E' && e[7] == 'R' && e[8] == 'M' && e[9] == '=' {
@@ -313,22 +313,22 @@ char lg_pick(double v) {
     if v < 0.0 { v = 0.0; }
     if v > 1.0 { v = 1.0; }
     v = v * (1.7 - 0.7 * v);                                // lifts the middle: fuller, less thin
-    int k = (int)(v * (double)(lg_n2 - 1) + 0.5);
+    i64 k = (i64)(v * (double)(lg_n2 - 1) + 0.5);
     if k > lg_n2 - 1 { k = lg_n2 - 1; }
     return lg_ramp2[k];
 }
 
 // the same with a 4 x 4 dither (the pattern of Bayer): the cell at (x, y) takes the character above or below the exact shade, in a
 // fine pattern, so that slow changes of the light look smooth
-char lg_pick_at(double v, int x, int y) {
+char lg_pick_at(double v, i64 x, i64 y) {
     if v < 0.0 { v = 0.0; }
     if v > 1.0 { v = 1.0; }
     v = v * (1.7 - 0.7 * v);
     double kf = v * (double)(lg_n2 - 1);
-    int k = (int)kf;
+    i64 k = (i64)kf;
     double fr = kf - (double)k;
-    int bi = (x % 4) * 4 + (y % 4);
-    int bm[16];
+    i64 bi = (x % 4) * 4 + (y % 4);
+    i64 bm[16];
     bm[0] = 0;  bm[1] = 8;  bm[2] = 2;  bm[3] = 10;
     bm[4] = 12; bm[5] = 4;  bm[6] = 14; bm[7] = 6;
     bm[8] = 3;  bm[9] = 11; bm[10] = 1; bm[11] = 9;
@@ -341,7 +341,7 @@ char lg_pick_at(double v, int x, int y) {
 
 // the character for the edge of a shape that covers some of the four quarters of a cell (1 = top left, 2 = top right, 4 = bottom left,
 // 8 = bottom right): the character looks like the line that cuts the cell
-char lg_edge_char(int m) {
+char lg_edge_char(i64 m) {
     if m == 1 { return '\''; }
     if m == 2 { return '`'; }
     if m == 4 { return ','; }
@@ -357,7 +357,7 @@ char lg_edge_char(int m) {
 }
 
 // pixel mode: a ray of the row sj of the cell found something of the colour (kr, kg, kb) with the brightness b
-void lg_pacc(int sj, double kr, double kg, double kb, double b) {
+void lg_pacc(i64 sj, double kr, double kg, double kb, double b) {
     if lg_px == 2 {
         kr = 1.0;
         kg = 1.0;
@@ -369,10 +369,10 @@ void lg_pacc(int sj, double kr, double kg, double kb, double b) {
 }
 
 // the colour number of the sum of two rays (red, green, blue added up, each 0..2)
-int lg_pcol(double r, double g, double b) {
-    int ri = (int)(r * 127.5);
-    int gi = (int)(g * 127.5);
-    int bi = (int)(b * 127.5);
+i64 lg_pcol(double r, double g, double b) {
+    i64 ri = (i64)(r * 127.5);
+    i64 gi = (i64)(g * 127.5);
+    i64 bi = (i64)(b * 127.5);
     if ri > 255 { ri = 255; }
     if gi > 255 { gi = 255; }
     if bi > 255 { bi = 255; }
@@ -380,10 +380,10 @@ int lg_pcol(double r, double g, double b) {
 }
 
 // grey, as a colour number
-int lg_grey(double v) {
+i64 lg_grey(double v) {
     if v < 0.0 { v = 0.0; }
     if v > 1.0 { v = 1.0; }
-    int g = (int)(70.0 + 185.0 * v);
+    i64 g = (i64)(70.0 + 185.0 * v);
     return (g << 16) | (g << 8) | g;
 }
 
@@ -392,8 +392,8 @@ void lg_read_size() {
     lg_cols = 80;
     lg_rows = 24;
     if syscall(29, 1, 21523, @ws) == 0 {
-        int r = (ws[0] & 255) | ((ws[1] & 255) << 8);
-        int c = (ws[2] & 255) | ((ws[3] & 255) << 8);
+        i64 r = (ws[0] & 255) | ((ws[1] & 255) << 8);
+        i64 c = (ws[2] & 255) | ((ws[3] & 255) << 8);
         if r >= 5 { lg_rows = r; }
         if c >= 10 { lg_cols = c; }
     }
@@ -401,12 +401,12 @@ void lg_read_size() {
 
 // the picture as text, in the middle of the terminal (every line is put in place with a cursor move)
 void lg_show() {
-    int left = (lg_cols - LW) / 2 + 1;
-    int top = (lg_rows - LH - 5) / 2 + 1;
+    i64 left = (lg_cols - LW) / 2 + 1;
+    i64 top = (lg_rows - LH - 5) / 2 + 1;
     if left < 1 { left = 1; }
     if top < 1 { top = 1; }
     lg_len = 0;
-    int y = 0;
+    i64 y = 0;
     while y < LH {
         lg_buf[lg_len] = 27;
         lg_len += 1;
@@ -415,12 +415,12 @@ void lg_show() {
         lg_text(";");
         lg_num(left);
         lg_text("H");
-        int x = 0;
-        int last = 0 - 1;
-        int lastb = 0 - 1;
+        i64 x = 0;
+        i64 last = 0 - 1;
+        i64 lastb = 0 - 1;
         while x < LW && lg_px > 0 {
-            int ct = lg_pt[y * LW + x];
-            int cb = lg_pbm[y * LW + x];
+            i64 ct = lg_pt[y * LW + x];
+            i64 cb = lg_pbm[y * LW + x];
             if ct != last {
                 lg_buf[lg_len] = 27;
                 lg_len += 1;
@@ -458,7 +458,7 @@ void lg_show() {
         }
         while x < LW {
             if lg_color_on == 1 {
-                int c = lg_col[y * LW + x];
+                i64 c = lg_col[y * LW + x];
                 if lg_ch[y * LW + x] == ' ' { c = 0; }
                 if c != last {
                     lg_buf[lg_len] = 27;
@@ -485,7 +485,7 @@ void lg_show() {
         y += 1;
     }
     // the four lines under the picture, each in the middle (the old text of the line is wiped first)
-    int n = 0;
+    i64 n = 0;
     while n < 5 {
         lg_buf[lg_len] = 27;
         lg_len += 1;
@@ -500,11 +500,11 @@ void lg_show() {
         lg_text("[");
         lg_num(top + LH + n);
         lg_text(";");
-        int col = left + (LW - lg_cl[n]) / 2;
+        i64 col = left + (LW - lg_cl[n]) / 2;
         if col < 1 { col = 1; }
         lg_num(col);
         lg_text("H");
-        int k = 0;
+        i64 k = 0;
         while k < lg_cl[n] {
             lg_buf[lg_len] = lg_cap[n * 100 + k];
             lg_len += 1;
@@ -519,7 +519,7 @@ void lg_show() {
 bool lg_key() {
     char pfd[8];
     char ts[16];
-    int i = 0;
+    i64 i = 0;
     while i < 8 {
         pfd[i] = 0;
         i += 1;
@@ -536,12 +536,12 @@ bool lg_key() {
     return syscall(63, 0, @b, 64) > 0;
 }
 
-int lg_now() {
+i64 lg_now() {
     char ts[16];
     syscall(113, 1, @ts);                                   // the clock that only goes forward
-    int sec = 0;
-    int nsec = 0;
-    int k = 7;
+    i64 sec = 0;
+    i64 nsec = 0;
+    i64 k = 7;
     while k >= 0 {
         sec = sec * 256 + (ts[k] & 255);
         nsec = nsec * 256 + (ts[8 + k] & 255);
@@ -550,11 +550,11 @@ int lg_now() {
     return sec * 1000000000 + nsec;
 }
 
-void lg_sleep_ns(int ns) {
+void lg_sleep_ns(i64 ns) {
     char ts[16];
-    int sec = ns / 1000000000;
-    int nsec = ns % 1000000000;
-    int k = 0;
+    i64 sec = ns / 1000000000;
+    i64 nsec = ns % 1000000000;
+    i64 k = 0;
     while k < 8 {
         ts[k] = (sec >> (8 * k)) & 255;
         ts[8 + k] = (nsec >> (8 * k)) & 255;
@@ -591,7 +591,7 @@ double lg_ball(double ox, double oy, double oz, double dx, double dy, double dz,
 }
 
 // the name of the phase of the Moon: k = the lit part (0..1), waxing = 1 if it grows
-void lg_phase_name(double k, int waxing) {
+void lg_phase_name(double k, i64 waxing) {
     if k < 0.04 { lg_ct("new moon"); return; }
     if k > 0.96 { lg_ct("full moon"); return; }
     if k > 0.46 && k < 0.54 {
@@ -603,7 +603,7 @@ void lg_phase_name(double k, int waxing) {
 }
 
 // the logo: frames = 0 runs until Ctrl-C or Enter; speed = how many times faster than real time the film runs
-void lg_run(int frames, int speed) {
+void lg_run(i64 frames, i64 speed) {
     if speed < 1 { speed = 1800; }
     double ts = (double)speed;
     lg_find_color();
@@ -614,8 +614,8 @@ void lg_run(int frames, int speed) {
         lg_ramp2[lg_n2] = rp[lg_n2];
         lg_n2 += 1;
     }
-    int seed = 4242;
-    int i = 0;
+    i64 seed = 4242;
+    i64 i = 0;
     while i < 60 {
         seed = (seed * 1103515245 + 12345) & 2147483647;
         lg_sx[i] = (double)((seed >> 8) % 1000) / 1000.0;               // 0..1 of the width
@@ -725,14 +725,14 @@ void lg_run(int frames, int speed) {
     double moon_spin_s = 40.0;                            // the Moon turns once in 40 seconds of the film (an artist's number: the real Moon turns once a month, locked to the Earth)
     double mtilt = 0.0897;                                // the orbit of the Moon leans 5.14 degrees
     // where the real Moon is now: the phase from the clock (a new moon was on 2000-01-06 18:14 UTC, JD 2451550.26)
-    int unix0 = lg_unix();
+    i64 unix0 = lg_unix();
     double jd = (double)unix0 / 86400.0 + 2440587.5;
     double cyc = (jd - 2451550.26) / 29.530588853;
-    cyc = cyc - (double)(int)cyc;
+    cyc = cyc - (double)(i64)cyc;
     if cyc < 0.0 { cyc = cyc + 1.0; }
     double theta0 = tau * cyc;                            // the angle of the Moon ahead of the Sun
-    int frame = 0;
-    int t0 = lg_now();
+    i64 frame = 0;
+    i64 t0 = lg_now();
     while frames == 0 || frame < frames {
         double t = (double)frame / 24.0;
         double real_s = t * ts;                           // the time that has passed on the Earth since the start, seconds
@@ -765,13 +765,13 @@ void lg_run(int frames, int speed) {
             if tw > 0.35 { c = '.'; }
             if tw > 0.65 { c = '+'; }
             if tw > 0.9 { c = '*'; }
-            int sxs = (int)(lg_sx[i] * (double)LW);
-            int sys = (int)(lg_sy[i] * (double)LH);
+            i64 sxs = (i64)(lg_sx[i] * (double)LW);
+            i64 sys = (i64)(lg_sy[i] * (double)LH);
             if sxs < LW && sys < LH {
                 lg_ch[sys * LW + sxs] = c;
                 lg_col[sys * LW + sxs] = lg_grey(0.35 + 0.55 * tw);
                 if lg_px > 0 {
-                    int sv = (int)(40.0 + 200.0 * tw * tw);
+                    i64 sv = (i64)(40.0 + 200.0 * tw * tw);
                     if lg_px == 1 && i % 3 == 1 { lg_pt[sys * LW + sxs] = (sv * 8 / 10 << 16) | (sv * 9 / 10 << 8) | sv; }
                     else if lg_px == 1 && i % 3 == 2 { lg_pt[sys * LW + sxs] = (sv << 16) | (sv * 9 / 10 << 8) | (sv * 7 / 10); }
                     else { lg_pt[sys * LW + sxs] = (sv << 16) | (sv << 8) | sv; }
@@ -779,16 +779,16 @@ void lg_run(int frames, int speed) {
             }
             i += 1;
         }
-        int y = 0;
+        i64 y = 0;
         while y < LH {
-            int x = 0;
+            i64 x = 0;
             while x < LW {
                 // four rays for each character (2 x 2), averaged: smooth edges and smooth shades
                 double sumb = 0.0;
-                int mask = 0;                                          // which of the four rays found something that shows (1 2 / 4 8)
-                int lit_n = 0;
+                i64 mask = 0;                                          // which of the four rays found something that shows (1 2 / 4 8)
+                i64 lit_n = 0;
                 double dmin = 1000.0;
-                int sj = 0;
+                i64 sj = 0;
                 lg_ar[0] = 0.0;
                 lg_ag[0] = 0.0;
                 lg_ab[0] = 0.0;
@@ -796,7 +796,7 @@ void lg_run(int frames, int speed) {
                 lg_ag[1] = 0.0;
                 lg_ab[1] = 0.0;
                 while sj < 2 {
-                    int si = 0;
+                    i64 si = 0;
                     while si < 2 {
                         double xs = ((double)x + ((double)si + 0.5) / 2.0 - cxs) / (unit * 2.0);
                         double ys = ((double)y + ((double)sj + 0.5) / 2.0 - cys) / unit;
@@ -979,7 +979,7 @@ void lg_run(int frames, int speed) {
                             double patch = lg_sin(p0x * 4.0 + 1.0) * lg_sin(p0y * 5.0 + 0.5) * lg_sin(p0z * 3.0 + 2.0);
                             double albedo = 0.66;
                             if patch > 0.18 { albedo = 0.44; }
-                            int ci = 0;
+                            i64 ci = 0;
                             while ci < 14 {
                                 double cdx = p0x - lg_crx[ci];
                                 double cdy = p0y - lg_cry[ci];
@@ -1032,8 +1032,8 @@ void lg_run(int frames, int speed) {
                     sj += 1;
                 }
                 if lg_px > 0 {
-                    int pt = lg_pcol(lg_ar[0], lg_ag[0], lg_ab[0]);
-                    int pbm = lg_pcol(lg_ar[1], lg_ag[1], lg_ab[1]);
+                    i64 pt = lg_pcol(lg_ar[0], lg_ag[0], lg_ab[0]);
+                    i64 pbm = lg_pcol(lg_ar[1], lg_ag[1], lg_ab[1]);
                     if pt != 0 { lg_pt[y * LW + x] = pt; }
                     if pbm != 0 { lg_pbm[y * LW + x] = pbm; }
                 }
@@ -1057,12 +1057,12 @@ void lg_run(int frames, int speed) {
         // the word MOON under the Moon, and EARTH under the Earth
         double mqx = mx * lg_rx + my * lg_ry + mz * lg_rz;
         double mqy = mx * lg_ux + my * lg_uy + mz * lg_uz;
-        int lcx = (int)(cxs + mqx * unit * 2.0);
-        int lcy = (int)(cys - mqy * unit + rm * unit + 1.5);
+        i64 lcx = (i64)(cxs + mqx * unit * 2.0);
+        i64 lcy = (i64)(cys - mqy * unit + rm * unit + 1.5);
         char^ word = "MOON";
-        int wi = 0;
+        i64 wi = 0;
         while wi < 4 && lg_px == 0 {
-            int wx2 = lcx - 2 + wi;
+            i64 wx2 = lcx - 2 + wi;
             if wx2 >= 0 && wx2 < LW && lcy >= 0 && lcy < LH {
                 if lg_ch[lcy * LW + wx2] == ' ' || lg_ch[lcy * LW + wx2] == '.' {
                     lg_ch[lcy * LW + wx2] = word[wi];
@@ -1078,7 +1078,7 @@ void lg_run(int frames, int speed) {
         double dl = lam_m - lam_s;
         while dl > pi { dl = dl - tau; }
         while dl < 0.0 - pi { dl = dl + tau; }
-        int waxing = 0;
+        i64 waxing = 0;
         if dl > 0.0 { waxing = 1; }
         // the five lines under the picture
         lg_cbegin(0);
@@ -1101,23 +1101,23 @@ void lg_run(int frames, int speed) {
         lg_ct("Moon: ");
         lg_phase_name(lit, waxing);
         lg_ct(" ");
-        lg_cnum((int)(lit * 100.0 + 0.5));
+        lg_cnum((i64)(lit * 100.0 + 0.5));
         lg_ct("%  light Sun ");
-        lg_cnum((int)(sun_delay / 60.0));
+        lg_cnum((i64)(sun_delay / 60.0));
         lg_ct("m");
-        lg_cnum((int)sun_delay % 60);
+        lg_cnum((i64)sun_delay % 60);
         lg_ct("s Moon ");
         lg_cdec(moon_delay);
         lg_ct("s");
         lg_cbegin(4);
         lg_ct("scale: 1 row = ");
-        lg_cnum((int)km_row);
+        lg_cnum((i64)km_row);
         lg_ct(" km; Moon at 1.70R, size 0.62R (real 60R, 0.27R)");
         lg_show();
         if frames == 0 && lg_key() { frame = 0 - 1; break; }
         frame += 1;
-        int due = t0 + frame * 41666666;
-        int now = lg_now();
+        i64 due = t0 + frame * 41666666;
+        i64 now = lg_now();
         if due > now { lg_sleep_ns(due - now); }
     }
 }

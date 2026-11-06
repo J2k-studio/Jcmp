@@ -6,24 +6,24 @@
 // The numbers mean what the game says; 0 is empty. Outside the world every tile is 0 and set() does nothing.
 
 struct TileMap {
-    int w;
-    int h;
-    int layers;
-    int cw;                          // chunks across
-    int ch;                          // chunks down
-    int[] chunk_of;                  // layer * cw * ch + chunk -> index in data + 1 (0: the chunk is empty)
-    int[] data;                      // the chunks that exist, 256 tiles each
-    int[] dirty_flag;                // layer * cw * ch + chunk -> 1 when changed since clean()
-    int nchunks;
+    i64 w;
+    i64 h;
+    i64 layers;
+    i64 cw;                          // chunks across
+    i64 ch;                          // chunks down
+    i64[] chunk_of;                  // layer * cw * ch + chunk -> index in data + 1 (0: the chunk is empty)
+    i64[] data;                      // the chunks that exist, 256 tiles each
+    i64[] dirty_flag;                // layer * cw * ch + chunk -> 1 when changed since clean()
+    i64 nchunks;
 
-    static TileMap make(int w, int h, int layers) {
+    static TileMap make(i64 w, i64 h, i64 layers) {
         TileMap m;
         m.w = w;
         m.h = h;
         m.layers = layers;
         m.cw = (w + 15) / 16;
         m.ch = (h + 15) / 16;
-        int total = layers * m.cw * m.ch;
+        i64 total = layers * m.cw * m.ch;
         m.chunk_of = arr(total + 1);
         m.dirty_flag = arr(total + 1);
         for i in 0..total { m.chunk_of.push(0); m.dirty_flag.push(0); }
@@ -32,22 +32,22 @@ struct TileMap {
         return m;
     }
 
-    bool inside(self, int layer, int x, int y) {
+    bool inside(self, i64 layer, i64 x, i64 y) {
         return layer >= 0 && layer < self.layers && x >= 0 && y >= 0 && x < self.w && y < self.h;
     }
 
-    int get(self, int layer, int x, int y) {
+    i64 get(self, i64 layer, i64 x, i64 y) {
         if !self.inside(layer, x, y) { return 0; }
-        int c = layer * self.cw * self.ch + (y / 16) * self.cw + (x / 16);
-        int at = self.chunk_of[c];
+        i64 c = layer * self.cw * self.ch + (y / 16) * self.cw + (x / 16);
+        i64 at = self.chunk_of[c];
         if at == 0 { return 0; }
         return self.data[(at - 1) * 256 + (y % 16) * 16 + (x % 16)];
     }
 
-    void set(self, int layer, int x, int y, int tile) {
+    void set(self, i64 layer, i64 x, i64 y, i64 tile) {
         if !self.inside(layer, x, y) { return; }
-        int c = layer * self.cw * self.ch + (y / 16) * self.cw + (x / 16);
-        int at = self.chunk_of[c];
+        i64 c = layer * self.cw * self.ch + (y / 16) * self.cw + (x / 16);
+        i64 at = self.chunk_of[c];
         if at == 0 {
             if tile == 0 { return; }                                   // nothing to write in a chunk that is empty
             for i in 0..256 { self.data.push(0); }
@@ -55,7 +55,7 @@ struct TileMap {
             at = self.nchunks;
             self.chunk_of[c] = at;
         }
-        int k = (at - 1) * 256 + (y % 16) * 16 + (x % 16);
+        i64 k = (at - 1) * 256 + (y % 16) * 16 + (x % 16);
         if self.data[k] != tile {
             self.data[k] = tile & 65535;
             self.dirty_flag[c] = 1;
@@ -63,7 +63,7 @@ struct TileMap {
     }
 
     // changed since the last clean()
-    bool dirty(self, int layer, int x, int y) {
+    bool dirty(self, i64 layer, i64 x, i64 y) {
         if !self.inside(layer, x, y) { return false; }
         return self.dirty_flag[layer * self.cw * self.ch + (y / 16) * self.cw + (x / 16)] == 1;
     }
@@ -73,19 +73,19 @@ struct TileMap {
     }
 
     // how many chunks hold something (the memory is this * 256 * 8 bytes)
-    int used_chunks(self) { return self.nchunks; }
+    i64 used_chunks(self) { return self.nchunks; }
 
     // a rectangle of one layer
-    void fill(self, int layer, int x, int y, int rw, int rh, int tile) {
+    void fill(self, i64 layer, i64 x, i64 y, i64 rw, i64 rh, i64 tile) {
         for j in 0..rh { for i in 0..rw { self.set(layer, x + i, y + j, tile); } }
     }
 
     // the world as text: a header, then for each chunk that exists  layer chunk  and its 256 numbers (the file of a save; small, readable)
     void save(self, String path) {
         String s = "tilemap 1 " + str(self.w) + " " + str(self.h) + " " + str(self.layers) + "\n";
-        int total = self.layers * self.cw * self.ch;
+        i64 total = self.layers * self.cw * self.ch;
         for c in 0..total {
-            int at = self.chunk_of[c];
+            i64 at = self.chunk_of[c];
             if at == 0 { continue; }
             s.append("c " + str(c));
             for k in 0..256 { s.append(" "); s.append(str(self.data[(at - 1) * 256 + k])); }
@@ -109,14 +109,14 @@ struct TileMap {
             if lines[li].len < 3 { continue; }
             String[] f = lines[li].split(" ");
             if f.len < 258 || f[0] != "c" { continue; }
-            int c = f[1].to_int();
-            int per = m.cw * m.ch;
-            int layer = c / per;
-            int inlayer = c % per;
-            int cy = inlayer / m.cw;
-            int cx = inlayer % m.cw;
+            i64 c = f[1].to_int();
+            i64 per = m.cw * m.ch;
+            i64 layer = c / per;
+            i64 inlayer = c % per;
+            i64 cy = inlayer / m.cw;
+            i64 cx = inlayer % m.cw;
             for k in 0..256 {
-                int t = f[2 + k].to_int();
+                i64 t = f[2 + k].to_int();
                 if t != 0 { m.set(layer, cx * 16 + (k % 16), cy * 16 + (k / 16), t); }
             }
         }

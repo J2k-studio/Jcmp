@@ -1,32 +1,32 @@
 #import <stdlib>
 // run: jcmp bench/cache.jk -o cache && ./cache   (on an idle phone; the program may run on any core: run it a few times)
 // the latency of a read that has to wait for the one before (pointer chasing) for working sets from 4 KB to 64 MB: the steps show the caches
-int main() {
-    int maxn = 8 * 1024 * 1024;                              // 64 MB of 8-byte entries
-    int^ buf = (int^)Sys::mmap(maxn * 8 + 4096);
-    if (int)buf <= 0 { jout << "no memory\n"; return 1; }
-    int sizes[14];
-    int ns = 0;
-    int kb = 4;
+i64 main() {
+    i64 maxn = 8 * 1024 * 1024;                              // 64 MB of 8-byte entries
+    i64^ buf = (i64^)Sys::mmap(maxn * 8 + 4096);
+    if (i64)buf <= 0 { jout << "no memory\n"; return 1; }
+    i64 sizes[14];
+    i64 ns = 0;
+    i64 kb = 4;
     while kb <= 65536 { sizes[ns] = kb; ns += 1; kb = kb * 2; }
     for q in 0..ns {
-        int n = sizes[q] * 1024 / 8;
+        i64 n = sizes[q] * 1024 / 8;
         for i in 0..n { buf[i] = i; }
-        int x = 987654321;
-        int i = n - 1;
+        i64 x = 987654321;
+        i64 i = n - 1;
         while i > 0 {                                         // Sattolo: one cycle through all the places
             x = (x * 1103515245 + 12345) & 2147483647;
-            int j = x % i;
-            int t = buf[i]; buf[i] = buf[j]; buf[j] = t;
+            i64 j = x % i;
+            i64 t = buf[i]; buf[i] = buf[j]; buf[j] = t;
             i -= 1;
         }
-        int steps = 20000000;
-        int best = 1000000000;
+        i64 steps = 20000000;
+        i64 best = 1000000000;
         for rep in 0..3 {
-            int p = 0;
-            int t0 = Time::now_ms();
+            i64 p = 0;
+            i64 t0 = Time::now_ms();
             for s in 0..steps { p = buf[p]; }
-            int t = Time::now_ms() - t0;
+            i64 t = Time::now_ms() - t0;
             if t < best { best = t; }
             if p == -1 { jout << "x"; }
         }

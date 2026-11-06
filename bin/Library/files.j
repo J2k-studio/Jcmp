@@ -2,7 +2,7 @@ enum class FileMode { Read, Write, Append, ReadWrite };
 
 struct File {
     static i32 open(char^ path, FileMode mode) {
-        int flags = 0;
+        i64 flags = 0;
         switch mode {
             FileMode::Read: flags = 0;
             FileMode::Write: flags = 577;
@@ -16,21 +16,21 @@ struct File {
     }
     static i32 read(i32 fd, char buf[]) {
         if buf.len < 2 { return -22; }
-        int n = Sys::read(fd, buf, buf.len - 1);
+        i64 n = Sys::read(fd, buf, buf.len - 1);
         if n < 0 { return (i32)n; }
         buf[n] = 0;
         return (i32)n;
     }
     static i32 write(i32 fd, char buf[]) {
-        int n = 0;
+        i64 n = 0;
         while n < buf.len && buf[n] != 0 { n += 1; }
         return (i32)Sys::write(fd, buf, n);
     }
     static i32 read_line(i32 fd, char line[]) {
-        int n = 0;
+        i64 n = 0;
         char c = 0;
         while n < line.len - 1 {
-            int got = Sys::read(fd, @c, 1);
+            i64 got = Sys::read(fd, @c, 1);
             if got < 0 { return (i32)got; }
             if got == 0 {
                 if n == 0 { return -1; }
@@ -48,16 +48,16 @@ struct File {
 // Files and folders: Fs (whole files), Dir (folders). Needs the core (Result, Error) and text (Str).
 // an Error for the system error number e (a negative number from a system call is fine) and what was being done
 struct Fs {
-    static Error error(int e, String what, String path) {
+    static Error error(i64 e, String what, String path) {
         return Error::from_errno(e, what + path);
     }
     // the whole file as a String
     static Result<String, Error> read_text(String path) {
-        int fd = Sys::open_read(path.c());
+        i64 fd = Sys::open_read(path.c());
         if fd < 0 { return Result<String, Error>::Err(Fs::error(fd, "cannot open ", path)); }
         String text = "";
         char buf[4096];
-        int n = Sys::read(fd, @buf, 4095);
+        i64 n = Sys::read(fd, @buf, 4095);
         while n > 0 {
             buf[n] = 0;
             text.append((char^)@buf);
@@ -69,11 +69,11 @@ struct Fs {
     }
     // the whole file as bytes in a String: any byte, also zero (read_text stops at a zero byte)
     static Result<String, Error> read_bytes(String path) {
-        int fd = Sys::open_read(path.c());
+        i64 fd = Sys::open_read(path.c());
         if fd < 0 { return Result<String, Error>::Err(Fs::error(fd, "cannot open ", path)); }
         String data = "";
         char buf[4096];
-        int n = Sys::read(fd, @buf, 4096);
+        i64 n = Sys::read(fd, @buf, 4096);
         while n > 0 {
             for i in 0..n { data.push(buf[i]); }
             n = Sys::read(fd, @buf, 4096);
@@ -83,7 +83,7 @@ struct Fs {
         return Result<String, Error>::Ok(data);
     }
     // write the bytes of a String (any byte) to the file (made or emptied); Ok(the number of bytes)
-    static Result<int, Error> write_bytes(String path, String data) {
+    static Result<i64, Error> write_bytes(String path, String data) {
         return Fs::write_text(path, data);
     }
     // the lines of a file (without the line ends)
@@ -93,7 +93,7 @@ struct Fs {
         String[] lines = arr(parts.len + 1);
         for i in 0..parts.len {
             String line = parts[i];
-            int n = line.len;
+            i64 n = line.len;
             if n > 0 {
                 char last = line[n - 1];
                 if last == 13 { line = line.slice(0, n - 1); }
@@ -104,101 +104,101 @@ struct Fs {
         return Result<String[], Error>::Ok(lines);
     }
     // write the text to the file (made or emptied); Ok(the number of bytes)
-    static Result<int, Error> write_text(String path, String text) {
+    static Result<i64, Error> write_text(String path, String text) {
         return Fs::put(path, text, 577);
     }
     // add the text at the end of the file (made if needed)
-    static Result<int, Error> append_text(String path, String text) {
+    static Result<i64, Error> append_text(String path, String text) {
         return Fs::put(path, text, 1089);
     }
-    static Result<int, Error> put(String path, String text, int flags) {
-        int fd = Sys::open(path.c(), flags, 420);
-        if fd < 0 { return Result<int, Error>::Err(Fs::error(fd, "cannot write ", path)); }
-        int done = 0;
+    static Result<i64, Error> put(String path, String text, i64 flags) {
+        i64 fd = Sys::open(path.c(), flags, 420);
+        if fd < 0 { return Result<i64, Error>::Err(Fs::error(fd, "cannot write ", path)); }
+        i64 done = 0;
         char^ p = text.c();
         while done < text.len {
-            int n = Sys::write(fd, p + done, text.len - done);
+            i64 n = Sys::write(fd, p + done, text.len - done);
             if n <= 0 {
                 Sys::close(fd);
-                return Result<int, Error>::Err(Fs::error(n, "cannot write ", path));
+                return Result<i64, Error>::Err(Fs::error(n, "cannot write ", path));
             }
             done += n;
         }
         Sys::close(fd);
-        return Result<int, Error>::Ok(done);
+        return Result<i64, Error>::Ok(done);
     }
     static bool exists(String path) {
         return Sys::access(path.c()) == 0;
     }
     // the size of a file in bytes
-    static Result<int, Error> size(String path) {
-        int fd = Sys::open_read(path.c());
-        if fd < 0 { return Result<int, Error>::Err(Fs::error(fd, "cannot open ", path)); }
-        int n = Sys::lseek(fd, 0, 2);
+    static Result<i64, Error> size(String path) {
+        i64 fd = Sys::open_read(path.c());
+        if fd < 0 { return Result<i64, Error>::Err(Fs::error(fd, "cannot open ", path)); }
+        i64 n = Sys::lseek(fd, 0, 2);
         Sys::close(fd);
-        if n < 0 { return Result<int, Error>::Err(Fs::error(n, "cannot size ", path)); }
-        return Result<int, Error>::Ok(n);
+        if n < 0 { return Result<i64, Error>::Err(Fs::error(n, "cannot size ", path)); }
+        return Result<i64, Error>::Ok(n);
     }
-    static Result<int, Error> remove(String path) {
-        int r = Sys::unlink(path.c());
-        if r < 0 { return Result<int, Error>::Err(Fs::error(r, "cannot remove ", path)); }
-        return Result<int, Error>::Ok(0);
+    static Result<i64, Error> remove(String path) {
+        i64 r = Sys::unlink(path.c());
+        if r < 0 { return Result<i64, Error>::Err(Fs::error(r, "cannot remove ", path)); }
+        return Result<i64, Error>::Ok(0);
     }
-    static Result<int, Error> rename(String from, String to) {
-        int r = Sys::rename(from.c(), to.c());
-        if r < 0 { return Result<int, Error>::Err(Fs::error(r, "cannot rename ", from)); }
-        return Result<int, Error>::Ok(0);
+    static Result<i64, Error> rename(String from, String to) {
+        i64 r = Sys::rename(from.c(), to.c());
+        if r < 0 { return Result<i64, Error>::Err(Fs::error(r, "cannot rename ", from)); }
+        return Result<i64, Error>::Ok(0);
     }
 }
 
 struct Dir {
     static bool exists(String path) {
-        int st[18];
+        i64 st[18];
         if Sys::stat(path.c(), @st) != 0 { return false; }       // newfstatat
         return (st[2] & 4294967295 & 61440) == 16384;                          // st_mode is a folder
     }
-    static Result<int, Error> make(String path) {
-        int r = Sys::mkdir(path.c(), 493);
-        if r < 0 { return Result<int, Error>::Err(Fs::error(r, "cannot make the folder ", path)); }
-        return Result<int, Error>::Ok(0);
+    static Result<i64, Error> make(String path) {
+        i64 r = Sys::mkdir(path.c(), 493);
+        if r < 0 { return Result<i64, Error>::Err(Fs::error(r, "cannot make the folder ", path)); }
+        return Result<i64, Error>::Ok(0);
     }
     // the folder and the ones above it (like mkdir -p)
-    static Result<int, Error> make_all(String path) {
+    static Result<i64, Error> make_all(String path) {
         String part = "";
         for ch in path {
             if ch == '/' && part.len > 0 {
                 if !Dir::exists(part) {
-                    int r1 = Sys::mkdir(part.c(), 493);
-                    if r1 < 0 { return Result<int, Error>::Err(Fs::error(r1, "cannot make the folder ", part)); }
+                    i64 r1 = Sys::mkdir(part.c(), 493);
+                    if r1 < 0 { return Result<i64, Error>::Err(Fs::error(r1, "cannot make the folder ", part)); }
                 }
             }
             part.push(ch);
         }
         if part.len > 0 && !Dir::exists(part) {
-            int r2 = Sys::mkdir(part.c(), 493);
-            if r2 < 0 { return Result<int, Error>::Err(Fs::error(r2, "cannot make the folder ", part)); }
+            i64 r2 = Sys::mkdir(part.c(), 493);
+            if r2 < 0 { return Result<i64, Error>::Err(Fs::error(r2, "cannot make the folder ", part)); }
         }
-        return Result<int, Error>::Ok(0);
+        return Result<i64, Error>::Ok(0);
     }
     // remove an empty folder
-    static Result<int, Error> remove(String path) {
-        int r = Sys::rmdir(path.c());                // AT_REMOVEDIR
-        if r < 0 { return Result<int, Error>::Err(Fs::error(r, "cannot remove the folder ", path)); }
-        return Result<int, Error>::Ok(0);
+    static Result<i64, Error> remove(String path) {
+        i64 r = Sys::rmdir(path.c());                // AT_REMOVEDIR
+        if r < 0 { return Result<i64, Error>::Err(Fs::error(r, "cannot remove the folder ", path)); }
+        return Result<i64, Error>::Ok(0);
     }
     // the names in a folder (not . and ..), in order
     static Result<String[], Error> list(String path) {
-        int fd = Sys::open_dir(path.c());
+        i64 fd = Sys::open_dir(path.c());
         if fd < 0 { return Result<String[], Error>::Err(Fs::error(fd, "cannot read the folder ", path)); }
         String[] names = arr(8);
         char buf[4096];
-        int n = Sys::getdents(fd, @buf, 4096);                     // getdents64
+        i64 n = Sys::getdents(fd, @buf, 4096);                     // getdents64
         while n > 0 {
-            int at = 0;
+            i64 at = 0;
             while at < n {
-                int reclen = buf[at + 16] + buf[at + 17] * 256;
+                i64 reclen = buf[at + 16] + buf[at + 17] * 256;
                 String name = "";
-                int k = at + 19;
+                i64 k = at + 19;
                 while buf[k] != 0 {
                     name.push(buf[k]);
                     k += 1;
@@ -214,7 +214,7 @@ struct Dir {
     }
     static Result<String, Error> current() {
         char buf[1024];
-        int n = Sys::getcwd(@buf, 1024);
+        i64 n = Sys::getcwd(@buf, 1024);
         if n < 0 { return Result<String, Error>::Err(Fs::error(n, "cannot get the folder", "")); }
         String s = "";
         s.append((char^)@buf);
@@ -243,13 +243,13 @@ struct Path {
     }
     // the part after the last /
     static String name(String p) {
-        int cut = -1;
+        i64 cut = -1;
         for i in 0..p.len { if p[i] == '/' { cut = i; } }
         return p.slice(cut + 1, p.len);
     }
     // everything before the last / ("." if there is none, "/" for a file in the root)
     static String parent(String p) {
-        int cut = -1;
+        i64 cut = -1;
         for i in 0..p.len { if p[i] == '/' { cut = i; } }
         if cut < 0 { return "."; }
         if cut == 0 { return "/"; }
@@ -258,7 +258,7 @@ struct Path {
     // the part of the name after the last . ("" if there is none, or if the name starts with the only .)
     static String ext(String p) {
         String n = Path::name(p);
-        int dot = -1;
+        i64 dot = -1;
         for i in 0..n.len { if n[i] == '.' { dot = i; } }
         if dot <= 0 { return ""; }
         return n.slice(dot + 1, n.len);
@@ -266,7 +266,7 @@ struct Path {
     // the name without its extension
     static String stem(String p) {
         String n = Path::name(p);
-        int dot = -1;
+        i64 dot = -1;
         for i in 0..n.len { if n[i] == '.' { dot = i; } }
         if dot <= 0 { return n; }
         return n.slice(0, dot);
@@ -282,22 +282,22 @@ struct __Files {
     static Result<String, Error> fs_try_read(String path) { return Fs::read_text(path); }
     static String[] fs_lines(String path) { return Fs::read_lines(path).take(); }
     static Result<String[], Error> fs_try_lines(String path) { return Fs::read_lines(path); }
-    static int fs_write(String path, String text) { return Fs::write_text(path, text).take(); }
-    static Result<int, Error> fs_try_write(String path, String text) { return Fs::write_text(path, text); }
-    static int fs_append(String path, String text) { return Fs::append_text(path, text).take(); }
-    static Result<int, Error> fs_try_append(String path, String text) { return Fs::append_text(path, text); }
+    static i64 fs_write(String path, String text) { return Fs::write_text(path, text).take(); }
+    static Result<i64, Error> fs_try_write(String path, String text) { return Fs::write_text(path, text); }
+    static i64 fs_append(String path, String text) { return Fs::append_text(path, text).take(); }
+    static Result<i64, Error> fs_try_append(String path, String text) { return Fs::append_text(path, text); }
     // the long names of the same functions (owner 2026-11-03: "f.read_text is fine too"): fs.read_text(p), fs.read_lines(p), fs.write_text(p, t), fs.append_text(p, t)
     static String fs_read_text(String path) { return Fs::read_text(path).take(); }
     static String[] fs_read_lines(String path) { return Fs::read_lines(path).take(); }
-    static int fs_write_text(String path, String text) { return Fs::write_text(path, text).take(); }
-    static int fs_append_text(String path, String text) { return Fs::append_text(path, text).take(); }
+    static i64 fs_write_text(String path, String text) { return Fs::write_text(path, text).take(); }
+    static i64 fs_append_text(String path, String text) { return Fs::append_text(path, text).take(); }
     static bool fs_exists(String path) { return Fs::exists(path); }
-    static int fs_size(String path) { return Fs::size(path).take(); }
-    static Result<int, Error> fs_try_size(String path) { return Fs::size(path); }
-    static int fs_remove(String path) { return Fs::remove(path).take(); }
-    static Result<int, Error> fs_try_remove(String path) { return Fs::remove(path); }
-    static int fs_rename(String from, String to) { return Fs::rename(from, to).take(); }
-    static Result<int, Error> fs_try_rename(String from, String to) { return Fs::rename(from, to); }
+    static i64 fs_size(String path) { return Fs::size(path).take(); }
+    static Result<i64, Error> fs_try_size(String path) { return Fs::size(path); }
+    static i64 fs_remove(String path) { return Fs::remove(path).take(); }
+    static Result<i64, Error> fs_try_remove(String path) { return Fs::remove(path); }
+    static i64 fs_rename(String from, String to) { return Fs::rename(from, to).take(); }
+    static Result<i64, Error> fs_try_rename(String from, String to) { return Fs::rename(from, to); }
     static String read_text(String path) { return Fs::read_text(path).take(); }
     static Result<String, Error> read_try_text(String path) { return Fs::read_text(path); }
     static String read_bytes(String path) { return Fs::read_bytes(path).take(); }
@@ -305,12 +305,12 @@ struct __Files {
     static String[] read_lines(String path) { return Fs::read_lines(path).take(); }
     static Result<String[], Error> read_try_lines(String path) { return Fs::read_lines(path); }
     static bool dir_exists(String path) { return Dir::exists(path); }
-    static int dir_make(String path) { return Dir::make(path).take(); }
-    static Result<int, Error> dir_try_make(String path) { return Dir::make(path); }
-    static int dir_make_all(String path) { return Dir::make_all(path).take(); }
-    static Result<int, Error> dir_try_make_all(String path) { return Dir::make_all(path); }
-    static int dir_remove(String path) { return Dir::remove(path).take(); }
-    static Result<int, Error> dir_try_remove(String path) { return Dir::remove(path); }
+    static i64 dir_make(String path) { return Dir::make(path).take(); }
+    static Result<i64, Error> dir_try_make(String path) { return Dir::make(path); }
+    static i64 dir_make_all(String path) { return Dir::make_all(path).take(); }
+    static Result<i64, Error> dir_try_make_all(String path) { return Dir::make_all(path); }
+    static i64 dir_remove(String path) { return Dir::remove(path).take(); }
+    static Result<i64, Error> dir_try_remove(String path) { return Dir::remove(path); }
     static String[] dir_list(String path) { return Dir::list(path).take(); }
     static Result<String[], Error> dir_try_list(String path) { return Dir::list(path); }
     static String dir_current() { return Dir::current().take(); }

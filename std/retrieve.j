@@ -11,17 +11,17 @@ struct Hits {
     String[] names;
     String[] texts;
     double[] scores;
-    int n;
+    i64 n;
 }
 
 struct Retrieve {
     String[] pname;                 // the document of a passage
     String[] ptext;
-    int[] pstart;                   // the passage p has the terms tok[pstart[p] .. pstart[p + 1] - 1]
-    int[] tok;
-    Map<String, int> ids;           // a term -> its number
-    int[] df;                       // in how many passages a term is
-    int nterms;
+    i64[] pstart;                   // the passage p has the terms tok[pstart[p] .. pstart[p + 1] - 1]
+    i64[] tok;
+    Map<String, i64> ids;           // a term -> its number
+    i64[] df;                       // in how many passages a term is
+    i64 nterms;
     double avglen;
     bool built;
 
@@ -38,10 +38,10 @@ struct Retrieve {
         return r;
     }
 
-    int term_id(self, String t, bool create) {
+    i64 term_id(self, String t, bool create) {
         if self.ids.has(t) { return self.ids.get(t); }
         if !create { return -1; }
-        int id = self.nterms;
+        i64 id = self.nterms;
         self.nterms += 1;
         self.ids.put(t + "", id);
         self.df.push(0);
@@ -49,13 +49,13 @@ struct Retrieve {
     }
 
     // the terms of a text, pushed into out (as term numbers; unknown terms are made when create is true, else skipped)
-    void terms_of(self, String text, int[] out, bool create) {
+    void terms_of(self, String text, i64[] out, bool create) {
         String word = "";
         String[] run = arr(8);                      // the characters of a run of Thai (or other) text
-        int i = 0;
-        int n = text.len;
+        i64 i = 0;
+        i64 n = text.len;
         while i <= n {
-            int c = 0;
+            i64 c = 0;
             if i < n { c = text[i]; }
             if c < 0 { c = c + 256; }
             bool alnum = (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_';
@@ -66,7 +66,7 @@ struct Retrieve {
                 i += 1;
             } else if c >= 128 {
                 if word.len > 0 { self.push_term(word, out, create); word.clear(); }
-                int len = 1;
+                i64 len = 1;
                 if c >= 240 { len = 4; } else if c >= 224 { len = 3; } else if c >= 192 { len = 2; }
                 if i + len > n { len = n - i; }
                 run.push(text.slice(i, i + len));
@@ -79,13 +79,13 @@ struct Retrieve {
         }
     }
 
-    void push_term(self, String w, int[] out, bool create) {
-        int id = self.term_id(w, create);
+    void push_term(self, String w, i64[] out, bool create) {
+        i64 id = self.term_id(w, create);
         if id >= 0 { out.push(id); }
     }
 
     // pairs of the characters of a run (one character alone when the run has one)
-    void flush_run(self, String[] run, int[] out, bool create) {
+    void flush_run(self, String[] run, i64[] out, bool create) {
         if run.len == 1 {
             self.push_term(run[0], out, create);
         } else {
@@ -124,15 +124,15 @@ struct Retrieve {
 
     void build(self) {
         self.pstart.push(self.tok.len);
-        int np = self.pname.len;
+        i64 np = self.pname.len;
         self.df = arr(self.nterms + 1);
         for t in 0..self.nterms + 1 { self.df.push(0); }
         for p in 0..np {
-            int a = self.pstart[p];
-            int b = self.pstart[p + 1];
+            i64 a = self.pstart[p];
+            i64 b = self.pstart[p + 1];
             // count a term once for each passage
             for i in a..b {
-                int t = self.tok[i];
+                i64 t = self.tok[i];
                 bool seen = false;
                 for j in a..i { if self.tok[j] == t { seen = true; break; } }
                 if !seen { self.df[t] += 1; }
@@ -143,25 +143,25 @@ struct Retrieve {
         self.built = true;
     }
 
-    Hits search(self, String query, int k) {
+    Hits search(self, String query, i64 k) {
         Hits h;
         h.names = arr(k + 1);
         h.texts = arr(k + 1);
         h.scores = arr(k + 1);
         h.n = 0;
         if !self.built { return h; }
-        int[] q = arr(16);
+        i64[] q = arr(16);
         self.terms_of(query, q, false);
-        int np = self.pname.len;
+        i64 np = self.pname.len;
         double[] score = arr(np + 1);
         for p in 0..np { score.push(0.0); }
         for qi in 0..q.len {
-            int t = q[qi];
+            i64 t = q[qi];
             double idf = Math::log(((double)np - (double)self.df[t] + 0.5) / ((double)self.df[t] + 0.5) + 1.0);
             for p in 0..np {
-                int a = self.pstart[p];
-                int b = self.pstart[p + 1];
-                int tf = 0;
+                i64 a = self.pstart[p];
+                i64 b = self.pstart[p + 1];
+                i64 tf = 0;
                 for i in a..b { if self.tok[i] == t { tf += 1; } }
                 if tf > 0 {
                     double len = (double)(b - a);
@@ -171,7 +171,7 @@ struct Retrieve {
             }
         }
         for r in 0..k {
-            int best = -1;
+            i64 best = -1;
             double bs = 0.0;
             for p in 0..np { if score[p] > bs { bs = score[p]; best = p; } }
             if best < 0 { break; }

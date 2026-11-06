@@ -103,49 +103,49 @@
 #define IR_UGE 9
 
 // the instructions
-int ir_op[IR_MAXI];
-int ir_d[IR_MAXI];           // the vreg that gets the result (0 = none)
-int ir_a[IR_MAXI];           // the first operand (a vreg, 0 = none)
-int ir_b[IR_MAXI];           // the second operand (a vreg, or a number when ir_bi is 1)
-int ir_bi[IR_MAXI];          // 1: ir_b is a number
-int ir_k[IR_MAXI];           // a number: the constant, the offset, the condition, the bits of an extension, the index of a name
-int ir_w[IR_MAXI];           // the width of a load / store, the sign of an extension
-int ir_t1[IR_MAXI];          // the blocks that a jump goes to
-int ir_t2[IR_MAXI];
-int ir_as[IR_MAXI];          // the arguments of a call: ir_args[ir_as .. ir_as + ir_ac)
-int ir_ac[IR_MAXI];
-int ir_args[IR_MAXA];
-int ir_nargs;
-int ir_n;                    // how many instructions
+i64 ir_op[IR_MAXI];
+i64 ir_d[IR_MAXI];           // the vreg that gets the result (0 = none)
+i64 ir_a[IR_MAXI];           // the first operand (a vreg, 0 = none)
+i64 ir_b[IR_MAXI];           // the second operand (a vreg, or a number when ir_bi is 1)
+i64 ir_bi[IR_MAXI];          // 1: ir_b is a number
+i64 ir_k[IR_MAXI];           // a number: the constant, the offset, the condition, the bits of an extension, the index of a name
+i64 ir_w[IR_MAXI];           // the width of a load / store, the sign of an extension
+i64 ir_t1[IR_MAXI];          // the blocks that a jump goes to
+i64 ir_t2[IR_MAXI];
+i64 ir_as[IR_MAXI];          // the arguments of a call: ir_args[ir_as .. ir_as + ir_ac)
+i64 ir_ac[IR_MAXI];
+i64 ir_args[IR_MAXA];
+i64 ir_nargs;
+i64 ir_n;                    // how many instructions
 
 // the blocks
-int ir_bs[IR_MAXB];          // the first instruction of the block
-int ir_be[IR_MAXB];          // one after the last one
-int ir_blab[IR_MAXB];        // the number of the label of the block in the assembler text (for the printer; -1 = none)
-int ir_nb;
-int ir_cur;                  // the block that gets the next instruction
-int ir_lastb;                // the block that is written last by the lowering (the one that falls into the epilogue / makes the exit call)
+i64 ir_bs[IR_MAXB];          // the first instruction of the block
+i64 ir_be[IR_MAXB];          // one after the last one
+i64 ir_blab[IR_MAXB];        // the number of the label of the block in the assembler text (for the printer; -1 = none)
+i64 ir_nb;
+i64 ir_cur;                  // the block that gets the next instruction
+i64 ir_lastb;                // the block that is written last by the lowering (the one that falls into the epilogue / makes the exit call)
 
 // the vregs: the class (0 whole number / pointer, 1 double)
-int ir_vcls[IR_MAXV];
-int ir_nv;
+i64 ir_vcls[IR_MAXV];
+i64 ir_nv;
 
 // the slots of the frame: the size in bytes and the place from the frame pointer
-int ir_slot_off[1024];
-int ir_slot_size[1024];
-int ir_nslots;
+i64 ir_slot_off[1024];
+i64 ir_slot_size[1024];
+i64 ir_nslots;
 
 // the names of the functions that the code calls (ir_name[i], 64 characters each)
 char ir_name[262144];
-int ir_nnames;
+i64 ir_nnames;
 char ir_fname[128];          // the name of the function
-int ir_nofma_fn;             // the function has a vector loop: no fused multiply-add in its text
+i64 ir_nofma_fn;             // the function has a vector loop: no fused multiply-add in its text
 char nofma_names[16384];     // the names of the functions that have one (64 characters each), for the register pass
-int nofma_n;
+i64 nofma_n;
 
 void nofma_add(char^ name) {
     if nofma_n < 256 {
-        int k = 0;
+        i64 k = 0;
         while name[k] != 0 && k < 63 {
             nofma_names[nofma_n * 64 + k] = name[k];
             k += 1;
@@ -157,22 +157,22 @@ void nofma_add(char^ name) {
 
 // is the function whose label line is the text s ("name:") on the list?
 bool nofma_has(char^ label) {
-    int u = 0;
+    i64 u = 0;
     while u < nofma_n {
-        int k = 0;
+        i64 k = 0;
         while nofma_names[u * 64 + k] != 0 && nofma_names[u * 64 + k] == label[k] { k += 1; }
         if nofma_names[u * 64 + k] == 0 && label[k] == ':' { return true; }
         u += 1;
     }
     return false;
 }
-int op_changed;              // 1: the function is written again from the IR
-int ir_pre = 1;              // the peephole pass runs before the lifting too
-int ir_opt = 1409331437;           // the passes: 1 constants out of loops, 2 allocator, 4 cleaning, 8 value numbering, 32 double round trips, 64 always write back
-int inl_off;                // -noinl: no inlining
-int ir_mode = 2;            // 0 off (-noir), 1 -irstat, 2 lift and write back, 3 -irdump
-int lf_frame;                // the size of the frame that the prologue made
-int lf_hint_n;               // the hint line ";H ..." of the function (kept for the register pass)
+i64 op_changed;              // 1: the function is written again from the IR
+i64 ir_pre = 1;              // the peephole pass runs before the lifting too
+i64 ir_opt = 1409331437;           // the passes: 1 constants out of loops, 2 allocator, 4 cleaning, 8 value numbering, 32 double round trips, 64 always write back
+i64 inl_off;                // -noinl: no inlining
+i64 ir_mode = 2;            // 0 off (-noir), 1 -irstat, 2 lift and write back, 3 -irdump
+i64 lf_frame;                // the size of the frame that the prologue made
+i64 lf_hint_n;               // the hint line ";H ..." of the function (kept for the register pass)
 char lf_hint_text[16384];
 
 void ir_reset(char^ name) {
@@ -188,7 +188,7 @@ void ir_reset(char^ name) {
 }
 
 // a new vreg of the class cls
-int ir_vreg(int cls) {
+i64 ir_vreg(i64 cls) {
     if ir_nv >= IR_MAXV { die("the IR has too many virtual registers in one function"); }
     ir_vcls[ir_nv] = cls;
     ir_nv += 1;
@@ -196,7 +196,7 @@ int ir_vreg(int cls) {
 }
 
 // a new block (it gets the instructions that follow ir_set_block); label: its number in the assembler text, or -1
-int ir_new_block(int label) {
+i64 ir_new_block(i64 label) {
     if ir_nb >= IR_MAXB { die("the IR has too many blocks in one function"); }
     ir_bs[ir_nb] = ir_n;
     ir_be[ir_nb] = ir_n;
@@ -206,13 +206,13 @@ int ir_new_block(int label) {
 }
 
 // the instructions of one block are written one after the other: only the last block can get more
-void ir_set_block(int b) {
+void ir_set_block(i64 b) {
     ir_cur = b;
 }
 
 // the number of a name of a function (the same text gives the same number)
-int ir_name_index(char^ name) {
-    int i = 0;
+i64 ir_name_index(char^ name) {
+    i64 i = 0;
     while i < ir_nnames {
         if str_eq(@ir_name + i * 64, name) { return i; }
         i += 1;
@@ -224,10 +224,10 @@ int ir_name_index(char^ name) {
 }
 
 // one instruction at the end of the current block; returns its number
-int ir_add(int op, int d, int a, int b, int bi, int k) {
+i64 ir_add(i64 op, i64 d, i64 a, i64 b, i64 bi, i64 k) {
     if ir_n >= IR_MAXI { die("the IR has too many instructions in one function"); }
     if ir_cur < 0 || ir_cur != ir_nb - 1 { die("internal error: an IR instruction was written into a block that is not the last one"); }
-    int i = ir_n;
+    i64 i = ir_n;
     ir_op[i] = op;
     ir_d[i] = d;
     ir_a[i] = a;
@@ -245,11 +245,11 @@ int ir_add(int op, int d, int a, int b, int bi, int k) {
 }
 
 // the arguments of the call i (the vregs are copied)
-void ir_set_args(int i, int count, int^ vregs) {
+void ir_set_args(i64 i, i64 count, i64^ vregs) {
     if ir_nargs + count >= IR_MAXA { die("the IR has too many call arguments in one function"); }
     ir_as[i] = ir_nargs;
     ir_ac[i] = count;
-    int k = 0;
+    i64 k = 0;
     while k < count {
         ir_args[ir_nargs] = vregs[k];
         ir_nargs += 1;
@@ -257,13 +257,13 @@ void ir_set_args(int i, int count, int^ vregs) {
     }
 }
 
-bool ir_is_term(int op) {
+bool ir_is_term(i64 op) {
     return op == IR_JMP || op == IR_BR || op == IR_FBR || op == IR_RET || op == IR_TRAP || op == IR_LRET;
 }
 
 // ---------------------------------------------------------------------------------------------- the printer
 
-char^ ir_opname(int op) {
+char^ ir_opname(i64 op) {
     if op == IR_CONST { return "const"; }
     if op == IR_COPY { return "copy"; }
     if op == IR_ADD { return "add"; }
@@ -343,7 +343,7 @@ char^ ir_opname(int op) {
     return "?";
 }
 
-char^ ir_ccname(int cc) {
+char^ ir_ccname(i64 cc) {
     if cc == IR_EQ { return "eq"; }
     if cc == IR_NE { return "ne"; }
     if cc == IR_LT { return "lt"; }
@@ -358,9 +358,9 @@ char^ ir_ccname(int cc) {
 
 // the text of the IR goes to the output buffer of the printer
 char ir_pbuf[1048576];
-int ir_plen;
+i64 ir_plen;
 
-void ir_pc(int c) {
+void ir_pc(i64 c) {
     if ir_plen < 1048570 {
         ir_pbuf[ir_plen] = c;
         ir_plen += 1;
@@ -368,14 +368,14 @@ void ir_pc(int c) {
 }
 
 void ir_ps(char^ s) {
-    int i = 0;
+    i64 i = 0;
     while s[i] != 0 {
         ir_pc(s[i]);
         i += 1;
     }
 }
 
-void ir_pn(int v) {
+void ir_pn(i64 v) {
     if v < 0 {
         ir_pc('-');
         v = 0 - v;
@@ -385,7 +385,7 @@ void ir_pn(int v) {
         return;
     }
     char d[24];
-    int n = 0;
+    i64 n = 0;
     while v > 0 {
         d[n] = '0' + v % 10;
         v = v / 10;
@@ -397,18 +397,18 @@ void ir_pn(int v) {
     }
 }
 
-void ir_pv(int v) {
+void ir_pv(i64 v) {
     if ir_vcls[v] == 1 { ir_pc('f'); } else { ir_pc('v'); }
     ir_pn(v);
 }
 
 // the second operand: a vreg or a number
-void ir_pb(int i) {
+void ir_pb(i64 i) {
     if ir_bi[i] == 1 { ir_pn(ir_b[i]); } else { ir_pv(ir_b[i]); }
 }
 
-void ir_print_instr(int i) {
-    int op = ir_op[i];
+void ir_print_instr(i64 i) {
+    i64 op = ir_op[i];
     ir_ps("    ");
     if ir_d[i] != 0 {
         ir_pv(ir_d[i]);
@@ -505,7 +505,7 @@ void ir_print_instr(int i) {
             ir_pv(ir_a[i]);
         }
         ir_pc('(');
-        int k = 0;
+        i64 k = 0;
         while k < ir_ac[i] {
             if k > 0 { ir_ps(", "); }
             ir_pv(ir_args[ir_as[i] + k]);
@@ -559,7 +559,7 @@ void ir_print() {
     ir_ps(" vregs, ");
     ir_pn(ir_nslots);
     ir_ps(" slots)\n");
-    int b = 0;
+    i64 b = 0;
     while b < ir_nb {
         ir_ps("  B");
         ir_pn(b);
@@ -569,7 +569,7 @@ void ir_print() {
             ir_pc(')');
         }
         ir_ps(":\n");
-        int i = ir_bs[b];
+        i64 i = ir_bs[b];
         while i < ir_be[b] {
             ir_print_instr(i);
             i += 1;
@@ -583,26 +583,26 @@ void ir_print() {
 char ir_err[200];
 
 // does the instruction use the vreg v as an operand? (for the checker)
-bool ir_uses_b(int op) {
+bool ir_uses_b(i64 op) {
     return op >= IR_ADD && op <= IR_MULHS || op == IR_ROTR || op == IR_ROTR32 || op == IR_SETCC || op == IR_FSETCC || op == IR_BR || op == IR_FBR || op == IR_STORE || (op >= IR_FADD && op <= IR_FDIV) || op == IR_VOP || op == IR_VINS || (op >= IR_FADD32 && op <= IR_FDIV32);
 }
 
 // 1 if the function is well made, else 0 and the message in ir_err
-int ir_check() {
+i64 ir_check() {
     ir_err[0] = 0;
     if ir_nb == 0 {
         str_copy(@ir_err, "no blocks", 200);
         return 0;
     }
-    int b = 0;
+    i64 b = 0;
     while b < ir_nb {
         if ir_be[b] <= ir_bs[b] {
             str_copy(@ir_err, "a block has no instructions", 200);
             return 0;
         }
-        int i = ir_bs[b];
+        i64 i = ir_bs[b];
         while i < ir_be[b] {
-            int op = ir_op[i];
+            i64 op = ir_op[i];
             bool last = i == ir_be[b] - 1;
             if ir_is_term(op) && !last {
                 str_copy(@ir_err, "a jump or return in the middle of a block", 200);
@@ -637,7 +637,7 @@ int ir_check() {
                 }
             }
             // the class of the operands: a double operation works on doubles, a whole number operation on whole numbers
-            int ca = ir_vcls[ir_a[i]];
+            i64 ca = ir_vcls[ir_a[i]];
             if ir_a[i] != 0 {
                 if ((op >= IR_FADD && op <= IR_FFLOOR || op == IR_FTRUNC || op == IR_FCEIL) && ca != 1) || (op >= IR_ADD && op <= IR_MULHS && ca != 0) {
                     str_copy(@ir_err, "an operand of the wrong class", 200);
@@ -656,24 +656,24 @@ int ir_check() {
 // builds  int sum(int n) { int s = 0; for i in 0..n { s = s + i; } return s; }  and a small function with doubles, checks and prints them
 void ir_selftest() {
     ir_reset("sum");
-    int b0 = ir_new_block(0 - 1);
+    i64 b0 = ir_new_block(0 - 1);
     ir_set_block(b0);
-    int n = ir_vreg(0);
-    int s = ir_vreg(0);
-    int i = ir_vreg(0);
+    i64 n = ir_vreg(0);
+    i64 s = ir_vreg(0);
+    i64 i = ir_vreg(0);
     ir_add(IR_PARAM, n, 0, 0, 0, 0);
     ir_add(IR_CONST, s, 0, 0, 0, 0);
     ir_add(IR_CONST, i, 0, 0, 0, 0);
-    int j0 = ir_add(IR_JMP, 0, 0, 0, 0, 0);
-    int b1 = ir_new_block(0 - 1);
+    i64 j0 = ir_add(IR_JMP, 0, 0, 0, 0, 0);
+    i64 b1 = ir_new_block(0 - 1);
     ir_set_block(b1);
-    int br = ir_add(IR_BR, 0, i, n, 0, IR_LT);
-    int b2 = ir_new_block(0 - 1);
+    i64 br = ir_add(IR_BR, 0, i, n, 0, IR_LT);
+    i64 b2 = ir_new_block(0 - 1);
     ir_set_block(b2);
     ir_add(IR_ADD, s, s, i, 0, 0);
     ir_add(IR_ADD, i, i, 1, 1, 0);
-    int j2 = ir_add(IR_JMP, 0, 0, 0, 0, 0);
-    int b3 = ir_new_block(0 - 1);
+    i64 j2 = ir_add(IR_JMP, 0, 0, 0, 0, 0);
+    i64 b3 = ir_new_block(0 - 1);
     ir_set_block(b3);
     ir_add(IR_RET, 0, s, 0, 0, 0);
     ir_t1[j0] = b1;
@@ -690,24 +690,24 @@ void ir_selftest() {
     syscall(64, 1, @ir_pbuf, ir_plen);
     // double area(ptr p) { return p[0] * p[1]; }   with a call
     ir_reset("area");
-    int c0 = ir_new_block(0 - 1);
+    i64 c0 = ir_new_block(0 - 1);
     ir_set_block(c0);
-    int p = ir_vreg(0);
-    int x = ir_vreg(1);
-    int y = ir_vreg(1);
-    int r = ir_vreg(1);
-    int q = ir_vreg(0);
+    i64 p = ir_vreg(0);
+    i64 x = ir_vreg(1);
+    i64 y = ir_vreg(1);
+    i64 r = ir_vreg(1);
+    i64 q = ir_vreg(0);
     ir_add(IR_PARAM, p, 0, 0, 0, 0);
-    int ld1 = ir_add(IR_LOAD, x, p, 0, 0, 0);
+    i64 ld1 = ir_add(IR_LOAD, x, p, 0, 0, 0);
     ir_w[ld1] = 8;
-    int ld2 = ir_add(IR_LOAD, y, p, 0, 0, 8);
+    i64 ld2 = ir_add(IR_LOAD, y, p, 0, 0, 8);
     ir_w[ld2] = 8;
     ir_add(IR_FMUL, r, x, y, 0, 0);
     ir_add(IR_ADDR_GLOBAL, q, 0, 0, 0, 4096);
-    int st = ir_add(IR_STORE, 0, q, r, 0, 16);
+    i64 st = ir_add(IR_STORE, 0, q, r, 0, 16);
     ir_w[st] = 8;
-    int cl = ir_add(IR_CALL, ir_vreg(0), 0, 0, 0, ir_name_index("print_f64"));
-    int args[2];
+    i64 cl = ir_add(IR_CALL, ir_vreg(0), 0, 0, 0, ir_name_index("print_f64"));
+    i64 args[2];
     args[0] = r;
     ir_set_args(cl, 1, @args);
     ir_add(IR_RET, 0, r, 0, 0, 0);

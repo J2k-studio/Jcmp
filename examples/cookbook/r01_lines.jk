@@ -2,10 +2,10 @@
 #import <stdlib>
 using stdlib;
 
-int main() {
+i64 main() {
     String path = "r01_lines.jk";                       // this very file
     String[] lines = Fs::read_lines(path).take();       // take(): the value, or stop with a message when the file cannot be read
-    int words = 0;
+    i64 words = 0;
     String longest = "";
     for i in 0..lines.len {
         words += lines[i].split(" ").len;

@@ -6,14 +6,14 @@
 //   String out = doc.dump(doc.root());               // back to (compact) JSON text
 // json_quote(s) makes a JSON string literal; json_num_text(x) is a number as text.
 // helpers (also reachable as Json::quote and Json::num_text)
-String json_int_text(int v) {
+String json_int_text(i64 v) {
     String r = "";
     if v < 0 {
         r.push('-');
         v = 0 - v;
     }
     char buf[24];
-    int n = 0;
+    i64 n = 0;
     if v == 0 {
         buf[0] = '0';
         n = 1;
@@ -38,21 +38,21 @@ String json_num_text(double x) {
         x = 0.0 - x;
     }
     if x < 9.0e15 {
-        int ip = (int)x;
+        i64 ip = (i64)x;
         r.append(json_int_text(ip));
         double fp = x - (double)ip;
         if fp > 0.0 {
             String f = "";
-            int k = 0;
+            i64 k = 0;
             while k < 15 && fp > 0.0 {
                 fp = fp * 10.0;
-                int d = (int)fp;
+                i64 d = (i64)fp;
                 f.push((char)('0' + d));
                 fp = fp - (double)d;
                 k += 1;
             }
             // drop zeros at the end
-            int cut = f.len;
+            i64 cut = f.len;
             while cut > 0 && f[cut - 1] == '0' { cut -= 1; }
             if cut > 0 {
                 r.push('.');
@@ -62,7 +62,7 @@ String json_num_text(double x) {
         return r;
     }
     // very large numbers: whole digits only
-    r.append(json_int_text((int)(x / 1.0e10)));
+    r.append(json_int_text((i64)(x / 1.0e10)));
     r.append("0000000000");
     return r;
 }
@@ -96,15 +96,15 @@ String json_quote(String s) {
 
 struct JsonDoc {
     String src;
-    int pos;
+    i64 pos;
     String err;
-    int[] kind;                  // 0 null, 1 false, 2 true, 3 number, 4 string, 5 array, 6 object
+    i64[] kind;                  // 0 null, 1 false, 2 true, 3 number, 4 string, 5 array, 6 object
     double[] num;
     String[] txt;                // the value of a string node
     String[] key;                // the name of a node that is a member of an object
-    int[] first;                 // the first child (array, object)
-    int[] last;
-    int[] next;                  // the next brother
+    i64[] first;                 // the first child (array, object)
+    i64[] last;
+    i64[] next;                  // the next brother
     void free(self) {
         self.src.free();
         self.err.free();
@@ -117,7 +117,7 @@ struct JsonDoc {
         self.next.free();
     }
     // ---- reading (JsonDoc is made by Json::parse)
-    int fail(self, String m) {
+    i64 fail(self, String m) {
         if self.err.len == 0 {
             String t = m;
             t.append(" at byte ");
@@ -137,7 +137,7 @@ struct JsonDoc {
         }
     }
     // a new node; its text and name are stored with it
-    int add(self, int k, String t, String name) {
+    i64 add(self, i64 k, String t, String name) {
         self.kind.push(k);
         self.num.push(0.0);
         self.txt.push(t);
@@ -148,7 +148,7 @@ struct JsonDoc {
         return self.kind.len - 1;
     }
     // puts node c at the end of the children of node p
-    void link(self, int p, int c) {
+    void link(self, i64 p, i64 c) {
         if self.first[p] < 0 {
             self.first[p] = c;
         } else {
@@ -164,7 +164,7 @@ struct JsonDoc {
         self.pos += w.len;
         return true;
     }
-    int value(self, String name) {
+    i64 value(self, String name) {
         self.skip_ws();
         if self.pos >= self.src.len { return self.fail("unexpected end of the text"); }
         char c = self.src[self.pos];
@@ -181,8 +181,8 @@ struct JsonDoc {
         if c == '-' || (c >= '0' && c <= '9') { return self.number_lit(name); }
         return self.fail("unexpected character");
     }
-    int number_lit(self, String name) {
-        int a = self.pos;
+    i64 number_lit(self, String name) {
+        i64 a = self.pos;
         if self.src[self.pos] == '-' { self.pos += 1; }
         while self.pos < self.src.len {
             char c = self.src[self.pos];
@@ -196,16 +196,16 @@ struct JsonDoc {
         try { v = self.src.slice(a, self.pos).to_double(); } catch (e) {
             return self.fail("bad number");
         }
-        int n = self.add(3, "", name);
+        i64 n = self.add(3, "", name);
         self.num[n] = v;
         return n;
     }
-    int hex4(self) {
+    i64 hex4(self) {
         if self.pos + 4 > self.src.len { return -1; }
-        int v = 0;
+        i64 v = 0;
         for i in 0..4 {
             char c = self.src[self.pos + i];
-            int d = -1;
+            i64 d = -1;
             if c >= '0' && c <= '9' { d = c - '0'; }
             if c >= 'a' && c <= 'f' { d = c - 'a' + 10; }
             if c >= 'A' && c <= 'F' { d = c - 'A' + 10; }
@@ -247,15 +247,15 @@ struct JsonDoc {
                 else if e == 'f' { r.push((char)12); }
                 else if e == '"' || e == 92 || e == '/' { r.push(e); }
                 else if e == 'u' {
-                    int cp = self.hex4();
+                    i64 cp = self.hex4();
                     if cp < 0 {
                         self.fail("bad \\u escape");
                         return r;
                     }
                     if cp >= 0xD800 && cp <= 0xDBFF && self.pos + 1 < self.src.len && self.src[self.pos] == 92 && self.src[self.pos + 1] == 'u' {
-                        int save = self.pos;
+                        i64 save = self.pos;
                         self.pos += 2;
-                        int lo = self.hex4();
+                        i64 lo = self.hex4();
                         if lo >= 0xDC00 && lo <= 0xDFFF {
                             cp = 0x10000 + ((cp - 0xD800) << 10) + (lo - 0xDC00);
                         } else {
@@ -285,8 +285,8 @@ struct JsonDoc {
         }
         return r;
     }
-    int array(self, String name) {
-        int me = self.add(5, "", name);
+    i64 array(self, String name) {
+        i64 me = self.add(5, "", name);
         self.pos += 1;
         self.skip_ws();
         if self.pos < self.src.len && self.src[self.pos] == ']' {
@@ -294,7 +294,7 @@ struct JsonDoc {
             return me;
         }
         while true {
-            int c = self.value("");
+            i64 c = self.value("");
             if c < 0 { return -1; }
             self.link(me, c);
             self.skip_ws();
@@ -306,8 +306,8 @@ struct JsonDoc {
         }
         return me;
     }
-    int object(self, String name) {
-        int me = self.add(6, "", name);
+    i64 object(self, String name) {
+        i64 me = self.add(6, "", name);
         self.pos += 1;
         self.skip_ws();
         if self.pos < self.src.len && self.src[self.pos] == '}' {
@@ -322,7 +322,7 @@ struct JsonDoc {
             self.skip_ws();
             if self.pos >= self.src.len || self.src[self.pos] != ':' { return self.fail("a : was expected"); }
             self.pos += 1;
-            int c = self.value(k);
+            i64 c = self.value(k);
             if c < 0 { return -1; }
             self.link(me, c);
             self.skip_ws();
@@ -336,17 +336,17 @@ struct JsonDoc {
     }
 
     // ---- looking at a document (n is a node; -1 or a wrong kind gives an empty answer)
-    int root(self) { return 0; }
+    i64 root(self) { return 0; }
     // 0 null, 1 false, 2 true, 3 number, 4 string, 5 array, 6 object; -1 for no node
-    int kind_of(self, int n) {
+    i64 kind_of(self, i64 n) {
         if n < 0 || n >= self.kind.len { return -1; }
         return self.kind[n];
     }
-    int len(self, int n) {
-        int k = self.kind_of(n);
+    i64 len(self, i64 n) {
+        i64 k = self.kind_of(n);
         if k != 5 && k != 6 { return 0; }
-        int c = self.first[n];
-        int count = 0;
+        i64 c = self.first[n];
+        i64 count = 0;
         while c >= 0 {
             count += 1;
             c = self.next[c];
@@ -354,10 +354,10 @@ struct JsonDoc {
         return count;
     }
     // the i-th element of an array or member of an object (counted from 0), or -1
-    int at(self, int n, int i) {
-        int k = self.kind_of(n);
+    i64 at(self, i64 n, i64 i) {
+        i64 k = self.kind_of(n);
         if k != 5 && k != 6 { return -1; }
-        int c = self.first[n];
+        i64 c = self.first[n];
         while c >= 0 && i > 0 {
             c = self.next[c];
             i -= 1;
@@ -365,41 +365,41 @@ struct JsonDoc {
         return c;
     }
     // the member of an object with this name, or -1
-    int get(self, int n, String name) {
+    i64 get(self, i64 n, String name) {
         if self.kind_of(n) != 6 { return -1; }
-        int c = self.first[n];
+        i64 c = self.first[n];
         while c >= 0 {
             if self.key[c] == name { return c; }
             c = self.next[c];
         }
         return -1;
     }
-    bool has(self, int n, String name) { return self.get(n, name) >= 0; }
+    bool has(self, i64 n, String name) { return self.get(n, name) >= 0; }
     // the name of a node that is a member of an object
-    String name_of(self, int n) {
+    String name_of(self, i64 n) {
         if n < 0 || n >= self.kind.len { return ""; }
         String r = "";
         r.append(self.key[n]);
         return r;
     }
-    String text(self, int n) {
+    String text(self, i64 n) {
         if self.kind_of(n) != 4 { return ""; }
         String r = "";
         r.append(self.txt[n]);
         return r;
     }
-    double number(self, int n) {
+    double number(self, i64 n) {
         if self.kind_of(n) != 3 { return 0.0; }
         return self.num[n];
     }
-    int integer(self, int n) { return (int)self.number(n); }
-    bool boolean(self, int n) { return self.kind_of(n) == 2; }
-    bool is_null(self, int n) { return self.kind_of(n) == 0; }
+    i64 integer(self, i64 n) { return (i64)self.number(n); }
+    bool boolean(self, i64 n) { return self.kind_of(n) == 2; }
+    bool is_null(self, i64 n) { return self.kind_of(n) == 0; }
 
     // ---- writing: the node and what is below it as compact JSON text
-    String dump(self, int n) {
+    String dump(self, i64 n) {
         String r = "";
-        int k = self.kind_of(n);
+        i64 k = self.kind_of(n);
         if k <= 0 {
             r.append("null");
         } else if k == 1 {
@@ -412,7 +412,7 @@ struct JsonDoc {
             r.append(json_quote(self.txt[n]));
         } else if k == 5 {
             r.push('[');
-            int c = self.first[n];
+            i64 c = self.first[n];
             while c >= 0 {
                 if c != self.first[n] { r.push(','); }
                 r.append(self.dump(c));
@@ -421,7 +421,7 @@ struct JsonDoc {
             r.push(']');
         } else {
             r.push('{');
-            int c = self.first[n];
+            i64 c = self.first[n];
             while c >= 0 {
                 if c != self.first[n] { r.push(','); }
                 r.append(json_quote(self.key[c]));
@@ -451,7 +451,7 @@ struct Json {
         j.first = arr(16);
         j.last = arr(16);
         j.next = arr(16);
-        int root = j.value("");
+        i64 root = j.value("");
         if root >= 0 {
             j.skip_ws();
             if j.pos < j.src.len { root = j.fail("extra text after the value"); }

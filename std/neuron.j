@@ -44,29 +44,29 @@ double nt_tanh(double x) {
 // bench/dot.jk measured: 1.8-2.1 GFLOPS on one core (the plain loop: 0.4), and about 3.5 times more with 4 threads.
 // the GPU hook (see <neurongpu>): when nt_gpu_on is 1 and a product has at least nt_gpu_min multiply-adds, Tensor32.matmul asks nt_gpu_fn
 // (a, b, c, m, k, n; c is zero; it returns 1 when it wrote the product) before it uses the CPU
-int nt_gpu_on;
-int nt_gpu_min;
-int(float^, float^, float^, int, int, int)^ nt_gpu_fn;
+i64 nt_gpu_on;
+i64 nt_gpu_min;
+i64(float^, float^, float^, i64, i64, i64)^ nt_gpu_fn;
 
 float^ mm_a;                     // m rows of kp numbers
 float^ mm_bt;                    // n rows of kp numbers (B turned over)
 float^ mm_c;                     // m rows of n numbers
-int mm_kp;
-int mm_n;
-int^ mm_range;                   // [2 * t] first row and [2 * t + 1] end row of the thread t
+i64 mm_kp;
+i64 mm_n;
+i64^ mm_range;                   // [2 * t] first row and [2 * t + 1] end row of the thread t
 
 void mm_rows(void^ arg) {
-    int id = (int)arg;
+    i64 id = (i64)arg;
     float^ a = mm_a;
     float^ bt = mm_bt;
     float^ c = mm_c;
-    int kp = mm_kp;
-    int n = mm_n;
+    i64 kp = mm_kp;
+    i64 n = mm_n;
     for i in mm_range[2 * id]..mm_range[2 * id + 1] {
         for jj in 0..n {
             f32x4 s0 = {0.0, 0.0, 0.0, 0.0};
             f32x4 s1 = {0.0, 0.0, 0.0, 0.0};
-            int k = 0;
+            i64 k = 0;
             while k < kp {
                 f32x4 a0 = f32x4::load(a, i * kp + k);
                 f32x4 b0 = f32x4::load(bt, jj * kp + k);
@@ -90,19 +90,19 @@ void mm_rows(void^ arg) {
 float^ gm_a;                     // packed A: (m + 3) / 4 strips of k * 4 numbers
 float^ gm_b;                     // packed B: (n + 7) / 8 panels of k * 8 numbers
 float^ gm_c;
-int gm_m;
-int gm_n;
-int gm_k;
-int^ gm_range;                   // [2 * t] first strip and [2 * t + 1] end strip of the thread t
+i64 gm_m;
+i64 gm_n;
+i64 gm_k;
+i64^ gm_range;                   // [2 * t] first strip and [2 * t + 1] end strip of the thread t
 
 // the piece: c[r * ldc + j] = the sums over kk of a[kk * 4 + r] * b[kk * 8 + j], r < 4, j < 8 (a function of its own with no calls: every vector stays in a register)
-void nt_kern48(float^ ap, float^ bp, float^ c, int k, int ldc) {
+void nt_kern48(float^ ap, float^ bp, float^ c, i64 k, i64 ldc) {
     f32x4 c00 = {0.0, 0.0, 0.0, 0.0}; f32x4 c01 = {0.0, 0.0, 0.0, 0.0};
     f32x4 c10 = {0.0, 0.0, 0.0, 0.0}; f32x4 c11 = {0.0, 0.0, 0.0, 0.0};
     f32x4 c20 = {0.0, 0.0, 0.0, 0.0}; f32x4 c21 = {0.0, 0.0, 0.0, 0.0};
     f32x4 c30 = {0.0, 0.0, 0.0, 0.0}; f32x4 c31 = {0.0, 0.0, 0.0, 0.0};
-    int ai = 0;
-    int bi = 0;
+    i64 ai = 0;
+    i64 bi = 0;
     for kk in 0..k {
         f32x4 b0 = f32x4::load(bp, bi);
         f32x4 b1 = f32x4::load(bp, bi + 4);
@@ -125,17 +125,17 @@ void nt_kern48(float^ ap, float^ bp, float^ c, int k, int ldc) {
 
 // the strips [gm_range[2 id], gm_range[2 id + 1]) of C; the panel is the outer loop, so that one panel of B (k * 32 bytes) stays in the cache while the strips go by
 void nt_gemm_rows(void^ arg) {
-    int id = (int)arg;
-    int m = gm_m;
-    int n = gm_n;
-    int k = gm_k;
+    i64 id = (i64)arg;
+    i64 m = gm_m;
+    i64 n = gm_n;
+    i64 k = gm_k;
     float tmp[32];
-    int np = (n + 7) / 8;
+    i64 np = (n + 7) / 8;
     for jp in 0..np {
-        int nr = n - jp * 8;
+        i64 nr = n - jp * 8;
         if nr > 8 { nr = 8; }
         for ip in gm_range[2 * id]..gm_range[2 * id + 1] {
-            int mr = m - ip * 4;
+            i64 mr = m - ip * 4;
             if mr > 4 { mr = 4; }
             if mr == 4 && nr == 8 {
                 nt_kern48(@gm_a[ip * k * 4], @gm_b[jp * k * 8], @gm_c[ip * 4 * n + jp * 8], k, n);
@@ -148,18 +148,18 @@ void nt_gemm_rows(void^ arg) {
 }
 
 // c = a x b (c is written); threads = 1 .. 8 (the strips of 4 rows are shared among them)
-void nt_gemm(float^ a, float^ b, float^ c, int m, int k, int n, int threads) {
+void nt_gemm(float^ a, float^ b, float^ c, i64 m, i64 k, i64 n, i64 threads) {
     if m <= 0 || n <= 0 { return; }
-    int ns = (m + 3) / 4;
-    int np = (n + 7) / 8;
-    int sa = ns * k * 16 + 64;
-    int sb = np * k * 32 + 64;
+    i64 ns = (m + 3) / 4;
+    i64 np = (n + 7) / 8;
+    i64 sa = ns * k * 16 + 64;
+    i64 sb = np * k * 32 + 64;
     float^ pa = (float^)Sys::mmap(sa);                    // zeroed pages from the system: the padding of the strips and panels is already 0
     float^ pb = (float^)Sys::mmap(sb);
     for ip in 0..ns {
         for kk in 0..k {
             for r in 0..4 {
-                int row = ip * 4 + r;
+                i64 row = ip * 4 + r;
                 if row < m { pa[(ip * k + kk) * 4 + r] = a[row * k + kk]; }
             }
         }
@@ -167,7 +167,7 @@ void nt_gemm(float^ a, float^ b, float^ c, int m, int k, int n, int threads) {
     for jp in 0..np {
         for kk in 0..k {
             for cc in 0..8 {
-                int col = jp * 8 + cc;
+                i64 col = jp * 8 + cc;
                 if col < n { pb[(jp * k + kk) * 8 + cc] = b[kk * n + col]; }
             }
         }
@@ -176,7 +176,7 @@ void nt_gemm(float^ a, float^ b, float^ c, int m, int k, int n, int threads) {
     if threads > 8 { threads = 8; }
     if threads > ns { threads = ns; }
     gm_a = pa; gm_b = pb; gm_c = c; gm_m = m; gm_n = n; gm_k = k;
-    int^ rng = (int^)Sys::mmap(4096);
+    i64^ rng = (i64^)Sys::mmap(4096);
     gm_range = rng;
     for t in 0..threads { rng[2 * t] = ns * t / threads; rng[2 * t + 1] = ns * (t + 1) / threads; }
     if threads == 1 { nt_gemm_rows((void^)0); }
@@ -191,11 +191,11 @@ void nt_gemm(float^ a, float^ b, float^ c, int m, int k, int n, int threads) {
 }
 
 struct Tensor {
-    int rows;
-    int cols;
+    i64 rows;
+    i64 cols;
     double[] d;
 
-    static Tensor zeros(int rows, int cols) {
+    static Tensor zeros(i64 rows, i64 cols) {
         Tensor t;
         t.rows = rows;
         t.cols = cols;
@@ -203,8 +203,8 @@ struct Tensor {
         for i in 0..rows * cols { t.d.push(0.0); }
         return t;
     }
-    double get(self, int r, int c) { return self.d[r * self.cols + c]; }
-    void set(self, int r, int c, double v) { self.d[r * self.cols + c] = v; }
+    double get(self, i64 r, i64 c) { return self.d[r * self.cols + c]; }
+    void set(self, i64 r, i64 c, double v) { self.d[r * self.cols + c] = v; }
 
     Tensor matmul(self, Tensor o) {
         Tensor r = Tensor::zeros(self.rows, o.cols);
@@ -218,19 +218,19 @@ struct Tensor {
     }
     // the same as matmul, much faster for big tables (pack to float32, dot products, threads); the numbers are float32 inside, so the last digits differ
     Tensor matmul_fast(self, Tensor o) {
-        int m = self.rows;
-        int k = self.cols;
-        int n = o.cols;
+        i64 m = self.rows;
+        i64 k = self.cols;
+        i64 n = o.cols;
         if m * k * n < 32768 { return self.matmul(o); }                // small: the plain loop is cheaper than the packing
-        int sa = m * k * 4 + 64;                                         // the buffers come from the system (mmap, zeroed): the compiler does not track them as owners
-        int sb = k * n * 4 + 64;
-        int sc = m * n * 4 + 64;
+        i64 sa = m * k * 4 + 64;                                         // the buffers come from the system (mmap, zeroed): the compiler does not track them as owners
+        i64 sb = k * n * 4 + 64;
+        i64 sc = m * n * 4 + 64;
         float^ pa = (float^)Sys::mmap(sa);
         float^ pb = (float^)Sys::mmap(sb);
         float^ pc = (float^)Sys::mmap(sc);
         for i in 0..m * k { pa[i] = (float)self.d[i]; }
         for i in 0..k * n { pb[i] = (float)o.d[i]; }
-        int threads = 4;
+        i64 threads = 4;
         if m < 16 { threads = 1; }
         nt_gemm(pa, pb, pc, m, k, n, threads);
         Tensor r = Tensor::zeros(m, n);
@@ -284,11 +284,11 @@ struct Dense {
     Tensor b;
     Tensor x;
 
-    static Dense make(int inputs, int outputs, int seed) {
+    static Dense make(i64 inputs, i64 outputs, i64 seed) {
         Dense l;
         l.w = Tensor::zeros(inputs, outputs);
         l.b = Tensor::zeros(1, outputs);
-        int s = seed * 2654435761 + 12345;
+        i64 s = seed * 2654435761 + 12345;
         for i in 0..inputs * outputs {
             s = (s * 1103515245 + 12345) & 2147483647;
             l.w.d[i] = ((double)(s % 2000) / 1000.0 - 1.0) * Math::sqrt(2.0 / (double)inputs);
@@ -316,8 +316,8 @@ struct Dense {
 // A network of layers: every layer is Dense, with relu after all of them but the last. Trained by gradient descent on the mean squared error.
 struct Network {
     Dense[] layers;
-    int count;
-    int seed;
+    i64 count;
+    i64 seed;
 
     static Network make() {
         Network n;
@@ -326,7 +326,7 @@ struct Network {
         n.seed = 1;
         return n;
     }
-    void add(self, int inputs, int outputs) {
+    void add(self, i64 inputs, i64 outputs) {
         self.seed += 1;
         self.layers.push(Dense::make(inputs, outputs, self.seed));
         self.count += 1;
@@ -351,13 +351,13 @@ struct Network {
         Tensor o = outs[self.count - 1];
         Tensor g = Tensor::zeros(o.rows, o.cols);
         double loss = 0.0;
-        int cells = o.rows * o.cols;
+        i64 cells = o.rows * o.cols;
         for i in 0..cells {
             double d = o.d[i] - y.d[i];
             loss += d * d;
             g.d[i] = 2.0 * d / (double)cells;
         }
-        int k2 = self.count - 1;
+        i64 k2 = self.count - 1;
         while k2 >= 0 {
             Tensor gin = self.layers[k2].backward(g, rate);
             if k2 > 0 {
@@ -369,7 +369,7 @@ struct Network {
         }
         return loss / (double)cells;
     }
-    double fit(self, Tensor x, Tensor y, int rounds, double rate) {
+    double fit(self, Tensor x, Tensor y, i64 rounds, double rate) {
         double loss = 0.0;
         for e in 0..rounds { loss = self.step(x, y, rate); }
         return loss;
@@ -388,7 +388,7 @@ struct Network {
         return t;
     }
     bool save(self, String path) {
-        Result<int, Error> r = Fs::write_text(path, self.text());
+        Result<i64, Error> r = Fs::write_text(path, self.text());
         return r.is_ok();
     }
     static Network load(String path) {
@@ -397,8 +397,8 @@ struct Network {
         if !r.is_ok() { return n; }
         String[] ls = r.take().split("\n");
         if ls.len < 2 || ls[0] != "neuron-jw 1" { return n; }
-        int count = ls[1].slice(7, ls[1].len).to_int();
-        int at = 2;
+        i64 count = ls[1].slice(7, ls[1].len).to_int();
+        i64 at = 2;
         for k in 0..count {
             String[] dim = ls[at].split(" ");
             Dense l = Dense::make(dim[0].to_int(), dim[1].to_int(), 1);
@@ -428,10 +428,10 @@ struct Network {
 
 // c = a x b for small tables, n a multiple of 4: four columns of two rows at a time stay in registers while k runs (a function of its own with no calls, so
 // that the compiler keeps every vector in a register)
-void nt_mm_small(float^ ap, float^ bp, float^ cp, int m, int k, int n) {
-    int i = 0;
+void nt_mm_small(float^ ap, float^ bp, float^ cp, i64 m, i64 k, i64 n) {
+    i64 i = 0;
     while i + 2 <= m {
-        int j = 0;
+        i64 j = 0;
         while j < n {
             f32x4 c0 = {0.0, 0.0, 0.0, 0.0};
             f32x4 c1 = {0.0, 0.0, 0.0, 0.0};
@@ -451,7 +451,7 @@ void nt_mm_small(float^ ap, float^ bp, float^ cp, int m, int k, int n) {
         i += 2;
     }
     while i < m {
-        int j = 0;
+        i64 j = 0;
         while j < n {
             f32x4 c0 = {0.0, 0.0, 0.0, 0.0};
             for kk in 0..k {
@@ -467,28 +467,28 @@ void nt_mm_small(float^ ap, float^ bp, float^ cp, int m, int k, int n) {
 }
 
 struct Tensor32 {
-    int[] shape;                       // 1 to 4 numbers, the last one is the width of a row
+    i64[] shape;                       // 1 to 4 numbers, the last one is the width of a row
     float[] d;
 
-    static Tensor32 make(int[] shape) {
+    static Tensor32 make(i64[] shape) {
         Tensor32 t;
         t.shape = arr(shape.len + 1);                  // a copy: assigning the array would move it out of the caller's tensor
-        int n = 1;
+        i64 n = 1;
         for i in 0..shape.len { t.shape.push(shape[i]); n = n * shape[i]; }
         t.d = arr(n + 1);
         t.d.resize(n);                                  // n zeros in one block (a push for each one took twice as long)
         return t;
     }
-    static Tensor32 zeros(int rows, int cols) {
-        int[] s = arr(2);
+    static Tensor32 zeros(i64 rows, i64 cols) {
+        i64[] s = arr(2);
         s.push(rows);
         s.push(cols);
         return Tensor32::make(s);
     }
     // numbers from -scale to scale (a small generator with the seed: the same seed gives the same numbers)
-    static Tensor32 random(int rows, int cols, int seed, double scale) {
+    static Tensor32 random(i64 rows, i64 cols, i64 seed, double scale) {
         Tensor32 t = Tensor32::zeros(rows, cols);
-        int s = seed * 2654435761 + 12345;
+        i64 s = seed * 2654435761 + 12345;
         for i in 0..rows * cols {
             s = (s * 1103515245 + 12345) & 2147483647;
             t.d[i] = (float)(((double)(s % 2000) / 1000.0 - 1.0) * scale);
@@ -496,19 +496,19 @@ struct Tensor32 {
         return t;
     }
     // from a flat list of numbers, row by row
-    static Tensor32 from_list(int rows, int cols, double[] v) {
+    static Tensor32 from_list(i64 rows, i64 cols, double[] v) {
         Tensor32 t = Tensor32::zeros(rows, cols);
         for i in 0..rows * cols { t.d[i] = (float)v[i]; }
         return t;
     }
-    int size(self) { return self.d.len; }
-    int cols(self) { return self.shape[self.shape.len - 1]; }
-    int rows(self) { return self.d.len / self.shape[self.shape.len - 1]; }
-    double get(self, int r, int c) { return (double)self.d[r * self.cols() + c]; }
-    void set(self, int r, int c, double v) { self.d[r * self.cols() + c] = (float)v; }
+    i64 size(self) { return self.d.len; }
+    i64 cols(self) { return self.shape[self.shape.len - 1]; }
+    i64 rows(self) { return self.d.len / self.shape[self.shape.len - 1]; }
+    double get(self, i64 r, i64 c) { return (double)self.d[r * self.cols() + c]; }
+    void set(self, i64 r, i64 c, double v) { self.d[r * self.cols() + c] = (float)v; }
     // the rows idx[0], idx[1], ... as a new table (a mini-batch)
-    Tensor32 gather(self, int[] idx) {
-        int c = self.cols();
+    Tensor32 gather(self, i64[] idx) {
+        i64 c = self.cols();
         Tensor32 r = Tensor32::zeros(idx.len, c);
         for i in 0..idx.len { for j in 0..c { r.d[i * c + j] = self.d[idx[i] * c + j]; } }
         return r;
@@ -519,7 +519,7 @@ struct Tensor32 {
         return t;
     }
     // the same numbers with another shape (the product must stay the same; a copy)
-    Tensor32 reshape(self, int[] shape) {
+    Tensor32 reshape(self, i64[] shape) {
         Tensor32 t = Tensor32::make(shape);
         for i in 0..self.d.len { t.d[i] = self.d[i]; }
         return t;
@@ -528,8 +528,8 @@ struct Tensor32 {
     // a + b: the same shape, or b is one row that is added to every row (the bias)
     Tensor32 add(self, Tensor32 o) {
         Tensor32 r = Tensor32::make(self.shape);
-        int c = self.cols();
-        int n = self.d.len;
+        i64 c = self.cols();
+        i64 n = self.d.len;
         if o.d.len == n { for i in 0..n { r.d[i] = self.d[i] + o.d[i]; } }
         else { for i in 0..n { r.d[i] = self.d[i] + o.d[i % c]; } }
         return r;
@@ -546,8 +546,8 @@ struct Tensor32 {
         return r;
     }
     Tensor32 transpose(self) {
-        int m = self.rows();
-        int n = self.cols();
+        i64 m = self.rows();
+        i64 n = self.cols();
         Tensor32 r = Tensor32::zeros(n, m);
         for i in 0..m { for j in 0..n { r.d[j * m + i] = self.d[i * n + j]; } }
         return r;
@@ -559,8 +559,8 @@ struct Tensor32 {
     }
     Tensor32 softmax(self) {                           // every row becomes numbers that sum to 1
         Tensor32 r = Tensor32::make(self.shape);
-        int c = self.cols();
-        int m = self.rows();
+        i64 c = self.cols();
+        i64 m = self.rows();
         for i in 0..m {
             double mx = (double)self.d[i * c];
             for j in 0..c { if (double)self.d[i * c + j] > mx { mx = (double)self.d[i * c + j]; } }
@@ -583,9 +583,9 @@ struct Tensor32 {
 
     // a @ b. Small tables: three plain loops in the order i, k, j (the inner loop walks both rows). Big tables: packed, dot products, threads (as matmul_fast).
     Tensor32 matmul(self, Tensor32 o) {
-        int m = self.rows();
-        int k = self.cols();
-        int n = o.cols();
+        i64 m = self.rows();
+        i64 k = self.cols();
+        i64 n = o.cols();
         Tensor32 r = Tensor32::zeros(m, n);
         if nt_gpu_on == 1 && m * k * n >= nt_gpu_min {
             if nt_gpu_fn(@self.d[0], @o.d[0], @r.d[0], m, k, n) == 1 { return r; }
@@ -603,7 +603,7 @@ struct Tensor32 {
             }
             return r;
         }
-        int threads = 4;
+        i64 threads = 4;
         if m < 16 { threads = 1; }
         nt_gemm(@self.d[0], @o.d[0], @r.d[0], m, k, n, threads);
         return r;
@@ -612,13 +612,13 @@ struct Tensor32 {
 
 // ---- attention kernels (dh = the width of a head, a multiple of 4): four numbers at a time, with no calls but the sum of four lanes
 // pr[(h * t + i) * t + j] = (q_i . k_j) * sc for j <= i, in every head
-void nt_att_scores(float^ q, float^ k, float^ pr, int t, int w, int heads, float sc) {
-    int dh = w / heads;
+void nt_att_scores(float^ q, float^ k, float^ pr, i64 t, i64 w, i64 heads, float sc) {
+    i64 dh = w / heads;
     for h in 0..heads {
         for i in 0..t {
             for j in 0..i + 1 {
                 f32x4 acc = {0.0, 0.0, 0.0, 0.0};
-                int d = 0;
+                i64 d = 0;
                 while d < dh {
                     acc = acc + f32x4::load(q, i * w + h * dh + d) * f32x4::load(k, j * w + h * dh + d);
                     d += 4;
@@ -629,16 +629,16 @@ void nt_att_scores(float^ q, float^ k, float^ pr, int t, int w, int heads, float
     }
 }
 // out_i += p_ij * v_j (the probabilities pr are ready)
-void nt_att_out(float^ pr, float^ v, float^ out, int t, int w, int heads) {
-    int dh = w / heads;
+void nt_att_out(float^ pr, float^ v, float^ out, i64 t, i64 w, i64 heads) {
+    i64 dh = w / heads;
     for h in 0..heads {
         for i in 0..t {
             for j in 0..i + 1 {
                 float p = pr[(h * t + i) * t + j];
                 f32x4 pv = {p, p, p, p};
-                int d = 0;
+                i64 d = 0;
                 while d < dh {
-                    int o = i * w + h * dh + d;
+                    i64 o = i * w + h * dh + d;
                     f32x4 r = f32x4::load(out, o) + pv * f32x4::load(v, j * w + h * dh + d);
                     r.store(out, o);
                     d += 4;
@@ -658,7 +658,7 @@ float^ nt_ab_dq;
 float^ nt_ab_dk;
 float^ nt_ab_dv;
 float^ nt_ab_dpb;
-void nt_att_back(int t, int w, int heads, float sc) {
+void nt_att_back(i64 t, i64 w, i64 heads, float sc) {
     float^ q = nt_ab_q;
     float^ k = nt_ab_k;
     float^ v = nt_ab_v;
@@ -668,13 +668,13 @@ void nt_att_back(int t, int w, int heads, float sc) {
     float^ dk = nt_ab_dk;
     float^ dv = nt_ab_dv;
     float^ dpb = nt_ab_dpb;
-    int dh = w / heads;
+    i64 dh = w / heads;
     for h in 0..heads {
         for i in 0..t {
             float dot = 0.0;
             for j in 0..i + 1 {
                 f32x4 acc = {0.0, 0.0, 0.0, 0.0};
-                int d = 0;
+                i64 d = 0;
                 while d < dh {
                     acc = acc + f32x4::load(dy, i * w + h * dh + d) * f32x4::load(v, j * w + h * dh + d);
                     d += 4;
@@ -688,10 +688,10 @@ void nt_att_back(int t, int w, int heads, float sc) {
                 float ds = p * (dpb[j] - dot) * sc;
                 f32x4 pv = {p, p, p, p};
                 f32x4 dsv = {ds, ds, ds, ds};
-                int d = 0;
+                i64 d = 0;
                 while d < dh {
-                    int oi = i * w + h * dh + d;
-                    int oj = j * w + h * dh + d;
+                    i64 oi = i * w + h * dh + d;
+                    i64 oj = j * w + h * dh + d;
                     f32x4 g = f32x4::load(dy, oi);
                     f32x4 a1 = f32x4::load(dv, oj) + pv * g;
                     a1.store(dv, oj);
@@ -707,50 +707,50 @@ void nt_att_back(int t, int w, int heads, float sc) {
 }
 
 // operations of the tape
-int OP_INPUT() { return 0; }
-int OP_PARAM() { return 1; }
-int OP_MATMUL() { return 2; }
-int OP_ADD() { return 3; }
-int OP_MUL() { return 4; }
-int OP_RELU() { return 5; }
-int OP_TANH() { return 6; }
-int OP_SIGMOID() { return 7; }
-int OP_MSE() { return 8; }
-int OP_SOFTMAX_CE() { return 9; }
-int OP_EMBED() { return 10; }
-int OP_GELU() { return 11; }
-int OP_SILU() { return 12; }
-int OP_LAYER_NORM() { return 13; }
-int OP_RMS_NORM() { return 14; }
-int OP_ATTENTION() { return 15; }
-int OP_CONV2D() { return 16; }
-int OP_MAXPOOL() { return 17; }
+i64 OP_INPUT() { return 0; }
+i64 OP_PARAM() { return 1; }
+i64 OP_MATMUL() { return 2; }
+i64 OP_ADD() { return 3; }
+i64 OP_MUL() { return 4; }
+i64 OP_RELU() { return 5; }
+i64 OP_TANH() { return 6; }
+i64 OP_SIGMOID() { return 7; }
+i64 OP_MSE() { return 8; }
+i64 OP_SOFTMAX_CE() { return 9; }
+i64 OP_EMBED() { return 10; }
+i64 OP_GELU() { return 11; }
+i64 OP_SILU() { return 12; }
+i64 OP_LAYER_NORM() { return 13; }
+i64 OP_RMS_NORM() { return 14; }
+i64 OP_ATTENTION() { return 15; }
+i64 OP_CONV2D() { return 16; }
+i64 OP_MAXPOOL() { return 17; }
 
 // the two parameters of a layer (node numbers of the graph that made it)
 struct Linear {
-    int w;
-    int b;
+    i64 w;
+    i64 b;
 }
 
 struct Graph {
     Tensor32[] val;                    // the value of every node
     Tensor32[] grad;                   // its gradient (zeros until backward)
-    int[] op;
-    int[] pa;                          // the first parent (a node number, -1 for none)
-    int[] pb;
-    int[] pc;                          // the third parent (attention), -1 for none
-    int[] iarg;                        // a number of the node (attention: the number of heads)
-    int[] aux;                         // whole numbers of the nodes (class numbers, embedding ids), one run per node
-    int[] aux_off;                     // where the run of a node starts in aux
-    int aux_keep;                      // the length of aux at mark()
+    i64[] op;
+    i64[] pa;                          // the first parent (a node number, -1 for none)
+    i64[] pb;
+    i64[] pc;                          // the third parent (attention), -1 for none
+    i64[] iarg;                        // a number of the node (attention: the number of heads)
+    i64[] aux;                         // whole numbers of the nodes (class numbers, embedding ids), one run per node
+    i64[] aux_off;                     // where the run of a node starts in aux
+    i64 aux_keep;                      // the length of aux at mark()
     Tensor32[] target;                 // the target table of an mse node, the probabilities of softmax_ce / attention, the normalised x of a norm
     Tensor32[] extra;                  // a second table of a node (the 1/sigma of every row of a norm)
-    int count;                         // the nodes now
-    int keep;                          // the nodes before mark(): the parameters
+    i64 count;                         // the nodes now
+    i64 keep;                          // the nodes before mark(): the parameters
     Tensor32[] m;                      // AdamW: the first and second moments of every parameter (made at the first adamw call)
     Tensor32[] v;
     Tensor32[] acc;                    // the sum of the gradients of several sequences (a batch), one table per node (made by acc_add)
-    int steps;                         // AdamW steps done
+    i64 steps;                         // AdamW steps done
     double b1t;                        // beta1 ^ steps
     double b2t;
 
@@ -778,7 +778,7 @@ struct Graph {
         g.b2t = 1.0;
         return g;
     }
-    int node(self, int op, int a, int b, Tensor32 v) {
+    i64 node(self, i64 op, i64 a, i64 b, Tensor32 v) {
         self.val.push(v);
         self.grad.push(Tensor32::zeros(1, 1));
         self.op.push(op);
@@ -792,8 +792,8 @@ struct Graph {
         self.count += 1;
         return self.count - 1;
     }
-    int input(self, Tensor32 t) { return self.node(OP_INPUT(), -1, -1, t); }
-    int param(self, Tensor32 t) { return self.node(OP_PARAM(), -1, -1, t); }
+    i64 input(self, Tensor32 t) { return self.node(OP_INPUT(), -1, -1, t); }
+    i64 param(self, Tensor32 t) { return self.node(OP_PARAM(), -1, -1, t); }
     // the nodes made so far are the parameters; clear() goes back to this point
     void mark(self) { self.keep = self.count; self.aux_keep = self.aux.len; }
     void clear(self) {
@@ -812,36 +812,36 @@ struct Graph {
         }
         while self.aux.len > self.aux_keep { self.aux.pop(); }
     }
-    Tensor32 value(self, int n) { return self.val[n]; }
-    Tensor32 gradient(self, int n) { return self.grad[n]; }
+    Tensor32 value(self, i64 n) { return self.val[n]; }
+    Tensor32 gradient(self, i64 n) { return self.grad[n]; }
 
-    int matmul(self, int a, int b) { return self.node(OP_MATMUL(), a, b, self.val[a].matmul(self.val[b])); }
-    int add(self, int a, int b) { return self.node(OP_ADD(), a, b, self.val[a].add(self.val[b])); }
-    int mul(self, int a, int b) { return self.node(OP_MUL(), a, b, self.val[a].mul(self.val[b])); }
-    int relu(self, int a) { return self.node(OP_RELU(), a, -1, self.val[a].relu()); }
-    int tanh(self, int a) {
+    i64 matmul(self, i64 a, i64 b) { return self.node(OP_MATMUL(), a, b, self.val[a].matmul(self.val[b])); }
+    i64 add(self, i64 a, i64 b) { return self.node(OP_ADD(), a, b, self.val[a].add(self.val[b])); }
+    i64 mul(self, i64 a, i64 b) { return self.node(OP_MUL(), a, b, self.val[a].mul(self.val[b])); }
+    i64 relu(self, i64 a) { return self.node(OP_RELU(), a, -1, self.val[a].relu()); }
+    i64 tanh(self, i64 a) {
         Tensor32 r = Tensor32::make(self.val[a].shape);
         for i in 0..r.d.len { r.d[i] = (float)nt_tanh((double)self.val[a].d[i]); }
         return self.node(OP_TANH(), a, -1, r);
     }
-    int sigmoid(self, int a) {
+    i64 sigmoid(self, i64 a) {
         Tensor32 r = Tensor32::make(self.val[a].shape);
         for i in 0..r.d.len { r.d[i] = (float)(1.0 / (1.0 + nt_exp(0.0 - (double)self.val[a].d[i]))); }
         return self.node(OP_SIGMOID(), a, -1, r);
     }
 
     // rows of a table of vectors (token numbers -> vectors): ids has one number per row of the result; the table is a parameter of shape vocab x width
-    int embed(self, int table, int[] ids) {
-        int w = self.val[table].cols();
+    i64 embed(self, i64 table, i64[] ids) {
+        i64 w = self.val[table].cols();
         Tensor32 r = Tensor32::zeros(ids.len, w);
         for i in 0..ids.len { for j in 0..w { r.d[i * w + j] = self.val[table].d[ids[i] * w + j]; } }
-        int n = self.node(OP_EMBED(), table, -1, r);
+        i64 n = self.node(OP_EMBED(), table, -1, r);
         for i in 0..ids.len { self.aux.push(ids[i]); }
         self.iarg[n] = ids.len;
         return n;
     }
     // GELU (the tanh form) and SiLU (x times sigmoid x)
-    int gelu(self, int a) {
+    i64 gelu(self, i64 a) {
         Tensor32 r = Tensor32::make(self.val[a].shape);
         for i in 0..r.d.len {
             double x = (double)self.val[a].d[i];
@@ -849,7 +849,7 @@ struct Graph {
         }
         return self.node(OP_GELU(), a, -1, r);
     }
-    int silu(self, int a) {
+    i64 silu(self, i64 a) {
         Tensor32 r = Tensor32::make(self.val[a].shape);
         for i in 0..r.d.len {
             double x = (double)self.val[a].d[i];
@@ -858,9 +858,9 @@ struct Graph {
         return self.node(OP_SILU(), a, -1, r);
     }
     // every row: (x - mean) / sqrt(variance + 0.00001), then times gain and plus bias (gain and bias: one row each, as parameters)
-    int layer_norm(self, int a, int gain, int bias) {
-        int c = self.val[a].cols();
-        int m = self.val[a].rows();
+    i64 layer_norm(self, i64 a, i64 gain, i64 bias) {
+        i64 c = self.val[a].cols();
+        i64 m = self.val[a].rows();
         Tensor32 y = Tensor32::make(self.val[a].shape);
         Tensor32 xh = Tensor32::make(self.val[a].shape);
         Tensor32 inv = Tensor32::zeros(m, 1);
@@ -879,16 +879,16 @@ struct Graph {
                 y.d[i * c + j] = (float)(h * (double)self.val[gain].d[j] + (double)self.val[bias].d[j]);
             }
         }
-        int n = self.node(OP_LAYER_NORM(), a, gain, y);
+        i64 n = self.node(OP_LAYER_NORM(), a, gain, y);
         self.pc[n] = bias;
         self.target[n] = xh;
         self.extra[n] = inv;
         return n;
     }
     // every row: x / sqrt(mean of squares + 0.00001), times gain (the norm of the Llama models: no mean, no bias)
-    int rms_norm(self, int a, int gain) {
-        int c = self.val[a].cols();
-        int m = self.val[a].rows();
+    i64 rms_norm(self, i64 a, i64 gain) {
+        i64 c = self.val[a].cols();
+        i64 m = self.val[a].rows();
         Tensor32 y = Tensor32::make(self.val[a].shape);
         Tensor32 xh = Tensor32::make(self.val[a].shape);
         Tensor32 inv = Tensor32::zeros(m, 1);
@@ -904,24 +904,24 @@ struct Graph {
                 y.d[i * c + j] = (float)(h * (double)self.val[gain].d[j]);
             }
         }
-        int n = self.node(OP_RMS_NORM(), a, gain, y);
+        i64 n = self.node(OP_RMS_NORM(), a, gain, y);
         self.target[n] = xh;
         self.extra[n] = inv;
         return n;
     }
     // causal self-attention of one sequence: q, k, v have one row per position and the width is split into `heads` equal parts;
     // position i looks at the positions 0..i only: softmax(q.k / sqrt(width of a head)) @ v
-    int attention(self, int q, int k, int v, int heads) {
-        int t = self.val[q].rows();
-        int w = self.val[q].cols();
-        int dh = w / heads;
+    i64 attention(self, i64 q, i64 k, i64 v, i64 heads) {
+        i64 t = self.val[q].rows();
+        i64 w = self.val[q].cols();
+        i64 dh = w / heads;
         double sc = 1.0 / Math::sqrt((double)dh);
         Tensor32 out = Tensor32::zeros(t, w);
         Tensor32 pr = Tensor32::zeros(heads * t, t);
         if dh % 4 == 0 {
             nt_att_scores(@self.val[q].d[0], @self.val[k].d[0], @pr.d[0], t, w, heads, (float)sc);
             for hi in 0..heads * t {                                     // the softmax of every row, over the places 0 .. i
-                int row = hi % t;
+                i64 row = hi % t;
                 float mx = pr.d[hi * t];
                 for j in 1..row + 1 { if pr.d[hi * t + j] > mx { mx = pr.d[hi * t + j]; } }
                 double z = 0.0;
@@ -934,7 +934,7 @@ struct Graph {
                 for j in 0..row + 1 { pr.d[hi * t + j] = pr.d[hi * t + j] * iz; }
             }
             nt_att_out(@pr.d[0], @self.val[v].d[0], @out.d[0], t, w, heads);
-            int fast = self.node(OP_ATTENTION(), q, k, out);
+            i64 fast = self.node(OP_ATTENTION(), q, k, out);
             self.pc[fast] = v;
             self.iarg[fast] = heads;
             self.target[fast] = pr;
@@ -963,7 +963,7 @@ struct Graph {
                 }
             }
         }
-        int n = self.node(OP_ATTENTION(), q, k, out);
+        i64 n = self.node(OP_ATTENTION(), q, k, out);
         self.pc[n] = v;
         self.iarg[n] = heads;
         self.target[n] = pr;
@@ -973,13 +973,13 @@ struct Graph {
     // a convolution over images: x has one image per row, stored as channels x height x width (c_in * h * w numbers); w is a parameter of c_out rows of
     // c_in * k * k numbers; b a parameter of one row of c_out numbers. Square window k, stride, zero padding. The result has c_out * ho * wo numbers per row
     // with ho = (h + 2 pad - k) / stride + 1 (the same for wo).
-    int conv2d(self, int x, int w, int b, int c_in, int h, int wd, int c_out, int k, int stride, int pad) {
-        int ho = (h + 2 * pad - k) / stride + 1;
-        int wo = (wd + 2 * pad - k) / stride + 1;
-        int nimg = self.val[x].rows();
+    i64 conv2d(self, i64 x, i64 w, i64 b, i64 c_in, i64 h, i64 wd, i64 c_out, i64 k, i64 stride, i64 pad) {
+        i64 ho = (h + 2 * pad - k) / stride + 1;
+        i64 wo = (wd + 2 * pad - k) / stride + 1;
+        i64 nimg = self.val[x].rows();
         Tensor32 r = Tensor32::zeros(nimg, c_out * ho * wo);
-        int inw = c_in * h * wd;
-        int outw = c_out * ho * wo;
+        i64 inw = c_in * h * wd;
+        i64 outw = c_out * ho * wo;
         for n in 0..nimg {
             for co in 0..c_out {
                 for oy in 0..ho {
@@ -987,10 +987,10 @@ struct Graph {
                         double s = (double)self.val[b].d[co];
                         for ci in 0..c_in {
                             for ky in 0..k {
-                                int iy = oy * stride - pad + ky;
+                                i64 iy = oy * stride - pad + ky;
                                 if iy < 0 || iy >= h { continue; }
                                 for kx in 0..k {
-                                    int ix = ox * stride - pad + kx;
+                                    i64 ix = ox * stride - pad + kx;
                                     if ix < 0 || ix >= wd { continue; }
                                     s += (double)self.val[x].d[n * inw + (ci * h + iy) * wd + ix] * (double)self.val[w].d[co * c_in * k * k + (ci * k + ky) * k + kx];
                                 }
@@ -1001,29 +1001,29 @@ struct Graph {
                 }
             }
         }
-        int node = self.node(OP_CONV2D(), x, w, r);
+        i64 node = self.node(OP_CONV2D(), x, w, r);
         self.pc[node] = b;
         self.aux.push(c_in); self.aux.push(h); self.aux.push(wd); self.aux.push(c_out); self.aux.push(k); self.aux.push(stride); self.aux.push(pad);
         return node;
     }
     // the biggest number of every k x k square (stride k) of every channel: c channels of h x wd per row; h and wd should be multiples of k
-    int maxpool(self, int x, int c, int h, int wd, int k) {
-        int ho = h / k;
-        int wo = wd / k;
-        int nimg = self.val[x].rows();
-        int inw = c * h * wd;
-        int outw = c * ho * wo;
+    i64 maxpool(self, i64 x, i64 c, i64 h, i64 wd, i64 k) {
+        i64 ho = h / k;
+        i64 wo = wd / k;
+        i64 nimg = self.val[x].rows();
+        i64 inw = c * h * wd;
+        i64 outw = c * ho * wo;
         Tensor32 r = Tensor32::zeros(nimg, outw);
-        int node = self.node(OP_MAXPOOL(), x, -1, r);
+        i64 node = self.node(OP_MAXPOOL(), x, -1, r);
         self.aux.push(c); self.aux.push(h); self.aux.push(wd); self.aux.push(k);
         for n in 0..nimg {
             for ch in 0..c {
                 for oy in 0..ho {
                     for ox in 0..wo {
-                        int best = n * inw + (ch * h + oy * k) * wd + ox * k;
+                        i64 best = n * inw + (ch * h + oy * k) * wd + ox * k;
                         for ky in 0..k {
                             for kx in 0..k {
-                                int at = n * inw + (ch * h + oy * k + ky) * wd + ox * k + kx;
+                                i64 at = n * inw + (ch * h + oy * k + ky) * wd + ox * k + kx;
                                 if self.val[x].d[at] > self.val[x].d[best] { best = at; }
                             }
                         }
@@ -1037,7 +1037,7 @@ struct Graph {
     }
 
     // the mean of the squares of (a - target): one number
-    int mse(self, int a, Tensor32 target) {
+    i64 mse(self, i64 a, Tensor32 target) {
         double s = 0.0;
         for i in 0..target.d.len {
             double e = (double)self.val[a].d[i] - (double)target.d[i];
@@ -1045,19 +1045,19 @@ struct Graph {
         }
         Tensor32 r = Tensor32::zeros(1, 1);
         r.d[0] = (float)(s / (double)target.d.len);
-        int n = self.node(OP_MSE(), a, -1, r);
+        i64 n = self.node(OP_MSE(), a, -1, r);
         self.target[n] = target;
         return n;
     }
     // softmax of every row of a (the scores), then the mean of -log(probability of the right class); classes: one class number per row
-    int softmax_ce(self, int a, int[] classes) {
+    i64 softmax_ce(self, i64 a, i64[] classes) {
         Tensor32 p = self.val[a].softmax();
-        int c = p.cols();
+        i64 c = p.cols();
         double s = 0.0;
         for i in 0..classes.len { s = s - Math::log((double)p.d[i * c + classes[i]] + 0.0000000001); }
         Tensor32 r = Tensor32::zeros(1, 1);
         r.d[0] = (float)(s / (double)classes.len);
-        int n = self.node(OP_SOFTMAX_CE(), a, -1, r);
+        i64 n = self.node(OP_SOFTMAX_CE(), a, -1, r);
         for i in 0..classes.len { self.aux.push(classes[i]); }
         self.iarg[n] = classes.len;
         self.target[n] = p;
@@ -1065,22 +1065,22 @@ struct Graph {
     }
 
     // adds g to the gradient of node n
-    void give(self, int n, Tensor32 g) {
+    void give(self, i64 n, Tensor32 g) {
         if self.grad[n].d.len != g.d.len { self.grad[n] = g.copy(); return; }
         for i in 0..g.d.len { self.grad[n].d[i] += g.d[i]; }
     }
     // the gradients of everything the node `loss` depends on (loss: a node with one number); the gradients of an earlier step are forgotten
-    void backward(self, int loss) {
+    void backward(self, i64 loss) {
         for i in 0..self.count { self.grad[i] = Tensor32::zeros(1, 1); }
         Tensor32 one = Tensor32::zeros(1, 1);
         one.d[0] = 1.0;
         self.grad[loss] = one;
-        int i = loss;
+        i64 i = loss;
         while i >= 0 {
             if self.grad[i].d.len == self.val[i].d.len || self.op[i] == OP_MSE() || self.op[i] == OP_SOFTMAX_CE() {
-                int o = self.op[i];
-                int a = self.pa[i];
-                int b = self.pb[i];
+                i64 o = self.op[i];
+                i64 a = self.pa[i];
+                i64 b = self.pb[i];
                 Tensor32 dy = self.grad[i];
                 if o == OP_MATMUL() {
                     self.give(a, dy.matmul(self.val[b].transpose()));
@@ -1089,7 +1089,7 @@ struct Graph {
                     self.give(a, dy);
                     if self.val[b].d.len == dy.d.len { self.give(b, dy); }
                     else {                                                 // the bias: the sum of the rows
-                        int c = dy.cols();
+                        i64 c = dy.cols();
                         Tensor32 gb = Tensor32::zeros(1, c);
                         for r in 0..dy.rows() { for j in 0..c { gb.d[j] += dy.d[r * c + j]; } }
                         self.give(b, gb);
@@ -1115,10 +1115,10 @@ struct Graph {
                     for k in 0..g.d.len { g.d[k] = (self.val[a].d[k] - self.target[i].d[k]) * k2; }
                     self.give(a, g);
                 } else if o == OP_EMBED() {
-                    int w = self.val[a].cols();
+                    i64 w = self.val[a].cols();
                     Tensor32 g = Tensor32::zeros(self.val[a].rows(), w);
                     for r in 0..self.iarg[i] {
-                        int id = self.aux[self.aux_off[i] + r];
+                        i64 id = self.aux[self.aux_off[i] + r];
                         for j in 0..w { g.d[id * w + j] += dy.d[r * w + j]; }
                     }
                     self.give(a, g);
@@ -1141,8 +1141,8 @@ struct Graph {
                     }
                     self.give(a, g);
                 } else if o == OP_LAYER_NORM() || o == OP_RMS_NORM() {
-                    int c = dy.cols();
-                    int m = dy.rows();
+                    i64 c = dy.cols();
+                    i64 m = dy.rows();
                     Tensor32 dx = Tensor32::make(dy.shape);
                     Tensor32 dg = Tensor32::zeros(1, c);
                     Tensor32 db = Tensor32::zeros(1, c);
@@ -1170,11 +1170,11 @@ struct Graph {
                     self.give(b, dg);
                     if o == OP_LAYER_NORM() { self.give(self.pc[i], db); }
                 } else if o == OP_ATTENTION() {
-                    int vv = self.pc[i];
-                    int t = self.val[a].rows();
-                    int w = self.val[a].cols();
-                    int heads = self.iarg[i];
-                    int dh = w / heads;
+                    i64 vv = self.pc[i];
+                    i64 t = self.val[a].rows();
+                    i64 w = self.val[a].cols();
+                    i64 heads = self.iarg[i];
+                    i64 dh = w / heads;
                     double sc = 1.0 / Math::sqrt((double)dh);
                     Tensor32 dq = Tensor32::zeros(t, w);
                     Tensor32 dk = Tensor32::zeros(t, w);
@@ -1211,15 +1211,15 @@ struct Graph {
                     self.give(b, dk);
                     self.give(vv, dv);
                 } else if o == OP_CONV2D() {
-                    int bb = self.pc[i];
-                    int ax = self.aux_off[i];
-                    int c_in = self.aux[ax]; int h = self.aux[ax + 1]; int wd = self.aux[ax + 2]; int c_out = self.aux[ax + 3];
-                    int k = self.aux[ax + 4]; int stride = self.aux[ax + 5]; int pad = self.aux[ax + 6];
-                    int ho = (h + 2 * pad - k) / stride + 1;
-                    int wo = (wd + 2 * pad - k) / stride + 1;
-                    int nimg = self.val[a].rows();
-                    int inw = c_in * h * wd;
-                    int outw = c_out * ho * wo;
+                    i64 bb = self.pc[i];
+                    i64 ax = self.aux_off[i];
+                    i64 c_in = self.aux[ax]; i64 h = self.aux[ax + 1]; i64 wd = self.aux[ax + 2]; i64 c_out = self.aux[ax + 3];
+                    i64 k = self.aux[ax + 4]; i64 stride = self.aux[ax + 5]; i64 pad = self.aux[ax + 6];
+                    i64 ho = (h + 2 * pad - k) / stride + 1;
+                    i64 wo = (wd + 2 * pad - k) / stride + 1;
+                    i64 nimg = self.val[a].rows();
+                    i64 inw = c_in * h * wd;
+                    i64 outw = c_out * ho * wo;
                     Tensor32 dx = Tensor32::zeros(nimg, inw);
                     Tensor32 dw = Tensor32::zeros(c_out, c_in * k * k);
                     Tensor32 db = Tensor32::zeros(1, c_out);
@@ -1231,13 +1231,13 @@ struct Graph {
                                     db.d[co] += g;
                                     for ci in 0..c_in {
                                         for ky in 0..k {
-                                            int iy = oy * stride - pad + ky;
+                                            i64 iy = oy * stride - pad + ky;
                                             if iy < 0 || iy >= h { continue; }
                                             for kx in 0..k {
-                                                int ix = ox * stride - pad + kx;
+                                                i64 ix = ox * stride - pad + kx;
                                                 if ix < 0 || ix >= wd { continue; }
-                                                int xi = n * inw + (ci * h + iy) * wd + ix;
-                                                int wi = co * c_in * k * k + (ci * k + ky) * k + kx;
+                                                i64 xi = n * inw + (ci * h + iy) * wd + ix;
+                                                i64 wi = co * c_in * k * k + (ci * k + ky) * k + kx;
                                                 dw.d[wi] += g * self.val[a].d[xi];
                                                 dx.d[xi] += g * self.val[b].d[wi];
                                             }
@@ -1251,15 +1251,15 @@ struct Graph {
                     self.give(b, dw);
                     self.give(bb, db);
                 } else if o == OP_MAXPOOL() {
-                    int ax = self.aux_off[i];
-                    int c = self.aux[ax]; int h = self.aux[ax + 1]; int wd = self.aux[ax + 2];
+                    i64 ax = self.aux_off[i];
+                    i64 c = self.aux[ax]; i64 h = self.aux[ax + 1]; i64 wd = self.aux[ax + 2];
                     Tensor32 dx = Tensor32::zeros(self.val[a].rows(), c * h * wd);
                     for q in 0..dy.d.len { dx.d[self.aux[ax + 4 + q]] += dy.d[q]; }
                     self.give(a, dx);
                 } else if o == OP_SOFTMAX_CE() {
                     Tensor32 g = self.target[i].copy();                    // the probabilities
-                    int c = g.cols();
-                    int rows = self.iarg[i];
+                    i64 c = g.cols();
+                    i64 rows = self.iarg[i];
                     for r in 0..rows { g.d[r * c + self.aux[self.aux_off[i] + r]] -= 1.0; }
                     float k3 = (float)((double)dy.d[0] / (double)rows);
                     for k in 0..g.d.len { g.d[k] = g.d[k] * k3; }
@@ -1271,13 +1271,13 @@ struct Graph {
     }
 
     // a layer: y = x @ w + b; the two parameters are made now (call it before mark())
-    Linear linear(self, int inputs, int outputs, int seed) {
+    Linear linear(self, i64 inputs, i64 outputs, i64 seed) {
         Linear l;
         l.w = self.param(Tensor32::random(inputs, outputs, seed, Math::sqrt(3.0 / (double)inputs)));
         l.b = self.param(Tensor32::zeros(1, outputs));
         return l;
     }
-    int apply(self, Linear l, int x) { return self.add(self.matmul(x, l.w), l.b); }
+    i64 apply(self, Linear l, i64 x) { return self.add(self.matmul(x, l.w), l.b); }
 
     // the size of the gradient of all parameters (the square root of the sum of squares); when it is above max_norm all gradients are made smaller so that it is max_norm
     double clip(self, double max_norm) {
@@ -1330,7 +1330,7 @@ struct Graph {
     // the parameters in a text file (numbers with 9 digits); load() puts them back into a graph that has the same parameters (same order and shapes)
     bool save(self, String path) {
         String t = "neuron-graph 1\n";
-        int np = 0;
+        i64 np = 0;
         for n in 0..self.keep { if self.op[n] == OP_PARAM() { np += 1; } }
         t.append("params " + str(np) + "\n");
         for n in 0..self.keep {
@@ -1346,7 +1346,7 @@ struct Graph {
                 t.append(nums + "\n");
             }
         }
-        Result<int, Error> r = Fs::write_text(path, t);
+        Result<i64, Error> r = Fs::write_text(path, t);
         return r.is_ok();
     }
     bool load(self, String path) {
@@ -1354,10 +1354,10 @@ struct Graph {
         if !r.is_ok() { return false; }
         String[] ls = r.take().split("\n");
         if ls.len < 2 || ls[0] != "neuron-graph 1" { return false; }
-        int np = 0;
+        i64 np = 0;
         for n in 0..self.keep { if self.op[n] == OP_PARAM() { np += 1; } }
         if ls[1] != "params " + str(np) { return false; }
-        int at = 2;
+        i64 at = 2;
         for n in 0..self.keep {
             if self.op[n] == OP_PARAM() {
                 String want = "";
@@ -1408,15 +1408,15 @@ struct Graph {
 }
 
 // the numbers 0 .. n-1 in a mixed order (the same seed gives the same order): for mini-batches
-int[] shuffled(int n, int seed) {
-    int[] a = arr(n + 1);
+i64[] shuffled(i64 n, i64 seed) {
+    i64[] a = arr(n + 1);
     for i in 0..n { a.push(i); }
-    int s = seed * 2654435761 + 12345;
-    int i = n - 1;
+    i64 s = seed * 2654435761 + 12345;
+    i64 i = n - 1;
     while i > 0 {
         s = (s * 1103515245 + 12345) & 2147483647;
-        int j = s % (i + 1);
-        int t = a[i];
+        i64 j = s % (i + 1);
+        i64 t = a[i];
         a[i] = a[j];
         a[j] = t;
         i -= 1;
@@ -1427,7 +1427,7 @@ int[] shuffled(int n, int seed) {
 // learning-rate schedules: step from 0 to total
 struct Sched {
     // grows from 0 to base in `warm` steps, then falls to low along a cosine until `total`
-    static double cosine(int step, int total, int warm, double base, double low) {
+    static double cosine(i64 step, i64 total, i64 warm, double base, double low) {
         if step < warm { return base * (double)(step + 1) / (double)warm; }
         double p = (double)(step - warm) / (double)(total - warm);
         if p > 1.0 { p = 1.0; }
@@ -1450,14 +1450,14 @@ struct Sched {
 
 struct Gpt {
     Graph g;
-    int vocab;
-    int ctx;
-    int d;
-    int heads;
-    int layers;
-    int emb;
-    int pos;
-    int gfin;
+    i64 vocab;
+    i64 ctx;
+    i64 d;
+    i64 heads;
+    i64 layers;
+    i64 emb;
+    i64 pos;
+    i64 gfin;
     Linear head;
     Linear[] wq;
     Linear[] wk;
@@ -1465,12 +1465,12 @@ struct Gpt {
     Linear[] wo;
     Linear[] up;
     Linear[] down;
-    int[] gain1;
-    int[] gain2;
-    int rng;
+    i64[] gain1;
+    i64[] gain2;
+    i64 rng;
 
     // a new model with random weights (the same seed gives the same model)
-    static Gpt make(int vocab, int ctx, int d, int heads, int layers, int seed) {
+    static Gpt make(i64 vocab, i64 ctx, i64 d, i64 heads, i64 layers, i64 seed) {
         Gpt m;
         m.g = Graph::make();
         m.vocab = vocab; m.ctx = ctx; m.d = d; m.heads = heads; m.layers = layers;
@@ -1500,29 +1500,29 @@ struct Gpt {
     }
 
     // a text as byte numbers
-    static int[] bytes(String text) {
-        int[] r = arr(text.len + 1);
+    static i64[] bytes(String text) {
+        i64[] r = arr(text.len + 1);
         for i in 0..text.len { r.push(text[i] & 255); }
         return r;
     }
     // byte numbers as a text
-    static String text_of(int[] ids) {
+    static String text_of(i64[] ids) {
         String s = "";
         for i in 0..ids.len { s.push((char)ids[i]); }
         return s;
     }
 
     // the scores of the next token at every position of ids (a node: ids.len rows of vocab numbers)
-    int forward(self, int[] ids) {
-        int t = ids.len;
-        int[] pids = arr(t + 1);
+    i64 forward(self, i64[] ids) {
+        i64 t = ids.len;
+        i64[] pids = arr(t + 1);
         for i in 0..t { pids.push(i); }
-        int x = self.g.add(self.g.embed(self.emb, ids), self.g.embed(self.pos, pids));
+        i64 x = self.g.add(self.g.embed(self.emb, ids), self.g.embed(self.pos, pids));
         for l in 0..self.layers {
-            int n1 = self.g.rms_norm(x, self.gain1[l]);
-            int att = self.g.attention(self.g.apply(self.wq[l], n1), self.g.apply(self.wk[l], n1), self.g.apply(self.wv[l], n1), self.heads);
+            i64 n1 = self.g.rms_norm(x, self.gain1[l]);
+            i64 att = self.g.attention(self.g.apply(self.wq[l], n1), self.g.apply(self.wk[l], n1), self.g.apply(self.wv[l], n1), self.heads);
             x = self.g.add(x, self.g.apply(self.wo[l], att));
-            int n2 = self.g.rms_norm(x, self.gain2[l]);
+            i64 n2 = self.g.rms_norm(x, self.gain2[l]);
             x = self.g.add(x, self.g.apply(self.down[l], self.g.gelu(self.g.apply(self.up[l], n2))));
         }
         return self.g.apply(self.head, self.g.rms_norm(x, self.gfin));
@@ -1531,14 +1531,14 @@ struct Gpt {
     // one learning step on a batch: every start in `starts` is the beginning of a sequence of ctx + 1 numbers in data (the first ctx are the input, the
     // next token at every place is the answer). The gradients of the sequences are averaged; clip: the biggest size of the gradient (0 = no clip).
     // Returns the mean loss of the batch.
-    double step(self, int[] data, int[] starts, double lr, double decay, double clip) {
+    double step(self, i64[] data, i64[] starts, double lr, double decay, double clip) {
         double total = 0.0;
         for q in 0..starts.len {
-            int s = starts[q];
-            int[] inp = arr(self.ctx + 1);
-            int[] want = arr(self.ctx + 1);
+            i64 s = starts[q];
+            i64[] inp = arr(self.ctx + 1);
+            i64[] want = arr(self.ctx + 1);
             for i in 0..self.ctx { inp.push(data[s + i]); want.push(data[s + i + 1]); }
-            int loss = self.g.softmax_ce(self.forward(inp), want);
+            i64 loss = self.g.softmax_ce(self.forward(inp), want);
             total += (double)self.g.value(loss).d[0];
             self.g.backward(loss);
             self.g.acc_add();
@@ -1551,22 +1551,22 @@ struct Gpt {
     }
 
     // the mean loss on sequences (no learning): for a check on text the model has not seen
-    double loss_on(self, int[] data, int[] starts) {
+    double loss_on(self, i64[] data, i64[] starts) {
         double total = 0.0;
         for q in 0..starts.len {
-            int s = starts[q];
-            int[] inp = arr(self.ctx + 1);
-            int[] want = arr(self.ctx + 1);
+            i64 s = starts[q];
+            i64[] inp = arr(self.ctx + 1);
+            i64[] want = arr(self.ctx + 1);
             for i in 0..self.ctx { inp.push(data[s + i]); want.push(data[s + i + 1]); }
-            int loss = self.g.softmax_ce(self.forward(inp), want);
+            i64 loss = self.g.softmax_ce(self.forward(inp), want);
             total += (double)self.g.value(loss).d[0];
             self.g.clear();
         }
         return total / (double)starts.len;
     }
 
-    int next_rand(self) {
-        int x = self.rng;
+    i64 next_rand(self) {
+        i64 x = self.rng;
         x = x xor (x << 13);
         x = x xor ((x >> 7) & 72057594037927935);
         x = x xor (x << 17);
@@ -1575,32 +1575,32 @@ struct Gpt {
     }
 
     // the next token after the numbers in ids (the last ctx of them are used): temperature 0 = the best; top_k 0 = any
-    int next_token(self, int[] ids, double temp, int top_k) {
-        int[] inp = arr(self.ctx + 1);
-        int from = ids.len - self.ctx;
+    i64 next_token(self, i64[] ids, double temp, i64 top_k) {
+        i64[] inp = arr(self.ctx + 1);
+        i64 from = ids.len - self.ctx;
         if from < 0 { from = 0; }
         for i in from..ids.len { inp.push(ids[i]); }
         Tensor32 sc = self.g.value(self.forward(inp));
-        int row = (inp.len - 1) * self.vocab;
+        i64 row = (inp.len - 1) * self.vocab;
         self.g.clear();
-        int best = 0;
+        i64 best = 0;
         for c in 1..self.vocab { if sc.d[row + c] > sc.d[row + best] { best = c; } }
         if temp <= 0.0 { return best; }
         // the candidates: the top_k best (or all), a softmax with the temperature, one drawn by chance
-        int m = self.vocab;
+        i64 m = self.vocab;
         if top_k > 0 && top_k < m { m = top_k; }
-        int[] cand = arr(m + 1);
+        i64[] cand = arr(m + 1);
         float[] val = arr(m + 1);
         for i in 0..self.vocab {
             float v = sc.d[row + i];
             if cand.len < m {
                 cand.push(i); val.push(v);
-                int k = cand.len - 1;
-                while k > 0 && val[k] > val[k - 1] { float tv = val[k]; val[k] = val[k - 1]; val[k - 1] = tv; int ti = cand[k]; cand[k] = cand[k - 1]; cand[k - 1] = ti; k -= 1; }
+                i64 k = cand.len - 1;
+                while k > 0 && val[k] > val[k - 1] { float tv = val[k]; val[k] = val[k - 1]; val[k - 1] = tv; i64 ti = cand[k]; cand[k] = cand[k - 1]; cand[k - 1] = ti; k -= 1; }
             } else if v > val[m - 1] {
                 val[m - 1] = v; cand[m - 1] = i;
-                int k = m - 1;
-                while k > 0 && val[k] > val[k - 1] { float tv = val[k]; val[k] = val[k - 1]; val[k - 1] = tv; int ti = cand[k]; cand[k] = cand[k - 1]; cand[k - 1] = ti; k -= 1; }
+                i64 k = m - 1;
+                while k > 0 && val[k] > val[k - 1] { float tv = val[k]; val[k] = val[k - 1]; val[k - 1] = tv; i64 ti = cand[k]; cand[k] = cand[k - 1]; cand[k - 1] = ti; k -= 1; }
             }
         }
         double mx = (double)val[0];
@@ -1614,14 +1614,14 @@ struct Gpt {
     }
 
     // `count` new tokens after the prompt (byte numbers); the text of the new ones
-    String write(self, int[] prompt, int count, double temp, int top_k, int seed) {
+    String write(self, i64[] prompt, i64 count, double temp, i64 top_k, i64 seed) {
         self.rng = seed * 2654435761 + 88172645463325252;
         if self.rng == 0 { self.rng = 1; }
-        int[] ids = arr(prompt.len + count + 1);
+        i64[] ids = arr(prompt.len + count + 1);
         for i in 0..prompt.len { ids.push(prompt[i]); }
-        int[] fresh = arr(count + 1);
+        i64[] fresh = arr(count + 1);
         for k in 0..count {
-            int t = self.next_token(ids, temp, top_k);
+            i64 t = self.next_token(ids, temp, top_k);
             ids.push(t);
             fresh.push(t);
         }
@@ -1631,7 +1631,7 @@ struct Gpt {
     // the weights go to `path`, the sizes to `path.cfg`
     bool save(self, String path) {
         String cfg = "gpt 1 " + str(self.vocab) + " " + str(self.ctx) + " " + str(self.d) + " " + str(self.heads) + " " + str(self.layers) + "\n";
-        Result<int, Error> r = Fs::write_text(path + ".cfg", cfg);
+        Result<i64, Error> r = Fs::write_text(path + ".cfg", cfg);
         if !r.is_ok() { return false; }
         return self.g.save(path);
     }

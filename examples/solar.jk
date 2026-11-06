@@ -34,7 +34,7 @@ double mix(double a, double b, double f) {
 
 // the colour of a ball at a point of its surface: kind 0 Mercury, 1 Venus, 2 Earth, 3 Mars, 4 Jupiter, 5 Saturn, 6 Moon
 // (lon, lat: the place on the ball; lit: 0..1 how much the sun shines there; rim: 0..1 near the edge)
-int surface(int kind, double lon, double lat, double lit, double rim) {
+i64 surface(i64 kind, double lon, double lat, double lit, double rim) {
     double r = 150.0;
     double g = 150.0;
     double b = 150.0;
@@ -123,15 +123,15 @@ int surface(int kind, double lon, double lat, double lit, double rim) {
     r = r * f + glow_r * lit;
     g = g * f + glow_g * lit;
     b = b * f + glow_b * lit * 1.0;
-    return Screen::rgb(Math::min_int(255, (int)r), Math::min_int(255, (int)g), Math::min_int(255, (int)b));
+    return Screen::rgb(Math::min_int(255, (i64)r), Math::min_int(255, (i64)g), Math::min_int(255, (i64)b));
 }
 
 // a ball of radius rad dots at (cx, cy); (lx, ly, lz) points to the sun; spin turns it
-void ball(Screen^ s, double cx, double cy, double rad, int kind, double lx, double ly, double lz, double spin) {
-    int x0 = Math::max_int(0, (int)(cx - rad) - 1);
-    int x1 = Math::min_int(s^.w - 1, (int)(cx + rad) + 1);
-    int y0 = Math::max_int(0, (int)(cy - rad) - 1);
-    int y1 = Math::min_int(s^.h - 1, (int)(cy + rad) + 1);
+void ball(Screen^ s, double cx, double cy, double rad, i64 kind, double lx, double ly, double lz, double spin) {
+    i64 x0 = Math::max_int(0, (i64)(cx - rad) - 1);
+    i64 x1 = Math::min_int(s^.w - 1, (i64)(cx + rad) + 1);
+    i64 y0 = Math::max_int(0, (i64)(cy - rad) - 1);
+    i64 y1 = Math::min_int(s^.h - 1, (i64)(cy + rad) + 1);
     for y in y0..y1 + 1 {
         for x in x0..x1 + 1 {
             double dx = ((double)x + 0.5 - cx) / rad;
@@ -143,7 +143,7 @@ void ball(Screen^ s, double cx, double cy, double rad, int kind, double lx, doub
                 lit = Math::clamp((lit + 0.04) / 1.04, 0.0, 1.0);
                 double rim = Math::pow(1.0 - Math::abs(nz), 3.0);
                 double lon = Math::atan2(dx, 0.0 - nz) + spin;
-                int c = surface(kind, lon, dy, lit, rim);
+                i64 c = surface(kind, lon, dy, lit, rim);
                 double cover = Math::clamp((1.0 - Math::sqrt(d2)) * rad, 0.0, 1.0);
                 if cover >= 1.0 {
                     s^.set_packed(x, y, c);
@@ -158,10 +158,10 @@ void ball(Screen^ s, double cx, double cy, double rad, int kind, double lx, doub
 // the sun: a hot disk, darker towards the edge, with a corona that fades out
 void sun_ball(Screen^ s, double cx, double cy, double rad) {
     double reach = rad * 3.6;
-    int x0 = Math::max_int(0, (int)(cx - reach));
-    int x1 = Math::min_int(s^.w - 1, (int)(cx + reach));
-    int y0 = Math::max_int(0, (int)(cy - reach));
-    int y1 = Math::min_int(s^.h - 1, (int)(cy + reach));
+    i64 x0 = Math::max_int(0, (i64)(cx - reach));
+    i64 x1 = Math::min_int(s^.w - 1, (i64)(cx + reach));
+    i64 y0 = Math::max_int(0, (i64)(cy - reach));
+    i64 y1 = Math::min_int(s^.h - 1, (i64)(cy + reach));
     for y in y0..y1 + 1 {
         for x in x0..x1 + 1 {
             double dx = (double)x + 0.5 - cx;
@@ -171,11 +171,11 @@ void sun_ball(Screen^ s, double cx, double cy, double rad) {
                 double mu = Math::sqrt(1.0 - d * d);
                 double limb = 0.55 + 0.45 * mu;
                 double spots = 0.93 + 0.07 * Math::sin(dx * 1.3) * Math::sin(dy * 1.1 + 1.0);
-                s^.set(x, y, Math::min_int(255, (int)(255.0 * limb * spots)), Math::min_int(255, (int)(228.0 * limb * limb * spots)), (int)(150.0 * limb * limb * limb * spots));
+                s^.set(x, y, Math::min_int(255, (i64)(255.0 * limb * spots)), Math::min_int(255, (i64)(228.0 * limb * limb * spots)), (i64)(150.0 * limb * limb * limb * spots));
             } else {
                 double a = 0.55 / (d * d) * Math::clamp((3.6 - d) / 2.6, 0.0, 1.0);
                 if a > 0.004 {
-                    s^.add(x, y, (int)(255.0 * a), (int)(170.0 * a), (int)(70.0 * a));
+                    s^.add(x, y, (i64)(255.0 * a), (i64)(170.0 * a), (i64)(70.0 * a));
                 }
             }
         }
@@ -184,7 +184,7 @@ void sun_ball(Screen^ s, double cx, double cy, double rad) {
 
 // the rings of Saturn: ellipses around the planet at (px, py), tilted; front = 0 draws the half behind the ball,
 // 1 the half in front of it; rad: the radius of the ball in dots
-void rings(Screen^ s, double px, double py, double rad, int front) {
+void rings(Screen^ s, double px, double py, double rad, i64 front) {
     double ca = Math::cos(0.42);
     double sa = Math::sin(0.42);
     for k in 0..900 {
@@ -194,13 +194,13 @@ void rings(Screen^ s, double px, double py, double rad, int front) {
             if rr != 7 {                                                             // a gap in the rings
                 double ex = radius * Math::cos(ang);
                 double ey = radius * Math::sin(ang) * 0.33;
-                int x = (int)(px + ex * ca - ey * sa);
-                int y = (int)(py + ex * sa + ey * ca);
-                int is_front = 0;
+                i64 x = (i64)(px + ex * ca - ey * sa);
+                i64 y = (i64)(py + ex * sa + ey * ca);
+                i64 is_front = 0;
                 if Math::sin(ang) > 0.0 { is_front = 1; }
                 if is_front == front && x >= 0 && x < s^.w && y >= 0 && y < s^.h {
                     double shade = 0.72 + 0.28 * Math::sin((double)rr * 1.9);
-                    s^.set(x, y, (int)(226.0 * shade), (int)(202.0 * shade), (int)(152.0 * shade));
+                    s^.set(x, y, (i64)(226.0 * shade), (i64)(202.0 * shade), (i64)(152.0 * shade));
                 }
             }
         }
@@ -208,7 +208,7 @@ void rings(Screen^ s, double px, double py, double rad, int front) {
 }
 
 void main() {
-    int frames = 0;                                   // 0: until Ctrl-C or Enter
+    i64 frames = 0;                                   // 0: until Ctrl-C or Enter
     String[] args = Env::args();
     if args.len > 1 {
         switch Num::parse_int(args[1]) {
@@ -219,8 +219,8 @@ void main() {
             }
         }
     }
-    int w = Math::min_int(Term::cols(), 120);
-    int h = Math::min_int((Term::rows() - 1) * 2, 80);
+    i64 w = Math::min_int(Term::cols(), 120);
+    i64 h = Math::min_int((Term::rows() - 1) * 2, 80);
     if w < 20 || h < 10 {                                     // not a terminal (a pipe): a fixed size
         w = 100;
         h = 70;
@@ -231,10 +231,10 @@ void main() {
     double ecc[6] = {0.21, 0.01, 0.02, 0.09, 0.05, 0.06};    // how far from a circle
     double size[6] = {0.42, 0.62, 0.66, 0.5, 1.25, 1.0};     // the radius of the ball
     // stars in fixed places
-    int star_x[160];
-    int star_y[160];
-    int star_c[160];
-    int seed = 12345;
+    i64 star_x[160];
+    i64 star_y[160];
+    i64 star_c[160];
+    i64 seed = 12345;
     for i in 0..160 {
         seed = (seed * 1103515245 + 12345) & 2147483647;
         star_x[i] = (seed >> 8) % w;
@@ -256,7 +256,7 @@ void main() {
     double cx = (double)w / 2.0;
     double cy = (double)s.h / 2.0;
     s.begin();
-    int frame = 0;
+    i64 frame = 0;
     while frames == 0 || frame < frames {
         double t = (double)frame * 0.05;
         mat3 tilt = mat3::rotate_x(1.05 + 0.18 * Math::sin(t * 0.25));       // the view nods slowly
@@ -264,7 +264,7 @@ void main() {
         s.gradient_v(2, 2, 10, 7, 5, 16);
         for i in 0..160 {
             double tw = 0.55 + 0.45 * Math::sin((double)frame * 0.13 + (double)i * 1.7);
-            int v = (int)(150.0 * tw);
+            i64 v = (i64)(150.0 * tw);
             if star_c[i] == 0 { s.set(star_x[i], star_y[i], v, v, v); }
             if star_c[i] == 1 { s.set(star_x[i], star_y[i], v * 8 / 10, v * 9 / 10, v); }
             if star_c[i] == 2 { s.set(star_x[i], star_y[i], v, v * 9 / 10, v * 7 / 10); }
@@ -275,8 +275,8 @@ void main() {
                 double ang = (double)k * Math::tau() / 360.0;
                 vec3 o = {axis[i] * (Math::cos(ang) - ecc[i]), 0.0, axis[i] * Math::sqrt(1.0 - ecc[i] * ecc[i]) * Math::sin(ang)};
                 vec3 q = tilt.mul_vec(o);
-                int px = (int)(cx + q.x * sc);
-                int py = (int)(cy + q.y * sc);
+                i64 px = (i64)(cx + q.x * sc);
+                i64 py = (i64)(cy + q.y * sc);
                 if px >= 0 && px < s.w && py >= 0 && py < s.h { s.set(px, py, 24 + i, 30 + i * 2, 52 + i * 3); }
             }
         }
@@ -284,8 +284,8 @@ void main() {
             double a = belt_a[i] + t * 0.9 / (belt_r[i] * Math::sqrt(belt_r[i])) * 8.0;
             vec3 b = {belt_r[i] * Math::cos(a), 0.0, belt_r[i] * Math::sin(a)};
             vec3 q = tilt.mul_vec(b);
-            int px = (int)(cx + q.x * sc);
-            int py = (int)(cy + q.y * sc);
+            i64 px = (i64)(cx + q.x * sc);
+            i64 py = (i64)(cy + q.y * sc);
             if px >= 0 && px < s.w && py >= 0 && py < s.h { s.set(px, py, 120, 108, 96); }
         }
         // the bodies: 0 the sun, 1..6 the planets, 7 the Moon, 8 and 9 two moons of Jupiter
@@ -293,7 +293,7 @@ void main() {
         double by[10];
         double bz[10];
         double br[10];
-        int bk[10];
+        i64 bk[10];
         bx[0] = 0.0;
         by[0] = 0.0;
         bz[0] = 0.0;
@@ -331,11 +331,11 @@ void main() {
             bk[8 + j] = 6;
         }
         // painter's order: the far ones first (a bigger z is farther)
-        int order[10];
+        i64 order[10];
         for i in 0..10 { order[i] = i; }
         for i in 1..10 {
-            int cur = order[i];
-            int j = i - 1;
+            i64 cur = order[i];
+            i64 j = i - 1;
             while j >= 0 && bz[order[j]] < bz[cur] {
                 order[j + 1] = order[j];
                 j -= 1;
@@ -343,7 +343,7 @@ void main() {
             order[j + 1] = cur;
         }
         for oi in 0..10 {
-            int i = order[oi];
+            i64 i = order[oi];
             double px = cx + bx[i] * sc;
             double py = cy + by[i] * sc;
             if bk[i] == 100 {

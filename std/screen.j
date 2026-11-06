@@ -5,10 +5,10 @@
 //   s.clear(0, 0, 0);   s.set(10, 5, 255, 120, 40);   s.glow(0.6);   s.show();
 // A colour is three numbers 0..255, or one packed number from Screen::rgb(r, g, b).
 struct Screen {
-    int w;
-    int h;                       // in dots (an even number)
-    int[] pix;                   // 0xRRGGBB for each dot
-    static Screen make(int w, int h) {
+    i64 w;
+    i64 h;                       // in dots (an even number)
+    i64[] pix;                   // 0xRRGGBB for each dot
+    static Screen make(i64 w, i64 h) {
         Screen s;
         s.w = w;
         s.h = h + h % 2;
@@ -20,7 +20,7 @@ struct Screen {
     void free(self) {
         self.pix.free();
     }
-    static int rgb(int r, int g, int b) {
+    static i64 rgb(i64 r, i64 g, i64 b) {
         if r < 0 { r = 0; }
         if r > 255 { r = 255; }
         if g < 0 { g = 0; }
@@ -29,53 +29,53 @@ struct Screen {
         if b > 255 { b = 255; }
         return (r << 16) | (g << 8) | b;
     }
-    void clear(self, int r, int g, int b) {
-        int c = Screen::rgb(r, g, b);
+    void clear(self, i64 r, i64 g, i64 b) {
+        i64 c = Screen::rgb(r, g, b);
         for i in 0..self.w * self.h { self.pix[i] = c; }
     }
-    void set(self, int x, int y, int r, int g, int b) {
+    void set(self, i64 x, i64 y, i64 r, i64 g, i64 b) {
         if x < 0 || x >= self.w || y < 0 || y >= self.h { return; }
         self.pix[y * self.w + x] = Screen::rgb(r, g, b);
     }
-    void set_packed(self, int x, int y, int c) {
+    void set_packed(self, i64 x, i64 y, i64 c) {
         if x < 0 || x >= self.w || y < 0 || y >= self.h { return; }
         self.pix[y * self.w + x] = c;
     }
     // adds light to a dot (the colours are added up, to 255 at most)
-    void add(self, int x, int y, int r, int g, int b) {
+    void add(self, i64 x, i64 y, i64 r, i64 g, i64 b) {
         if x < 0 || x >= self.w || y < 0 || y >= self.h { return; }
-        int c = self.pix[y * self.w + x];
+        i64 c = self.pix[y * self.w + x];
         self.pix[y * self.w + x] = Screen::rgb(((c >> 16) & 255) + r, ((c >> 8) & 255) + g, (c & 255) + b);
     }
-    int get(self, int x, int y) {
+    i64 get(self, i64 x, i64 y) {
         if x < 0 || x >= self.w || y < 0 || y >= self.h { return 0; }
         return self.pix[y * self.w + x];
     }
     // mixes a colour into a dot: a = 0 keeps the dot, a = 1 puts the colour
-    void blend(self, int x, int y, int r, int g, int b, double a) {
+    void blend(self, i64 x, i64 y, i64 r, i64 g, i64 b, double a) {
         if x < 0 || x >= self.w || y < 0 || y >= self.h { return; }
-        int c = self.pix[y * self.w + x];
-        int nr = (int)((double)((c >> 16) & 255) * (1.0 - a) + (double)r * a);
-        int ng = (int)((double)((c >> 8) & 255) * (1.0 - a) + (double)g * a);
-        int nb = (int)((double)(c & 255) * (1.0 - a) + (double)b * a);
+        i64 c = self.pix[y * self.w + x];
+        i64 nr = (i64)((double)((c >> 16) & 255) * (1.0 - a) + (double)r * a);
+        i64 ng = (i64)((double)((c >> 8) & 255) * (1.0 - a) + (double)g * a);
+        i64 nb = (i64)((double)(c & 255) * (1.0 - a) + (double)b * a);
         self.pix[y * self.w + x] = Screen::rgb(nr, ng, nb);
     }
     // a straight line from (x0, y0) to (x1, y1), both ends included (Bresenham)
-    void line(self, int x0, int y0, int x1, int y1, int r, int g, int b) {
-        int dx = x1 - x0;
+    void line(self, i64 x0, i64 y0, i64 x1, i64 y1, i64 r, i64 g, i64 b) {
+        i64 dx = x1 - x0;
         if dx < 0 { dx = 0 - dx; }
-        int dy = y1 - y0;
+        i64 dy = y1 - y0;
         if dy < 0 { dy = 0 - dy; }
-        int sx = 1;
+        i64 sx = 1;
         if x0 > x1 { sx = -1; }
-        int sy = 1;
+        i64 sy = 1;
         if y0 > y1 { sy = -1; }
-        int err = dx - dy;
-        int c = Screen::rgb(r, g, b);
+        i64 err = dx - dy;
+        i64 c = Screen::rgb(r, g, b);
         while true {
             self.set_packed(x0, y0, c);
             if x0 == x1 && y0 == y1 { break; }
-            int e2 = 2 * err;
+            i64 e2 = 2 * err;
             if e2 > 0 - dy {
                 err -= dy;
                 x0 += sx;
@@ -87,25 +87,25 @@ struct Screen {
         }
     }
     // the border of a rectangle with the corner (x, y), w dots wide and h high
-    void rect(self, int x, int y, int w, int h, int r, int g, int b) {
+    void rect(self, i64 x, i64 y, i64 w, i64 h, i64 r, i64 g, i64 b) {
         if w <= 0 || h <= 0 { return; }
         self.line(x, y, x + w - 1, y, r, g, b);
         self.line(x, y + h - 1, x + w - 1, y + h - 1, r, g, b);
         self.line(x, y, x, y + h - 1, r, g, b);
         self.line(x + w - 1, y, x + w - 1, y + h - 1, r, g, b);
     }
-    void fill_rect(self, int x, int y, int w, int h, int r, int g, int b) {
-        int c = Screen::rgb(r, g, b);
+    void fill_rect(self, i64 x, i64 y, i64 w, i64 h, i64 r, i64 g, i64 b) {
+        i64 c = Screen::rgb(r, g, b);
         for j in 0..h {
             for i in 0..w { self.set_packed(x + i, y + j, c); }
         }
     }
     // the border of a circle with the middle (cx, cy) (the midpoint method)
-    void circle(self, int cx, int cy, int rad, int r, int g, int b) {
-        int c = Screen::rgb(r, g, b);
-        int x = rad;
-        int y = 0;
-        int err = 1 - rad;
+    void circle(self, i64 cx, i64 cy, i64 rad, i64 r, i64 g, i64 b) {
+        i64 c = Screen::rgb(r, g, b);
+        i64 x = rad;
+        i64 y = 0;
+        i64 err = 1 - rad;
         while x >= y {
             self.set_packed(cx + x, cy + y, c);
             self.set_packed(cx + y, cy + x, c);
@@ -124,8 +124,8 @@ struct Screen {
             }
         }
     }
-    void fill_circle(self, int cx, int cy, int rad, int r, int g, int b) {
-        int c = Screen::rgb(r, g, b);
+    void fill_circle(self, i64 cx, i64 cy, i64 rad, i64 r, i64 g, i64 b) {
+        i64 c = Screen::rgb(r, g, b);
         for j in 0 - rad..rad + 1 {
             for i in 0 - rad..rad + 1 {
                 if i * i + j * j <= rad * rad { self.set_packed(cx + i, cy + j, c); }
@@ -133,10 +133,10 @@ struct Screen {
         }
     }
     // the whole picture goes from one colour at the top to another at the bottom
-    void gradient_v(self, int r0, int g0, int b0, int r1, int g1, int b1) {
+    void gradient_v(self, i64 r0, i64 g0, i64 b0, i64 r1, i64 g1, i64 b1) {
         for y in 0..self.h {
             double t = (double)y / (double)(self.h - 1);
-            int c = Screen::rgb((int)((double)r0 + (double)(r1 - r0) * t), (int)((double)g0 + (double)(g1 - g0) * t), (int)((double)b0 + (double)(b1 - b0) * t));
+            i64 c = Screen::rgb((i64)((double)r0 + (double)(r1 - r0) * t), (i64)((double)g0 + (double)(g1 - g0) * t), (i64)((double)b0 + (double)(b1 - b0) * t));
             for x in 0..self.w { self.pix[y * self.w + x] = c; }
         }
     }
@@ -151,8 +151,8 @@ struct Screen {
                 double dx = (double)x + 0.5 - cx;
                 double dy = (double)y + 0.5 - cy;
                 double f = 1.0 - strength * (dx * dx + dy * dy) / rmax;
-                int c = self.pix[y * self.w + x];
-                self.pix[y * self.w + x] = Screen::rgb((int)((double)((c >> 16) & 255) * f), (int)((double)((c >> 8) & 255) * f), (int)((double)(c & 255) * f));
+                i64 c = self.pix[y * self.w + x];
+                self.pix[y * self.w + x] = Screen::rgb((i64)((double)((c >> 16) & 255) * f), (i64)((double)((c >> 8) & 255) * f), (i64)((double)(c & 255) * f));
             }
         }
     }
@@ -162,8 +162,8 @@ struct Screen {
         for y in 0..self.h {
             if y % 2 == 1 {
                 for x in 0..self.w {
-                    int c = self.pix[y * self.w + x];
-                    self.pix[y * self.w + x] = Screen::rgb((int)((double)((c >> 16) & 255) * f), (int)((double)((c >> 8) & 255) * f), (int)((double)(c & 255) * f));
+                    i64 c = self.pix[y * self.w + x];
+                    self.pix[y * self.w + x] = Screen::rgb((i64)((double)((c >> 16) & 255) * f), (i64)((double)((c >> 8) & 255) * f), (i64)((double)(c & 255) * f));
                 }
             }
         }
@@ -171,8 +171,8 @@ struct Screen {
     // all the dots lighter (f > 1) or darker (f < 1)
     void brightness(self, double f) {
         for i in 0..self.w * self.h {
-            int c = self.pix[i];
-            self.pix[i] = Screen::rgb((int)((double)((c >> 16) & 255) * f), (int)((double)((c >> 8) & 255) * f), (int)((double)(c & 255) * f));
+            i64 c = self.pix[i];
+            self.pix[i] = Screen::rgb((i64)((double)((c >> 16) & 255) * f), (i64)((double)((c >> 8) & 255) * f), (i64)((double)(c & 255) * f));
         }
     }
     // the opposite colours
@@ -182,31 +182,31 @@ struct Screen {
         }
     }
     // how many dots are not black (to count what was drawn)
-    int lit(self) {
-        int n = 0;
+    i64 lit(self) {
+        i64 n = 0;
         for i in 0..self.w * self.h { if self.pix[i] != 0 { n += 1; } }
         return n;
     }
 
     // light spreads out of the bright dots (a soft blur added on top): strength 0..1
     void glow(self, double strength) {
-        int n = self.w * self.h;
-        int[] tmp = arr(n);
+        i64 n = self.w * self.h;
+        i64[] tmp = arr(n);
         tmp.resize(n);
-        int[] out = arr(n);
+        i64[] out = arr(n);
         out.resize(n);
         // blur along x then along y: a box of 2 * 3 + 1 dots, three times for a smooth falloff
         for pass in 0..2 {
             for y in 0..self.h {
                 for x in 0..self.w {
-                    int sr = 0;
-                    int sg = 0;
-                    int sb = 0;
-                    int cnt = 0;
+                    i64 sr = 0;
+                    i64 sg = 0;
+                    i64 sb = 0;
+                    i64 cnt = 0;
                     for k in -3..4 {
-                        int xx = x + k;
+                        i64 xx = x + k;
                         if xx >= 0 && xx < self.w {
-                            int c = self.pix[y * self.w + xx];
+                            i64 c = self.pix[y * self.w + xx];
                             if pass == 1 { c = tmp[y * self.w + xx]; }
                             sr += (c >> 16) & 255;
                             sg += (c >> 8) & 255;
@@ -219,14 +219,14 @@ struct Screen {
             }
             for y in 0..self.h {
                 for x in 0..self.w {
-                    int sr = 0;
-                    int sg = 0;
-                    int sb = 0;
-                    int cnt = 0;
+                    i64 sr = 0;
+                    i64 sg = 0;
+                    i64 sb = 0;
+                    i64 cnt = 0;
                     for k in -3..4 {
-                        int yy = y + k;
+                        i64 yy = y + k;
                         if yy >= 0 && yy < self.h {
-                            int c = tmp[yy * self.w + x];
+                            i64 c = tmp[yy * self.w + x];
                             sr += (c >> 16) & 255;
                             sg += (c >> 8) & 255;
                             sb += c & 255;
@@ -243,11 +243,11 @@ struct Screen {
             }
         }
         for i in 0..n {
-            int c = self.pix[i];
-            int g = out[i];
-            int r = ((c >> 16) & 255) + (int)(strength * (double)((g >> 16) & 255) * 2.0);
-            int gr = ((c >> 8) & 255) + (int)(strength * (double)((g >> 8) & 255) * 2.0);
-            int b = (c & 255) + (int)(strength * (double)(g & 255) * 2.0);
+            i64 c = self.pix[i];
+            i64 g = out[i];
+            i64 r = ((c >> 16) & 255) + (i64)(strength * (double)((g >> 16) & 255) * 2.0);
+            i64 gr = ((c >> 8) & 255) + (i64)(strength * (double)((g >> 8) & 255) * 2.0);
+            i64 b = (c & 255) + (i64)(strength * (double)(g & 255) * 2.0);
             self.pix[i] = Screen::rgb(r, gr, b);
         }
         tmp.free();
@@ -258,12 +258,12 @@ struct Screen {
         String o = "";
         o.push((char)27);
         o.append("[H");
-        int last_top = -1;
-        int last_bot = -1;
+        i64 last_top = -1;
+        i64 last_bot = -1;
         for row in 0..self.h / 2 {
             for x in 0..self.w {
-                int top = self.pix[(row * 2) * self.w + x];
-                int bot = self.pix[(row * 2 + 1) * self.w + x];
+                i64 top = self.pix[(row * 2) * self.w + x];
+                i64 bot = self.pix[(row * 2 + 1) * self.w + x];
                 if top != last_top {
                     o.push((char)27);
                     o.append("[38;2;");

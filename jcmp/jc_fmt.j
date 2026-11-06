@@ -10,14 +10,14 @@ char fmt_in[4194304];
 char fmt_out[4194304];
 
 // the formatted text of fmt_in[0..n) goes to fmt_out; returns its length
-int fmt_text(int n) {
-    int o = 0;
-    int i = 0;
-    int blank = 0;
+i64 fmt_text(i64 n) {
+    i64 o = 0;
+    i64 i = 0;
+    i64 blank = 0;
     while i < n {
-        int s = i;
+        i64 s = i;
         while i < n && fmt_in[i] != 10 { i += 1; }
-        int e = i;
+        i64 e = i;
         if i < n { i += 1; }
         if e > s && fmt_in[e - 1] == 13 { e -= 1; }
         while e > s && (fmt_in[e - 1] == 32 || fmt_in[e - 1] == 9) { e -= 1; }
@@ -26,7 +26,7 @@ int fmt_text(int n) {
         } else {
             if o > 0 && blank > 0 && o + 2 < 4194300 { fmt_out[o] = 10; o += 1; }
             blank = 0;
-            int k = s;
+            i64 k = s;
             while k < e && fmt_in[k] == 9 && o + 4 < 4194300 {
                 fmt_out[o] = 32; fmt_out[o + 1] = 32; fmt_out[o + 2] = 32; fmt_out[o + 3] = 32;
                 o += 4;
@@ -41,13 +41,13 @@ int fmt_text(int n) {
 }
 
 // mode 0: write back, 1: check, 2: print. Returns 0 (not changed), 1 (changed or would change), -1 (cannot read or write)
-int fmt_file(char^ path, int mode) {
-    int n = read_file(path, @fmt_in, 4194304);
+i64 fmt_file(char^ path, i64 mode) {
+    i64 n = read_file(path, @fmt_in, 4194304);
     if n < 0 { return 0 - 1; }
-    int m = fmt_text(n);
+    i64 m = fmt_text(n);
     bool same = m == n;
     if same {
-        int k = 0;
+        i64 k = 0;
         while k < n { if fmt_in[k] != fmt_out[k] { same = false; break; } k += 1; }
     }
     if mode == 2 {
@@ -61,19 +61,19 @@ int fmt_file(char^ path, int mode) {
 }
 
 // jcmp fmt [-c|-p] FILE...  (first = the index of the first argument after "fmt")
-int fmt_main(int first) {
-    int mode = 0;
-    int changed = 0;
-    int bad = 0;
-    int ai = first;
-    int files = 0;
+i64 fmt_main(i64 first) {
+    i64 mode = 0;
+    i64 changed = 0;
+    i64 bad = 0;
+    i64 ai = first;
+    i64 files = 0;
     while ai < argc() {
         char^ a = arg(ai);
         if str_eq(a, "-c") { mode = 1; }
         else if str_eq(a, "-p") { mode = 2; }
         else {
             files += 1;
-            int r = fmt_file(a, mode);
+            i64 r = fmt_file(a, mode);
             if r < 0 {
                 write_err("jcmp fmt: cannot read or write ");
                 write_err(a);
@@ -95,32 +95,32 @@ int fmt_main(int first) {
 
 // jcmp migrate [-c] FILE...: cout -> jout, cin -> jin, cerr -> jerr (and coutf, cinf are left) in the code of a file: not inside a string, a character or a comment.
 // -c only says which files would change. Prints one line for each file that changes.
-int mig_word(int at, int n) {
+i64 mig_word(i64 at, i64 n) {
     // the length of the word at fmt_in[at] if it is cout, cin or cerr as a whole word, else 0
     if at > 0 {
-        int pc = fmt_in[at - 1];
+        i64 pc = fmt_in[at - 1];
         if (pc >= 'a' && pc <= 'z') || (pc >= 'A' && pc <= 'Z') || (pc >= '0' && pc <= '9') || pc == '_' || pc == '.' { return 0; }
     }
-    int len = 0;
+    i64 len = 0;
     if at + 4 <= n && fmt_in[at] == 'c' && fmt_in[at + 1] == 'o' && fmt_in[at + 2] == 'u' && fmt_in[at + 3] == 't' { len = 4; }
     else if at + 4 <= n && fmt_in[at] == 'c' && fmt_in[at + 1] == 'e' && fmt_in[at + 2] == 'r' && fmt_in[at + 3] == 'r' { len = 4; }
     else if at + 3 <= n && fmt_in[at] == 'c' && fmt_in[at + 1] == 'i' && fmt_in[at + 2] == 'n' { len = 3; }
     if len == 0 { return 0; }
     if at + len < n {
-        int nc = fmt_in[at + len];
+        i64 nc = fmt_in[at + len];
         if (nc >= 'a' && nc <= 'z') || (nc >= 'A' && nc <= 'Z') || (nc >= '0' && nc <= '9') || nc == '_' { return 0; }
     }
     return len;
 }
 
-int mig_text(int n) {
-    int o = 0;
-    int i = 0;
+i64 mig_text(i64 n) {
+    i64 o = 0;
+    i64 i = 0;
     while i < n {
-        int c = fmt_in[i];
+        i64 c = fmt_in[i];
         if c == '"' || c == 39 {
             // a string or a character: copied as it is, up to the closing mark (a backslash protects the next one)
-            int q = c;
+            i64 q = c;
             fmt_out[o] = c; o += 1; i += 1;
             while i < n && fmt_in[i] != q && fmt_in[i] != 10 {
                 if fmt_in[i] == 92 && i + 1 < n { fmt_out[o] = fmt_in[i]; o += 1; i += 1; }
@@ -134,10 +134,10 @@ int mig_text(int n) {
             continue;
         }
         if c == 'c' {
-            int len = mig_word(i, n);
+            i64 len = mig_word(i, n);
             if len > 0 {
                 fmt_out[o] = 'j'; o += 1;
-                int k = 1;
+                i64 k = 1;
                 while k < len { fmt_out[o] = fmt_in[i + k]; o += 1; k += 1; }
                 i += len;
                 continue;
@@ -149,23 +149,23 @@ int mig_text(int n) {
     return o;
 }
 
-int migrate_main(int first) {
+i64 migrate_main(i64 first) {
     bool check = false;
-    int changed = 0;
-    int files = 0;
-    int bad = 0;
-    int ai = first;
+    i64 changed = 0;
+    i64 files = 0;
+    i64 bad = 0;
+    i64 ai = first;
     while ai < argc() {
         char^ a = arg(ai);
         if str_eq(a, "-c") { check = true; }
         else {
             files += 1;
-            int n = read_file(a, @fmt_in, 4194304);
+            i64 n = read_file(a, @fmt_in, 4194304);
             if n < 0 { write_err("jcmp migrate: cannot read "); write_err(a); write_err("\n"); bad = 1; }
             else {
-                int m = mig_text(n);
+                i64 m = mig_text(n);
                 bool same = m == n;
-                if same { int k = 0; while k < n { if fmt_in[k] != fmt_out[k] { same = false; break; } k += 1; } }
+                if same { i64 k = 0; while k < n { if fmt_in[k] != fmt_out[k] { same = false; break; } k += 1; } }
                 if !same {
                     changed += 1;
                     write_out(a);

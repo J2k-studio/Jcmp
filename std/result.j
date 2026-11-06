@@ -19,7 +19,7 @@ struct Error {
     }
     // throw a text (the short forms of the library throw instead of returning a Result; catch with try { } catch (e) { })
     static void raise(char^ msg) {
-        int n = 0;
+        i64 n = 0;
         while msg[n] != 0 && n < 255 {
             error_text_buf[n] = msg[n];
             n += 1;
@@ -28,7 +28,7 @@ struct Error {
         throw (char^)@error_text_buf;
     }
     // the reason of a system error number in words (a negative number from a system call is fine)
-    static String reason(int e) {
+    static String reason(i64 e) {
         if e < 0 { e = 0 - e; }
         if e == 1 { return "not allowed"; }
         if e == 2 { return "there is no file or folder with this name"; }
@@ -55,7 +55,7 @@ struct Error {
         return "the system refused";
     }
     // the kind of a system error number
-    static ErrorKind kind_of(int e) {
+    static ErrorKind kind_of(i64 e) {
         if e < 0 { e = 0 - e; }
         if e == 2 || e == 20 || e == 110 || e == 111 || e == 113 { return ErrorKind::NotFound; }
         if e == 13 || e == 1 { return ErrorKind::Denied; }
@@ -63,7 +63,7 @@ struct Error {
         return ErrorKind::Io;
     }
     // the error for a system error number: "what: reason (error N)"
-    static Error from_errno(int e, String what) {
+    static Error from_errno(i64 e, String what) {
         if e < 0 { e = 0 - e; }
         String m = what + ": " + Error::reason(e) + " (error " + str(e) + ")";
         return Error::make(Error::kind_of(e), m);

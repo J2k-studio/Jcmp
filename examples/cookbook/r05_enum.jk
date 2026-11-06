@@ -17,7 +17,7 @@ double area(Shape s) {
     return 0.0;
 }
 
-int main() {
+i64 main() {
     jout << fmt(area(Shape::Circle(2.0)), 2) << " " << fmt(area(Shape::Rect(3.0, 4.5)), 2) << " " << fmt(area(Shape::Dot), 2) << "\n";
     return 0;
 }

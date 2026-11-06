@@ -5,7 +5,7 @@ using stdlib::fs;
 
 char data[65536];
 
-bool is_space(int c) {
+bool is_space(i64 c) {
     return c == 32 || c == 10 || c == 9 || c == 13;
 }
 
@@ -19,14 +19,14 @@ void main() {
         jout << "cannot open file\n";
         return;
     }
-    int size = File::read(f, data);
+    i64 size = File::read(f, data);
     File::close(f);
-    int lines = 0;
-    int words = 0;
+    i64 lines = 0;
+    i64 words = 0;
     bool in_word = false;
-    int i = 0;
+    i64 i = 0;
     while i < size {
-        int c = data[i];
+        i64 c = data[i];
         if c == 10 { lines += 1; }
         if is_space(c) {
             in_word = false;

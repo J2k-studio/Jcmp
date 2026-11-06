@@ -2,28 +2,28 @@
 #import <neuron>
 #import <neurongpu>
 // Tensor32.matmul on the CPU and on the GPU:   jcmp -dyn bench/neuron_gpu.jk -o ng && ./ng
-int main() {
+i64 main() {
     if !NeuronGpu::enable(1000000) { jout << "no GPU\n"; return 1; }
-    int[] sizes = arr(4);
+    i64[] sizes = arr(4);
     sizes.push(64); sizes.push(128); sizes.push(256); sizes.push(512);
     for q in 0..4 {
-        int n = sizes[q];
-        int[] sh = arr(2);
+        i64 n = sizes[q];
+        i64[] sh = arr(2);
         sh.push(n); sh.push(n);
         Tensor32 a = Tensor32::make(sh);
         Tensor32 b = Tensor32::make(sh);
         for i in 0..n * n { a.d[i] = (float)(i % 7) * 0.25; b.d[i] = (float)(i % 5) * 0.5; }
         NeuronGpu::disable();
-        int t0 = Time::now_ms();
+        i64 t0 = Time::now_ms();
         Tensor32 c1 = a.matmul(b);
-        int reps = 5;
+        i64 reps = 5;
         for r in 0..reps { c1 = a.matmul(b); }
-        int t1 = Time::now_ms();
+        i64 t1 = Time::now_ms();
         NeuronGpu::enable(1);
         Tensor32 c2 = a.matmul(b);
-        int t2 = Time::now_ms();
+        i64 t2 = Time::now_ms();
         for r in 0..reps { c2 = a.matmul(b); }
-        int t3 = Time::now_ms();
+        i64 t3 = Time::now_ms();
         double worst = 0.0;
         for i in 0..n * n {
             double e = (double)(c1.d[i]) - (double)(c2.d[i]);

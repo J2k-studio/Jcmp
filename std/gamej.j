@@ -18,41 +18,41 @@
 // The back key of the app ends a game that has a surface.
 
 struct Key {
-    static int up() { return 257; }
-    static int down() { return 258; }
-    static int right() { return 259; }
-    static int left() { return 260; }
-    static int space() { return 32; }
-    static int enter() { return 13; }
-    static int esc() { return 27; }
+    static i64 up() { return 257; }
+    static i64 down() { return 258; }
+    static i64 right() { return 259; }
+    static i64 left() { return 260; }
+    static i64 space() { return 32; }
+    static i64 enter() { return 13; }
+    static i64 esc() { return 27; }
 }
 
 char game_tio[64];
 bool game_raw;
 bool game_tty;
 bool game_os;                  // the program runs in Jaric OS (the system says so: JARIC_OS): the picture goes to the screen of the system (call 400), the touch comes from it (call 401)
-int game_os_seq;
+i64 game_os_seq;
 
 void game_raw_on() {
     if game_raw || Sys::isatty(0) != 0 { return; }
-    Sys::call(29, 0, 21505, (int)@game_tio, 0, 0, 0);
+    Sys::call(29, 0, 21505, (i64)@game_tio, 0, 0, 0);
     char r[64];
     for i in 0..64 { r[i] = game_tio[i]; }
     r[12] = r[12] & 244;                                    // no signals, no line editing, no echo: a key arrives at once
-    Sys::call(29, 0, 21506, (int)@r, 0, 0, 0);
+    Sys::call(29, 0, 21506, (i64)@r, 0, 0, 0);
     game_raw = true;
 }
 
 void game_raw_off() {
     if !game_raw { return; }
-    Sys::call(29, 0, 21506, (int)@game_tio, 0, 0, 0);
+    Sys::call(29, 0, 21506, (i64)@game_tio, 0, 0, 0);
     game_raw = false;
 }
 
-int game_byte(int ms) {
+i64 game_byte(i64 ms) {
     if !Input::ready(ms) { return 0 - 1; }
     char b[2];
-    int n = Sys::read(0, @b, 1);
+    i64 n = Sys::read(0, @b, 1);
     if n <= 0 { return 0 - 2; }
     return b[0] & 255;
 }
@@ -60,32 +60,32 @@ int game_byte(int ms) {
 String game_font() { return "00000222025500057575367365124525253220001222142224052500272000024007000000211244755572622771747717175571174717747577111175757757170202002024124210707042124713027574725755656563444365556746477464434553557557222711152556554444757755655552555265644255636565534216722225555755552557755525555222712476444644211311132500000007"; }
 
 struct Game {
-    int w;
-    int h;
-    int cols;
-    int rows;
-    int[] px;
-    int[] prev;
-    int[] key_at;               // the time (ms) each key was last seen
-    int[] key_hit;              // 1: pressed since the last begin()
+    i64 w;
+    i64 h;
+    i64 cols;
+    i64 rows;
+    i64[] px;
+    i64[] prev;
+    i64[] key_at;               // the time (ms) each key was last seen
+    i64[] key_hit;              // 1: pressed since the last begin()
     bool alive;
     bool first;
-    int frame;
-    int last_ms;
-    int target_ms;
-    int limit;                  // GAME_FRAMES
+    i64 frame;
+    i64 last_ms;
+    i64 target_ms;
+    i64 limit;                  // GAME_FRAMES
     bool surf;                  // drawing on the surface of the app
-    int sfd;
+    i64 sfd;
     char^ sbuf;
     String spath;
-    int touch_x;
-    int touch_y;
+    i64 touch_x;
+    i64 touch_y;
     bool touch_down;
     bool touch_hit;
     double dt;
     String font;
 
-    static int rgb(int r, int g, int b) { return ((r & 255) << 16) | ((g & 255) << 8) | (b & 255); }
+    static i64 rgb(i64 r, i64 g, i64 b) { return ((r & 255) << 16) | ((g & 255) << 8) | (b & 255); }
 
     static Game open(String title) {
         Game g;
@@ -178,7 +178,7 @@ struct Game {
     void quit(self) { self.alive = false; }
 
     // frames per second (default 60)
-    void set_fps(self, int fps) {
+    void set_fps(self, i64 fps) {
         if fps < 1 { fps = 1; }
         self.target_ms = 1000 / fps;
     }
@@ -197,7 +197,7 @@ struct Game {
         self.alive = false;
     }
 
-    void note_key(self, int k, int now) {
+    void note_key(self, i64 k, i64 now) {
         if k < 0 || k >= 512 { return; }
         self.key_at[k] = now;
         self.key_hit[k] = 1;
@@ -205,19 +205,19 @@ struct Game {
 
     // keys and time: call it first in every frame
     void begin(self) {
-        int now = Time::now_ms();
+        i64 now = Time::now_ms();
         self.dt = (double)(now - self.last_ms) / 1000.0;
         if self.dt > 0.1 { self.dt = 0.1; }                      // a long pause does not throw things through walls
         self.last_ms = now;
         for i in 0..512 { self.key_hit[i] = 0; }
         self.touch_hit = false;
         if game_os {
-            int ev[8];
+            i64 ev[8];
             for q in 0..8 { ev[q] = 0; }
             syscall(401, @ev);                                     // seq, x, y, state (1 down, 2 move, 3 up), id, scale, left, top
             if ev[0] != game_os_seq {
                 game_os_seq = ev[0];
-                int sc = ev[5];
+                i64 sc = ev[5];
                 if sc < 1 { sc = 1; }
                 if ev[3] == 1 || ev[3] == 2 || ev[3] == 3 {
                     self.touch_x = (ev[1] - ev[6]) / sc;
@@ -231,14 +231,14 @@ struct Game {
         }
         if !game_tty { return; }
         while Input::ready(0) {
-            int c = game_byte(0);
+            i64 c = game_byte(0);
             if c < 0 { break; }
             if c == 3 { self.alive = false; continue; }
             if c == 27 {
-                int d = game_byte(8);
+                i64 d = game_byte(8);
                 if d < 0 { self.note_key(27, now); self.alive = false; continue; }
                 if d == 91 || d == 79 {
-                    int e = game_byte(8);
+                    i64 e = game_byte(8);
                     if e == 65 { self.note_key(257, now); }
                     else if e == 66 { self.note_key(258, now); }
                     else if e == 67 { self.note_key(259, now); }
@@ -246,7 +246,7 @@ struct Game {
                     else { while e >= 48 && e <= 59 { e = game_byte(8); } }
                 } else if d == 93 {                                // a message of the app: read it up to BEL
                     String m = "";
-                    int e = game_byte(30);
+                    i64 e = game_byte(30);
                     while e >= 0 && e != 7 && e != 27 { m.push((char)e); e = game_byte(30); }
                     if e == 27 { game_byte(8); }
                     String[] pm = m.split(";");
@@ -267,28 +267,28 @@ struct Game {
     // the finger is on the screen / has just touched it (the surface of the Jaric app)
     bool touching(self) { return self.touch_down; }
     bool tapped(self) { return self.touch_hit; }
-    bool hit(self, int k) { return k >= 0 && k < 512 && self.key_hit[k] == 1; }
-    bool held(self, int k) { return k >= 0 && k < 512 && Time::now_ms() - self.key_at[k] < 180; }
+    bool hit(self, i64 k) { return k >= 0 && k < 512 && self.key_hit[k] == 1; }
+    bool held(self, i64 k) { return k >= 0 && k < 512 && Time::now_ms() - self.key_at[k] < 180; }
 
-    void clear(self, int c) {
+    void clear(self, i64 c) {
         for i in 0..self.w * self.h { self.px[i] = c; }
     }
 
-    void pixel(self, int x, int y, int c) {
+    void pixel(self, i64 x, i64 y, i64 c) {
         if x < 0 || y < 0 || x >= self.w || y >= self.h { return; }
         self.px[y * self.w + x] = c;
     }
 
-    int get(self, int x, int y) {
+    i64 get(self, i64 x, i64 y) {
         if x < 0 || y < 0 || x >= self.w || y >= self.h { return 0; }
         return self.px[y * self.w + x];
     }
 
-    void rect(self, int x, int y, int rw, int rh, int c) {
-        int x0 = x;
-        int y0 = y;
-        int x1 = x + rw;
-        int y1 = y + rh;
+    void rect(self, i64 x, i64 y, i64 rw, i64 rh, i64 c) {
+        i64 x0 = x;
+        i64 y0 = y;
+        i64 x1 = x + rw;
+        i64 y1 = y + rh;
         if x0 < 0 { x0 = 0; }
         if y0 < 0 { y0 = 0; }
         if x1 > self.w { x1 = self.w; }
@@ -298,33 +298,33 @@ struct Game {
         }
     }
 
-    void frame_rect(self, int x, int y, int rw, int rh, int c) {
+    void frame_rect(self, i64 x, i64 y, i64 rw, i64 rh, i64 c) {
         self.rect(x, y, rw, 1, c);
         self.rect(x, y + rh - 1, rw, 1, c);
         self.rect(x, y, 1, rh, c);
         self.rect(x + rw - 1, y, 1, rh, c);
     }
 
-    void line(self, int x0, int y0, int x1, int y1, int c) {
-        int dx = x1 - x0;
+    void line(self, i64 x0, i64 y0, i64 x1, i64 y1, i64 c) {
+        i64 dx = x1 - x0;
         if dx < 0 { dx = 0 - dx; }
-        int dy = y1 - y0;
+        i64 dy = y1 - y0;
         if dy < 0 { dy = 0 - dy; }
-        int sx = 1;
+        i64 sx = 1;
         if x0 > x1 { sx = 0 - 1; }
-        int sy = 1;
+        i64 sy = 1;
         if y0 > y1 { sy = 0 - 1; }
-        int err = dx - dy;
+        i64 err = dx - dy;
         while true {
             self.pixel(x0, y0, c);
             if x0 == x1 && y0 == y1 { break; }
-            int e2 = 2 * err;
+            i64 e2 = 2 * err;
             if e2 > 0 - dy { err -= dy; x0 += sx; }
             if e2 < dx { err += dx; y0 += sy; }
         }
     }
 
-    void circle(self, int cx, int cy, int r, int c) {
+    void circle(self, i64 cx, i64 cy, i64 r, i64 c) {
         for yy in 0 - r..r + 1 {
             for xx in 0 - r..r + 1 {
                 if xx * xx + yy * yy <= r * r { self.pixel(cx + xx, cy + yy, c); }
@@ -333,18 +333,18 @@ struct Game {
     }
 
     // text with a small 3 x 5 font (capital letters, digits, signs); returns the x after the last letter
-    int text(self, int x, int y, String s, int c) {
+    i64 text(self, i64 x, i64 y, String s, i64 c) {
         return self.text_scaled(x, y, s, c, 1);
     }
 
-    int text_scaled(self, int x, int y, String s, int c, int scale) {
+    i64 text_scaled(self, i64 x, i64 y, String s, i64 c, i64 scale) {
         for i in 0..s.len {
-            int ch = s[i] & 255;
+            i64 ch = s[i] & 255;
             if ch >= 97 && ch <= 122 { ch = ch - 32; }
             if ch < 32 || ch > 95 { ch = 63; }
-            int g = (ch - 32) * 5;
+            i64 g = (ch - 32) * 5;
             for ry in 0..5 {
-                int bits = self.font[g + ry] - 48;
+                i64 bits = self.font[g + ry] - 48;
                 for rx in 0..3 {
                     if ((bits >> (2 - rx)) & 1) != 0 { self.rect(x + rx * scale, y + ry * scale, scale, scale, c); }
                 }
@@ -356,20 +356,20 @@ struct Game {
 
     // a picture made of letters: rows separated by new lines; the legend is  <letter>#RRGGBB  repeated ("r#ff0000g#00ff00");
     // '.' and ' ' are empty. Example: g.art(10, 5, ".rr.\nrrrr\n.rr.", "r#ff4040");
-    void art(self, int x, int y, String rows, String legend) {
-        int yy = 0;
-        int xx = 0;
+    void art(self, i64 x, i64 y, String rows, String legend) {
+        i64 yy = 0;
+        i64 xx = 0;
         for i in 0..rows.len {
-            int ch = rows[i] & 255;
+            i64 ch = rows[i] & 255;
             if ch == 10 { yy += 1; xx = 0; continue; }
             if ch != 46 && ch != 32 {
-                int k = 0;
+                i64 k = 0;
                 while k + 8 <= legend.len {
                     if (legend[k] & 255) == ch {
-                        int v = 0;
+                        i64 v = 0;
                         for q in 0..6 {
-                            int d = legend[k + 2 + q] & 255;
-                            int dv = 0;
+                            i64 d = legend[k + 2 + q] & 255;
+                            i64 dv = 0;
                             if d >= 48 && d <= 57 { dv = d - 48; } else if d >= 97 && d <= 102 { dv = d - 87; } else if d >= 65 && d <= 70 { dv = d - 55; }
                             v = v * 16 + dv;
                         }
@@ -384,7 +384,7 @@ struct Game {
     }
 
     // two boxes overlap?
-    static bool overlap(int ax, int ay, int aw, int ah, int bx, int by, int bw, int bh) {
+    static bool overlap(i64 ax, i64 ay, i64 aw, i64 ah, i64 bx, i64 by, i64 bw, i64 bh) {
         return ax < bx + bw && bx < ax + aw && ay < by + bh && by < ay + ah;
     }
 
@@ -416,27 +416,27 @@ struct Game {
         if game_tty || game_os { self.present(); }
         self.frame += 1;
         if self.limit > 0 && self.frame >= self.limit { self.alive = false; }
-        int spent = Time::now_ms() - self.last_ms;
+        i64 spent = Time::now_ms() - self.last_ms;
         if spent < self.target_ms && (game_tty || game_os) { Time::sleep_ms(self.target_ms - spent); }
     }
 
     void present(self) {
         if game_os {
-            int n = self.w * self.h;
+            i64 n = self.w * self.h;
             for i in 0..n {
-                int c = self.px[i];
+                i64 c = self.px[i];
                 self.sbuf[i * 4] = (char)(c & 255);
                 self.sbuf[i * 4 + 1] = (char)((c >> 8) & 255);
                 self.sbuf[i * 4 + 2] = (char)((c >> 16) & 255);
                 self.sbuf[i * 4 + 3] = (char)255;
             }
-            syscall(400, (int)self.sbuf, self.w, self.h);
+            syscall(400, (i64)self.sbuf, self.w, self.h);
             return;
         }
         if self.surf {
-            int n = self.w * self.h;
+            i64 n = self.w * self.h;
             for i in 0..n {
-                int c = self.px[i];
+                i64 c = self.px[i];
                 self.sbuf[i * 4] = (char)(c & 255);
                 self.sbuf[i * 4 + 1] = (char)((c >> 8) & 255);
                 self.sbuf[i * 4 + 2] = (char)((c >> 16) & 255);
@@ -448,16 +448,16 @@ struct Game {
             return;
         }
         String s = "";
-        int lastcol = 0 - 5;
-        int lastrow = 0 - 5;
-        int fgc = 0 - 1;
-        int bgc = 0 - 1;
+        i64 lastcol = 0 - 5;
+        i64 lastrow = 0 - 5;
+        i64 fgc = 0 - 1;
+        i64 bgc = 0 - 1;
         for r in 0..self.rows {
             for x in 0..self.w {
-                int top = self.px[(2 * r) * self.w + x];
-                int bot = self.px[(2 * r + 1) * self.w + x];
-                int ptop = self.prev[(2 * r) * self.w + x];
-                int pbot = self.prev[(2 * r + 1) * self.w + x];
+                i64 top = self.px[(2 * r) * self.w + x];
+                i64 bot = self.px[(2 * r + 1) * self.w + x];
+                i64 ptop = self.prev[(2 * r) * self.w + x];
+                i64 pbot = self.prev[(2 * r + 1) * self.w + x];
                 if top == ptop && bot == pbot { continue; }
                 self.prev[(2 * r) * self.w + x] = top;
                 self.prev[(2 * r + 1) * self.w + x] = bot;

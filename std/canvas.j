@@ -4,13 +4,13 @@
 //   c.clear();   c.ball(p, 2.0, ".:-=+*#%@");   c.plot(q, 'E');   c.text(2, 1, "hello");   c.show();
 // Points are vec3: x to the right, y down, z away from the viewer; plot() looks at them in perspective.
 struct Canvas {
-    int w;
-    int h;
+    i64 w;
+    i64 h;
     double view;                 // the distance of the eye: bigger = flatter (default 60)
     double wide;                 // a character is about twice as high as wide: x is scaled by this (default 2)
     char[] cells;
     double[] depth;
-    static Canvas make(int w, int h) {
+    static Canvas make(i64 w, i64 h) {
         Canvas c;
         c.w = w;
         c.h = h;
@@ -35,25 +35,25 @@ struct Canvas {
         }
     }
     // a character in a place of the grid (no depth)
-    void put(self, int x, int y, char c) {
+    void put(self, i64 x, i64 y, char c) {
         if x < 0 || x >= self.w || y < 0 || y >= self.h { return; }
         self.cells[y * self.w + x] = c;
     }
-    char get(self, int x, int y) {
+    char get(self, i64 x, i64 y) {
         if x < 0 || x >= self.w || y < 0 || y >= self.h { return ' '; }
         return self.cells[y * self.w + x];
     }
     // text from (x, y) to the right
-    void text(self, int x, int y, String s) {
+    void text(self, i64 x, i64 y, String s) {
         for i in 0..s.len { self.put(x + i, y, s[i]); }
     }
     // a point in 3D (the middle of the canvas is x = 0, y = 0)
     void plot(self, vec3 p, char c) {
         double persp = self.view / (self.view + p.z);
-        int sx = (int)((double)self.w / 2.0 + p.x * persp * self.wide);
-        int sy = (int)((double)self.h / 2.0 + p.y * persp);
+        i64 sx = (i64)((double)self.w / 2.0 + p.x * persp * self.wide);
+        i64 sy = (i64)((double)self.h / 2.0 + p.y * persp);
         if sx < 0 || sx >= self.w || sy < 0 || sy >= self.h { return; }
-        int at = sy * self.w + sx;
+        i64 at = sy * self.w + sx;
         if p.z < self.depth[at] {
             self.depth[at] = p.z;
             self.cells[at] = c;
@@ -62,7 +62,7 @@ struct Canvas {
     // a line of points from a to b
     void line(self, vec3 a, vec3 b, char c) {
         vec3 d = b - a;
-        int n = (int)(d.length() * 2.0) + 1;
+        i64 n = (i64)(d.length() * 2.0) + 1;
         for i in 0..n + 1 {
             vec3 q = a + d * ((double)i / (double)n);
             self.plot(q, c);
@@ -76,7 +76,7 @@ struct Canvas {
     // the same, lit from a given direction (towards the light, in the same space as the points; z grows away
     // from the viewer). The side that is turned away from the light still gets the faintest character.
     void ball_lit(self, vec3 p, double r, String ramp, vec3 to_light) {
-        int n = ramp.len;
+        i64 n = ramp.len;
         vec3 l = to_light.normalize();
         double dy = 0.0 - r;
         while dy <= r {
@@ -90,7 +90,7 @@ struct Canvas {
                     double lit = nx * l.x + ny * l.y - nz * l.z;
                     if lit < 0.0 { lit = 0.0; }
                     lit = 0.10 + 0.90 * lit;
-                    int k = (int)(lit * (double)(n - 1));
+                    i64 k = (i64)(lit * (double)(n - 1));
                     if k > n - 1 { k = n - 1; }
                     vec3 q = {p.x + dx / self.wide, p.y + dy, p.z - nz};
                     self.plot(q, ramp[k]);

@@ -17,18 +17,18 @@
 #import <web>
 
 struct TgMessage {
-    int update_id;
-    int chat;                          // the number of the chat to answer to
+    i64 update_id;
+    i64 chat;                          // the number of the chat to answer to
     String from;                       // the first name (or the username) of who wrote
     String text;
 }
 
 struct TgUpdates {
     TgMessage[] list;
-    int next;                          // the offset for the next poll (the biggest update_id + 1; the one you gave when there was nothing)
+    i64 next;                          // the offset for the next poll (the biggest update_id + 1; the one you gave when there was nothing)
 
-    int count(self) { return self.list.len; }
-    TgMessage get(self, int i) { return self.list[i]; }
+    i64 count(self) { return self.list.len; }
+    TgMessage get(self, i64 i) { return self.list[i]; }
 }
 
 struct Telegram {
@@ -61,12 +61,12 @@ struct Telegram {
         Result<JsonDoc, Error> pj = Json::parse(resp.body);
         switch pj {
             Result::Ok(d): {
-                int okn = d.get(0, "ok");
+                i64 okn = d.get(0, "ok");
                 bool is_ok = false;
                 if okn >= 0 { is_ok = d.boolean(okn); }
                 if !is_ok {
                     String why = "";
-                    int dn = d.get(0, "description");
+                    i64 dn = d.get(0, "description");
                     if dn >= 0 { why = d.text(dn); }
                     if why.len == 0 { why = "HTTP " + str(resp.status); }
                     return Result<String, Error>::Err(Error::make(ErrorKind::Io, "Telegram: " + why));
@@ -86,10 +86,10 @@ struct Telegram {
               Result<JsonDoc, Error> pj = Json::parse(text);
               switch pj {
                 Result::Ok(d): {
-                int res = d.get(0, "result");
+                i64 res = d.get(0, "result");
                 String uname = "";
                 if res >= 0 {
-                    int un = d.get(res, "username");
+                    i64 un = d.get(res, "username");
                     if un >= 0 { uname = d.text(un); }
                 }
                 return Result<String, Error>::Ok(uname);
@@ -103,18 +103,18 @@ struct Telegram {
     }
 
     // a message of text to a chat
-    Result<int, Error> send(self, int chat, String text) {
+    Result<i64, Error> send(self, i64 chat, String text) {
         String body = "{\"chat_id\":" + str(chat) + ",\"text\":" + Json::quote(text) + "}";
         Result<String, Error> r = self.call("sendMessage", body);
         switch r {
-            Result::Ok(d): { return Result<int, Error>::Ok(1); }
-            Result::Err(e): { return Result<int, Error>::Err(Error::make(e.kind, e.message)); }
+            Result::Ok(d): { return Result<i64, Error>::Ok(1); }
+            Result::Err(e): { return Result<i64, Error>::Err(Error::make(e.kind, e.message)); }
         }
-        return Result<int, Error>::Ok(1);
+        return Result<i64, Error>::Ok(1);
     }
 
     // the news since the offset; seconds is how long the server may wait for a message (0: answer at once)
-    Result<TgUpdates, Error> poll(self, int offset, int seconds) {
+    Result<TgUpdates, Error> poll(self, i64 offset, i64 seconds) {
         String body = "{\"offset\":" + str(offset) + ",\"timeout\":" + str(seconds) + ",\"allowed_updates\":[\"message\"]}";
         Result<String, Error> r = self.call("getUpdates", body);
         switch r {
@@ -125,36 +125,36 @@ struct Telegram {
                 TgUpdates u;
                 u.list = arr(4);
                 u.next = offset;
-                int res = d.get(0, "result");
-                int n = 0;
+                i64 res = d.get(0, "result");
+                i64 n = 0;
                 if res >= 0 { n = d.len(res); }
                 for i in 0..n {
-                    int up = d.at(res, i);
-                    int id = 0;
-                    int idn = d.get(up, "update_id");
+                    i64 up = d.at(res, i);
+                    i64 id = 0;
+                    i64 idn = d.get(up, "update_id");
                     if idn >= 0 { id = d.integer(idn); }
                     if id + 1 > u.next { u.next = id + 1; }
-                    int msg = d.get(up, "message");
+                    i64 msg = d.get(up, "message");
                     if msg < 0 { continue; }
                     String text = "";
-                    int tn = d.get(msg, "text");
+                    i64 tn = d.get(msg, "text");
                     if tn >= 0 { text = d.text(tn); }
                     if text.len == 0 { continue; }
                     TgMessage m;
                     m.update_id = id;
                     m.chat = 0;
-                    int chn = d.get(msg, "chat");
+                    i64 chn = d.get(msg, "chat");
                     if chn >= 0 {
-                        int cid = d.get(chn, "id");
+                        i64 cid = d.get(chn, "id");
                         if cid >= 0 { m.chat = d.integer(cid); }
                     }
                     String who = "";
-                    int frn = d.get(msg, "from");
+                    i64 frn = d.get(msg, "from");
                     if frn >= 0 {
-                        int fnn = d.get(frn, "first_name");
+                        i64 fnn = d.get(frn, "first_name");
                         if fnn >= 0 { who = d.text(fnn); }
                         if who.len == 0 {
-                            int unn = d.get(frn, "username");
+                            i64 unn = d.get(frn, "username");
                             if unn >= 0 { who = d.text(unn); }
                         }
                     }

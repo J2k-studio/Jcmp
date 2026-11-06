@@ -4,17 +4,17 @@
 struct Map<K, V> {
     K[] keys;
     V[] vals;
-    int[] st;                  // 0 empty, 1 used, 2 deleted
-    int len;                   // how many keys
-    int used;                  // used + deleted places
+    i64[] st;                  // 0 empty, 1 used, 2 deleted
+    i64 len;                   // how many keys
+    i64 used;                  // used + deleted places
 
     // the place of key k, or -1
-    int find(self, K k) {
+    i64 find(self, K k) {
         if self.st == null { return -1; }
-        int mask = self.st.len - 1;
-        int i = __hash(k) & mask;
+        i64 mask = self.st.len - 1;
+        i64 i = __hash(k) & mask;
         while true {
-            int s = self.st[i];
+            i64 s = self.st[i];
             if s == 0 { return -1; }
             if s == 1 && self.keys[i] == k { return i; }
             i = (i + 1) & mask;
@@ -26,24 +26,24 @@ struct Map<K, V> {
     }
     // the value of key k (throws "key not found")
     V get(self, K k) {
-        int i = self.find(k);
+        i64 i = self.find(k);
         if i < 0 { throw "key not found"; }
         return self.vals[i];
     }
     // the value of key k as an Option: Some(value) or None
     Option<V> try_get(self, K k) {
-        int i = self.find(k);
+        i64 i = self.find(k);
         if i < 0 { return Option<V>::None; }
         return Option<V>::Some(self.vals[i]);
     }
     void put(self, K k, V v) {
         if self.st == null { self.rehash(8); }
         if (self.used + 1) * 4 > self.st.len * 3 { self.rehash(self.st.len * 2); }
-        int mask = self.st.len - 1;
-        int i = __hash(k) & mask;
-        int tomb = -1;
+        i64 mask = self.st.len - 1;
+        i64 i = __hash(k) & mask;
+        i64 tomb = -1;
         while true {
-            int s = self.st[i];
+            i64 s = self.st[i];
             if s == 0 { break; }
             if s == 2 && tomb < 0 { tomb = i; }
             if s == 1 && self.keys[i] == k {
@@ -64,16 +64,16 @@ struct Map<K, V> {
     }
     // true if key k was there
     bool remove(self, K k) {
-        int i = self.find(k);
+        i64 i = self.find(k);
         if i < 0 { return false; }
         self.st[i] = 2;
         self.len -= 1;
         return true;
     }
-    void rehash(self, int cap) {
+    void rehash(self, i64 cap) {
         K[] ok = self.keys;
         V[] ov = self.vals;
-        int[] os = self.st;
+        i64[] os = self.st;
         self.keys = arr(cap);
         self.keys.resize(cap);
         self.vals = arr(cap);
@@ -121,16 +121,16 @@ struct Map<K, V> {
 
 struct Set<T> {
     T[] items;
-    int[] st;
-    int len;
-    int used;
+    i64[] st;
+    i64 len;
+    i64 used;
 
-    int find(self, T x) {
+    i64 find(self, T x) {
         if self.st == null { return -1; }
-        int mask = self.st.len - 1;
-        int i = __hash(x) & mask;
+        i64 mask = self.st.len - 1;
+        i64 i = __hash(x) & mask;
         while true {
-            int s = self.st[i];
+            i64 s = self.st[i];
             if s == 0 { return -1; }
             if s == 1 && self.items[i] == x { return i; }
             i = (i + 1) & mask;
@@ -145,8 +145,8 @@ struct Set<T> {
         if self.find(x) >= 0 { return false; }
         if self.st == null { self.rehash(8); }
         if (self.used + 1) * 4 > self.st.len * 3 { self.rehash(self.st.len * 2); }
-        int mask = self.st.len - 1;
-        int i = __hash(x) & mask;
+        i64 mask = self.st.len - 1;
+        i64 i = __hash(x) & mask;
         while self.st[i] == 1 { i = (i + 1) & mask; }
         if self.st[i] == 0 { self.used += 1; }
         self.items[i] = x;
@@ -155,15 +155,15 @@ struct Set<T> {
         return true;
     }
     bool remove(self, T x) {
-        int i = self.find(x);
+        i64 i = self.find(x);
         if i < 0 { return false; }
         self.st[i] = 2;
         self.len -= 1;
         return true;
     }
-    void rehash(self, int cap) {
+    void rehash(self, i64 cap) {
         T[] oi = self.items;
-        int[] os = self.st;
+        i64[] os = self.st;
         self.items = arr(cap);
         self.items.resize(cap);
         self.st = arr(cap);
@@ -200,21 +200,21 @@ struct Set<T> {
 // buffer of the same length) and takes n log n steps.
 
 void sort_by<T>(T[] a, bool(T, T)^ less) {
-    int n = a.len;
+    i64 n = a.len;
     if n < 2 { return; }
     T[] tmp = arr(n);
     tmp.resize(n);
-    int width = 1;
+    i64 width = 1;
     while width < n {
-        int lo = 0;
+        i64 lo = 0;
         while lo < n {
-            int mid = lo + width;
+            i64 mid = lo + width;
             if mid > n { mid = n; }
-            int hi = lo + width * 2;
+            i64 hi = lo + width * 2;
             if hi > n { hi = n; }
-            int i = lo;
-            int j = mid;
-            int k = lo;
+            i64 i = lo;
+            i64 j = mid;
+            i64 k = lo;
             while i < mid && j < hi {
                 if less(a[j], a[i]) {
                     tmp[k] = a[j];
@@ -236,30 +236,30 @@ void sort_by<T>(T[] a, bool(T, T)^ less) {
 }
 
 // the first place i of the sorted array a where a[i] >= x (a.len when there is none)
-int lower_bound<T>(T[] a, T x) {
-    int lo = 0;
-    int hi = a.len;
+i64 lower_bound<T>(T[] a, T x) {
+    i64 lo = 0;
+    i64 hi = a.len;
     while lo < hi {
-        int mid = lo + (hi - lo) / 2;
+        i64 mid = lo + (hi - lo) / 2;
         if a[mid] < x { lo = mid + 1; } else { hi = mid; }
     }
     return lo;
 }
 
 // the first place i where a[i] > x
-int upper_bound<T>(T[] a, T x) {
-    int lo = 0;
-    int hi = a.len;
+i64 upper_bound<T>(T[] a, T x) {
+    i64 lo = 0;
+    i64 hi = a.len;
     while lo < hi {
-        int mid = lo + (hi - lo) / 2;
+        i64 mid = lo + (hi - lo) / 2;
         if a[mid] <= x { lo = mid + 1; } else { hi = mid; }
     }
     return lo;
 }
 
 // the place of x in the sorted array a, or -1
-int binary_search<T>(T[] a, T x) {
-    int i = lower_bound<T>(a, x);
+i64 binary_search<T>(T[] a, T x) {
+    i64 i = lower_bound<T>(a, x);
     if i < a.len && a[i] == x { return i; }
     return -1;
 }
@@ -270,12 +270,12 @@ int binary_search<T>(T[] a, T x) {
 
 struct Queue<T> {
     T[] items;
-    int head;
-    int len;
+    i64 head;
+    i64 len;
 
     void push(self, T x) {
         if self.items == null { self.items = arr(8); self.items.resize(8); }
-        int cap = self.items.len;
+        i64 cap = self.items.len;
         if self.len == cap {
             T[] bigger = arr(cap * 2);
             bigger.resize(cap * 2);
@@ -308,12 +308,12 @@ struct Queue<T> {
 
 struct Deque<T> {
     T[] items;
-    int head;
-    int len;
+    i64 head;
+    i64 len;
 
     void grow(self) {
         if self.items == null { self.items = arr(8); self.items.resize(8); }
-        int cap = self.items.len;
+        i64 cap = self.items.len;
         if self.len == cap {
             T[] bigger = arr(cap * 2);
             bigger.resize(cap * 2);
@@ -325,13 +325,13 @@ struct Deque<T> {
     }
     void push_back(self, T x) {
         self.grow();
-        int cap = self.items.len;
+        i64 cap = self.items.len;
         self.items[(self.head + self.len) % cap] = x;
         self.len += 1;
     }
     void push_front(self, T x) {
         self.grow();
-        int cap = self.items.len;
+        i64 cap = self.items.len;
         self.head = (self.head + cap - 1) % cap;
         self.items[self.head] = x;
         self.len += 1;
@@ -357,7 +357,7 @@ struct Deque<T> {
         return self.items[(self.head + self.len) % self.items.len];
     }
     // the element number i from the front
-    T get(self, int i) {
+    T get(self, i64 i) {
         if i < 0 || i >= self.len { throw "index out of range"; }
         return self.items[(self.head + i) % self.items.len];
     }
@@ -370,15 +370,15 @@ struct Deque<T> {
 
 struct Heap<T> {
     T[] items;
-    int len;
+    i64 len;
 
     void push(self, T x) {
         if self.items == null { self.items = arr(8); }
         self.items.push(x);
-        int i = self.len;
+        i64 i = self.len;
         self.len += 1;
         while i > 0 {
-            int p = (i - 1) / 2;
+            i64 p = (i - 1) / 2;
             if self.items[i] < self.items[p] {
                 T t = self.items[i];
                 self.items[i] = self.items[p];
@@ -399,11 +399,11 @@ struct Heap<T> {
         self.len -= 1;
         self.items[0] = self.items[self.len];
         self.items.pop();
-        int i = 0;
+        i64 i = 0;
         bool go = true;
         while go {
-            int l = i * 2 + 1;
-            int m = i;
+            i64 l = i * 2 + 1;
+            i64 m = i;
             if l < self.len && self.items[l] < self.items[m] { m = l; }
             if l + 1 < self.len && self.items[l + 1] < self.items[m] { m = l + 1; }
             if m == i {
@@ -431,19 +431,19 @@ struct Heap<T> {
 
 struct Span<T> {
     T[] base;
-    int off;
-    int len;
+    i64 off;
+    i64 len;
 
-    T get(self, int i) {
+    T get(self, i64 i) {
         if i < 0 || i >= self.len { throw "span index out of range"; }
         return self.base[self.off + i];
     }
-    void set(self, int i, T x) {
+    void set(self, i64 i, T x) {
         if i < 0 || i >= self.len { throw "span index out of range"; }
         self.base[self.off + i] = x;
     }
     // the part lo .. hi of this span (a view of the same array)
-    Span<T> sub(self, int lo, int hi) {
+    Span<T> sub(self, i64 lo, i64 hi) {
         if lo < 0 || hi > self.len || lo > hi { throw "span range out of range"; }
         Span<T> r = {self.base, self.off + lo, hi - lo};
         return r;
@@ -456,7 +456,7 @@ struct Span<T> {
     }
 }
 
-Span<T> span<T>(T[] a, int lo, int hi) {
+Span<T> span<T>(T[] a, i64 lo, i64 hi) {
     if lo < 0 || hi > a.len || lo > hi { throw "span range out of range"; }
     Span<T> r = {a, lo, hi - lo};
     return r;
@@ -470,14 +470,14 @@ Span<T> span<T>(T[] a, int lo, int hi) {
 //   String out = doc.dump(doc.root());               // back to (compact) JSON text
 // json_quote(s) makes a JSON string literal; json_num_text(x) is a number as text.
 // helpers (also reachable as Json::quote and Json::num_text)
-String json_int_text(int v) {
+String json_int_text(i64 v) {
     String r = "";
     if v < 0 {
         r.push('-');
         v = 0 - v;
     }
     char buf[24];
-    int n = 0;
+    i64 n = 0;
     if v == 0 {
         buf[0] = '0';
         n = 1;
@@ -502,21 +502,21 @@ String json_num_text(double x) {
         x = 0.0 - x;
     }
     if x < 9.0e15 {
-        int ip = (int)x;
+        i64 ip = (i64)x;
         r.append(json_int_text(ip));
         double fp = x - (double)ip;
         if fp > 0.0 {
             String f = "";
-            int k = 0;
+            i64 k = 0;
             while k < 15 && fp > 0.0 {
                 fp = fp * 10.0;
-                int d = (int)fp;
+                i64 d = (i64)fp;
                 f.push((char)('0' + d));
                 fp = fp - (double)d;
                 k += 1;
             }
             // drop zeros at the end
-            int cut = f.len;
+            i64 cut = f.len;
             while cut > 0 && f[cut - 1] == '0' { cut -= 1; }
             if cut > 0 {
                 r.push('.');
@@ -526,7 +526,7 @@ String json_num_text(double x) {
         return r;
     }
     // very large numbers: whole digits only
-    r.append(json_int_text((int)(x / 1.0e10)));
+    r.append(json_int_text((i64)(x / 1.0e10)));
     r.append("0000000000");
     return r;
 }
@@ -560,15 +560,15 @@ String json_quote(String s) {
 
 struct JsonDoc {
     String src;
-    int pos;
+    i64 pos;
     String err;
-    int[] kind;                  // 0 null, 1 false, 2 true, 3 number, 4 string, 5 array, 6 object
+    i64[] kind;                  // 0 null, 1 false, 2 true, 3 number, 4 string, 5 array, 6 object
     double[] num;
     String[] txt;                // the value of a string node
     String[] key;                // the name of a node that is a member of an object
-    int[] first;                 // the first child (array, object)
-    int[] last;
-    int[] next;                  // the next brother
+    i64[] first;                 // the first child (array, object)
+    i64[] last;
+    i64[] next;                  // the next brother
     void free(self) {
         self.src.free();
         self.err.free();
@@ -581,7 +581,7 @@ struct JsonDoc {
         self.next.free();
     }
     // ---- reading (JsonDoc is made by Json::parse)
-    int fail(self, String m) {
+    i64 fail(self, String m) {
         if self.err.len == 0 {
             String t = m;
             t.append(" at byte ");
@@ -601,7 +601,7 @@ struct JsonDoc {
         }
     }
     // a new node; its text and name are stored with it
-    int add(self, int k, String t, String name) {
+    i64 add(self, i64 k, String t, String name) {
         self.kind.push(k);
         self.num.push(0.0);
         self.txt.push(t);
@@ -612,7 +612,7 @@ struct JsonDoc {
         return self.kind.len - 1;
     }
     // puts node c at the end of the children of node p
-    void link(self, int p, int c) {
+    void link(self, i64 p, i64 c) {
         if self.first[p] < 0 {
             self.first[p] = c;
         } else {
@@ -628,7 +628,7 @@ struct JsonDoc {
         self.pos += w.len;
         return true;
     }
-    int value(self, String name) {
+    i64 value(self, String name) {
         self.skip_ws();
         if self.pos >= self.src.len { return self.fail("unexpected end of the text"); }
         char c = self.src[self.pos];
@@ -645,8 +645,8 @@ struct JsonDoc {
         if c == '-' || (c >= '0' && c <= '9') { return self.number_lit(name); }
         return self.fail("unexpected character");
     }
-    int number_lit(self, String name) {
-        int a = self.pos;
+    i64 number_lit(self, String name) {
+        i64 a = self.pos;
         if self.src[self.pos] == '-' { self.pos += 1; }
         while self.pos < self.src.len {
             char c = self.src[self.pos];
@@ -660,16 +660,16 @@ struct JsonDoc {
         try { v = self.src.slice(a, self.pos).to_double(); } catch (e) {
             return self.fail("bad number");
         }
-        int n = self.add(3, "", name);
+        i64 n = self.add(3, "", name);
         self.num[n] = v;
         return n;
     }
-    int hex4(self) {
+    i64 hex4(self) {
         if self.pos + 4 > self.src.len { return -1; }
-        int v = 0;
+        i64 v = 0;
         for i in 0..4 {
             char c = self.src[self.pos + i];
-            int d = -1;
+            i64 d = -1;
             if c >= '0' && c <= '9' { d = c - '0'; }
             if c >= 'a' && c <= 'f' { d = c - 'a' + 10; }
             if c >= 'A' && c <= 'F' { d = c - 'A' + 10; }
@@ -711,15 +711,15 @@ struct JsonDoc {
                 else if e == 'f' { r.push((char)12); }
                 else if e == '"' || e == 92 || e == '/' { r.push(e); }
                 else if e == 'u' {
-                    int cp = self.hex4();
+                    i64 cp = self.hex4();
                     if cp < 0 {
                         self.fail("bad \\u escape");
                         return r;
                     }
                     if cp >= 0xD800 && cp <= 0xDBFF && self.pos + 1 < self.src.len && self.src[self.pos] == 92 && self.src[self.pos + 1] == 'u' {
-                        int save = self.pos;
+                        i64 save = self.pos;
                         self.pos += 2;
-                        int lo = self.hex4();
+                        i64 lo = self.hex4();
                         if lo >= 0xDC00 && lo <= 0xDFFF {
                             cp = 0x10000 + ((cp - 0xD800) << 10) + (lo - 0xDC00);
                         } else {
@@ -749,8 +749,8 @@ struct JsonDoc {
         }
         return r;
     }
-    int array(self, String name) {
-        int me = self.add(5, "", name);
+    i64 array(self, String name) {
+        i64 me = self.add(5, "", name);
         self.pos += 1;
         self.skip_ws();
         if self.pos < self.src.len && self.src[self.pos] == ']' {
@@ -758,7 +758,7 @@ struct JsonDoc {
             return me;
         }
         while true {
-            int c = self.value("");
+            i64 c = self.value("");
             if c < 0 { return -1; }
             self.link(me, c);
             self.skip_ws();
@@ -770,8 +770,8 @@ struct JsonDoc {
         }
         return me;
     }
-    int object(self, String name) {
-        int me = self.add(6, "", name);
+    i64 object(self, String name) {
+        i64 me = self.add(6, "", name);
         self.pos += 1;
         self.skip_ws();
         if self.pos < self.src.len && self.src[self.pos] == '}' {
@@ -786,7 +786,7 @@ struct JsonDoc {
             self.skip_ws();
             if self.pos >= self.src.len || self.src[self.pos] != ':' { return self.fail("a : was expected"); }
             self.pos += 1;
-            int c = self.value(k);
+            i64 c = self.value(k);
             if c < 0 { return -1; }
             self.link(me, c);
             self.skip_ws();
@@ -800,17 +800,17 @@ struct JsonDoc {
     }
 
     // ---- looking at a document (n is a node; -1 or a wrong kind gives an empty answer)
-    int root(self) { return 0; }
+    i64 root(self) { return 0; }
     // 0 null, 1 false, 2 true, 3 number, 4 string, 5 array, 6 object; -1 for no node
-    int kind_of(self, int n) {
+    i64 kind_of(self, i64 n) {
         if n < 0 || n >= self.kind.len { return -1; }
         return self.kind[n];
     }
-    int len(self, int n) {
-        int k = self.kind_of(n);
+    i64 len(self, i64 n) {
+        i64 k = self.kind_of(n);
         if k != 5 && k != 6 { return 0; }
-        int c = self.first[n];
-        int count = 0;
+        i64 c = self.first[n];
+        i64 count = 0;
         while c >= 0 {
             count += 1;
             c = self.next[c];
@@ -818,10 +818,10 @@ struct JsonDoc {
         return count;
     }
     // the i-th element of an array or member of an object (counted from 0), or -1
-    int at(self, int n, int i) {
-        int k = self.kind_of(n);
+    i64 at(self, i64 n, i64 i) {
+        i64 k = self.kind_of(n);
         if k != 5 && k != 6 { return -1; }
-        int c = self.first[n];
+        i64 c = self.first[n];
         while c >= 0 && i > 0 {
             c = self.next[c];
             i -= 1;
@@ -829,41 +829,41 @@ struct JsonDoc {
         return c;
     }
     // the member of an object with this name, or -1
-    int get(self, int n, String name) {
+    i64 get(self, i64 n, String name) {
         if self.kind_of(n) != 6 { return -1; }
-        int c = self.first[n];
+        i64 c = self.first[n];
         while c >= 0 {
             if self.key[c] == name { return c; }
             c = self.next[c];
         }
         return -1;
     }
-    bool has(self, int n, String name) { return self.get(n, name) >= 0; }
+    bool has(self, i64 n, String name) { return self.get(n, name) >= 0; }
     // the name of a node that is a member of an object
-    String name_of(self, int n) {
+    String name_of(self, i64 n) {
         if n < 0 || n >= self.kind.len { return ""; }
         String r = "";
         r.append(self.key[n]);
         return r;
     }
-    String text(self, int n) {
+    String text(self, i64 n) {
         if self.kind_of(n) != 4 { return ""; }
         String r = "";
         r.append(self.txt[n]);
         return r;
     }
-    double number(self, int n) {
+    double number(self, i64 n) {
         if self.kind_of(n) != 3 { return 0.0; }
         return self.num[n];
     }
-    int integer(self, int n) { return (int)self.number(n); }
-    bool boolean(self, int n) { return self.kind_of(n) == 2; }
-    bool is_null(self, int n) { return self.kind_of(n) == 0; }
+    i64 integer(self, i64 n) { return (i64)self.number(n); }
+    bool boolean(self, i64 n) { return self.kind_of(n) == 2; }
+    bool is_null(self, i64 n) { return self.kind_of(n) == 0; }
 
     // ---- writing: the node and what is below it as compact JSON text
-    String dump(self, int n) {
+    String dump(self, i64 n) {
         String r = "";
-        int k = self.kind_of(n);
+        i64 k = self.kind_of(n);
         if k <= 0 {
             r.append("null");
         } else if k == 1 {
@@ -876,7 +876,7 @@ struct JsonDoc {
             r.append(json_quote(self.txt[n]));
         } else if k == 5 {
             r.push('[');
-            int c = self.first[n];
+            i64 c = self.first[n];
             while c >= 0 {
                 if c != self.first[n] { r.push(','); }
                 r.append(self.dump(c));
@@ -885,7 +885,7 @@ struct JsonDoc {
             r.push(']');
         } else {
             r.push('{');
-            int c = self.first[n];
+            i64 c = self.first[n];
             while c >= 0 {
                 if c != self.first[n] { r.push(','); }
                 r.append(json_quote(self.key[c]));
@@ -915,7 +915,7 @@ struct Json {
         j.first = arr(16);
         j.last = arr(16);
         j.next = arr(16);
-        int root = j.value("");
+        i64 root = j.value("");
         if root >= 0 {
             j.skip_ws();
             if j.pos < j.src.len { root = j.fail("extra text after the value"); }
@@ -937,7 +937,7 @@ struct Csv {
         String[] out = arr(4);
         String cur = "";
         bool quoted = false;
-        int i = 0;
+        i64 i = 0;
         while i < line.len {
             char c = line[i];
             if quoted {
@@ -999,20 +999,20 @@ struct Toml {
     // the value of the key as it is written (a quoted text without its quotes), or None
     static Option<String> get(String text, String key) {
         String section = "";
-        int pos = 0;
+        i64 pos = 0;
         while pos <= text.len {
-            int end = pos;
+            i64 end = pos;
             while end < text.len && text[end] != 10 { end += 1; }
             String line = text.slice(pos, end);
             pos = end + 1;
             String t = line.trim();
             if t.len == 0 || t[0] == '#' { continue; }
             if t[0] == '[' {
-                int close = t.find("]");
+                i64 close = t.find("]");
                 if close > 1 { section = t.slice(1, close).trim(); }
                 continue;
             }
-            int eq = t.find("=");
+            i64 eq = t.find("=");
             if eq < 1 { continue; }
             String k = t.slice(0, eq).trim();
             String full = k;
@@ -1021,7 +1021,7 @@ struct Toml {
             String v = t.slice(eq + 1, t.len).trim();
             if v.len >= 2 && v[0] == '"' {
                 String r = "";
-                int i = 1;
+                i64 i = 1;
                 while i < v.len && v[i] != '"' {
                     if v[i] == '\\' && i + 1 < v.len {
                         i += 1;
@@ -1036,35 +1036,35 @@ struct Toml {
                 return Option<String>::Some(r);
             }
             // a value without quotes ends at a comment
-            int hash = v.find("#");
+            i64 hash = v.find("#");
             if hash >= 0 { v = v.slice(0, hash).trim(); }
             return Option<String>::Some(v);
         }
         return Option<String>::None;
     }
-    static Option<int> get_int(String text, String key) {
+    static Option<i64> get_int(String text, String key) {
         Option<String> v = Toml::get(text, key);
-        if v.is_none() { return Option<int>::None; }
+        if v.is_none() { return Option<i64>::None; }
         String s = v.unwrap();
-        if s.len == 0 { return Option<int>::None; }
-        int i = 0;
-        int sign = 1;
+        if s.len == 0 { return Option<i64>::None; }
+        i64 i = 0;
+        i64 sign = 1;
         if s[0] == '-' {
             sign = -1;
             i = 1;
         }
-        if i >= s.len { return Option<int>::None; }
-        int n = 0;
+        if i >= s.len { return Option<i64>::None; }
+        i64 n = 0;
         while i < s.len {
             if s[i] == '_' {
                 i += 1;
                 continue;
             }
-            if s[i] < '0' || s[i] > '9' { return Option<int>::None; }
+            if s[i] < '0' || s[i] > '9' { return Option<i64>::None; }
             n = n * 10 + (s[i] - '0');
             i += 1;
         }
-        return Option<int>::Some(n * sign);
+        return Option<i64>::Some(n * sign);
     }
     static Option<bool> get_bool(String text, String key) {
         Option<String> v = Toml::get(text, key);
@@ -1079,7 +1079,7 @@ struct Toml {
         if v.is_none() { return Option<double>::None; }
         String s = v.unwrap();
         if s.len == 0 { return Option<double>::None; }
-        int i = 0;
+        i64 i = 0;
         double sign = 1.0;
         if s[0] == '-' {
             sign = -1.0;
@@ -1127,7 +1127,7 @@ struct __Data {
         }
         return fallback;
     }
-    static Option<int> toml_get_int(String text, String key) { return Toml::get_int(text, key); }
+    static Option<i64> toml_get_int(String text, String key) { return Toml::get_int(text, key); }
     static Option<bool> toml_get_bool(String text, String key) { return Toml::get_bool(text, key); }
     static Option<double> toml_get_double(String text, String key) { return Toml::get_double(text, key); }
 }

@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.23.0 (2026-11-06)
+* **Changed (breaking):** `int` is a 32-bit integer; `i32` is another name of it; `i64` is the 64-bit integer. `int + int` wraps at 32 bits. A program that needs 64 bits keeps its meaning when `int` is written `i64`: `python3 tools/int2i64.py FILE...` does it (not in comments or text); see `docs/MIGRATION.md`. The compiler, the standard library, the libraries (`Jcmp-libs`) and the tests are written with `i64` where they mean 64 bits. Test t609.
+* **Added:** `i64` as a type name (it was only a name in the design); `-showlib` shows a library as it is written.
+* **Fixed:** `Span<i64>` and `Span<int>` were different generic instances while `i64` was a name of `int`.
+* **Documents:** the table of types in `LANGUAGE.md`, the examples that need 64 bits write `i64`; `docs/MIGRATION.md`.
+
 ## 1.2.22.0 (2026-11-06)
 * **Fixed (speed regression of 1.2.19.0 - 1.2.21.0):** the `arrays` benchmark took 609 ms instead of 124. After the repeated clean-up a `double` kept in a stack cell is loaded as a float-typed value, and the vectoriser gave up on it (it did not count as loop-invariant); now it does (`-irdbg 562949953421312` turns it off). Test t605.
 * **Fixed:** the debug switch of the wrapping counter shared a bit with the variable-stride pass; it has its own now (`-irdbg 140737488355328`).

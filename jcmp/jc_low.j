@@ -19,25 +19,25 @@
 // Every instruction is written after a line ";N": the text passes (peephole, register pass) do not change a naked function, the last pass
 // takes the marker lines away.
 
-int fn_naked;                    // 1 while the function being parsed is naked
-int fn_noreturn;
-int fn_interrupt;               // 1 for the function being parsed: an interrupt handler
-int fn_align;                   // align(N) before the function
+i64 fn_naked;                    // 1 while the function being parsed is naked
+i64 fn_noreturn;
+i64 fn_interrupt;               // 1 for the function being parsed: an interrupt handler
+i64 fn_align;                   // align(N) before the function
 char nk_lname[2048];             // the labels of the function: 32 names of 64 characters
-int nk_lnum[32];
-int nk_ldef[32];
-int nk_ln;
+i64 nk_lnum[32];
+i64 nk_ldef[32];
+i64 nk_ln;
 char nk_line[256];
-int nk_sp;                       // 1 if the last register read was sp
-int nk_pins_n;
+i64 nk_sp;                       // 1 if the last register read was sp
+i64 nk_pins_n;
 
 void nk_reset() {
     nk_ln = 0;
 }
 
 // the number of a label (made when it is first seen), and whether it was defined
-int nk_label(char^ name, bool define) {
-    int i = 0;
+i64 nk_label(char^ name, bool define) {
+    i64 i = 0;
     while i < nk_ln {
         if str_eq(@nk_lname + i * 64, name) {
             if define {
@@ -59,7 +59,7 @@ int nk_label(char^ name, bool define) {
 
 // at the end of the function: every label that was used is defined
 void nk_check_labels() {
-    int i = 0;
+    i64 i = 0;
     while i < nk_ln {
         if nk_ldef[i] == 0 { die_name("this label is used but never defined", @nk_lname + i * 64); }
         i += 1;
@@ -71,7 +71,7 @@ void nk_emit(char^ s) {
     emit_line(s);
 }
 
-void nk_add_reg(char^ dst, int r) {
+void nk_add_reg(char^ dst, i64 r) {
     if r == 31 {
         append_text(dst, "sp");
         return;
@@ -81,10 +81,10 @@ void nk_add_reg(char^ dst, int r) {
 }
 
 // the number in a register name  x0 .. x30, or -1
-int nk_xnum(char^ t) {
+i64 nk_xnum(char^ t) {
     if t[0] != 'x' || t[1] < '0' || t[1] > '9' { return 0 - 1; }
-    int v = 0;
-    int i = 1;
+    i64 v = 0;
+    i64 i = 1;
     while t[i] >= '0' && t[i] <= '9' {
         v = v * 10 + (t[i] - '0');
         i += 1;
@@ -94,8 +94,8 @@ int nk_xnum(char^ t) {
 }
 
 // a register name (without Reg::): its number, 31 for sp, 32 for the zero register, or -1
-int nk_regname(char^ t, bool bare) {
-    int x = nk_xnum(t);
+i64 nk_regname(char^ t, bool bare) {
+    i64 x = nk_xnum(t);
     if x >= 0 { return x; }
     if str_eq(t, "sp") { return 31; }
     if str_eq(t, "lr") { return 30; }
@@ -115,9 +115,9 @@ bool nk_at_reg() {
 }
 
 // read a register: Reg::name or a bare name; returns 0..30, 31 (sp), 32 (zero)
-int nk_reg() {
+i64 nk_reg() {
     if tok_kind != T_IDENT { die("a register was expected (Reg::x0, x0, sp ...)"); }
-    int r = 0 - 1;
+    i64 r = 0 - 1;
     if str_eq(@tok_text, "Reg") {
         next();
         expect("::");
@@ -138,21 +138,21 @@ bool nk_at_num() {
     return tok_is("-");
 }
 
-int nk_num() {
-    int neg = 0;
+i64 nk_num() {
+    i64 neg = 0;
     if tok_is("-") {
         neg = 1;
         next();
     }
     if tok_kind != T_NUM { die("a number was expected"); }
-    int v = tok_num;
+    i64 v = tok_num;
     next();
     if neg == 1 { v = 0 - v; }
     return v;
 }
 
 // the text of a number for an instruction line
-void nk_add_num(char^ dst, int v) {
+void nk_add_num(char^ dst, i64 v) {
     if v < 0 {
         append_text(dst, "-");
         if v == 0 - 9223372036854775807 - 1 {
@@ -166,7 +166,7 @@ void nk_add_num(char^ dst, int v) {
 }
 
 // "mn xA, xB, xC"
-void nk_rrr(char^ mn, int a, int b, int c) {
+void nk_rrr(char^ mn, i64 a, i64 b, i64 c) {
     str_copy(@nk_line, mn, 256);
     append_text(@nk_line, " ");
     nk_add_reg(@nk_line, a);
@@ -178,7 +178,7 @@ void nk_rrr(char^ mn, int a, int b, int c) {
 }
 
 // "mn xA, xB, #n"  (the number is written without #)
-void nk_rrn(char^ mn, int a, int b, int n) {
+void nk_rrn(char^ mn, i64 a, i64 b, i64 n) {
     str_copy(@nk_line, mn, 256);
     append_text(@nk_line, " ");
     nk_add_reg(@nk_line, a);
@@ -189,7 +189,7 @@ void nk_rrn(char^ mn, int a, int b, int n) {
     nk_emit(@nk_line);
 }
 
-void nk_rn(char^ mn, int a, int n) {
+void nk_rn(char^ mn, i64 a, i64 n) {
     str_copy(@nk_line, mn, 256);
     append_text(@nk_line, " ");
     nk_add_reg(@nk_line, a);
@@ -198,7 +198,7 @@ void nk_rn(char^ mn, int a, int n) {
     nk_emit(@nk_line);
 }
 
-void nk_rr(char^ mn, int a, int b) {
+void nk_rr(char^ mn, i64 a, i64 b) {
     str_copy(@nk_line, mn, 256);
     append_text(@nk_line, " ");
     nk_add_reg(@nk_line, a);
@@ -208,15 +208,15 @@ void nk_rr(char^ mn, int a, int b) {
 }
 
 // x17 = n
-void nk_scratch(int n) {
+void nk_scratch(i64 n) {
     nk_rn("mov", 17, n);
 }
 
 // the register form of an operation  d = a op b
 // kind 1: add/sub-like (immediate 0..4095)   2: shifts (0..63)   3: only registers (the number goes to x17)
-void nk_binop(char^ op, int d, int a, bool bnum, int b) {
+void nk_binop(char^ op, i64 d, i64 a, bool bnum, i64 b) {
     char^ mn = null;
-    int kind = 3;
+    i64 kind = 3;
     if str_eq(op, "+") { mn = "add"; kind = 1; }
     else if str_eq(op, "-") { mn = "sub"; kind = 1; }
     else if str_eq(op, "*") { mn = "mul"; }
@@ -252,12 +252,12 @@ void nk_binop(char^ op, int d, int a, bool bnum, int b) {
 
 // [base + off] after the opening bracket was read: the address as "base" and a number that fits the access (size: 1, 2, 4, 8)
 // returns the base register to use (maybe 17) and sets nk_off
-int nk_off;
-int nk_addr(int size) {
-    int base = nk_reg();
-    int off = 0;
+i64 nk_off;
+i64 nk_addr(i64 size) {
+    i64 base = nk_reg();
+    i64 off = 0;
     bool regoff = false;
-    int roff = 0;
+    i64 roff = 0;
     if tok_is("+") || tok_is("-") {
         bool minus = tok_is("-");
         next();
@@ -292,7 +292,7 @@ int nk_addr(int size) {
     return 17;
 }
 
-void nk_mem(char^ mn, int rt, int base, int off) {
+void nk_mem(char^ mn, i64 rt, i64 base, i64 off) {
     str_copy(@nk_line, mn, 256);
     append_text(@nk_line, " ");
     nk_add_reg(@nk_line, rt);
@@ -307,8 +307,8 @@ void nk_mem(char^ mn, int rt, int base, int off) {
 }
 
 // the access prefix at the current token: u8 u16 u32 i8 i16 i32, or "[" (64 bits). Sets nk_msize and nk_mkind (0 plain 64 bit, 1 u8, 2 u16, 3 u32, 4 i8, 5 i16, 6 i32).
-int nk_msize;
-int nk_mkind;
+i64 nk_msize;
+i64 nk_mkind;
 bool nk_at_mem() {
     if tok_is("[") { return true; }
     if tok_kind != T_IDENT { return false; }
@@ -330,9 +330,9 @@ void nk_read_mem_prefix() {
     expect("[");
 }
 
-void nk_load(int rd) {
+void nk_load(i64 rd) {
     nk_read_mem_prefix();
-    int base = nk_addr(nk_msize);
+    i64 base = nk_addr(nk_msize);
     char^ mn = "ldr";
     if nk_mkind == 1 { mn = "ldrb"; }
     else if nk_mkind == 2 { mn = "ldrh"; }
@@ -360,7 +360,7 @@ void nk_sys_name(char^ dst) {
     expect("Sys");
     expect("::");
     if tok_kind != T_IDENT { die("a system register name was expected after Sys::"); }
-    int i = 0;
+    i64 i = 0;
     while tok_text[i] != 0 {
         char c = tok_text[i];
         if c >= 'A' && c <= 'Z' { c = c + 32; }
@@ -379,7 +379,7 @@ bool nk_is_fpname(char^ t) {
     if t[1] < '0' || t[1] > '9' { return false; }
     if t[2] == 0 { return true; }
     if t[2] < '0' || t[2] > '9' || t[3] != 0 { return false; }
-    int n = (t[1] - '0') * 10 + (t[2] - '0');
+    i64 n = (t[1] - '0') * 10 + (t[2] - '0');
     return n <= 31;
 }
 
@@ -388,7 +388,7 @@ void nk_inst() {
     if tok_kind != T_STR { die("Cpu::inst needs the name of the instruction in quotes"); }
     str_copy(@nk_line, @tok_str, 256);
     next();
-    int n = 0;
+    i64 n = 0;
     while accept(",") {
         if n == 0 { append_text(@nk_line, " "); } else { append_text(@nk_line, ", "); }
         if nk_at_reg() {
@@ -422,7 +422,7 @@ void nk_cpu() {
         return;
     }
     expect("(");
-    int arg = 0;
+    i64 arg = 0;
     if str_eq(@name, "brk") {
         arg = nk_num();
     }
@@ -451,20 +451,20 @@ void nk_end() {
 }
 
 // R = ...;  (the destination register was read, tok is "=" or an operator with =)
-void nk_assign(int rd, char^ op_eq) {
+void nk_assign(i64 rd, char^ op_eq) {
     nk_dest(rd);
     // op_eq: "=" or "+=" "-=" ...
     bool plain = str_eq(op_eq, "=");
     char op[8];
     if !plain {
-        int n = str_len(op_eq);
+        i64 n = str_len(op_eq);
         str_copy(@op, op_eq, 8);
         op[n - 1] = 0;
     }
     if plain {
         // R = number
         if nk_at_num() {
-            int v = nk_num();
+            i64 v = nk_num();
             nk_rn("mov", rd, v);
             nk_end();
             return;
@@ -479,7 +479,7 @@ void nk_assign(int rd, char^ op_eq) {
             next();
             expect("::");
             if tok_kind != T_IDENT || tok_text[1] != 0 { die("after Flags:: write one of the flags: n z c v"); }
-            int fbit = 0 - 1;
+            i64 fbit = 0 - 1;
             if tok_text[0] == 'n' { fbit = 31; }
             if tok_text[0] == 'z' { fbit = 30; }
             if tok_text[0] == 'c' { fbit = 29; }
@@ -508,7 +508,7 @@ void nk_assign(int rd, char^ op_eq) {
         }
         if tok_is("~") {
             next();
-            int rs = nk_reg();
+            i64 rs = nk_reg();
             nk_rr("mvn", rd, rs);
             nk_end();
             return;
@@ -524,7 +524,7 @@ void nk_assign(int rd, char^ op_eq) {
             str_copy(@bn, @tok_text, 32);
             next();
             expect("(");
-            int rb = nk_reg();
+            i64 rb = nk_reg();
             expect(")");
             if str_eq(@bn, "clz") { nk_rr("clz", rd, rb); }
             else if str_eq(@bn, "rbit") { nk_rr("rbit", rd, rb); }
@@ -536,7 +536,7 @@ void nk_assign(int rd, char^ op_eq) {
             return;
         }
         // R = R2 [op (R3 | number)]
-        int ra = nk_reg();
+        i64 ra = nk_reg();
         if tok_is(";") {
             if ra == 32 { nk_rn("mov", rd, 0); } else { nk_rr("mov", rd, ra); }
             next();
@@ -551,10 +551,10 @@ void nk_assign(int rd, char^ op_eq) {
             str_copy(@o2, ">>>", 8);
         }
         if nk_at_reg() {
-            int rb2 = nk_reg();
+            i64 rb2 = nk_reg();
             nk_binop(@o2, rd, ra, false, rb2);
         } else if nk_at_num() {
-            int nb = nk_num();
+            i64 nb = nk_num();
             nk_binop(@o2, rd, ra, true, nb);
         } else {
             die("a register or a number was expected");
@@ -569,10 +569,10 @@ void nk_assign(int rd, char^ op_eq) {
         str_copy(@op, ">>>", 8);
     }
     if nk_at_reg() {
-        int rc = nk_reg();
+        i64 rc = nk_reg();
         nk_binop(@op, rd, rd, false, rc);
     } else if nk_at_num() {
-        int nc = nk_num();
+        i64 nc = nk_num();
         nk_binop(@op, rd, rd, true, nc);
     } else {
         die("a register or a number was expected");
@@ -588,20 +588,20 @@ void nk_if() {
         neg = true;
         next();
     }
-    int ra = nk_reg();
+    i64 ra = nk_reg();
     if tok_is(".") {
         // R.bit(n)
         next();
         if !tok_is("bit") { die("only .bit(n) can follow a register in an if"); }
         next();
         expect("(");
-        int bit = nk_num();
+        i64 bit = nk_num();
         expect(")");
         if bit < 0 || bit > 63 { die("a bit is 0 .. 63"); }
         if !tok_is("goto") { die("goto was expected"); }
         next();
         if tok_kind != T_IDENT { die("a label was expected"); }
-        int lab = nk_label(@tok_text, false);
+        i64 lab = nk_label(@tok_text, false);
         next();
         nk_end();
         str_copy(@nk_line, "tbnz ", 256);
@@ -621,10 +621,10 @@ void nk_if() {
     char^ cc = nk_cc(@cmpop);
     next();
     if nk_at_reg() {
-        int rb = nk_reg();
+        i64 rb = nk_reg();
         nk_rr("cmp", ra, rb);
     } else {
-        int nb = nk_num();
+        i64 nb = nk_num();
         if nb >= 0 && nb <= 4095 {
             nk_rn("cmp", ra, nb);
         } else {
@@ -635,7 +635,7 @@ void nk_if() {
     if !tok_is("goto") { die("goto was expected"); }
     next();
     if tok_kind != T_IDENT { die("a label was expected"); }
-    int lab2 = nk_label(@tok_text, false);
+    i64 lab2 = nk_label(@tok_text, false);
     next();
     nk_end();
     str_copy(@nk_line, "b.", 256);
@@ -668,7 +668,7 @@ void parse_raw() {
     next();                                  // raw
     if !tok_is("<") { die("raw<type>[values];  was expected (type: u8, u16, u32 or u64)"); }
     next();
-    int size = 0;
+    i64 size = 0;
     if tok_is("u8") { size = 1; }
     else if tok_is("u16") { size = 2; }
     else if tok_is("u32") { size = 4; }
@@ -678,17 +678,17 @@ void parse_raw() {
     if !tok_is(">") { die("> was expected after the type of raw<type>"); }
     next();
     expect("[");
-    int w = 0;                               // the word that is being made
-    int nb = 0;                              // its bytes so far
-    int count = 0;
+    i64 w = 0;                               // the word that is being made
+    i64 nb = 0;                              // its bytes so far
+    i64 count = 0;
     while !tok_is("]") {
         if tok_kind != T_NUM { die("a number was expected in raw<type>[ ... ]"); }
-        int v = tok_num;
+        i64 v = tok_num;
         if size == 1 && (v < 0 || v > 255) { die("this value does not fit u8 (0 .. 255)"); }
         if size == 2 && (v < 0 || v > 65535) { die("this value does not fit u16 (0 .. 65535)"); }
         if size == 4 && (v < 0 || v > 4294967295) { die("this value does not fit u32 (0 .. 4294967295)"); }
         next();
-        int k = 0;
+        i64 k = 0;
         while k < size {
             w = w | (((v >> (k * 8)) & 255) << (nb * 8));
             nb += 1;
@@ -733,7 +733,7 @@ void parse_naked_stmt() {
     if tok_is("goto") {
         next();
         if tok_kind != T_IDENT { die("a label was expected"); }
-        int lab = nk_label(@tok_text, false);
+        i64 lab = nk_label(@tok_text, false);
         next();
         nk_end();
         str_copy(@nk_line, "b L", 256);
@@ -762,7 +762,7 @@ void parse_naked_stmt() {
     if tok_is("svc") {
         next();
         expect("(");
-        int n = nk_num();
+        i64 n = nk_num();
         expect(")");
         nk_end();
         str_copy(@nk_line, "svc ", 256);
@@ -787,7 +787,7 @@ void parse_naked_stmt() {
         expect("=");
         if nk_at_num() {
             // Sys::daifset = 3;  (the fields of PSTATE take a number)
-            int v = nk_num();
+            i64 v = nk_num();
             nk_end();
             str_copy(@nk_line, "msr ", 256);
             append_text(@nk_line, @sr);
@@ -796,7 +796,7 @@ void parse_naked_stmt() {
             nk_emit(@nk_line);
             return;
         }
-        int rs = nk_reg();
+        i64 rs = nk_reg();
         nk_end();
         str_copy(@nk_line, "msr ", 256);
         append_text(@nk_line, @sr);
@@ -808,14 +808,14 @@ void parse_naked_stmt() {
     if nk_at_mem() {
         // a store:  [B + off] = R;   u8[B + off] = R;
         nk_read_mem_prefix();
-        int base = nk_addr(nk_msize);
-        int off = nk_off;
-        int size = nk_msize;
-        int kind = nk_mkind;
+        i64 base = nk_addr(nk_msize);
+        i64 off = nk_off;
+        i64 size = nk_msize;
+        i64 kind = nk_mkind;
         expect("=");
-        int rs2 = 0;
+        i64 rs2 = 0;
         if nk_at_num() {
-            int nv = nk_num();
+            i64 nv = nk_num();
             nk_scratch(nv);
             rs2 = 17;
             if base == 17 {
@@ -843,17 +843,17 @@ void parse_naked_stmt() {
         next();
         if tok_is(":") {
             next();
-            int lab = nk_label(@lbl_text, true);
+            i64 lab = nk_label(@lbl_text, true);
             place_label(lab);
             return;
         }
         die_name("a statement of the low level was expected; this is not one", @lbl_text);
     }
-    int rd = nk_reg();
+    i64 rd = nk_reg();
     if tok_kind != T_OP { die("= or an operator with = was expected after the register"); }
     char aop[8];
     str_copy(@aop, @tok_text, 8);
-    int al = str_len(@aop);
+    i64 al = str_len(@aop);
     if !(aop[al - 1] == '=' && !str_eq(@aop, "==") && !str_eq(@aop, "!=") && !str_eq(@aop, "<=") && !str_eq(@aop, ">=")) {
         die("= or an operator with = (+= -= *= &= |= <<= >>=) was expected after the register");
     }
@@ -874,8 +874,8 @@ void parse_naked_block() {
 }
 
 // a naked function after its name and "(" were read: the parameters are only counted (they arrive in x0 .. x7), then the body
-void parse_naked_function(int f_idx) {
-    int np = 0;
+void parse_naked_function(i64 f_idx) {
+    i64 np = 0;
     if !tok_is(")") {
         while true {
             parse_type();
@@ -903,15 +903,15 @@ void parse_naked_function(int f_idx) {
 // and the result register is x0 afterwards.
 
 char abi_name[1024];             // 16 names of 64 characters
-int abi_num[16];                 // the register of the number, or -1
-int abi_args[128];               // 8 argument registers for each
-int abi_nargs[16];
-int abi_res[16];
+i64 abi_num[16];                 // the register of the number, or -1
+i64 abi_args[128];               // 8 argument registers for each
+i64 abi_nargs[16];
+i64 abi_res[16];
 char abi_via[1024];              // the text of the instruction
-int abi_count;
+i64 abi_count;
 
-int find_abi(char^ name) {
-    int i = 0;
+i64 find_abi(char^ name) {
+    i64 i = 0;
     while i < abi_count {
         if str_eq(@abi_name + i * 64, name) { return i; }
         i += 1;
@@ -919,9 +919,9 @@ int find_abi(char^ name) {
     return 0 - 1;
 }
 
-int abi_reg() {
+i64 abi_reg() {
     if tok_kind != T_IDENT { die("a register (x0 .. x30) was expected"); }
-    int r = nk_xnum(@tok_text);
+    i64 r = nk_xnum(@tok_text);
     if r < 0 { die_name("this is not a register (x0 .. x30)", @tok_text); }
     next();
     return r;
@@ -930,7 +930,7 @@ int abi_reg() {
 void parse_abi() {
     next();                                  // abi
     if tok_kind != T_IDENT { die("a name for the abi was expected"); }
-    int ab = find_abi(@tok_text);
+    i64 ab = find_abi(@tok_text);
     bool fresh = false;
     if pass_no == 1 {
         if ab >= 0 { die_name("this abi exists already", @tok_text); }
@@ -953,18 +953,18 @@ void parse_abi() {
         next();
         expect(":");
         if str_eq(@field, "number") {
-            int r = abi_reg();
+            i64 r = abi_reg();
             if fresh { abi_num[ab] = r; }
         } else if str_eq(@field, "result") {
-            int r2 = abi_reg();
+            i64 r2 = abi_reg();
             if fresh { abi_res[ab] = r2; }
         } else if str_eq(@field, "args") {
-            int first = abi_reg();
-            int cnt = 0;
+            i64 first = abi_reg();
+            i64 cnt = 0;
             if tok_is(".") {
                 next();
                 expect(".");                 // a range is written with two dots
-                int last = abi_reg();
+                i64 last = abi_reg();
                 if last < first || last - first > 7 { die("a range of at most 8 registers was expected (x0..x5)"); }
                 while first + cnt <= last {
                     if fresh { abi_args[ab * 8 + cnt] = first + cnt; }
@@ -975,7 +975,7 @@ void parse_abi() {
                 cnt = 1;
                 while accept(",") {
                     if cnt >= 8 { die("at most 8 argument registers"); }
-                    int rn = abi_reg();
+                    i64 rn = abi_reg();
                     if fresh { abi_args[ab * 8 + cnt] = rn; }
                     cnt += 1;
                 }
@@ -1009,10 +1009,10 @@ void parse_abi() {
 }
 
 // the call: the values are in x0 .. x(n-1) in the order they were written
-void emit_abi_call(int ab, int n) {
-    int total = abi_nargs[ab];
-    int first = 0;
-    int dst[16];
+void emit_abi_call(i64 ab, i64 n) {
+    i64 total = abi_nargs[ab];
+    i64 first = 0;
+    i64 dst[16];
     if abi_num[ab] >= 0 {
         total += 1;
         dst[0] = abi_num[ab];
@@ -1020,13 +1020,13 @@ void emit_abi_call(int ab, int n) {
     }
     if n > total { die("more values than the abi has registers"); }
     if n < first + 0 { die("the first value of this abi is the number of the call"); }
-    int i = 0;
+    i64 i = 0;
     while i < abi_nargs[ab] {
         dst[first + i] = abi_args[ab * 8 + i];
         i += 1;
     }
     // the parallel move  x[i] -> x[dst[i]]
-    int src[16];
+    i64 src[16];
     bool done[16];
     i = 0;
     while i < n {
@@ -1034,7 +1034,7 @@ void emit_abi_call(int ab, int n) {
         done[i] = dst[i] == i;
         i += 1;
     }
-    int left = 0;
+    i64 left = 0;
     i = 0;
     while i < n {
         if !done[i] { left += 1; }
@@ -1047,7 +1047,7 @@ void emit_abi_call(int ab, int n) {
             if !done[i] {
                 // the destination may be written when no other move still needs it as a source
                 bool free = true;
-                int j = 0;
+                i64 j = 0;
                 while j < n {
                     if !done[j] && j != i && src[j] == dst[i] { free = false; }
                     j += 1;
@@ -1072,8 +1072,8 @@ void emit_abi_call(int ab, int n) {
             str_copy(@nk_line, "mov x17, x", 256);
             append_int(@nk_line, src[i]);
             emit_line(@nk_line);
-            int s0 = src[i];
-            int j2 = 0;
+            i64 s0 = src[i];
+            i64 j2 = 0;
             while j2 < n {
                 if !done[j2] && src[j2] == s0 { src[j2] = 17; }
                 j2 += 1;
@@ -1100,7 +1100,7 @@ void emit_abi_call(int ab, int n) {
 void sys_name(char^ dst) {
     next();                                  // ::
     if tok_kind != T_IDENT { die("a system register name was expected after Sys::"); }
-    int i = 0;
+    i64 i = 0;
     while tok_text[i] != 0 && i < 62 {
         char c = tok_text[i];
         if c >= 'A' && c <= 'Z' { c = c + 32; }
@@ -1163,23 +1163,23 @@ void parse_sys_assign() {
 // u8 u16 u32 u64: the size of the register; the value read is not signed.
 
 char dev_name[1024];              // 16 devices
-int dev_base[16];
-int dev_nf[16];                   // how many fields
-int dev_f0[16];                   // the first field
-int dev_count;
+i64 dev_base[16];
+i64 dev_nf[16];                   // how many fields
+i64 dev_f0[16];                   // the first field
+i64 dev_count;
 char devf_name[8192];             // 128 fields of 64 characters
-int devf_off[128];
-int devf_size[128];
-int devf_nb[128];                 // how many named bit fields
-int devf_b0[128];                 // the first of them
-int devf_count;
+i64 devf_off[128];
+i64 devf_size[128];
+i64 devf_nb[128];                 // how many named bit fields
+i64 devf_b0[128];                 // the first of them
+i64 devf_count;
 char devb_name[8192];             // 128 bit fields
-int devb_hi[128];
-int devb_lo[128];
-int devb_count;
+i64 devb_hi[128];
+i64 devb_lo[128];
+i64 devb_count;
 
-int find_device(char^ name) {
-    int i = 0;
+i64 find_device(char^ name) {
+    i64 i = 0;
     while i < dev_count {
         if str_eq(@dev_name + i * 64, name) { return i; }
         i += 1;
@@ -1190,7 +1190,7 @@ int find_device(char^ name) {
 void parse_device() {
     next();                                  // device
     if tok_kind != T_IDENT { die("a name for the device was expected"); }
-    int d = find_device(@tok_text);
+    i64 d = find_device(@tok_text);
     bool fresh = false;
     if pass_no == 1 {
         if d >= 0 { die_name("this device exists already", @tok_text); }
@@ -1215,7 +1215,7 @@ void parse_device() {
         next();
         expect(":");
         if tok_kind != T_IDENT { die("u8, u16, u32 or u64 was expected"); }
-        int size = 0;
+        i64 size = 0;
         if str_eq(@tok_text, "u8") { size = 1; }
         else if str_eq(@tok_text, "u16") { size = 2; }
         else if str_eq(@tok_text, "u32") { size = 4; }
@@ -1224,9 +1224,9 @@ void parse_device() {
         next();
         expect("@");
         if tok_kind != T_NUM { die("the offset of the register (a number) was expected after @"); }
-        int off = tok_num;
+        i64 off = tok_num;
         next();
-        int fidx = 0 - 1;
+        i64 fidx = 0 - 1;
         if fresh {
             if devf_count >= 128 { die("too many device registers (128 at most)"); }
             fidx = devf_count;
@@ -1247,8 +1247,8 @@ void parse_device() {
                 next();
                 expect(":");
                 if tok_kind != T_NUM { die("a bit number was expected"); }
-                int lo = tok_num;
-                int hi = tok_num;
+                i64 lo = tok_num;
+                i64 hi = tok_num;
                 next();
                 if tok_is(".") {
                     next();
@@ -1280,8 +1280,8 @@ void parse_device() {
 }
 
 // the register of the device d named name (the index), or -1
-int dev_field(int d, char^ name) {
-    int i = 0;
+i64 dev_field(i64 d, char^ name) {
+    i64 i = 0;
     while i < dev_nf[d] {
         if str_eq(@devf_name + (dev_f0[d] + i) * 64, name) { return dev_f0[d] + i; }
         i += 1;
@@ -1289,8 +1289,8 @@ int dev_field(int d, char^ name) {
     return 0 - 1;
 }
 
-int dev_bitfield(int f, char^ name) {
-    int i = 0;
+i64 dev_bitfield(i64 f, char^ name) {
+    i64 i = 0;
     while i < devf_nb[f] {
         if str_eq(@devb_name + (devf_b0[f] + i) * 64, name) { return devf_b0[f] + i; }
         i += 1;
@@ -1299,15 +1299,15 @@ int dev_bitfield(int f, char^ name) {
 }
 
 // the address of the register into x9
-void dev_addr(int d, int f) {
+void dev_addr(i64 d, i64 f) {
     str_copy(@nk_line, "mov x9, ", 256);
     append_int(@nk_line, dev_base[d] + devf_off[f]);
     emit_line(@nk_line);
 }
 
 // the load of the register at x9 into dst
-void dev_load(int f, char^ dst) {
-    int sz = devf_size[f];
+void dev_load(i64 f, char^ dst) {
+    i64 sz = devf_size[f];
     char^ mn = "ldr";
     if sz == 1 { mn = "ldrb"; }
     else if sz == 2 { mn = "ldrh"; }
@@ -1319,8 +1319,8 @@ void dev_load(int f, char^ dst) {
     emit_line(@nk_line);
 }
 
-void dev_store(int f, char^ src) {
-    int sz = devf_size[f];
+void dev_store(i64 f, char^ src) {
+    i64 sz = devf_size[f];
     char^ mn = "str";
     if sz == 1 { mn = "strb"; }
     else if sz == 2 { mn = "strh"; }
@@ -1332,7 +1332,7 @@ void dev_store(int f, char^ src) {
     emit_line(@nk_line);
 }
 
-void dev_mov(char^ reg, int v) {
+void dev_mov(char^ reg, i64 v) {
     str_copy(@nk_line, "mov ", 256);
     append_text(@nk_line, reg);
     append_text(@nk_line, ", ");
@@ -1345,18 +1345,18 @@ void dev_mov(char^ reg, int v) {
     emit_line(@nk_line);
 }
 
-int dev_mask(int hi, int lo) {
-    int w = hi - lo + 1;
+i64 dev_mask(i64 hi, i64 lo) {
+    i64 w = hi - lo + 1;
     if w >= 63 { return 0 - 1; }
     return (1 << w) - 1;
 }
 
 // Device.reg  /  Device.reg.bit(n)  /  Device.reg.field   in an expression (the token is "." after the device name, which is in id_name)
 void gen_device_read() {
-    int d = find_device(@id_name);
+    i64 d = find_device(@id_name);
     next();                                  // .
     if tok_kind != T_IDENT { die("the name of a register was expected after the device name"); }
-    int f = dev_field(d, @tok_text);
+    i64 f = dev_field(d, @tok_text);
     if f < 0 { die_name("this device has no such register", @tok_text); }
     next();
     dev_addr(d, f);
@@ -1371,7 +1371,7 @@ void gen_device_read() {
             next();
             expect("(");
             if tok_kind != T_NUM { die("bit(n) takes a number"); }
-            int bn = tok_num;
+            i64 bn = tok_num;
             next();
             expect(")");
             if bn < 0 || bn >= devf_size[f] * 8 { die("this bit is outside the register"); }
@@ -1385,7 +1385,7 @@ void gen_device_read() {
             ex_ty = 1;                       // a bool
             return;
         }
-        int b = dev_bitfield(f, @tok_text);
+        i64 b = dev_bitfield(f, @tok_text);
         if b < 0 { die_name("this register has no such bit field", @tok_text); }
         next();
         if devb_lo[b] > 0 {
@@ -1393,7 +1393,7 @@ void gen_device_read() {
             append_int(@nk_line, devb_lo[b]);
             emit_line(@nk_line);
         }
-        int mask = dev_mask(devb_hi[b], devb_lo[b]);
+        i64 mask = dev_mask(devb_hi[b], devb_lo[b]);
         if devb_hi[b] - devb_lo[b] + 1 < 64 {
             dev_mov("x1", mask);
             emit_line("and x0, x0, x1");
@@ -1404,13 +1404,13 @@ void gen_device_read() {
 
 // a statement  Device.reg = value;  Device.reg.field = value;  Device.reg |= value;  (the name of the device was read, the token is ".")
 void parse_device_assign(char^ dname) {
-    int d = find_device(dname);
+    i64 d = find_device(dname);
     next();                                  // .
     if tok_kind != T_IDENT { die("the name of a register was expected after the device name"); }
-    int f = dev_field(d, @tok_text);
+    i64 f = dev_field(d, @tok_text);
     if f < 0 { die_name("this device has no such register", @tok_text); }
     next();
-    int b = 0 - 1;
+    i64 b = 0 - 1;
     if tok_is(".") {
         next();
         if tok_kind != T_IDENT { die("the name of a bit field was expected"); }
@@ -1427,8 +1427,8 @@ void parse_device_assign(char^ dname) {
     expect(";");
     if b >= 0 {
         // the bits: read, clear, put the new bits in, write
-        int mask = dev_mask(devb_hi[b], devb_lo[b]);
-        int lo = devb_lo[b];
+        i64 mask = dev_mask(devb_hi[b], devb_lo[b]);
+        i64 lo = devb_lo[b];
         dev_addr(d, f);
         dev_load(f, "x1");
         if !str_eq(@op, "=") { die("a bit field takes = only"); }
@@ -1475,17 +1475,17 @@ void parse_device_assign(char^ dname) {
 // inside the block. The block may change x0 .. x17 (the work registers of the statement); a change of a callee-saved register that was not
 // reserved (x19 .. x28) is a warning.
 
-int nk_dests;                    // bit n: the register xn was written by the statements of the block
+i64 nk_dests;                    // bit n: the register xn was written by the statements of the block
 
-void nk_dest(int r) {
+void nk_dest(i64 r) {
     if r >= 0 && r <= 30 { nk_dests = nk_dests | (1 << r); }
 }
 
 // the token after the current one is a register name (so `in x1 = ...` is the statement, not a label or a variable called in)
 bool nk_xnum_next() {
-    int sp = cur_pos;
-    int sl = cur_line;
-    int sls = cur_line_start;
+    i64 sp = cur_pos;
+    i64 sl = cur_line;
+    i64 sls = cur_line_start;
     while lc(0) == ' ' { adv(); }
     bool r = lc(0) == 'x' && lc(1) >= '0' && lc(1) <= '9';
     cur_pos = sp;
@@ -1494,7 +1494,7 @@ bool nk_xnum_next() {
     return r;
 }
 
-int rb_alias;                                // 1: `_. { }` (the keyword was read already)
+i64 rb_alias;                                // 1: `_. { }` (the keyword was read already)
 
 void parse_register_block() {
     if rb_alias == 1 { rb_alias = 0; } else { next(); }      // register
@@ -1503,12 +1503,12 @@ void parse_register_block() {
     nk_dests = 0;
     next();
     // in xN = expr;  (before the instructions)   out xN = variable;   clobber x3, x4;
-    int in_regs[8];
-    int in_n = 0;
-    int out_regs[8];
+    i64 in_regs[8];
+    i64 in_n = 0;
+    i64 out_regs[8];
     char out_names[512];
-    int out_n = 0;
-    int listed = 0;                          // the registers the block names: in, out, clobber
+    i64 out_n = 0;
+    i64 listed = 0;                          // the registers the block names: in, out, clobber
     bool clobber_given = false;
     bool code_seen = false;
     while !tok_is("}") {
@@ -1517,7 +1517,7 @@ void parse_register_block() {
             if code_seen { die("in xN = value; must come before the instructions of the block"); }
             if in_n >= 8 { die("a register block has at most 8 'in' values"); }
             next();
-            int ir = nk_xnum(@tok_text);
+            i64 ir = nk_xnum(@tok_text);
             if ir < 0 { die_name("in needs a register name (x0 .. x30)", @tok_text); }
             next();
             expect("=");
@@ -1532,7 +1532,7 @@ void parse_register_block() {
         if tok_is("out") && nk_xnum_next() {
             if out_n >= 8 { die("a register block has at most 8 'out' values"); }
             next();
-            int orr = nk_xnum(@tok_text);
+            i64 orr = nk_xnum(@tok_text);
             if orr < 0 { die_name("out needs a register name (x0 .. x30)", @tok_text); }
             next();
             expect("=");
@@ -1548,7 +1548,7 @@ void parse_register_block() {
         if tok_is("clobber") && nk_xnum_next() {
             next();
             while true {
-                int cr = nk_xnum(@tok_text);
+                i64 cr = nk_xnum(@tok_text);
                 if cr < 0 { die_name("clobber needs register names (x0 .. x30)", @tok_text); }
                 listed = listed | (1 << cr);
                 next();
@@ -1561,7 +1561,7 @@ void parse_register_block() {
         if !code_seen {
             code_seen = true;
             // the 'in' values: popped into their registers (the last one first)
-            int q = in_n - 1;
+            i64 q = in_n - 1;
             while q >= 0 {
                 str_copy(@nk_line, "ldr x", 256);
                 append_int(@nk_line, in_regs[q]);
@@ -1574,7 +1574,7 @@ void parse_register_block() {
         parse_naked_stmt();
     }
     if !code_seen && in_n > 0 {
-        int q2 = in_n - 1;
+        i64 q2 = in_n - 1;
         while q2 >= 0 {
             str_copy(@nk_line, "ldr x", 256);
             append_int(@nk_line, in_regs[q2]);
@@ -1587,7 +1587,7 @@ void parse_register_block() {
     nk_check_labels();
     next();
     // the 'out' values: stored into their variables (whole numbers and pointers, 8 bytes)
-    int o = 0;
+    i64 o = 0;
     while o < out_n {
         if !lookup_var(@out_names + o * 64) { die_name("unknown name in out", @out_names + o * 64); }
         if v_kind != 0 || v_elem >= 16 || size_of(v_elem) != 8 { die_name("out needs a variable of type int (or a pointer): not this", @out_names + o * 64); }
@@ -1597,7 +1597,7 @@ void parse_register_block() {
         o += 1;
     }
     if clobber_given && pass_no >= 2 {
-        int rr = 1;
+        i64 rr = 1;
         while rr <= 28 {
             if (nk_dests & (1 << rr)) != 0 && (listed & (1 << rr)) == 0 && rr != 16 && rr != 17 {
                 char cm[200];
@@ -1611,7 +1611,7 @@ void parse_register_block() {
     }
     emit_line(";N");
     // callee-saved registers that the block changed and nobody reserved
-    int r = 19;
+    i64 r = 19;
     while r <= 28 {
         if (nk_dests & (1 << r)) != 0 && (reserve_mask & (1 << r)) == 0 {
             char wm[200];
@@ -1627,9 +1627,9 @@ void parse_register_block() {
 }
 
 // a register of normal code: only x18 and the reserved ones
-int nk_normal_reg() {
+i64 nk_normal_reg() {
     if tok_kind != T_IDENT { die("a register name was expected after Reg::"); }
-    int r = nk_xnum(@tok_text);
+    i64 r = nk_xnum(@tok_text);
     if r < 0 { die_name("this is not a register (x18 or a reserved one)", @tok_text); }
     if r != 18 && (reserve_mask & (1 << r)) == 0 {
         die_name("normal code can read and write x18 and the registers named in #reserve only; use a register { } block for the others", @tok_text);
@@ -1641,7 +1641,7 @@ int nk_normal_reg() {
 // Reg::x18 in an expression
 void gen_reg_read() {
     next();                                  // ::
-    int r = nk_normal_reg();
+    i64 r = nk_normal_reg();
     str_copy(@nk_line, "mov x0, x", 256);
     append_int(@nk_line, r);
     emit_line(@nk_line);
@@ -1653,7 +1653,7 @@ void gen_reg_read() {
 // Reg::x18 = expression;
 void parse_reg_assign() {
     next();                                  // ::
-    int r = nk_normal_reg();
+    i64 r = nk_normal_reg();
     expect("=");
     parse_expr();
     expect(";");
@@ -1670,12 +1670,12 @@ void parse_reg_assign() {
 // save writes the registers of the list to the record; restore reads them back (sp is written with `mov sp, x17`: x17 is the scratch register).
 
 char frm_name[1024];             // 16 frames of 64 characters
-int frm_n[16];
-int frm_regs[640];               // 40 registers for each: 0 .. 30 = xN, 31 = sp, 100 + N = dN
-int frm_count;
+i64 frm_n[16];
+i64 frm_regs[640];               // 40 registers for each: 0 .. 30 = xN, 31 = sp, 100 + N = dN
+i64 frm_count;
 
-int find_frame(char^ name) {
-    int i = 0;
+i64 find_frame(char^ name) {
+    i64 i = 0;
     while i < frm_count {
         if str_eq(@frm_name + i * 64, name) { return i; }
         i += 1;
@@ -1686,7 +1686,7 @@ int find_frame(char^ name) {
 void parse_frame() {
     next();                                  // frame
     if tok_kind != T_IDENT { die("a name for the frame was expected"); }
-    int f = find_frame(@tok_text);
+    i64 f = find_frame(@tok_text);
     bool fresh = false;
     if pass_no == 1 {
         if f >= 0 { die_name("this frame exists already", @tok_text); }
@@ -1701,16 +1701,16 @@ void parse_frame() {
     expect("{");
     while !tok_is("}") {
         if tok_kind != T_IDENT { die("a register (x19, x19..x30, sp, d8..d15) was expected"); }
-        int first = 0 - 1;
-        int last = 0 - 1;
-        int base = 0;
+        i64 first = 0 - 1;
+        i64 last = 0 - 1;
+        i64 base = 0;
         if str_eq(@tok_text, "sp") {
             first = 31;
             last = 31;
             next();
         } else if tok_text[0] == 'd' && tok_text[1] >= '0' && tok_text[1] <= '9' {
-            int dn = 0;
-            int di = 1;
+            i64 dn = 0;
+            i64 di = 1;
             while tok_text[di] >= '0' && tok_text[di] <= '9' { dn = dn * 10 + (tok_text[di] - '0'); di += 1; }
             if tok_text[di] != 0 || dn > 31 { die_name("this is not a register (d0 .. d31)", @tok_text); }
             first = 100 + dn;
@@ -1720,8 +1720,8 @@ void parse_frame() {
                 next();
                 expect(".");
                 if tok_kind != T_IDENT || tok_text[0] != 'd' { die("the last register of the range was expected (d15)"); }
-                int dm = 0;
-                int dj = 1;
+                i64 dm = 0;
+                i64 dj = 1;
                 while tok_text[dj] >= '0' && tok_text[dj] <= '9' { dm = dm * 10 + (tok_text[dj] - '0'); dj += 1; }
                 if tok_text[dj] != 0 || dm > 31 || dm < dn { die_name("this is not a register after the first one (d0 .. d31)", @tok_text); }
                 last = 100 + dm;
@@ -1740,7 +1740,7 @@ void parse_frame() {
             }
         }
         expect(";");
-        int r = first;
+        i64 r = first;
         while r <= last {
             if fresh {
                 if frm_n[f] >= 40 { die("a frame has 40 registers at most"); }
@@ -1757,7 +1757,7 @@ void parse_frame() {
 
 // Context::save(R) / Context::restore(R) : the token is the name of the frame
 void nk_frame_stmt() {
-    int f = find_frame(@tok_text);
+    i64 f = find_frame(@tok_text);
     next();
     expect("::");
     if tok_kind != T_IDENT { die("save or restore was expected"); }
@@ -1765,24 +1765,24 @@ void nk_frame_stmt() {
     if !save && !str_eq(@tok_text, "restore") { die_name("a frame has save(R) and restore(R)", @tok_text); }
     next();
     expect("(");
-    int rb = nk_reg();
+    i64 rb = nk_reg();
     expect(")");
     nk_end();
     if rb == 17 { die("the base register of save / restore cannot be x17 (the scratch register)"); }
     if rb == 32 { die("the zero register cannot hold an address"); }
-    int n = frm_n[f];
-    int i = 0;
+    i64 n = frm_n[f];
+    i64 i = 0;
     while i < n {
-        int r = frm_regs[f * 40 + i];
+        i64 r = frm_regs[f * 40 + i];
         if !save && r == rb { die("the register that holds the address is restored by the frame too: use x0 .. x17 for it"); }
         i += 1;
     }
     i = 0;
     while i < n {
-        int r1 = frm_regs[f * 40 + i];
-        int off = i * 8;
+        i64 r1 = frm_regs[f * 40 + i];
+        i64 off = i * 8;
         if r1 <= 30 && i + 1 < n && frm_regs[f * 40 + i + 1] <= 30 && off <= 496 {
-            int r2 = frm_regs[f * 40 + i + 1];
+            i64 r2 = frm_regs[f * 40 + i + 1];
             if save { str_copy(@nk_line, "stp x", 256); } else { str_copy(@nk_line, "ldp x", 256); }
             append_int(@nk_line, r1);
             append_text(@nk_line, ", x");
@@ -1822,7 +1822,7 @@ void nk_frame_stmt() {
 
 // Context::size in an expression
 bool gen_frame_size() {
-    int f = find_frame(@id_name);
+    i64 f = find_frame(@id_name);
     if f < 0 { return false; }
     next();                                  // ::
     if tok_kind != T_IDENT || !str_eq(@tok_text, "size") { die("a frame has save(R), restore(R) (in naked functions) and size"); }

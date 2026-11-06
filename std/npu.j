@@ -11,25 +11,25 @@
 // Without NNAPI or without an NPU device `available()` is false and `make` gives a layer with ok = false: the program goes on with the CPU.
 #import <native>
 
-int npu_lib;
-int npu_dev;                  // the NNAPI device that is the NPU (the first one that is not the reference CPU), or 0
-int npu_tried;
-int npu_f_model_create;
-int npu_f_add_operand;
-int npu_f_set_value;
-int npu_f_add_operation;
-int npu_f_identify;
-int npu_f_relax;
-int npu_f_finish;
-int npu_f_comp_create;
-int npu_f_comp_finish;
-int npu_f_exec_create;
-int npu_f_exec_input;
-int npu_f_exec_output;
-int npu_f_exec_compute;
-int npu_f_model_free;
-int npu_f_comp_free;
-int npu_f_exec_free;
+i64 npu_lib;
+i64 npu_dev;                  // the NNAPI device that is the NPU (the first one that is not the reference CPU), or 0
+i64 npu_tried;
+i64 npu_f_model_create;
+i64 npu_f_add_operand;
+i64 npu_f_set_value;
+i64 npu_f_add_operation;
+i64 npu_f_identify;
+i64 npu_f_relax;
+i64 npu_f_finish;
+i64 npu_f_comp_create;
+i64 npu_f_comp_finish;
+i64 npu_f_exec_create;
+i64 npu_f_exec_input;
+i64 npu_f_exec_output;
+i64 npu_f_exec_compute;
+i64 npu_f_model_free;
+i64 npu_f_comp_free;
+i64 npu_f_exec_free;
 
 // find NNAPI and the NPU device once
 void npu_init() {
@@ -37,15 +37,15 @@ void npu_init() {
     npu_tried = 1;
     npu_lib = Native::open("libneuralnetworks.so");
     if npu_lib == 0 { return; }
-    int cnt = (int)Mem::alloc(16);
+    i64 cnt = (i64)Mem::alloc(16);
     Native::poke32(cnt, 0);
-    int f = Native::sym(npu_lib, "ANeuralNetworks_getDeviceCount");
+    i64 f = Native::sym(npu_lib, "ANeuralNetworks_getDeviceCount");
     if f == 0 || Native::call1(f, cnt) != 0 { npu_lib = 0; return; }
-    int getd = Native::sym(npu_lib, "ANeuralNetworks_getDevice");
-    int nameof = Native::sym(npu_lib, "ANeuralNetworksDevice_getName");
-    int pdev = (int)Mem::alloc(16);
-    int pname = (int)Mem::alloc(16);
-    int found = 0;
+    i64 getd = Native::sym(npu_lib, "ANeuralNetworks_getDevice");
+    i64 nameof = Native::sym(npu_lib, "ANeuralNetworksDevice_getName");
+    i64 pdev = (i64)Mem::alloc(16);
+    i64 pname = (i64)Mem::alloc(16);
+    i64 found = 0;
     for i in 0..Native::peek32(cnt) {
         Native::poke64(pdev, 0);
         Native::call2(getd, i, pdev);
@@ -75,15 +75,15 @@ void npu_init() {
 }
 
 // the type of an operand: type 3 is a tensor of float32, 1 a number of 32 bits (a scalar has no dimensions)
-int npu_type(int type, int d0, int d1) {
-    int t = (int)Mem::alloc(48);
+i64 npu_type(i64 type, i64 d0, i64 d1) {
+    i64 t = (i64)Mem::alloc(48);
     for i in 0..6 { Native::poke64(t + i * 8, 0); }
     Native::poke32(t, type);
-    int nd = 0;
+    i64 nd = 0;
     if d0 > 0 { nd = 1; }
     if d1 > 0 { nd = 2; }
     Native::poke32(t + 4, nd);
-    int dims = t + 32;
+    i64 dims = t + 32;
     Native::poke32(dims, d0);
     Native::poke32(dims + 4, d1);
     if nd > 0 { Native::poke64(t + 8, dims); }                  // a scalar has no dimensions: the pointer must be null
@@ -92,26 +92,26 @@ int npu_type(int type, int d0, int d1) {
 
 struct NpuLinear {
     bool ok;
-    int code;                 // 0 when it worked, else the NNAPI error of the step that failed (or -1: no NPU)
-    int model;
-    int comp;
-    int m;
-    int k;
-    int n;
+    i64 code;                 // 0 when it worked, else the NNAPI error of the step that failed (or -1: no NPU)
+    i64 model;
+    i64 comp;
+    i64 m;
+    i64 k;
+    i64 n;
 
     // w: n x k numbers (row-major), bias: n numbers or null; x has m rows
-    static NpuLinear make(float^ w, float^ bias, int m, int k, int n) {
+    static NpuLinear make(float^ w, float^ bias, i64 m, i64 k, i64 n) {
         NpuLinear l;
         l.ok = false;
         l.code = -1;
         l.m = m; l.k = k; l.n = n;
         npu_init();
         if npu_dev == 0 { return l; }
-        int pm = (int)Mem::alloc(16);
+        i64 pm = (i64)Mem::alloc(16);
         Native::poke64(pm, 0);
-        int rc = Native::call1(npu_f_model_create, pm);
+        i64 rc = Native::call1(npu_f_model_create, pm);
         if rc != 0 { l.code = rc; return l; }
-        int model = Native::peek64(pm);
+        i64 model = Native::peek64(pm);
         l.model = model;
         rc = Native::call2(npu_f_add_operand, model, npu_type(3, m, k));            // 0 the input x
         rc = rc + Native::call2(npu_f_add_operand, model, npu_type(3, n, k));       // 1 the weights
@@ -123,25 +123,25 @@ struct NpuLinear {
             b0 = (float^)Mem::alloc(n * 4 + 16);
             for i in 0..n { b0[i] = 0.0; }
         }
-        int act = (int)Mem::alloc(16);
+        i64 act = (i64)Mem::alloc(16);
         Native::poke32(act, 0);
-        rc = rc + Native::call4(npu_f_set_value, model, 1, (int)w, n * k * 4);
-        rc = rc + Native::call4(npu_f_set_value, model, 2, (int)b0, n * 4);
+        rc = rc + Native::call4(npu_f_set_value, model, 1, (i64)w, n * k * 4);
+        rc = rc + Native::call4(npu_f_set_value, model, 2, (i64)b0, n * 4);
         rc = rc + Native::call4(npu_f_set_value, model, 3, act, 4);
-        int ins = (int)Mem::alloc(32);
+        i64 ins = (i64)Mem::alloc(32);
         Native::poke32(ins, 0); Native::poke32(ins + 4, 1); Native::poke32(ins + 8, 2); Native::poke32(ins + 12, 3);
-        int outs = (int)Mem::alloc(16);
+        i64 outs = (i64)Mem::alloc(16);
         Native::poke32(outs, 4);
         rc = rc + Native::call6(npu_f_add_operation, model, 9, 4, ins, 1, outs);        // 9: FULLY_CONNECTED
-        int in0 = (int)Mem::alloc(16);
+        i64 in0 = (i64)Mem::alloc(16);
         Native::poke32(in0, 0);
         rc = rc + Native::call5(npu_f_identify, model, 1, in0, 1, outs);
         rc = rc + Native::call2(npu_f_relax, model, 1);
         rc = rc + Native::call1(npu_f_finish, model);
         if rc != 0 { l.code = rc; return l; }
-        int devs = (int)Mem::alloc(16);
+        i64 devs = (i64)Mem::alloc(16);
         Native::poke64(devs, npu_dev);
-        int pc = (int)Mem::alloc(16);
+        i64 pc = (i64)Mem::alloc(16);
         Native::poke64(pc, 0);
         rc = Native::call4(npu_f_comp_create, model, devs, 1, pc);
         if rc != 0 { l.code = rc; return l; }
@@ -156,12 +156,12 @@ struct NpuLinear {
     // y (m x n) = x (m x k) * W^T + bias; false when the NPU says no
     bool run(self, float^ x, float^ y) {
         if !self.ok { return false; }
-        int pe = (int)Mem::alloc(16);
+        i64 pe = (i64)Mem::alloc(16);
         Native::poke64(pe, 0);
         if Native::call2(npu_f_exec_create, self.comp, pe) != 0 { return false; }
-        int ex = Native::peek64(pe);
-        int rc = Native::call5(npu_f_exec_input, ex, 0, 0, (int)x, self.m * self.k * 4);
-        rc = rc + Native::call5(npu_f_exec_output, ex, 0, 0, (int)y, self.m * self.n * 4);
+        i64 ex = Native::peek64(pe);
+        i64 rc = Native::call5(npu_f_exec_input, ex, 0, 0, (i64)x, self.m * self.k * 4);
+        rc = rc + Native::call5(npu_f_exec_output, ex, 0, 0, (i64)y, self.m * self.n * 4);
         if rc == 0 { rc = Native::call1(npu_f_exec_compute, ex); }
         if npu_f_exec_free != 0 { Native::call1(npu_f_exec_free, ex); }
         return rc == 0;

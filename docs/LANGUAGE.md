@@ -34,8 +34,9 @@ Statements end with `;`. Blocks use `{ }` and are always required. `//` and `/* 
 
 | Type    | Meaning                                  |
 |---------|------------------------------------------|
-| `int`   | 64-bit signed integer                    |
-| `i32`, `i8` | 32 / 8-bit signed integers           |
+| `int`   | 32-bit signed integer (`i32` is another, older name of it); `int + int` wraps around at 32 bits |
+| `i64`   | 64-bit signed integer: use it for sizes, large counts, file offsets and pointers cast to a number |
+| `i8`    | 8-bit signed integer                     |
 | `char`  | 8-bit **unsigned** (a byte / character)  |
 | `bool`  | `true` / `false` (1 byte)                |
 | `u8`, `u32`, `u64` | unsigned integers (8 / 32 / 64 bit) |
@@ -424,8 +425,8 @@ _.addone {                      // a block with a name: a function without param
     x0 += 1;                    // (`ret` is added at the end)
 }
 
-int main() {
-    int v = 41;
+i64 main() {
+    i64 v = 41;
     register {
         in x0 = v;
         _.addone;               // call it by name (also inside a naked function or a register block)
@@ -1255,10 +1256,10 @@ void main() {
 `reg<int x20> total = 0;` keeps the variable `total` in the register `x20` for the whole function (x18 and x19 .. x25 are allowed; the compiler does not use `x18` itself). It is the same as the older form `int total @ x20 = 0;`. Only whole numbers, pointers, `bool`, `char` and enums can live in a register.
 
 ```jk
-int sq(int v) { return v * v; }
+i64 sq(i64 v) { return v * v; }
 
-int main() {
-    reg<int x20> acc = 0;
+i64 main() {
+    reg<i64 x20> acc = 0;
     for i in 0..5 { acc += sq(i); }
     jout << acc << "\n";
     return 0;

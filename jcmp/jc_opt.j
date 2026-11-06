@@ -8,43 +8,43 @@
 #define OP_MAXL 1024
 #define OP_MAXH 512
 
-int op_s1[IR_MAXB];              // the successors of a block (-1 = none)
-int op_s2[IR_MAXB];
-int op_phead[IR_MAXB];           // the predecessors: a list of edges, an edge e = 2 * (the block it comes from) + 0 or 1
-int op_enext[16384];
-int op_po[IR_MAXB];              // the number of a block in the post order (-1: the flow never gets there)
-int op_rpo[IR_MAXB];             // the blocks in reverse post order
-int op_nrpo;
-int op_idom[IR_MAXB];
-int op_mark[IR_MAXB];            // the loop that a block belongs to is marked with the stamp of the loop being looked at
-int op_stamp;
-int op_stack[IR_MAXB];
-int op_dfs_b[IR_MAXB];           // the stack of the depth first search: the block and which successor is next
-int op_dfs_k[IR_MAXB];
-int op_outer[IR_MAXB];           // the outermost loop (an index into op_lh) that a block is in, or -1
+i64 op_s1[IR_MAXB];              // the successors of a block (-1 = none)
+i64 op_s2[IR_MAXB];
+i64 op_phead[IR_MAXB];           // the predecessors: a list of edges, an edge e = 2 * (the block it comes from) + 0 or 1
+i64 op_enext[16384];
+i64 op_po[IR_MAXB];              // the number of a block in the post order (-1: the flow never gets there)
+i64 op_rpo[IR_MAXB];             // the blocks in reverse post order
+i64 op_nrpo;
+i64 op_idom[IR_MAXB];
+i64 op_mark[IR_MAXB];            // the loop that a block belongs to is marked with the stamp of the loop being looked at
+i64 op_stamp;
+i64 op_stack[IR_MAXB];
+i64 op_dfs_b[IR_MAXB];           // the stack of the depth first search: the block and which successor is next
+i64 op_dfs_k[IR_MAXB];
+i64 op_outer[IR_MAXB];           // the outermost loop (an index into op_lh) that a block is in, or -1
 
-int op_bsrc[4096];        // the back edges: from, to
-int op_bdst[4096];
-int op_nback;
-int op_lh[OP_MAXL];              // the loops: the header, the size
-int op_lsize[OP_MAXL];
-int op_nloops;
+i64 op_bsrc[4096];        // the back edges: from, to
+i64 op_bdst[4096];
+i64 op_nback;
+i64 op_lh[OP_MAXL];              // the loops: the header, the size
+i64 op_lsize[OP_MAXL];
+i64 op_nloops;
 
-int op_hl[OP_MAXH];              // the hoisted constants: the loop, the value, the cell (k of the load)
-int op_hv[OP_MAXH];
-int op_hq[OP_MAXH];
-int op_nh;
+i64 op_hl[OP_MAXH];              // the hoisted constants: the loop, the value, the cell (k of the load)
+i64 op_hv[OP_MAXH];
+i64 op_hq[OP_MAXH];
+i64 op_nh;
 
-int op_hoisted;                  // how many constants were moved out of loops (all functions; for -irstat)
+i64 op_hoisted;                  // how many constants were moved out of loops (all functions; for -irstat)
 
-int op_succ(int b, int k) {
+i64 op_succ(i64 b, i64 k) {
     if k == 0 { return op_s1[b]; }
     return op_s2[b];
 }
 
 // does the block a dominate the block b?
-bool op_dom(int a, int b) {
-    int x = b;
+bool op_dom(i64 a, i64 b) {
+    i64 x = b;
     while true {
         if x == a { return true; }
         if x == 0 { return false; }
@@ -54,9 +54,9 @@ bool op_dom(int a, int b) {
     return false;
 }
 
-int op_intersect(int a, int b) {
-    int x = a;
-    int y = b;
+i64 op_intersect(i64 a, i64 b) {
+    i64 x = a;
+    i64 y = b;
     while x != y {
         while op_po[x] < op_po[y] { x = op_idom[x]; }
         while op_po[y] < op_po[x] { y = op_idom[y]; }
@@ -66,10 +66,10 @@ int op_intersect(int a, int b) {
 
 // the graph: successors, predecessors, post order, immediate dominators
 void op_graph() {
-    int b = 0;
+    i64 b = 0;
     while b < ir_nb {
-        int t = ir_be[b] - 1;
-        int op = ir_op[t];
+        i64 t = ir_be[b] - 1;
+        i64 op = ir_op[t];
         op_s1[b] = 0 - 1;
         op_s2[b] = 0 - 1;
         if op == IR_JMP { op_s1[b] = ir_t1[t]; }
@@ -84,11 +84,11 @@ void op_graph() {
     }
     b = 0;
     while b < ir_nb {
-        int k = 0;
+        i64 k = 0;
         while k < 2 {
-            int s = op_succ(b, k);
+            i64 s = op_succ(b, k);
             if s >= 0 {
-                int e = b * 2 + k;
+                i64 e = b * 2 + k;
                 op_enext[e] = op_phead[s];
                 op_phead[s] = e;
             }
@@ -97,21 +97,21 @@ void op_graph() {
         b += 1;
     }
     // the depth first search from the entry (an explicit stack)
-    int sp = 0;
-    int npo = 0;
+    i64 sp = 0;
+    i64 npo = 0;
     op_mark[0] = 0 - 7;
     op_dfs_b[0] = 0;
     op_dfs_k[0] = 0;
     sp = 1;
-    int seen_stamp = 0 - 7;
+    i64 seen_stamp = 0 - 7;
     b = 1;
     while b < ir_nb {
         op_mark[b] = 0;
         b += 1;
     }
     while sp > 0 {
-        int cb = op_dfs_b[sp - 1];
-        int ck = op_dfs_k[sp - 1];
+        i64 cb = op_dfs_b[sp - 1];
+        i64 ck = op_dfs_k[sp - 1];
         if ck >= 2 {
             op_po[cb] = npo;
             op_rpo[ir_nb - 1 - npo] = cb;
@@ -119,7 +119,7 @@ void op_graph() {
             sp -= 1;
         } else {
             op_dfs_k[sp - 1] = ck + 1;
-            int s2 = op_succ(cb, ck);
+            i64 s2 = op_succ(cb, ck);
             if s2 >= 0 && op_mark[s2] != seen_stamp {
                 op_mark[s2] = seen_stamp;
                 op_dfs_b[sp] = s2;
@@ -130,8 +130,8 @@ void op_graph() {
     }
     // op_rpo holds the blocks that were reached at the END of the array (npo of them)
     op_nrpo = npo;
-    int shift = ir_nb - npo;
-    int r = 0;
+    i64 shift = ir_nb - npo;
+    i64 r = 0;
     while r < npo {
         op_rpo[r] = op_rpo[r + shift];
         r += 1;
@@ -141,13 +141,13 @@ void op_graph() {
     bool changed = true;
     while changed {
         changed = false;
-        int ri = 1;
+        i64 ri = 1;
         while ri < npo {
-            int blk = op_rpo[ri];
-            int ni = 0 - 1;
-            int e = op_phead[blk];
+            i64 blk = op_rpo[ri];
+            i64 ni = 0 - 1;
+            i64 e = op_phead[blk];
             while e >= 0 {
-                int p = e / 2;
+                i64 p = e / 2;
                 if op_po[p] >= 0 && op_idom[p] >= 0 {
                     if ni < 0 { ni = p; } else { ni = op_intersect(p, ni); }
                 }
@@ -163,13 +163,13 @@ void op_graph() {
 }
 
 // mark the blocks of the loop number l (its header and every block that reaches a back edge source without passing the header)
-int op_mark_loop(int l) {
+i64 op_mark_loop(i64 l) {
     op_stamp += 1;
-    int h = op_lh[l];
-    int n = 1;
-    int sp = 0;
+    i64 h = op_lh[l];
+    i64 n = 1;
+    i64 sp = 0;
     op_mark[h] = op_stamp;
-    int i = 0;
+    i64 i = 0;
     while i < op_nback {
         if op_bdst[i] == h && op_mark[op_bsrc[i]] != op_stamp {
             op_mark[op_bsrc[i]] = op_stamp;
@@ -181,10 +181,10 @@ int op_mark_loop(int l) {
     }
     while sp > 0 {
         sp -= 1;
-        int x = op_stack[sp];
-        int e = op_phead[x];
+        i64 x = op_stack[sp];
+        i64 e = op_phead[x];
         while e >= 0 {
-            int p = e / 2;
+            i64 p = e / 2;
             if op_po[p] >= 0 && op_mark[p] != op_stamp {
                 op_mark[p] = op_stamp;
                 op_stack[sp] = p;
@@ -198,11 +198,11 @@ int op_mark_loop(int l) {
 }
 
 // does the constant need more than one instruction? (counts the 16-bit pieces that are not all 0, or for a negative number not all 1)
-bool op_costly(int k) {
-    int fill = 0;
+bool op_costly(i64 k) {
+    i64 fill = 0;
     if k < 0 { fill = 65535; }
-    int n = 0;
-    int c = 0;
+    i64 n = 0;
+    i64 c = 0;
     while c < 4 {
         if ((k >> (c * 16)) & 65535) != fill { n += 1; }
         c += 1;
@@ -211,9 +211,9 @@ bool op_costly(int k) {
 }
 
 // the stack cells that exist already: the deepest one
-int op_maxq() {
-    int m = 0;
-    int i = 0;
+i64 op_maxq() {
+    i64 m = 0;
+    i64 i = 0;
     while i < ir_n {
         if (ir_op[i] == IR_LOAD || ir_op[i] == IR_STORE) && ir_a[i] == 30 && ir_k[i] < 0 {
             if 0 - ir_k[i] > m { m = 0 - ir_k[i]; }
@@ -227,12 +227,12 @@ void op_run() {
     op_graph();
     // the back edges
     op_nback = 0;
-    int b = 0;
+    i64 b = 0;
     while b < ir_nb {
         if op_po[b] >= 0 {
-            int k = 0;
+            i64 k = 0;
             while k < 2 {
-                int s = op_succ(b, k);
+                i64 s = op_succ(b, k);
                 if s >= 0 && op_dom(s, b) && op_nback < OP_MAXL * 4 {
                     op_bsrc[op_nback] = b;
                     op_bdst[op_nback] = s;
@@ -246,11 +246,11 @@ void op_run() {
     if op_nback == 0 { return; }
     // the loops (one for each header), the biggest first
     op_nloops = 0;
-    int i = 0;
+    i64 i = 0;
     while i < op_nback {
-        int h = op_bdst[i];
+        i64 h = op_bdst[i];
         bool known = false;
-        int j = 0;
+        i64 j = 0;
         while j < op_nloops {
             if op_lh[j] == h { known = true; }
             j += 1;
@@ -268,9 +268,9 @@ void op_run() {
     }
     i = 1;
     while i < op_nloops {
-        int th = op_lh[i];
-        int ts = op_lsize[i];
-        int j = i - 1;
+        i64 th = op_lh[i];
+        i64 ts = op_lsize[i];
+        i64 j = i - 1;
         while j >= 0 && op_lsize[j] < ts {
             op_lh[j + 1] = op_lh[j];
             op_lsize[j + 1] = op_lsize[j];
@@ -296,18 +296,18 @@ void op_run() {
         i += 1;
     }
     // the constants in loops: read from a cell that the new block in front of the loop fills
-    int q = op_maxq();
-    int nb0 = ir_nb;
+    i64 q = op_maxq();
+    i64 nb0 = ir_nb;
     op_nh = 0;
     b = 0;
     while b < nb0 {
-        int l = op_outer[b];
+        i64 l = op_outer[b];
         if l >= 0 {
-            int p = ir_bs[b];
+            i64 p = ir_bs[b];
             while p < ir_be[b] {
                 if ir_op[p] == IR_CONST && ir_d[p] >= 1 && ir_d[p] <= 31 && op_costly(ir_k[p]) {
-                    int hi = 0 - 1;
-                    int u = 0;
+                    i64 hi = 0 - 1;
+                    i64 u = 0;
                     while u < op_nh {
                         if op_hl[u] == l && op_hv[u] == ir_k[p] { hi = u; }
                         u += 1;
@@ -337,34 +337,34 @@ void op_run() {
     i = 0;
     while i < op_nloops {
         bool any = false;
-        int u2 = 0;
+        i64 u2 = 0;
         while u2 < op_nh {
             if op_hl[u2] == i { any = true; }
             u2 += 1;
         }
         if any {
-            int pre = ir_new_block(0 - 1);
+            i64 pre = ir_new_block(0 - 1);
             ir_set_block(pre);
             u2 = 0;
             while u2 < op_nh {
                 if op_hl[u2] == i {
-                    int tv = ir_vreg(0);
+                    i64 tv = ir_vreg(0);
                     ir_add(IR_CONST, tv, 0, 0, 0, op_hv[u2]);
-                    int st = ir_add(IR_STORE, 0, 30, tv, 0, op_hq[u2]);
+                    i64 st = ir_add(IR_STORE, 0, 30, tv, 0, op_hq[u2]);
                     ir_w[st] = 8;
                 }
                 u2 += 1;
             }
-            int jm = ir_add(IR_JMP, 0, 0, 0, 0, 0);
-            int hh = op_lh[i];
+            i64 jm = ir_add(IR_JMP, 0, 0, 0, 0, 0);
+            i64 hh = op_lh[i];
             ir_t1[jm] = hh;
             // every jump to the header from outside the loop goes to the new block
             op_mark_loop(i);
             b = 0;
             while b < nb0 {
                 if op_mark[b] != op_stamp {
-                    int t = ir_be[b] - 1;
-                    int top = ir_op[t];
+                    i64 t = ir_be[b] - 1;
+                    i64 top = ir_op[t];
                     if (top == IR_JMP || top == IR_BR || top == IR_FBR) && ir_t1[t] == hh { ir_t1[t] = pre; }
                     if (top == IR_BR || top == IR_FBR) && ir_t2[t] == hh { ir_t2[t] = pre; }
                 }
@@ -379,25 +379,25 @@ void op_run() {
 // A "web" is the set of definitions of one machine register that are connected through their uses (what a renaming to virtual registers
 // needs). Only the registers x0..x30 / d0..d31 (vregs 1..63) are looked at; the temporaries (vregs from 64) live inside a block.
 
-int op_li[IR_MAXB];              // live-in registers of a block: bit v is the vreg v
-int op_lo[IR_MAXB];
-int op_exit[524288];             // the definition (an instruction number + 1, or 65536 + block * 64 + register + 1) that a register has at the end of a block, or 0
-int op_uf[589824];               // union-find over: the instructions (their results) and the live-in nodes
-int op_cur[64];
-int opn_a[IR_MAXI];             // the node (see op_exit) of the definition that reaches each operand: -1 not a machine register, -2 none reaches
-int opn_b[IR_MAXI];
-int opn_g[IR_MAXA];
-int ldef[IR_MAXB];
-int op_seen[589824];
-int op_fn_stamp;
-int op_tot_defs;
-int op_tot_webs;
-int op_tot_fixed;
+i64 op_li[IR_MAXB];              // live-in registers of a block: bit v is the vreg v
+i64 op_lo[IR_MAXB];
+i64 op_exit[524288];             // the definition (an instruction number + 1, or 65536 + block * 64 + register + 1) that a register has at the end of a block, or 0
+i64 op_uf[589824];               // union-find over: the instructions (their results) and the live-in nodes
+i64 op_cur[64];
+i64 opn_a[IR_MAXI];             // the node (see op_exit) of the definition that reaches each operand: -1 not a machine register, -2 none reaches
+i64 opn_b[IR_MAXI];
+i64 opn_g[IR_MAXA];
+i64 ldef[IR_MAXB];
+i64 op_seen[589824];
+i64 op_fn_stamp;
+i64 op_tot_defs;
+i64 op_tot_webs;
+i64 op_tot_fixed;
 
-int op_clobber() {
+i64 op_clobber() {
     // caller-saved: x0..x18 (vregs 1..19), d0..d7 (32..39), d16..d31 (48..63)
-    int m = 0;
-    int v = 1;
+    i64 m = 0;
+    i64 v = 1;
     while v <= 19 { m = m | (1 << v); v += 1; }
     v = 32;
     while v <= 39 { m = m | (1 << v); v += 1; }
@@ -406,17 +406,17 @@ int op_clobber() {
     return m;
 }
 
-int op_bit(int v) {
+i64 op_bit(i64 v) {
     if v >= 1 && v <= 63 { return 1 << v; }
     return 0;
 }
 
-int op_uses(int i) {
-    int m = op_bit(ir_a[i]);
-    int op = ir_op[i];
+i64 op_uses(i64 i) {
+    i64 m = op_bit(ir_a[i]);
+    i64 op = ir_op[i];
     if ir_uses_b(op) && ir_bi[i] == 0 { m = m | op_bit(ir_b[i]); }
     if op == IR_CALL || op == IR_CALLIND || op == IR_SYSCALL {
-        int a = 0;
+        i64 a = 0;
         while a < ir_ac[i] {
             m = m | op_bit(ir_args[ir_as[i] + a]);
             a += 1;
@@ -425,44 +425,44 @@ int op_uses(int i) {
     return m;
 }
 
-int op_defs(int i) {
-    int op = ir_op[i];
-    int m = op_bit(ir_d[i]);
+i64 op_defs(i64 i) {
+    i64 op = ir_op[i];
+    i64 m = op_bit(ir_d[i]);
     if op == IR_CALL || op == IR_CALLIND { m = m | op_clobber(); }
     return m;
 }
 
-int op_find(int x) {
-    int r = x;
+i64 op_find(i64 x) {
+    i64 r = x;
     while op_uf[r] != r { r = op_uf[r]; }
     while op_uf[x] != r {
-        int nx = op_uf[x];
+        i64 nx = op_uf[x];
         op_uf[x] = r;
         x = nx;
     }
     return r;
 }
 
-void op_union(int a, int b) {
-    int ra = op_find(a);
-    int rb = op_find(b);
+void op_union(i64 a, i64 b) {
+    i64 ra = op_find(a);
+    i64 rb = op_find(b);
     if ra != rb { op_uf[ra] = rb; }
 }
 
 // the nodes of the definitions that reach the operands of the instruction i (op_cur says what each register holds now)
-int op_node(int v) {
+i64 op_node(i64 v) {
     if v < 1 || v > 63 { return 0 - 1; }
     if op_cur[v] == 0 { return 0 - 2; }
     return op_cur[v] - 1;
 }
 
-void op_record(int i) {
-    int op = ir_op[i];
+void op_record(i64 i) {
+    i64 op = ir_op[i];
     opn_a[i] = op_node(ir_a[i]);
     opn_b[i] = 0 - 1;
     if ir_uses_b(op) && ir_bi[i] == 0 { opn_b[i] = op_node(ir_b[i]); }
     if op == IR_CALL || op == IR_CALLIND || op == IR_SYSCALL {
-        int a = 0;
+        i64 a = 0;
         while a < ir_ac[i] {
             opn_g[ir_as[i] + a] = op_node(ir_args[ir_as[i] + a]);
             a += 1;
@@ -473,14 +473,14 @@ void op_record(int i) {
 
 // liveness of the machine registers over the blocks, then the webs; returns the number of webs of the function
 // the live-in and live-out registers of the blocks only (op_li, op_lo), without the webs
-int lv_use[IR_MAXB];
+i64 lv_use[IR_MAXB];
 void op_liveness() {
     op_graph();
-    int b = 0;
+    i64 b = 0;
     while b < ir_nb {
-        int u = 0;
-        int d = 0;
-        int i = ir_bs[b];
+        i64 u = 0;
+        i64 d = 0;
+        i64 i = ir_bs[b];
         while i < ir_be[b] {
             u = u | (op_uses(i) & ~d);
             d = d | op_defs(i);
@@ -495,17 +495,17 @@ void op_liveness() {
     bool changed = true;
     while changed {
         changed = false;
-        int ri = op_nrpo - 1;
+        i64 ri = op_nrpo - 1;
         while ri >= 0 {
-            int blk = op_rpo[ri];
-            int out = 0;
-            int k = 0;
+            i64 blk = op_rpo[ri];
+            i64 out = 0;
+            i64 k = 0;
             while k < 2 {
-                int s = op_succ(blk, k);
+                i64 s = op_succ(blk, k);
                 if s >= 0 { out = out | op_li[s]; }
                 k += 1;
             }
-            int nin = lv_use[blk] | (out & ~ldef[blk]);
+            i64 nin = lv_use[blk] | (out & ~ldef[blk]);
             if nin != op_li[blk] || out != op_lo[blk] {
                 op_li[blk] = nin;
                 op_lo[blk] = out;
@@ -516,14 +516,14 @@ void op_liveness() {
     }
 }
 
-int op_webs() {
+i64 op_webs() {
     op_graph();
     // use / def of each block
-    int b = 0;
+    i64 b = 0;
     while b < ir_nb {
-        int u = 0;
-        int d = 0;
-        int i = ir_bs[b];
+        i64 u = 0;
+        i64 d = 0;
+        i64 i = ir_bs[b];
         while i < ir_be[b] {
             u = u | (op_uses(i) & ~d);
             d = d | op_defs(i);
@@ -542,25 +542,25 @@ int op_webs() {
     bool changed = true;
     while changed {
         changed = false;
-        int ri = op_nrpo - 1;
+        i64 ri = op_nrpo - 1;
         while ri >= 0 {
-            int blk = op_rpo[ri];
-            int out = 0;
-            int k = 0;
+            i64 blk = op_rpo[ri];
+            i64 out = 0;
+            i64 k = 0;
             while k < 2 {
-                int s = op_succ(blk, k);
+                i64 s = op_succ(blk, k);
                 if s >= 0 { out = out | op_li[s]; }
                 k += 1;
             }
-            int uu = 0;
-            int i2 = ir_bs[blk];
-            int dd = 0;
+            i64 uu = 0;
+            i64 i2 = ir_bs[blk];
+            i64 dd = 0;
             while i2 < ir_be[blk] {
                 uu = uu | (op_uses(i2) & ~dd);
                 dd = dd | op_defs(i2);
                 i2 += 1;
             }
-            int nin = uu | (out & ~ldef[blk]);
+            i64 nin = uu | (out & ~ldef[blk]);
             if nin != op_li[blk] || out != op_lo[blk] {
                 op_li[blk] = nin;
                 op_lo[blk] = out;
@@ -571,8 +571,8 @@ int op_webs() {
     }
     // the nodes
     // only the nodes that can be used: the instructions (0 .. ir_n) and the live-in nodes of the blocks (from 65536); this was every node up to 65536 + 64 * blocks each time
-    int nn = 65536 + ir_nb * 64;
-    int x = 0;
+    i64 nn = 65536 + ir_nb * 64;
+    i64 x = 0;
     while x < ir_n + 1 {
         op_uf[x] = x;
         x += 1;
@@ -584,20 +584,20 @@ int op_webs() {
     }
     b = 0;
     while b < ir_nb {
-        int r = 0;
+        i64 r = 0;
         while r < 64 {
             op_cur[r] = 0;
             if r >= 1 && (op_li[b] & (1 << r)) != 0 { op_cur[r] = 65536 + b * 64 + r + 1; }
             r += 1;
         }
-        int i3 = ir_bs[b];
+        i64 i3 = ir_bs[b];
         while i3 < ir_be[b] {
             op_record(i3);
-            int dv = ir_d[i3];
+            i64 dv = ir_d[i3];
             if dv >= 1 && dv <= 63 { op_cur[dv] = i3 + 1; }
             if ir_op[i3] == IR_CALL || ir_op[i3] == IR_CALLIND {
-                int cm = op_clobber();
-                int r2 = 1;
+                i64 cm = op_clobber();
+                i64 r2 = 1;
                 while r2 < 64 {
                     if (cm & (1 << r2)) != 0 && r2 != dv { op_cur[r2] = 0; }
                     r2 += 1;
@@ -615,13 +615,13 @@ int op_webs() {
     b = 0;
     while b < ir_nb {
         if op_po[b] >= 0 {
-            int r3 = 1;
+            i64 r3 = 1;
             while r3 < 64 {
                 if (op_li[b] & (1 << r3)) != 0 {
-                    int e = op_phead[b];
+                    i64 e = op_phead[b];
                     while e >= 0 {
-                        int p = e / 2;
-                        int ex = op_exit[p * 64 + r3];
+                        i64 p = e / 2;
+                        i64 ex = op_exit[p * 64 + r3];
                         if ex != 0 && op_po[p] >= 0 { op_union(65536 + b * 64 + r3, ex - 1); }
                         e = op_enext[e];
                     }
@@ -633,14 +633,14 @@ int op_webs() {
     }
     // count: the roots that hold at least one definition
     op_fn_stamp += 1;
-    int webs = 0;
-    int defs = 0;
-    int i4 = 0;
+    i64 webs = 0;
+    i64 defs = 0;
+    i64 i4 = 0;
     while i4 < ir_n {
-        int dv2 = ir_d[i4];
+        i64 dv2 = ir_d[i4];
         if dv2 >= 1 && dv2 <= 63 {
             defs += 1;
-            int rt = op_find(i4);
+            i64 rt = op_find(i4);
             if op_seen[rt] != op_fn_stamp {
                 op_seen[rt] = op_fn_stamp;
                 webs += 1;
@@ -660,37 +660,37 @@ int op_webs() {
 
 #define OP_MAXW 131072
 
-int w_reg[OP_MAXW];              // the register the web has now
-int w_start[OP_MAXW];
-int w_end[OP_MAXW];
-int w_fixed[OP_MAXW];
-int w_new[OP_MAXW];              // the register it gets (0 = not yet)
-int w_defi[OP_MAXW];             // the instruction of its first definition (the copy that may be removed), or -1
-int w_ndef[OP_MAXW];
-int w_bnext[OP_MAXW];
-int w_nextf[OP_MAXW];
-int op_nw;
-int op_wmap[589824];
-int op_pos[IR_MAXI];
-int op_bpos0[IR_MAXB];           // the first / last position of a block
-int op_bpos1[IR_MAXB];
-int op_bhead[65540];
-int op_cumcall[65540];
-int op_reserved[64];
-int op_busy[64];
-int op_lastw[64];
-int op_fbusy[64];
-int op_fhead[64];
-int op_ra_changes;
-int op_ra_removed;
-int op_ra_webs;
+i64 w_reg[OP_MAXW];              // the register the web has now
+i64 w_start[OP_MAXW];
+i64 w_end[OP_MAXW];
+i64 w_fixed[OP_MAXW];
+i64 w_new[OP_MAXW];              // the register it gets (0 = not yet)
+i64 w_defi[OP_MAXW];             // the instruction of its first definition (the copy that may be removed), or -1
+i64 w_ndef[OP_MAXW];
+i64 w_bnext[OP_MAXW];
+i64 w_nextf[OP_MAXW];
+i64 op_nw;
+i64 op_wmap[589824];
+i64 op_pos[IR_MAXI];
+i64 op_bpos0[IR_MAXB];           // the first / last position of a block
+i64 op_bpos1[IR_MAXB];
+i64 op_bhead[65540];
+i64 op_cumcall[65540];
+i64 op_reserved[64];
+i64 op_busy[64];
+i64 op_lastw[64];
+i64 op_fbusy[64];
+i64 op_fhead[64];
+i64 op_ra_changes;
+i64 op_ra_removed;
+i64 op_ra_webs;
 
-bool op_in_pool(int r) {
+bool op_in_pool(i64 r) {
     return (r >= 1 && r <= 15) || (r >= 32 && r <= 39) || (r >= 48 && r <= 61 && r != 59);
 }
 
-int op_web(int node, int reg) {
-    int root = op_find(node);
+i64 op_web(i64 node, i64 reg) {
+    i64 root = op_find(node);
     if op_seen[root] != op_fn_stamp {
         if op_nw >= OP_MAXW { return 0 - 1; }
         op_seen[root] = op_fn_stamp;
@@ -707,29 +707,29 @@ int op_web(int node, int reg) {
     return op_wmap[root];
 }
 
-int op_node_reg(int node) {
+i64 op_node_reg(i64 node) {
     if node >= 65536 { return (node - 65536) % 64; }
     return ir_d[node];
 }
 
-void op_touch(int w, int p) {
+void op_touch(i64 w, i64 p) {
     if w < 0 { return; }
     if p < w_start[w] { w_start[w] = p; }
     if p > w_end[w] { w_end[w] = p; }
 }
 
 // a use of the operand node n at the position p of the instruction i; fixed: the instruction needs the register as it is
-void op_use(int n, int p, bool fixed) {
+void op_use(i64 n, i64 p, bool fixed) {
     if n == 0 - 1 { return; }
     if n == 0 - 2 { return; }
-    int w = op_web(n, op_node_reg(n));
+    i64 w = op_web(n, op_node_reg(n));
     if w < 0 { return; }
     op_touch(w, p);
     if fixed { w_fixed[w] = 1; }
 }
 
 // can the web [s, e] take the register rr? (srcw: the source of the copy that defines it, which may end where it starts, but only in want)
-bool op_try(int rr, int s, int e, int srcw, int want) {
+bool op_try(i64 rr, i64 s, i64 e, i64 srcw, i64 want) {
     if rr < 1 || !op_in_pool(rr) || op_reserved[rr] == 1 { return false; }
     while op_fhead[rr] >= 0 && w_start[op_fhead[rr]] <= s {
         if w_end[op_fhead[rr]] > op_fbusy[rr] { op_fbusy[rr] = w_end[op_fhead[rr]]; }
@@ -749,12 +749,12 @@ bool op_ra_run() {
     op_fn_stamp += 1;
     op_nw = 0;
     // positions: the reachable blocks in reverse post order
-    int npos = 0;
-    int ri = 0;
+    i64 npos = 0;
+    i64 ri = 0;
     while ri < op_nrpo {
-        int b = op_rpo[ri];
+        i64 b = op_rpo[ri];
         op_bpos0[b] = npos;
-        int i = ir_bs[b];
+        i64 i = ir_bs[b];
         while i < ir_be[b] {
             op_pos[i] = npos;
             npos += 1;
@@ -763,7 +763,7 @@ bool op_ra_run() {
         op_bpos1[b] = npos - 1;
         ri += 1;
     }
-    int r = 0;
+    i64 r = 0;
     while r < 64 {
         op_reserved[r] = 0;
         r += 1;
@@ -771,17 +771,17 @@ bool op_ra_run() {
     // definitions and uses
     ri = 0;
     while ri < op_nrpo {
-        int b2 = op_rpo[ri];
-        int i2 = ir_bs[b2];
+        i64 b2 = op_rpo[ri];
+        i64 i2 = ir_bs[b2];
         while i2 < ir_be[b2] {
-            int p = op_pos[i2];
-            int op = ir_op[i2];
+            i64 p = op_pos[i2];
+            i64 op = ir_op[i2];
             bool call = op == IR_CALL || op == IR_CALLIND || op == IR_SYSCALL;
             if op == IR_CALL || op == IR_CALLIND { op_cumcall[p] = 1; } else { op_cumcall[p] = 0; }
             bool special = call || op == IR_RET;
-            int dv = ir_d[i2];
+            i64 dv = ir_d[i2];
             if dv >= 1 && dv <= 63 {
-                int w = op_web(i2, dv);
+                i64 w = op_web(i2, dv);
                 if w < 0 { return false; }
                 op_touch(w, p);
                 w_ndef[w] += 1;
@@ -793,9 +793,9 @@ bool op_ra_run() {
             if opn_b[i2] == 0 - 2 && ir_uses_b(op) && ir_bi[i2] == 0 && ir_b[i2] >= 1 && ir_b[i2] <= 63 { op_reserved[ir_b[i2]] = 1; }
             op_use(opn_b[i2], p, special);
             if call {
-                int a = 0;
+                i64 a = 0;
                 while a < ir_ac[i2] {
-                    int g = ir_as[i2] + a;
+                    i64 g = ir_as[i2] + a;
                     if opn_g[g] == 0 - 2 && ir_args[g] >= 1 && ir_args[g] <= 63 { op_reserved[ir_args[g]] = 1; }
                     op_use(opn_g[g], p, true);
                     a += 1;
@@ -808,16 +808,16 @@ bool op_ra_run() {
     // the registers that are live across the borders of blocks
     ri = 0;
     while ri < op_nrpo {
-        int b3 = op_rpo[ri];
-        int r2 = 1;
+        i64 b3 = op_rpo[ri];
+        i64 r2 = 1;
         while r2 < 64 {
             if (op_li[b3] & (1 << r2)) != 0 {
-                int w = op_web(65536 + b3 * 64 + r2, r2);
+                i64 w = op_web(65536 + b3 * 64 + r2, r2);
                 if w < 0 { return false; }
                 op_touch(w, op_bpos0[b3]);
             }
             if (op_lo[b3] & (1 << r2)) != 0 && op_exit[b3 * 64 + r2] != 0 {
-                int w2 = op_web(op_exit[b3 * 64 + r2] - 1, r2);
+                i64 w2 = op_web(op_exit[b3 * 64 + r2] - 1, r2);
                 if w2 < 0 { return false; }
                 op_touch(w2, op_bpos1[b3]);
             }
@@ -827,26 +827,26 @@ bool op_ra_run() {
     }
     op_ra_webs += op_nw;
     // the webs that cross a call, or are not in the pool, stay where they are
-    int p2 = 0;
-    int run = 0;
+    i64 p2 = 0;
+    i64 run = 0;
     while p2 < npos {
         run += op_cumcall[p2];
         op_cumcall[p2] = run;
         p2 += 1;
     }
-    int w3 = 0;
+    i64 w3 = 0;
     while w3 < op_nw {
         if w_end[w3] < w_start[w3] { w_end[w3] = w_start[w3]; }
         if !op_in_pool(w_reg[w3]) || op_reserved[w_reg[w3]] == 1 { w_fixed[w3] = 1; }
         if w_end[w3] - w_start[w3] >= 2 {
-            int c1 = op_cumcall[w_end[w3] - 1];
-            int c0 = op_cumcall[w_start[w3]];
+            i64 c1 = op_cumcall[w_end[w3] - 1];
+            i64 c0 = op_cumcall[w_start[w3]];
             if c1 > c0 { w_fixed[w3] = 1; }
         }
         w3 += 1;
     }
     // buckets by start position; the fixed webs of each register in order of their start
-    int pp = 0;
+    i64 pp = 0;
     while pp <= npos {
         op_bhead[pp] = 0 - 1;
         pp += 1;
@@ -867,7 +867,7 @@ bool op_ra_run() {
     }
     pp = npos - 1;
     while pp >= 0 {
-        int w4 = op_bhead[pp];
+        i64 w4 = op_bhead[pp];
         while w4 >= 0 {
             if w_fixed[w4] == 1 {
                 w_nextf[w4] = op_fhead[w_reg[w4]];
@@ -879,30 +879,30 @@ bool op_ra_run() {
         pp -= 1;
     }
     // the scan
-    int changes = 0;
+    i64 changes = 0;
     pp = 0;
     while pp < npos {
-        int w5 = op_bhead[pp];
+        i64 w5 = op_bhead[pp];
         while w5 >= 0 {
             if w_fixed[w5] == 0 {
-                int s = w_start[w5];
-                int e = w_end[w5];
-                int want = 0;
+                i64 s = w_start[w5];
+                i64 e = w_end[w5];
+                i64 want = 0;
                 // a copy whose source dies at the copy: the same register
-                int di = w_defi[w5];
-                int srcw = 0 - 1;
+                i64 di = w_defi[w5];
+                i64 srcw = 0 - 1;
                 if w_ndef[w5] == 1 && di >= 0 && ir_op[di] == IR_COPY && opn_a[di] >= 0 {
                     srcw = op_web(opn_a[di], op_node_reg(opn_a[di]));
                     if srcw >= 0 && w_end[srcw] == s && w_new[srcw] != 0 && w_fixed[srcw] == 0 { want = w_new[srcw]; }
                 }
-                int chosen = 0;
+                i64 chosen = 0;
                 if want > 0 && op_try(want, s, e, srcw, want) { chosen = want; }
                 if chosen == 0 && op_try(w_reg[w5], s, e, srcw, want) { chosen = w_reg[w5]; }
                 if chosen == 0 {
-                    int lo = 1;
-                    int hi = 15;
+                    i64 lo = 1;
+                    i64 hi = 15;
                     if w_reg[w5] >= 32 { lo = 32; hi = 61; }
-                    int scan = lo;
+                    i64 scan = lo;
                     while chosen == 0 && scan <= hi {
                         if op_try(scan, s, e, srcw, want) { chosen = scan; }
                         scan += 1;
@@ -924,21 +924,21 @@ bool op_ra_run() {
     // write the registers into the instructions
     ri = 0;
     while ri < op_nrpo {
-        int b6 = op_rpo[ri];
-        int i6 = ir_bs[b6];
+        i64 b6 = op_rpo[ri];
+        i64 i6 = ir_bs[b6];
         while i6 < ir_be[b6] {
-            int op6 = ir_op[i6];
-            int dv6 = ir_d[i6];
+            i64 op6 = ir_op[i6];
+            i64 dv6 = ir_d[i6];
             if opn_a[i6] >= 0 && ir_a[i6] >= 1 && ir_a[i6] <= 63 {
-                int wa = op_web(opn_a[i6], ir_a[i6]);
+                i64 wa = op_web(opn_a[i6], ir_a[i6]);
                 if w_new[wa] != ir_a[i6] { ir_a[i6] = w_new[wa]; changes += 1; }
             }
             if opn_b[i6] >= 0 && ir_uses_b(op6) && ir_bi[i6] == 0 && ir_b[i6] >= 1 && ir_b[i6] <= 63 {
-                int wb = op_web(opn_b[i6], ir_b[i6]);
+                i64 wb = op_web(opn_b[i6], ir_b[i6]);
                 if w_new[wb] != ir_b[i6] { ir_b[i6] = w_new[wb]; changes += 1; }
             }
             if dv6 >= 1 && dv6 <= 63 {
-                int wd = op_web(i6, dv6);
+                i64 wd = op_web(i6, dv6);
                 if w_new[wd] != dv6 { ir_d[i6] = w_new[wd]; changes += 1; }
             }
             i6 += 1;
@@ -954,31 +954,31 @@ bool op_ra_run() {
 // reads it), an operand that is a small constant becomes an immediate. Then, going backward over the liveness: an instruction without side
 // effect whose result nobody reads is removed.
 
-int cp_kind[IR_MAXV];            // 0 nothing known, 1 the vreg holds a constant, 2 it is a copy of cp_val
-int cp_val[IR_MAXV];
-int cp_stamp[IR_MAXV];
-int cp_cur;
-int cp_act[64];                  // the vregs that have a kind now (to be killed when their source is written)
-int cp_nact;
-int op_clean_changes;
+i64 cp_kind[IR_MAXV];            // 0 nothing known, 1 the vreg holds a constant, 2 it is a copy of cp_val
+i64 cp_val[IR_MAXV];
+i64 cp_stamp[IR_MAXV];
+i64 cp_cur;
+i64 cp_act[64];                  // the vregs that have a kind now (to be killed when their source is written)
+i64 cp_nact;
+i64 op_clean_changes;
 
-int cp_get(int v) {
+i64 cp_get(i64 v) {
     if v < 1 || v >= ir_nv || cp_stamp[v] != cp_cur { return 0; }
     return cp_kind[v];
 }
 
-void cp_kill(int d) {
+void cp_kill(i64 d) {
     if d < 1 || d >= ir_nv { return; }
     if cp_stamp[d] == cp_cur { cp_kind[d] = 0; }
-    int k = 0;
+    i64 k = 0;
     while k < cp_nact {
-        int v = cp_act[k];
+        i64 v = cp_act[k];
         if cp_stamp[v] == cp_cur && cp_kind[v] == 2 && cp_val[v] == d { cp_kind[v] = 0; }
         k += 1;
     }
 }
 
-void cp_set(int v, int kind, int val) {
+void cp_set(i64 v, i64 kind, i64 val) {
     if v < 1 || v >= ir_nv { return; }
     if cp_nact >= 64 {
         cp_cur += 1;
@@ -992,16 +992,16 @@ void cp_set(int v, int kind, int val) {
 }
 
 // what a use of v reads: the register it is a copy of (or v)
-int cp_root(int v) {
+i64 cp_root(i64 v) {
     if cp_get(v) == 2 { return cp_val[v]; }
     return v;
 }
 
-bool cp_small(int k, int hi) {
+bool cp_small(i64 k, i64 hi) {
     return k >= 0 && k <= hi;
 }
 
-int cp_flip(int cc) {
+i64 cp_flip(i64 cc) {
     if cc == IR_LT { return IR_GT; }
     if cc == IR_GT { return IR_LT; }
     if cc == IR_LE { return IR_GE; }
@@ -1014,9 +1014,9 @@ int cp_flip(int cc) {
 }
 
 // the bits of a float made from the bits of a double (fcvt sD, dA), worked out here
-int cp_fbits(int dbits) {
+i64 cp_fbits(i64 dbits) {
     double dd[1];
-    int^ db = (int^)@dd[0];
+    i64^ db = (i64^)@dd[0];
     db[0] = dbits;
     float ff[2];
     ff[0] = (float)dd[0];
@@ -1024,33 +1024,33 @@ int cp_fbits(int dbits) {
     return fb[0] & 4294967295;
 }
 
-int cp_done[IR_MAXB];
-int cp_pc[IR_MAXB];
+i64 cp_done[IR_MAXB];
+i64 cp_pc[IR_MAXB];
 
-void op_prop_block(int b, int cont) {
+void op_prop_block(i64 b, i64 cont) {
     if cont == 0 {
         cp_cur += 1;
         cp_nact = 0;
     }
-    int i = ir_bs[b];
+    i64 i = ir_bs[b];
     while i < ir_be[b] {
-        int op = ir_op[i];
+        i64 op = ir_op[i];
         bool fixed = op == IR_CALL || op == IR_CALLIND || op == IR_SYSCALL || op == IR_RET;
         if !fixed {
-            int a = ir_a[i];
+            i64 a = ir_a[i];
             if a != 0 && cp_get(a) == 2 && ir_vcls[cp_val[a]] == ir_vcls[a] {
                 ir_a[i] = cp_val[a];
                 op_clean_changes += 1;
             }
             if ir_uses_b(op) && ir_bi[i] == 0 {
-                int bv = ir_b[i];
+                i64 bv = ir_b[i];
                 if cp_get(bv) == 2 && ir_vcls[cp_val[bv]] == ir_vcls[bv] {
                     ir_b[i] = cp_val[bv];
                     op_clean_changes += 1;
                 }
                 bv = ir_b[i];
                 if cp_get(bv) == 1 && ir_vcls[bv] == 0 {
-                    int k = cp_val[bv];
+                    i64 k = cp_val[bv];
                     bool ok = false;
                     if op == IR_ADD || op == IR_SUB || op == IR_SETCC || op == IR_BR { ok = cp_small(k, 4095); }
                     if op == IR_SHL || op == IR_LSHR || op == IR_ASHR || op == IR_ROTR { ok = cp_small(k, 63); }
@@ -1064,7 +1064,7 @@ void op_prop_block(int b, int cont) {
                 }
                 // a constant first operand of a commutative operation or a comparison
                 if ir_bi[i] == 0 && cp_get(ir_a[i]) == 1 && ir_vcls[ir_a[i]] == 0 && cp_get(ir_b[i]) != 1 {
-                    int k2 = cp_val[ir_a[i]];
+                    i64 k2 = cp_val[ir_a[i]];
                     if op == IR_ADD && cp_small(k2, 4095) {
                         ir_a[i] = ir_b[i];
                         ir_b[i] = k2;
@@ -1098,12 +1098,12 @@ void op_prop_block(int b, int cont) {
         // an operation on two known numbers is a number
         if !fixed && op >= IR_ADD && op <= IR_ASHR && op != IR_SDIV && op != IR_UDIV && ir_d[i] != 0 && ir_vcls[ir_d[i]] == 0 && ir_a[i] != 0 && cp_get(ir_a[i]) == 1 && ir_vcls[ir_a[i]] == 0 {
             bool haveb = false;
-            int kb = 0;
+            i64 kb = 0;
             if ir_bi[i] == 1 { kb = ir_b[i]; haveb = true; }
             else if cp_get(ir_b[i]) == 1 && ir_vcls[ir_b[i]] == 0 { kb = cp_val[ir_b[i]]; haveb = true; }
             if haveb {
-                int ka = cp_val[ir_a[i]];
-                int r = 0;
+                i64 ka = cp_val[ir_a[i]];
+                i64 r = 0;
                 bool okf = true;
                 if op == IR_ADD { r = ka + kb; }
                 else if op == IR_SUB { r = ka - kb; }
@@ -1146,13 +1146,13 @@ void op_prop_block(int b, int cont) {
             op = IR_FCONST;
         }
         // what the instruction writes
-        int d = ir_d[i];
+        i64 d = ir_d[i];
         if op == IR_CALL || op == IR_CALLIND || op == IR_SYSCALL {
             cp_cur += 1;
             cp_nact = 0;
         } else if d != 0 {
-            int akind = 0;
-            int aval = 0;
+            i64 akind = 0;
+            i64 aval = 0;
             if ir_a[i] > 0 { akind = cp_get(ir_a[i]); aval = cp_val[ir_a[i]]; }
             cp_kill(d);
             if op == IR_CONST && ir_vcls[d] == 0 {
@@ -1162,7 +1162,7 @@ void op_prop_block(int b, int cont) {
             } else if op == IR_FCVT_DS && akind == 3 && ir_vcls[d] == 1 {
                 cp_set(d, 4, cp_fbits(aval));
             } else if op == IR_COPY && ir_a[i] != d {
-                int src = ir_a[i];
+                i64 src = ir_a[i];
                 if cp_get(src) == 1 && ir_vcls[d] == 0 {
                     ir_op[i] = IR_CONST;
                     ir_k[i] = cp_val[src];
@@ -1178,26 +1178,26 @@ void op_prop_block(int b, int cont) {
     }
 }
 
-bool op_pure(int op) {
+bool op_pure(i64 op) {
     return op == IR_CONST || op == IR_COPY || (op >= IR_ADD && op <= IR_MULHS) || op == IR_NEG || op == IR_NOT || op == IR_EXT || op == IR_SETCC
         || (op >= IR_FADD && op <= IR_FSETCC) || op == IR_ADDR_GLOBAL || op == IR_ADDR_FUNC || op == IR_FCONST || (op >= IR_CLZ && op <= IR_POPCNT) || op == IR_FTRUNC || op == IR_FCEIL || (op >= IR_F32IN && op <= IR_F32TOI);
 }
 
-int op_tl[IR_MAXV];
-int op_tl_stamp[IR_MAXV];
-int op_tl_cur;
+i64 op_tl[IR_MAXV];
+i64 op_tl_stamp[IR_MAXV];
+i64 op_tl_cur;
 
 // dead code: backward in each block with the live registers at its end (op_lo); the temporaries (vregs from 64) live inside a block
 void op_dce() {
-    int b = 0;
+    i64 b = 0;
     while b < ir_nb {
         if op_po[b] >= 0 {
-            int live = op_lo[b];
+            i64 live = op_lo[b];
             op_tl_cur += 1;
-            int i = ir_be[b] - 1;
+            i64 i = ir_be[b] - 1;
             while i >= ir_bs[b] {
-                int op = ir_op[i];
-                int d = ir_d[i];
+                i64 op = ir_op[i];
+                i64 d = ir_d[i];
                 bool dead = false;
                 if (op_pure(op) || (op == IR_LOAD && ir_a[i] == 30)) && d != 0 && op != IR_NOP {
                     if d >= 64 { dead = op_tl_stamp[d] != op_tl_cur || op_tl[d] == 0; }
@@ -1215,7 +1215,7 @@ void op_dce() {
                         op_tl[d] = 0;
                     }
                     live = (live & ~op_defs(i)) | op_uses(i);
-                    int a = ir_a[i];
+                    i64 a = ir_a[i];
                     if a >= 64 {
                         op_tl_stamp[a] = op_tl_cur;
                         op_tl[a] = 1;
@@ -1225,7 +1225,7 @@ void op_dce() {
                         op_tl[ir_b[i]] = 1;
                     }
                     if op == IR_CALL || op == IR_CALLIND || op == IR_SYSCALL {
-                        int g = 0;
+                        i64 g = 0;
                         while g < ir_ac[i] {
                             if ir_args[ir_as[i] + g] >= 64 {
                                 op_tl_stamp[ir_args[ir_as[i] + g]] = op_tl_cur;
@@ -1243,11 +1243,11 @@ void op_dce() {
 }
 
 void op_clean_run() {
-    int round = 0;
+    i64 round = 0;
     while round < 1 {
         op_graph();
-        int b = 0;
-        int nb0 = ir_nb;
+        i64 b = 0;
+        i64 nb0 = ir_nb;
         while b < nb0 {
             cp_done[b] = 0;
             cp_pc[b] = 0;
@@ -1256,9 +1256,9 @@ void op_clean_run() {
         b = 0;
         while b < nb0 {
             if op_po[b] >= 0 {
-                int k = 0;
+                i64 k = 0;
                 while k < 2 {
-                    int sc = op_succ(b, k);
+                    i64 sc = op_succ(b, k);
                     if sc >= 0 && !(k == 1 && op_succ(b, 0) == sc) { cp_pc[sc] += 1; }
                     k += 1;
                 }
@@ -1267,21 +1267,21 @@ void op_clean_run() {
         }
         // a block that only one block leads to goes on with what is known at the end of that block (the body of an inlined function
         // follows the arguments this way)
-        int ri = 0;
+        i64 ri = 0;
         while ri < op_nrpo {
-            int start = op_rpo[ri];
+            i64 start = op_rpo[ri];
             ri += 1;
             if cp_done[start] == 0 && start < nb0 {
-                int cur = start;
-                int cont = 0;
+                i64 cur = start;
+                i64 cont = 0;
                 while cur >= 0 {
                     cp_done[cur] = 1;
                     op_prop_block(cur, cont);
-                    int term = ir_be[cur] - 1;
-                    int nxt = 0 - 1;
-                    int tk = ir_op[term];
-                    int cand1 = 0 - 1;
-                    int cand2 = 0 - 1;
+                    i64 term = ir_be[cur] - 1;
+                    i64 nxt = 0 - 1;
+                    i64 tk = ir_op[term];
+                    i64 cand1 = 0 - 1;
+                    i64 cand2 = 0 - 1;
                     if tk == IR_JMP { cand1 = ir_t1[term]; }
                     if tk == IR_BR || tk == IR_FBR { cand1 = ir_t2[term]; cand2 = ir_t1[term]; }
                     if cand1 >= 0 && cand1 < nb0 && cp_pc[cand1] == 1 && cp_done[cand1] == 0 && cand1 != cur { nxt = cand1; }
@@ -1305,63 +1305,63 @@ void op_clean_run() {
 // numbered by its version: every store makes a new version, so two loads of the same version are the same value.
 
 #define VN_MAX 60000
-int vn_k[VN_MAX];               // the kind (an opcode, or 1000 + something for the others)
-int vn_x[VN_MAX];
-int vn_y[VN_MAX];
-int vn_z[VN_MAX];
-int vn_def[VN_MAX];             // the instruction that made it first (in this block), or -1
-int vn_heavy[VN_MAX];
-int vn_cell[VN_MAX];            // the stack cell (k of the load) it was written to, or 0
-int vn_holder[VN_MAX];          // a register that held it last
-int vn_inv[VN_MAX];             // the value that F2BITS / BITS2F of this one gives back (0 = none)
-int vn_ab[VN_MAX];              // this value is (value vn_ab) + the number vn_ao (an address with an offset), vn_ab = -1: no
-int vn_ao[VN_MAX];
-int vn_al[VN_MAX];              // the value of a stored cell version is the value that was stored (-1 = none)
-int vn_n;
-int vn_ht[131072];
-int vn_hst[131072];
-int vn_hcur;
-int vr_vn[IR_MAXV];             // the value number of a register now
-int vr_st[IR_MAXV];
-int vr_cur;
-int vn_ins[IR_MAXI];            // after this instruction a store to this cell must be written
-int op_plain[8192];             // 1: the frame slot (offset / 8) is a plain 8-byte value (from the hint line)
-int vn_ver[16384];              // the version of a frame slot: index (offset / 8) for offsets >= 0, 8192 + (-offset / 8) for stack cells
-int vn_ver_st[16384];
-int vn_cell_cur;
-int vn_cellvn[16384];
-int vn_q;                       // the deepest stack cell now
-int vn_changes;
-int vn_mem;                     // the memory epoch: every store and every call makes a new one (a load of a global array is the same value inside one epoch)
-int nc_dbg;                      // -ncdbg: say what the null check pass sees
-int vn_neg_open;                // 1: the address of a stack cell (a negative offset of the frame) is taken somewhere: a store through a pointer may be to a cell
-int vn_cellhits;                // how many values were read from a cell instead of being computed again
+i64 vn_k[VN_MAX];               // the kind (an opcode, or 1000 + something for the others)
+i64 vn_x[VN_MAX];
+i64 vn_y[VN_MAX];
+i64 vn_z[VN_MAX];
+i64 vn_def[VN_MAX];             // the instruction that made it first (in this block), or -1
+i64 vn_heavy[VN_MAX];
+i64 vn_cell[VN_MAX];            // the stack cell (k of the load) it was written to, or 0
+i64 vn_holder[VN_MAX];          // a register that held it last
+i64 vn_inv[VN_MAX];             // the value that F2BITS / BITS2F of this one gives back (0 = none)
+i64 vn_ab[VN_MAX];              // this value is (value vn_ab) + the number vn_ao (an address with an offset), vn_ab = -1: no
+i64 vn_ao[VN_MAX];
+i64 vn_al[VN_MAX];              // the value of a stored cell version is the value that was stored (-1 = none)
+i64 vn_n;
+i64 vn_ht[131072];
+i64 vn_hst[131072];
+i64 vn_hcur;
+i64 vr_vn[IR_MAXV];             // the value number of a register now
+i64 vr_st[IR_MAXV];
+i64 vr_cur;
+i64 vn_ins[IR_MAXI];            // after this instruction a store to this cell must be written
+i64 op_plain[8192];             // 1: the frame slot (offset / 8) is a plain 8-byte value (from the hint line)
+i64 vn_ver[16384];              // the version of a frame slot: index (offset / 8) for offsets >= 0, 8192 + (-offset / 8) for stack cells
+i64 vn_ver_st[16384];
+i64 vn_cell_cur;
+i64 vn_cellvn[16384];
+i64 vn_q;                       // the deepest stack cell now
+i64 vn_changes;
+i64 vn_mem;                     // the memory epoch: every store and every call makes a new one (a load of a global array is the same value inside one epoch)
+i64 nc_dbg;                      // -ncdbg: say what the null check pass sees
+i64 vn_neg_open;                // 1: the address of a stack cell (a negative offset of the frame) is taken somewhere: a store through a pointer may be to a cell
+i64 vn_cellhits;                // how many values were read from a cell instead of being computed again
 
 // the numbers of the hint line  ";H off:size:flag ..."  into op_plain
 void vn_hints() {
-    int i = 0;
+    i64 i = 0;
     while i < 8192 {
         op_plain[i] = 0;
         i += 1;
     }
-    int n = lf_hint_n;
-    int p = 2;
+    i64 n = lf_hint_n;
+    i64 p = 2;
     while p < n {
         while p < n && lf_hint_text[p] == ' ' { p += 1; }
         if p < n {
-            int off = 0;
+            i64 off = 0;
             while p < n && lf_hint_text[p] >= '0' && lf_hint_text[p] <= '9' { off = off * 10 + (lf_hint_text[p] - '0'); p += 1; }
             p += 1;
-            int size = 0;
+            i64 size = 0;
             while p < n && lf_hint_text[p] >= '0' && lf_hint_text[p] <= '9' { size = size * 10 + (lf_hint_text[p] - '0'); p += 1; }
             p += 1;
-            int flag = 0;
+            i64 flag = 0;
             while p < n && lf_hint_text[p] >= '0' && lf_hint_text[p] <= '9' { flag = flag * 10 + (lf_hint_text[p] - '0'); p += 1; }
             if size == 8 && flag == 1 && off % 8 == 0 && off / 8 < 8192 && op_plain[off / 8] == 0 { op_plain[off / 8] = 1; }
             else if off / 8 < 8192 {
                 // any other entry that covers the slot makes it not plain
-                int w = off / 8;
-                int w1 = (off + size - 1) / 8;
+                i64 w = off / 8;
+                i64 w1 = (off + size - 1) / 8;
                 if size <= 0 { w1 = w; }
                 while w <= w1 && w < 8192 {
                     if !(size == 8 && flag == 1 && off % 8 == 0) { op_plain[w] = 2; }
@@ -1373,9 +1373,9 @@ void vn_hints() {
 }
 
 // the index of the frame slot an instruction touches (a load or a store of 8 bytes at x29 + k), or -1 when it is not a plain slot
-int vn_slot(int i) {
+i64 vn_slot(i64 i) {
     if ir_a[i] != 30 || ir_w[i] != 8 { return 0 - 1; }
-    int k = ir_k[i];
+    i64 k = ir_k[i];
     if k < 0 {
         if (0 - k) / 8 < 8192 && (0 - k) % 8 == 0 { return 8192 + (0 - k) / 8; }
         return 0 - 1;
@@ -1384,9 +1384,9 @@ int vn_slot(int i) {
     return 0 - 1;
 }
 
-int vn_new(int kind, int x, int y, int z) {
+i64 vn_new(i64 kind, i64 x, i64 y, i64 z) {
     if vn_n >= VN_MAX { return 0 - 1; }
-    int v = vn_n;
+    i64 v = vn_n;
     vn_n += 1;
     vn_k[v] = kind;
     vn_x[v] = x;
@@ -1403,19 +1403,19 @@ int vn_new(int kind, int x, int y, int z) {
     return v;
 }
 
-int vn_hash(int kind, int x, int y, int z) {
-    int h = kind * 1000003 + x * 10007 + y * 131 + z * 7 + 12345;
+i64 vn_hash(i64 kind, i64 x, i64 y, i64 z) {
+    i64 h = kind * 1000003 + x * 10007 + y * 131 + z * 7 + 12345;
     if h < 0 { h = 0 - h; }
     if h < 0 { h = 0; }
     return h & 131071;
 }
 
 // the value with this key, or -1
-int vn_find(int kind, int x, int y, int z) {
-    int h = vn_hash(kind, x, y, z);
-    int n = 0;
+i64 vn_find(i64 kind, i64 x, i64 y, i64 z) {
+    i64 h = vn_hash(kind, x, y, z);
+    i64 n = 0;
     while n < 131072 && vn_hst[h] == vn_hcur {
-        int v = vn_ht[h];
+        i64 v = vn_ht[h];
         if vn_k[v] == kind && vn_x[v] == x && vn_y[v] == y && vn_z[v] == z { return v; }
         h = (h + 1) & 131071;
         n += 1;
@@ -1423,9 +1423,9 @@ int vn_find(int kind, int x, int y, int z) {
     return 0 - 1;
 }
 
-void vn_enter(int v) {
-    int h = vn_hash(vn_k[v], vn_x[v], vn_y[v], vn_z[v]);
-    int n = 0;
+void vn_enter(i64 v) {
+    i64 h = vn_hash(vn_k[v], vn_x[v], vn_y[v], vn_z[v]);
+    i64 n = 0;
     while n < 131072 && vn_hst[h] == vn_hcur {
         h = (h + 1) & 131071;
         n += 1;
@@ -1435,10 +1435,10 @@ void vn_enter(int v) {
 }
 
 // the value of a register now (a register that was not written in the block holds a value that comes from outside)
-int vn_reg(int r) {
+i64 vn_reg(i64 r) {
     if r < 1 || r >= ir_nv { return 0 - 1; }
     if vr_st[r] == vr_cur { return vr_vn[r]; }
-    int v = vn_new(1000, r, 0, 0);
+    i64 v = vn_new(1000, r, 0, 0);
     if v < 0 { return v; }
     vr_vn[r] = v;
     vr_st[r] = vr_cur;
@@ -1446,7 +1446,7 @@ int vn_reg(int r) {
     return v;
 }
 
-void vn_set(int r, int v) {
+void vn_set(i64 r, i64 v) {
     if r < 1 || r >= ir_nv { return; }
     if v < 0 {
         vr_st[r] = 0;
@@ -1457,32 +1457,32 @@ void vn_set(int r, int v) {
     if r < 64 { vn_holder[v] = r; }                  // a temporary (vreg >= 64) lives inside one block only
 }
 
-bool vn_commutes(int op) {
+bool vn_commutes(i64 op) {
     return op == IR_ADD || op == IR_MUL || op == IR_AND || op == IR_OR || op == IR_XOR || op == IR_FADD || op == IR_FMUL;
 }
 
-bool vn_is_heavy_op(int op) {
+bool vn_is_heavy_op(i64 op) {
     return op == IR_MUL || op == IR_SDIV || op == IR_UDIV || op == IR_MULHS || op == IR_FMUL || op == IR_FDIV || op == IR_FSQRT;
 }
 
 // is the register r still holding the value v?
-bool vn_holds(int r, int v) {
+bool vn_holds(i64 r, i64 v) {
     return r >= 1 && r < ir_nv && vr_st[r] == vr_cur && vr_vn[r] == v;
 }
 
 // what is known about a value on the way into the block (from the branches that led here): value, condition, number, 1 = the condition holds
-int vf_vn[16];
-int vf_cc[16];
-int vf_imm[16];
-int vf_t[16];
-int vf_n;
-int vn_folded;                  // branches that were decided
+i64 vf_vn[16];
+i64 vf_cc[16];
+i64 vf_imm[16];
+i64 vf_t[16];
+i64 vf_n;
+i64 vn_folded;                  // branches that were decided
 
 // does the branch  cc v, imm  go the true way (1), the false way (0), or is it not known (-1)?
-int vf_decide(int cc, int v, int imm) {
+i64 vf_decide(i64 cc, i64 v, i64 imm) {
     if v < 0 { return 0 - 1; }
     if vn_k[v] == 1001 { if tj_holds(cc, vn_x[v], imm) { return 1; } return 0; }
-    int f = 0;
+    i64 f = 0;
     while f < vf_n {
         if vf_vn[f] == v {
             bool known_eq = (vf_cc[f] == IR_EQ && vf_t[f] == 1) || (vf_cc[f] == IR_NE && vf_t[f] == 0);
@@ -1503,10 +1503,10 @@ int vf_decide(int cc, int v, int imm) {
 
 // cont = 1: the block is entered from the block processed before it only, so what is known stays
 // does the value v come from the value g (the base of the globals) through additions and shifts?
-bool vn_from(int v, int g, int depth) {
+bool vn_from(i64 v, i64 g, i64 depth) {
     if v == g { return true; }
     if depth <= 0 || v < 0 { return false; }
-    int k = vn_k[v];
+    i64 k = vn_k[v];
     if k >= IR_ADD && k <= IR_ASHR && k != IR_SDIV && k != IR_UDIV && k != IR_MUL {
         if vn_from(vn_x[v], g, depth - 1) { return true; }
         if vn_y[v] < 1000000 && vn_y[v] >= 0 && vn_from(vn_y[v], g, depth - 1) { return true; }
@@ -1514,25 +1514,25 @@ bool vn_from(int v, int g, int depth) {
     return false;
 }
 
-void vn_block(int b, int cont) {
+void vn_block(i64 b, i64 cont) {
     if cont == 0 {
         vn_n = 0;
         vn_hcur += 1;
         vr_cur += 1;
         vf_n = 0;
     }
-    int i = ir_bs[b];
+    i64 i = ir_bs[b];
     while i < ir_be[b] {
-        int op = ir_op[i];
-        int d = ir_d[i];
+        i64 op = ir_op[i];
+        i64 d = ir_d[i];
         vn_ins[i] = 0;
         if (op == IR_LOAD || op == IR_STORE) && ir_a[i] != 30 && ir_a[i] >= 1 && vn_n < VN_MAX - 8 {
-            int va3 = vn_reg(ir_a[i]);
+            i64 va3 = vn_reg(ir_a[i]);
             if va3 >= 0 && vn_ab[va3] >= 0 {
-                int hb = vn_holder[vn_ab[va3]];
-                int w = ir_w[i];
+                i64 hb = vn_holder[vn_ab[va3]];
+                i64 w = ir_w[i];
                 if w < 0 { w = 0 - w; }
-                int nk = ir_k[i] + vn_ao[va3];
+                i64 nk = ir_k[i] + vn_ao[va3];
                 if hb >= 1 && vn_holds(hb, vn_ab[va3]) && ir_vcls[hb] == 0 && w > 0 && nk >= 0 && nk <= 32760 && nk % w == 0 {
                     ir_a[i] = hb;
                     ir_k[i] = nk;
@@ -1540,7 +1540,7 @@ void vn_block(int b, int cont) {
                 }
             }
         }
-        int V = 0 - 1;
+        i64 V = 0 - 1;
         bool fwd = false;
         bool memload = false;
         bool valuable = false;
@@ -1550,7 +1550,7 @@ void vn_block(int b, int cont) {
                 V = vn_find(1001, ir_k[i], 0, 0);
                 if V < 0 { V = vn_new(1001, ir_k[i], 0, 0); vn_enter(V); }
             } else if op == IR_LOAD {
-                int sl = vn_slot(i);
+                i64 sl = vn_slot(i);
                 if sl >= 0 {
                     valuable = true;
                     if vn_ver_st[sl] != vn_hcur { vn_ver_st[sl] = vn_hcur; vn_ver[sl] = 0; vn_cellvn[sl] = 0 - 1; }
@@ -1560,7 +1560,7 @@ void vn_block(int b, int cont) {
                 } else if ir_a[i] != 30 && ir_a[i] >= 1 && ir_vcls[d] == 0 && opt_nullchk == 1 && vn_reg(ir_a[i]) >= 0 {
                     // a load through a pointer: the same pointer in the same epoch gives the same value (the epoch changes at every call and at every store but the
                     // stores into a frame slot or cell that no pointer can reach); the data pointer of the header of an array is read once an access, not once a round
-                    int vh = vn_reg(ir_a[i]);
+                    i64 vh = vn_reg(ir_a[i]);
                     valuable = true;
                     memload = true;
                     V = vn_find(1004, vh, ir_k[i], vn_mem * 64 + ir_w[i] + 16);
@@ -1574,12 +1574,12 @@ void vn_block(int b, int cont) {
                     }
                 } else if ir_a[i] != 30 && ir_a[i] >= 1 && (ir_opt & 4194304) == 0 && ir_vcls[d] == 0 {
                     // a load from an element of a global array: the same address in the same epoch is the same value
-                    int vg = vn_reg(29);
-                    int vad = vn_reg(ir_a[i]);
+                    i64 vg = vn_reg(29);
+                    i64 vad = vn_reg(ir_a[i]);
                     if vg >= 0 && vad >= 0 && vn_from(vad, vg, 6) {
                         valuable = true;
                         memload = true;
-                        int wq = ir_w[i] + 16;
+                        i64 wq = ir_w[i] + 16;
                         V = vn_find(1004, vad, ir_k[i], vn_mem * 64 + wq);
                         if V < 0 {
                             V = vn_new(1004, vad, ir_k[i], vn_mem * 64 + wq);
@@ -1592,21 +1592,21 @@ void vn_block(int b, int cont) {
                     }
                 }
             } else if op == IR_COPY {
-                int va = vn_reg(ir_a[i]);
+                i64 va = vn_reg(ir_a[i]);
                 if va >= 0 { vn_set(d, va); i += 1; continue; }
             } else if op_pure(op) && op != IR_NOP && op != IR_CONST && op != IR_COPY {
-                int va2 = vn_reg(ir_a[i]);
-                int vb2 = 0;
-                int kk = ir_k[i];
+                i64 va2 = vn_reg(ir_a[i]);
+                i64 vb2 = 0;
+                i64 kk = ir_k[i];
                 if ir_uses_b(op) {
                     if ir_bi[i] == 1 { vb2 = ir_b[i] + 1000000; } else { vb2 = vn_reg(ir_b[i]); }
                 }
                 if va2 >= 0 && vb2 >= 0 {
                     valuable = true;
-                    int xa = va2;
-                    int xb = vb2;
+                    i64 xa = va2;
+                    i64 xb = vb2;
                     if vn_commutes(op) && ir_bi[i] == 0 && xb < xa { xa = vb2; xb = va2; }
-                    int ky = op;
+                    i64 ky = op;
                     if op == IR_BITS2F && vn_inv[va2] > 0 { V = vn_inv[va2]; }
                     else if op == IR_F2BITS && vn_inv[va2] > 0 { V = vn_inv[va2]; }
                     else {
@@ -1616,7 +1616,7 @@ void vn_block(int b, int cont) {
                             if V >= 0 {
                                 vn_enter(V);
                                 vn_def[V] = i;
-                                int hv = 0;
+                                i64 hv = 0;
                                 if vn_is_heavy_op(op) { hv = 1; }
                                 if vn_heavy[va2] == 1 { hv = 1; }
                                 if vb2 < 1000000 && vn_heavy[vb2] == 1 { hv = 1; }
@@ -1631,7 +1631,7 @@ void vn_block(int b, int cont) {
             if valuable && V >= 0 {
                 // a register that holds the value already: a copy
                 bool done = false;
-                int h = vn_holder[V];
+                i64 h = vn_holder[V];
                 if (op != IR_LOAD || (fwd && (ir_opt & 1048576) == 0) || memload) && (op != IR_CONST || (ir_k[i] != 0 && op_costly(ir_k[i]))) && h >= 1 && vn_holds(h, V) && ir_vcls[h] == ir_vcls[d] && vn_def[V] != i {
                     if h == d {
                         ir_op[i] = IR_NOP;
@@ -1686,7 +1686,7 @@ void vn_block(int b, int cont) {
         // a second operand that is a known small number is an immediate (the text pass would take "mov x1, N" into "cmp x0, N" without
         // asking whether x1 is needed later: with an immediate there is no such pair)
         if (op == IR_BR || op == IR_ADD || op == IR_SUB || op == IR_SETCC) && ir_bi[i] == 0 && vn_n < VN_MAX - 8 && ir_vcls[ir_a[i]] == 0 {
-            int vb5 = vn_reg(ir_b[i]);
+            i64 vb5 = vn_reg(ir_b[i]);
             if vb5 >= 0 && vn_k[vb5] == 1001 && vn_x[vb5] >= 0 && vn_x[vb5] <= 4095 {
                 ir_bi[i] = 1;
                 ir_b[i] = vn_x[vb5];
@@ -1695,10 +1695,10 @@ void vn_block(int b, int cont) {
         }
         // a branch on a number: decided when the way in tells the answer
         if op == IR_BR && ir_bi[i] == 1 && vn_n < VN_MAX - 8 {
-            int vq = vn_reg(ir_a[i]);
-            int dec = vf_decide(ir_k[i], vq, ir_b[i]);
+            i64 vq = vn_reg(ir_a[i]);
+            i64 dec = vf_decide(ir_k[i], vq, ir_b[i]);
             if dec >= 0 && (ir_opt & 2048) == 0 {
-                int tgt = ir_t2[i];
+                i64 tgt = ir_t2[i];
                 if dec == 1 { tgt = ir_t1[i]; }
                 ir_op[i] = IR_JMP;
                 ir_t1[i] = tgt;
@@ -1713,14 +1713,14 @@ void vn_block(int b, int cont) {
         bool frame_store = op == IR_STORE && ir_a[i] == 30 && ir_w[i] == 8 && ((ir_k[i] >= 0 && ir_k[i] % 8 == 0 && ir_k[i] / 8 < 8192 && op_plain[ir_k[i] / 8] == 1) || (ir_k[i] < 0 && vn_neg_open == 0));
         if (op == IR_STORE && !frame_store) || op == IR_CALL || op == IR_CALLIND || op == IR_SYSCALL { vn_mem += 1; }
         if op == IR_STORE {
-            int sl2 = vn_slot(i);
+            i64 sl2 = vn_slot(i);
             if sl2 >= 0 {
                 if vn_ver_st[sl2] != vn_hcur { vn_ver_st[sl2] = vn_hcur; vn_ver[sl2] = 0; }
                 vn_ver[sl2] += 1;
-                int vb = vn_reg(ir_b[i]);
+                i64 vb = vn_reg(ir_b[i]);
                 if vb >= 0 {
                     // a load of the new version of the slot gives the stored value
-                    int nv = vn_new(1002, sl2, vn_ver[sl2], 0);
+                    i64 nv = vn_new(1002, sl2, vn_ver[sl2], 0);
                     if nv >= 0 {
                         vn_enter(nv);
                         vn_al[nv] = vb;
@@ -1732,7 +1732,7 @@ void vn_block(int b, int cont) {
             if op == IR_CALL || op == IR_CALLIND || op == IR_SYSCALL {
                 vr_cur += 1;
             }
-            int vo = vn_new(1003, d, i, 0);
+            i64 vo = vn_new(1003, d, i, 0);
             vn_set(d, vo);
         } else if op == IR_CALL || op == IR_CALLIND || op == IR_SYSCALL {
             vr_cur += 1;
@@ -1742,27 +1742,27 @@ void vn_block(int b, int cont) {
 }
 
 // the block b written again (at the end of the arrays) with the stores after the instructions that made values read from cells
-bool vn_emit(int b) {
+bool vn_emit(i64 b) {
     bool any = false;
-    int i = ir_bs[b];
+    i64 i = ir_bs[b];
     while i < ir_be[b] {
         if vn_ins[i] < 0 { any = true; }
         i += 1;
     }
     if !any { return true; }
-    int cnt = ir_be[b] - ir_bs[b];
-    int extra = 0;
+    i64 cnt = ir_be[b] - ir_bs[b];
+    i64 extra = 0;
     i = ir_bs[b];
     while i < ir_be[b] {
         if vn_ins[i] < 0 { extra += 1; }
         i += 1;
     }
     if ir_n + cnt + extra + 2 >= IR_MAXI || ir_nv + 4 >= IR_MAXV { return false; }
-    int ns = ir_n;
+    i64 ns = ir_n;
     i = ir_bs[b];
-    int e0 = ir_be[b];
+    i64 e0 = ir_be[b];
     while i < e0 {
-        int j = ir_n;
+        i64 j = ir_n;
         ir_op[j] = ir_op[i];
         ir_d[j] = ir_d[i];
         ir_a[j] = ir_a[i];
@@ -1776,7 +1776,7 @@ bool vn_emit(int b) {
         ir_ac[j] = ir_ac[i];
         ir_n += 1;
         if vn_ins[i] < 0 {
-            int st = ir_n;
+            i64 st = ir_n;
             ir_op[st] = IR_STORE;
             ir_d[st] = 0;
             ir_a[st] = 30;
@@ -1797,20 +1797,20 @@ bool vn_emit(int b) {
     return true;
 }
 
-int vn_done[IR_MAXB];
-int vn_pc[IR_MAXB];             // the number of predecessors (that the flow can reach)
+i64 vn_done[IR_MAXB];
+i64 vn_pc[IR_MAXB];             // the number of predecessors (that the flow can reach)
 
-void op_walk(int kind) {
+void op_walk(i64 kind) {
     op_graph();
     vn_hints();
     vn_neg_open = 0;
     {
-        int ib = 0;
+        i64 ib = 0;
         while ib < ir_nb {
             if op_po[ib] >= 0 {
-                int ii = ir_bs[ib];
+                i64 ii = ir_bs[ib];
                 while ii < ir_be[ib] {
-                    int io = ir_op[ii];
+                    i64 io = ir_op[ii];
                     if (io == IR_ADDR_SLOT && ir_d[ii] != 30 && (ir_k[ii] < 0 || ir_b[ii] < 0)) || (io == IR_ADD && ir_a[ii] == 30 && ir_bi[ii] == 1 && ir_b[ii] < 0) { vn_neg_open = 1; }
                     if ir_a[ii] == 30 && io != IR_LOAD && io != IR_STORE && io != IR_ADDR_SLOT && !(io == IR_ADD && ir_bi[ii] == 1) { vn_neg_open = 1; }
                     ii += 1;
@@ -1821,8 +1821,8 @@ void op_walk(int kind) {
     }
     if nc_dbg == 1 { write_err("  vn of "); write_err(@ir_fname); write_err(" neg_open "); write_err_int(vn_neg_open); write_err(" plain16 "); write_err_int(op_plain[2]); write_err(" plain24 "); write_err_int(op_plain[3]); write_err(" hint "); write_err(@lf_hint_text); write_err("\n"); }
     vn_q = op_maxq();
-    int b = 0;
-    int nb0 = ir_nb;
+    i64 b = 0;
+    i64 nb0 = ir_nb;
     while b < nb0 {
         vn_done[b] = 0;
         vn_pc[b] = 0;
@@ -1831,9 +1831,9 @@ void op_walk(int kind) {
     b = 0;
     while b < nb0 {
         if op_po[b] >= 0 {
-            int k = 0;
+            i64 k = 0;
             while k < 2 {
-                int sc = op_succ(b, k);
+                i64 sc = op_succ(b, k);
                 if sc >= 0 && !(k == 1 && op_succ(b, 0) == sc) { vn_pc[sc] += 1; }
                 k += 1;
             }
@@ -1841,31 +1841,31 @@ void op_walk(int kind) {
         b += 1;
     }
     // the blocks in reverse post order; after a block comes the successor that only it leads to (what is known stays)
-    int ri = 0;
+    i64 ri = 0;
     while ri < op_nrpo {
-        int start = op_rpo[ri];
+        i64 start = op_rpo[ri];
         ri += 1;
         if vn_done[start] == 0 && start < nb0 {
-            int cur = start;
-            int cont = 0;
+            i64 cur = start;
+            i64 cont = 0;
             while cur >= 0 {
                 vn_done[cur] = 1;
                 if kind == 0 { vn_block(cur, cont); } else { fa_block(cur, cont); }
                 // the way on: the false side of a branch first (the fall through), else the true side, else the target of a jump
-                int term = ir_be[cur] - 1;
-                int nxt = 0 - 1;
-                int tk = ir_op[term];
-                int cand1 = 0 - 1;
-                int cand2 = 0 - 1;
+                i64 term = ir_be[cur] - 1;
+                i64 nxt = 0 - 1;
+                i64 tk = ir_op[term];
+                i64 cand1 = 0 - 1;
+                i64 cand2 = 0 - 1;
                 if tk == IR_JMP { cand1 = ir_t1[term]; }
                 if tk == IR_BR || tk == IR_FBR { cand1 = ir_t2[term]; cand2 = ir_t1[term]; }
-                int which = 0;
+                i64 which = 0;
                 if cand1 >= 0 && cand1 < nb0 && vn_pc[cand1] == 1 && vn_done[cand1] == 0 && cand1 != cur { nxt = cand1; which = 2; }
                 else if cand2 >= 0 && cand2 < nb0 && vn_pc[cand2] == 1 && vn_done[cand2] == 0 && cand2 != cur && cand1 != cand2 { nxt = cand2; which = 1; }
                 if (ir_opt & 256) != 0 { nxt = 0 - 1; }
                 if nxt >= 0 && tk == IR_BR && ir_bi[term] == 1 {
                     // what the branch tells about its value on the way to nxt
-                    int vq = vn_reg(ir_a[term]);
+                    i64 vq = vn_reg(ir_a[term]);
                     if vq >= 0 && vf_n < 16 {
                         vf_vn[vf_n] = vq;
                         vf_cc[vf_n] = ir_k[term];
@@ -1895,13 +1895,13 @@ void op_cse_run() {
 }
 
 // the number of instructions that do something, in the blocks the flow can reach (to see whether the passes made the function smaller)
-int op_count() {
+i64 op_count() {
     op_graph();
-    int n = 0;
-    int b = 0;
+    i64 n = 0;
+    i64 b = 0;
     while b < ir_nb {
         if op_po[b] >= 0 {
-            int i = ir_bs[b];
+            i64 i = ir_bs[b];
             while i < ir_be[b] {
                 if ir_op[i] != IR_NOP && !(ir_op[i] == IR_COPY && ir_d[i] == ir_a[i]) && ir_op[i] != IR_PARAM { n += 1; }
                 i += 1;
@@ -1916,12 +1916,12 @@ int op_count() {
 // "fmov x1, d0 / (code that writes d0) / fmov d1, x1" (the value of a compound assignment waits in a whole number register) becomes a copy
 // into a double register that the block does not use: "fmov d20, d0 / ... / fmov d1, d20". A move between a double and a whole number
 // register takes several cycles on the phone, a move between double registers one.
-bool bt_mentions(int b, int r) {
-    int i = ir_bs[b];
+bool bt_mentions(i64 b, i64 r) {
+    i64 i = ir_bs[b];
     while i < ir_be[b] {
         if ir_d[i] == r || ir_a[i] == r || (ir_uses_b(ir_op[i]) && ir_bi[i] == 0 && ir_b[i] == r) { return true; }
         if ir_op[i] == IR_CALL || ir_op[i] == IR_CALLIND || ir_op[i] == IR_SYSCALL {
-            int g = 0;
+            i64 g = 0;
             while g < ir_ac[i] {
                 if ir_args[ir_as[i] + g] == r { return true; }
                 g += 1;
@@ -1932,18 +1932,18 @@ bool bt_mentions(int b, int r) {
     return false;
 }
 
-int bt_changes;
+i64 bt_changes;
 
 // the only instruction after `from` in the block b that reads the register x before x is written again (-1: none, more than one, or x lives on)
-int bt_reader(int b, int from, int x) {
-    int j = from;
-    int found = 0 - 1;
-    int count = 0;
+i64 bt_reader(i64 b, i64 from, i64 x) {
+    i64 j = from;
+    i64 found = 0 - 1;
+    i64 count = 0;
     while j < ir_be[b] {
         bool reads = ir_a[j] == x || (ir_uses_b(ir_op[j]) && ir_bi[j] == 0 && ir_b[j] == x);
         bool call = ir_op[j] == IR_CALL || ir_op[j] == IR_CALLIND || ir_op[j] == IR_SYSCALL;
         if call {
-            int g = 0;
+            i64 g = 0;
             while g < ir_ac[j] {
                 if ir_args[ir_as[j] + g] == x { reads = true; }
                 g += 1;
@@ -1963,31 +1963,31 @@ int bt_reader(int b, int from, int x) {
     return 0 - 1;
 }
 
-void op_bits_block(int b) {
-    int i = ir_bs[b];
+void op_bits_block(i64 b) {
+    i64 i = ir_bs[b];
     while i < ir_be[b] {
         if ir_op[i] == IR_F2BITS && ir_d[i] >= 1 && ir_d[i] <= 31 && ir_vcls[ir_a[i]] == 1 {
-            int x = ir_d[i];
-            int src = ir_a[i];
-            int j1 = bt_reader(b, i + 1, x);
-            int use = 0 - 1;
-            int mid = 0 - 1;
+            i64 x = ir_d[i];
+            i64 src = ir_a[i];
+            i64 j1 = bt_reader(b, i + 1, x);
+            i64 use = 0 - 1;
+            i64 mid = 0 - 1;
             if j1 >= 0 && ir_op[j1] == IR_BITS2F { use = j1; }
             else if j1 >= 0 && ir_op[j1] == IR_COPY && ir_a[j1] == x && ir_d[j1] >= 1 && ir_d[j1] <= 31 {
-                int j2 = bt_reader(b, j1 + 1, ir_d[j1]);
+                i64 j2 = bt_reader(b, j1 + 1, ir_d[j1]);
                 if j2 >= 0 && ir_op[j2] == IR_BITS2F { use = j2; mid = j1; }
             }
             if use >= 0 {
                 // is the source written between the two? then a copy is needed, else nothing to do
                 bool written = false;
-                int m = i + 1;
+                i64 m = i + 1;
                 while m < use {
                     if ir_d[m] == src || ir_op[m] == IR_CALL || ir_op[m] == IR_CALLIND { written = true; }
                     m += 1;
                 }
                 if written {
-                    int r = 48;
-                    int pick = 0;
+                    i64 r = 48;
+                    i64 pick = 0;
                     while r <= 61 && pick == 0 {
                         if r != 59 && (op_li[b] & (1 << r)) == 0 && (op_lo[b] & (1 << r)) == 0 && !bt_mentions(b, r) { pick = r; }
                         r += 1;
@@ -2015,7 +2015,7 @@ void op_bits_block(int b) {
 
 void op_bits_run() {
     if (ir_opt & 4) == 0 { op_webs(); }       // liveness (op_li, op_lo); the cleaning pass has made it already (a little too much live: safe)
-    int b = 0;
+    i64 b = 0;
     while b < ir_nb {
         if op_po[b] >= 0 { op_bits_block(b); }
         b += 1;
@@ -2030,24 +2030,24 @@ void op_bits_run() {
 // A slot is a double slot when every store puts in the result of an f2bits (or a constant, or a load of another double slot) that
 // is read by nothing but such stores and bits2f, and every load is read by nothing but such stores and bits2f. Then the loads
 // and the stores work on double registers: `ldr d, [slot]`, `str d, [slot]`.
-int fs_cand[8192];
-int fs_changes;
+i64 fs_cand[8192];
+i64 fs_changes;
 
-int fs_slot_of(int i) {
-    int s = vn_slot(i);
+i64 fs_slot_of(i64 i) {
+    i64 s = vn_slot(i);
     if s >= 0 && s < 8192 { return s; }
     return 0 - 1;
 }
 
 // the instruction that made the value of r at pos, through copies: F2BITS, CONST or a LOAD (-1: something else)
-int fs_root(int b, int pos, int r) {
-    int guard = 0;
-    int at = pos;
-    int v = r;
+i64 fs_root(i64 b, i64 pos, i64 r) {
+    i64 guard = 0;
+    i64 at = pos;
+    i64 v = r;
     while guard < 8 {
-        int j = rn_find_def(b, at, v);
+        i64 j = rn_find_def(b, at, v);
         if j < 0 { return 0 - 1; }
-        int op = ir_op[j];
+        i64 op = ir_op[j];
         if op == IR_COPY {
             v = ir_a[j];
             at = j;
@@ -2060,14 +2060,14 @@ int fs_root(int b, int pos, int r) {
     return 0 - 1;
 }
 
-bool fs_uses_ok(int b, int from, int d, int depth) {
+bool fs_uses_ok(i64 b, i64 from, i64 d, i64 depth) {
     if depth > 6 || d < 1 { return false; }
-    int j = from;
+    i64 j = from;
     while j < ir_be[b] {
-        int op = ir_op[j];
+        i64 op = ir_op[j];
         if op == IR_NOP { j += 1; continue; }
         if op == IR_CALL || op == IR_CALLIND || op == IR_SYSCALL {
-            int g = 0;
+            i64 g = 0;
             while g < ir_ac[j] {
                 if ir_args[ir_as[j] + g] == d { return false; }
                 g += 1;
@@ -2080,7 +2080,7 @@ bool fs_uses_ok(int b, int from, int d, int depth) {
         if reads {
             if op == IR_BITS2F && ir_a[j] == d {
             } else if op == IR_COPY && ir_a[j] == d {
-                int e = ir_d[j];
+                i64 e = ir_d[j];
                 if e == d {
                     // a copy onto itself changes nothing: the value goes on in the same register
                     j += 1;
@@ -2089,7 +2089,7 @@ bool fs_uses_ok(int b, int from, int d, int depth) {
                 if e < 1 || e >= 64 { return false; }
                 if !fs_uses_ok(b, j + 1, e, depth + 1) { return false; }
             } else if op == IR_STORE && ir_w[j] == 8 && ir_bi[j] == 0 && ir_b[j] == d && ir_a[j] == 30 {
-                int s2 = fs_slot_of(j);
+                i64 s2 = fs_slot_of(j);
                 if s2 < 0 || fs_cand[s2] != 1 { return false; }
             } else {
                 return false;
@@ -2104,8 +2104,8 @@ bool fs_uses_ok(int b, int from, int d, int depth) {
 
 // a double register (d18 .. d29) that the block b does not mention and that does not live across it, and that this pass did not take
 // in the block yet (bit r of taken); 0 when there is none. The scratch registers of the lowering (d30, d31) and d16, d17 are left alone.
-int fs_pick(int b, int taken) {
-    int r = 61;
+i64 fs_pick(i64 b, i64 taken) {
+    i64 r = 61;
     while r >= 50 {
         if r != 59 && (taken & (1 << r)) == 0 && (op_li[b] & (1 << r)) == 0 && (op_lo[b] & (1 << r)) == 0 && !bt_mentions(b, r) { return r; }
         r -= 1;
@@ -2116,16 +2116,16 @@ int fs_pick(int b, int taken) {
 void op_fslots() {
     if ir_nb > 2000 { return; }
     op_liveness();
-    int s = 0;
+    i64 s = 0;
     while s < 8192 { fs_cand[s] = 0; s += 1; }
     bool any = false;
-    int b = 0;
+    i64 b = 0;
     while b < ir_nb {
         if op_po[b] >= 0 {
-            int i = ir_bs[b];
+            i64 i = ir_bs[b];
             while i < ir_be[b] {
                 if ir_op[i] == IR_STORE && ir_a[i] == 30 {
-                    int sl = fs_slot_of(i);
+                    i64 sl = fs_slot_of(i);
                     if sl >= 0 { fs_cand[sl] = 1; any = true; }
                 }
                 i += 1;
@@ -2136,28 +2136,28 @@ void op_fslots() {
     if !any { return; }
     // the slots that something else than a double uses go out, until nothing changes
     bool changed = true;
-    int rounds = 0;
+    i64 rounds = 0;
     while changed && rounds < 12 {
         changed = false;
         rounds += 1;
         b = 0;
         while b < ir_nb {
             if op_po[b] >= 0 {
-                int i = ir_bs[b];
+                i64 i = ir_bs[b];
                 while i < ir_be[b] {
-                    int op = ir_op[i];
+                    i64 op = ir_op[i];
                     if (op == IR_STORE || op == IR_LOAD) && ir_a[i] == 30 && ir_w[i] == 8 {
-                        int sl = fs_slot_of(i);
+                        i64 sl = fs_slot_of(i);
                         if sl >= 0 && fs_cand[sl] == 1 {
                             bool ok = true;
                             if op == IR_STORE {
                                 if ir_bi[i] != 0 { ok = false; }
                                 else {
-                                    int rt = fs_root(b, i, ir_b[i]);
+                                    i64 rt = fs_root(b, i, ir_b[i]);
                                     if rt < 0 { ok = false; }
                                     else {
                                         if ir_op[rt] == IR_LOAD {
-                                            int s3 = fs_slot_of(rt);
+                                            i64 s3 = fs_slot_of(rt);
                                             if s3 < 0 || fs_cand[s3] != 1 { ok = false; }
                                         }
                                         // every reader of the value: the register the root wrote, after the root
@@ -2177,16 +2177,16 @@ void op_fslots() {
         }
     }
     // the slots that stay: stores and loads work on double registers
-    int map_of[64];
+    i64 map_of[64];
     b = 0;
     while b < ir_nb {
         if op_po[b] >= 0 {
-            int z = 0;
+            i64 z = 0;
             while z < 64 { map_of[z] = 0; z += 1; }
-            int taken = 0;
-            int i = ir_bs[b];
+            i64 taken = 0;
+            i64 i = ir_bs[b];
             while i < ir_be[b] {
-                int op = ir_op[i];
+                i64 op = ir_op[i];
                 if op == IR_NOP { i += 1; continue; }
                 if op == IR_CALL || op == IR_CALLIND || op == IR_SYSCALL {
                     z = 0;
@@ -2204,8 +2204,8 @@ void op_fslots() {
                     fs_changes += 1;
                     op = IR_COPY;
                 } else if op == IR_COPY && ir_a[i] > 0 && ir_a[i] < 64 && map_of[ir_a[i]] != 0 && ir_d[i] > 0 && ir_d[i] < 64 {
-                    int nf2 = fs_pick(b, taken);
-                    int od = ir_d[i];
+                    i64 nf2 = fs_pick(b, taken);
+                    i64 od = ir_d[i];
                     if ir_a[i] == od && nf2 == 0 { i += 1; continue; }
                     if nf2 != 0 {
                         taken = taken | (1 << nf2);
@@ -2222,16 +2222,16 @@ void op_fslots() {
                     i += 1;
                     continue;
                 }
-                int d = ir_d[i];
+                i64 d = ir_d[i];
                 if d > 0 && d < 64 && op != IR_STORE && ir_vcls[d] == 0 {
                     map_of[d] = 0;
                     bool retype = false;
                     if op == IR_LOAD && ir_a[i] == 30 && ir_w[i] == 8 && ir_bi[i] == 0 {
-                        int sl2 = fs_slot_of(i);
+                        i64 sl2 = fs_slot_of(i);
                         if sl2 >= 0 && fs_cand[sl2] == 1 { retype = true; }
                     } else if (op == IR_F2BITS || op == IR_CONST) && fs_uses_ok(b, i + 1, d, 0) {
                         // only when a store of a double slot is among the readers (else nothing is gained)
-                        int j = i + 1;
+                        i64 j = i + 1;
                         bool feeds = false;
                         while j < ir_be[b] && !feeds {
                             if ir_op[j] == IR_STORE && ir_b[j] == d && ir_bi[j] == 0 && ir_a[j] == 30 { feeds = true; }
@@ -2242,7 +2242,7 @@ void op_fslots() {
                         retype = feeds;
                     }
                     if retype {
-                        int nf = fs_pick(b, taken);
+                        i64 nf = fs_pick(b, taken);
                         if nf != 0 {
                             taken = taken | (1 << nf);
                             if op == IR_F2BITS { ir_op[i] = IR_COPY; }
@@ -2263,10 +2263,10 @@ void op_fslots() {
 // ---------------------------------------------------------------------------------------------- the frame of a function (the last text pass)
 // sub sp, sp, #N / str x29, [sp, #0] / str x30, [sp, #8] / add x29, sp, #0     ->   stp x29, x30, [sp, #-N]! / add x29, sp, #0
 // ldr x29, [sp, #0] / ldr x30, [sp, #8] / add sp, sp, #N                     ->   ldp x29, x30, [sp], #N
-int fr_on = 0;                  // off: stp/ldp pre- and post-index were 9 % SLOWER than sub/str/str on the Cortex-A55 (fib), measured 0.9.71
+i64 fr_on = 0;                  // off: stp/ldp pre- and post-index were 9 % SLOWER than sub/str/str on the Cortex-A55 (fib), measured 0.9.71
 
-int fr_number(int p) {
-    int n = 0;
+i64 fr_number(i64 p) {
+    i64 n = 0;
     while out_buf[p] >= '0' && out_buf[p] <= '9' {
         n = n * 10 + (out_buf[p] - '0');
         p += 1;
@@ -2276,14 +2276,14 @@ int fr_number(int p) {
 
 void fr_run() {
     regs_len = 0;
-    int i = 0;
+    i64 i = 0;
     while i < out_len {
-        int en = rg_end(i);
+        i64 en = rg_end(i);
         if rg_has(i, "sub sp, sp, #") {
-            int n = fr_number(i + 13);
-            int l2 = en + 1;
-            int l3 = 0 - 1;
-            int l4 = 0 - 1;
+            i64 n = fr_number(i + 13);
+            i64 l2 = en + 1;
+            i64 l3 = 0 - 1;
+            i64 l4 = 0 - 1;
             if l2 < out_len && rg_has(l2, "str x29, [sp, #0]\n") { l3 = rg_end(l2) + 1; }
             if l3 > 0 && l3 < out_len && rg_has(l3, "str x30, [sp, #8]\n") { l4 = rg_end(l3) + 1; }
             if l4 > 0 && l4 < out_len && rg_has(l4, "add x29, sp, #0\n") && n >= 16 && n <= 512 && n % 8 == 0 {
@@ -2295,11 +2295,11 @@ void fr_run() {
             }
         }
         if rg_has(i, "ldr x29, [sp, #0]\n") {
-            int l2 = en + 1;
-            int l3 = 0 - 1;
+            i64 l2 = en + 1;
+            i64 l3 = 0 - 1;
             if l2 < out_len && rg_has(l2, "ldr x30, [sp, #8]\n") { l3 = rg_end(l2) + 1; }
             if l3 > 0 && l3 < out_len && rg_has(l3, "add sp, sp, #") {
-                int n = fr_number(l3 + 13);
+                i64 n = fr_number(l3 + 13);
                 if n >= 16 && n <= 504 && n % 8 == 0 {
                     rg_text("ldp x29, x30, [sp], #");
                     rg_int(n);
@@ -2312,7 +2312,7 @@ void fr_run() {
         rg_copy(i, en);
         i = en + 1;
     }
-    int t = 0;
+    i64 t = 0;
     while t < regs_len {
         out_buf[t] = regs_buf[t];
         t += 1;
@@ -2323,7 +2323,7 @@ void fr_run() {
 // ---------------------------------------------------------------------------------------------- jump threading
 // A block that holds only "br cc xR, #N" and is jumped to from a block that has just set xR to a constant: the jump goes straight to the
 // right target (the boolean that && and || make with  mov x0, 1 / mov x0, 0  and test again). The constant stays where it is; dead code removes it.
-bool tj_holds(int cc, int a, int b) {
+bool tj_holds(i64 cc, i64 a, i64 b) {
     if cc == IR_EQ { return a == b; }
     if cc == IR_NE { return a != b; }
     if cc == IR_LT { return a < b; }
@@ -2331,9 +2331,9 @@ bool tj_holds(int cc, int a, int b) {
     if cc == IR_GT { return a > b; }
     if cc == IR_GE { return a >= b; }
     // unsigned: compare after flipping the sign bit
-    int sign = 1 << 63;
-    int ua = a + sign;
-    int ub = b + sign;
+    i64 sign = 1 << 63;
+    i64 ua = a + sign;
+    i64 ub = b + sign;
     if cc == IR_ULT { return ua < ub; }
     if cc == IR_ULE { return ua <= ub; }
     if cc == IR_UGT { return ua > ub; }
@@ -2341,10 +2341,10 @@ bool tj_holds(int cc, int a, int b) {
 }
 
 // the target an edge from the block b to the block t can be threaded to, or -1
-int tj_target(int b, int t, int upto) {
+i64 tj_target(i64 b, i64 t, i64 upto) {
     if t == b { return 0 - 1; }
     // the first instruction that does something; it must be the last of the block
-    int br = ir_bs[t];
+    i64 br = ir_bs[t];
     while br < ir_be[t] - 1 && ir_op[br] == IR_NOP { br += 1; }
     if br != ir_be[t] - 1 { return 0 - 1; }
     if ir_op[br] == IR_JMP {
@@ -2352,9 +2352,9 @@ int tj_target(int b, int t, int upto) {
         return ir_t1[br];
     }
     if ir_op[br] != IR_BR || ir_bi[br] != 1 || ir_a[br] < 1 || ir_a[br] > 31 { return 0 - 1; }
-    int r = ir_a[br];
+    i64 r = ir_a[br];
     // the last definition of r in b before the terminator
-    int i = upto - 1;
+    i64 i = upto - 1;
     while i >= ir_bs[b] {
         if ir_d[i] == r {
             if ir_op[i] != IR_CONST { return 0 - 1; }
@@ -2367,22 +2367,22 @@ int tj_target(int b, int t, int upto) {
     return 0 - 1;
 }
 
-int tj_changes;
+i64 tj_changes;
 
 void op_thread() {
-    int pass = 0;
+    i64 pass = 0;
     while pass < 3 {
-        int before = tj_changes;
-        int b = 0;
-        int nb0 = ir_nb;
+        i64 before = tj_changes;
+        i64 b = 0;
+        i64 nb0 = ir_nb;
         while b < nb0 {
-            int t = ir_be[b] - 1;
-            int op = ir_op[t];
+            i64 t = ir_be[b] - 1;
+            i64 op = ir_op[t];
             if op == IR_JMP || op == IR_BR || op == IR_FBR {
-                int n1 = tj_target(b, ir_t1[t], t);
+                i64 n1 = tj_target(b, ir_t1[t], t);
                 if n1 >= 0 { ir_t1[t] = n1; tj_changes += 1; }
                 if op != IR_JMP {
-                    int n2 = tj_target(b, ir_t2[t], t);
+                    i64 n2 = tj_target(b, ir_t2[t], t);
                     if n2 >= 0 { ir_t2[t] = n2; tj_changes += 1; }
                 }
             }
@@ -2398,17 +2398,17 @@ void op_thread() {
 // the front end and the inlining cut the code into such chains (a call, a check, the end of a statement). The passes that work inside a
 // block (the stack cells, the vectors, the constants of cells, later the promotion of cells) then see the whole chain. The instructions of
 // the chain are copied to a new place at the end of the arrays (the blocks are ranges); the blocks that were taken in stay but nobody reaches them.
-int mg_pc[IR_MAXB];
-int mg_pin[IR_MAXB];
-int mg_gone[IR_MAXB];
-int mg_chain[IR_MAXB];
-int mg_changes;
+i64 mg_pc[IR_MAXB];
+i64 mg_pin[IR_MAXB];
+i64 mg_gone[IR_MAXB];
+i64 mg_chain[IR_MAXB];
+i64 mg_changes;
 
 void op_merge_blocks() {
     // the allocator of webs (-irra, off by default) orders its intervals by the block numbers: not yet taught about merged chains
     if (ir_opt & 2147483648) != 0 || (ir_opt & 2) != 0 { return; }
     op_graph();
-    int b = 0;
+    i64 b = 0;
     while b < ir_nb {
         mg_pc[b] = 0;
         mg_pin[b] = 0;
@@ -2418,15 +2418,15 @@ void op_merge_blocks() {
     b = 0;
     while b < ir_nb {
         if op_po[b] >= 0 {
-            int k = 0;
+            i64 k = 0;
             while k < 2 {
-                int sc = op_succ(b, k);
+                i64 sc = op_succ(b, k);
                 if sc >= 0 && !(k == 1 && op_succ(b, 0) == sc) { mg_pc[sc] += 1; }
                 k += 1;
             }
-            int j = ir_bs[b];
+            i64 j = ir_bs[b];
             while j < ir_be[b] - 1 {
-                int op = ir_op[j];
+                i64 op = ir_op[j];
                 if op != IR_NOP {
                     if ir_t1[j] >= 0 && ir_t1[j] < ir_nb { mg_pin[ir_t1[j]] = 1; }
                     if ir_t2[j] >= 0 && ir_t2[j] < ir_nb { mg_pin[ir_t2[j]] = 1; }
@@ -2437,43 +2437,43 @@ void op_merge_blocks() {
         b += 1;
     }
     if ir_lastb >= 0 && ir_lastb < ir_nb { mg_pin[ir_lastb] = 1; }      // the block that falls into the epilogue stays where it is
-    int nb0 = ir_nb;
-    int ri = 0;
+    i64 nb0 = ir_nb;
+    i64 ri = 0;
     while ri < op_nrpo {
-        int h = op_rpo[ri];
+        i64 h = op_rpo[ri];
         ri += 1;
         if h >= nb0 || mg_gone[h] == 1 { continue; }
         // the chain that starts at h
-        int n = 0;
-        int cur = h;
+        i64 n = 0;
+        i64 cur = h;
         mg_chain[0] = h;
         n = 1;
         while n < 4000 {
-            int tt = ir_be[cur] - 1;
+            i64 tt = ir_be[cur] - 1;
             if ir_op[tt] != IR_JMP { break; }
-            int s = ir_t1[tt];
+            i64 s = ir_t1[tt];
             if s < 0 || s >= nb0 || s == h || s == 0 || mg_pc[s] != 1 || mg_pin[s] == 1 || mg_gone[s] == 1 || op_po[s] < 0 { break; }
             mg_chain[n] = s;
             n += 1;
             cur = s;
         }
         if n < 2 { continue; }
-        int total = 0;
-        int q = 0;
+        i64 total = 0;
+        i64 q = 0;
         while q < n {
             total += ir_be[mg_chain[q]] - ir_bs[mg_chain[q]];
             q += 1;
         }
         if ir_n + total + 8 >= IR_MAXI { return; }
-        int start = ir_n;
+        i64 start = ir_n;
         q = 0;
         while q < n {
-            int cb = mg_chain[q];
-            int last = ir_be[cb];
+            i64 cb = mg_chain[q];
+            i64 last = ir_be[cb];
             if q < n - 1 { last = last - 1; }             // the jump to the next block of the chain goes
-            int jj = ir_bs[cb];
+            i64 jj = ir_bs[cb];
             while jj < last {
-                int ni = ir_n;
+                i64 ni = ir_n;
                 ir_op[ni] = ir_op[jj];
                 ir_d[ni] = ir_d[jj];
                 ir_a[ni] = ir_a[jj];
@@ -2508,26 +2508,26 @@ void op_merge_blocks() {
 // stays a double: the cell is held in a double register, the load gives `f2bits` of it and the `bits2f` after it is a copy again.
 // The knowledge ends at a call (the registers are not kept over it) and at the end of the block. Only cells that the passes treat as plain.
 #define CP_N 12
-int cp_off[CP_N];
-int cp_reg[CP_N];
-int cp_cls[CP_N];
-int cp_n;
-int cp_fv[64];                   // d = f2bits F is known for the whole number register d: F (0: not known)
-int cp_ll_off[64];
-int cp_ll_pos[64];
-int cp_nll;
-int cp_pool_i[10];
-int cp_pool_f[13];
-int cp_changes;
-int cp_blocks;
+i64 cp_off[CP_N];
+i64 cp_reg[CP_N];
+i64 cp_cls[CP_N];
+i64 cp_n;
+i64 cp_fv[64];                   // d = f2bits F is known for the whole number register d: F (0: not known)
+i64 cp_ll_off[64];
+i64 cp_ll_pos[64];
+i64 cp_nll;
+i64 cp_pool_i[10];
+i64 cp_pool_f[13];
+i64 cp_changes;
+i64 cp_blocks;
 
-bool cp_cell_ok(int k) {
+bool cp_cell_ok(i64 k) {
     if k < 0 { return vn_neg_open == 0 && (0 - k) % 8 == 0; }
     return k % 8 == 0 && k / 8 < 8192 && op_plain[k / 8] == 1;
 }
 
-int cp_find(int k) {
-    int i = 0;
+i64 cp_find(i64 k) {
+    i64 i = 0;
     while i < cp_n {
         if cp_off[i] == k { return i; }
         i += 1;
@@ -2535,10 +2535,10 @@ int cp_find(int k) {
     return 0 - 1;
 }
 
-void cp_kill_reg(int r) {
+void cp_kill_reg(i64 r) {
     if r >= 1 && r < 64 {
         cp_fv[r] = 0;
-        int i = 0;
+        i64 i = 0;
         while i < 64 {
             if cp_fv[i] == r { cp_fv[i] = 0; }
             i += 1;
@@ -2546,8 +2546,8 @@ void cp_kill_reg(int r) {
     }
 }
 
-int cp_lastload(int k) {
-    int i = 0;
+i64 cp_lastload(i64 k) {
+    i64 i = 0;
     while i < cp_nll {
         if cp_ll_off[i] == k { return cp_ll_pos[i]; }
         i += 1;
@@ -2555,13 +2555,13 @@ int cp_lastload(int k) {
     return 0 - 1;
 }
 
-void cp_drop(int c) {
+void cp_drop(i64 c) {
     cp_n -= 1;
     cp_off[c] = cp_off[cp_n]; cp_reg[c] = cp_reg[cp_n]; cp_cls[c] = cp_cls[cp_n];
 }
 
-int cp_emit(int op, int d, int a, int b, int bi, int k) {
-    int ni = ir_n;
+i64 cp_emit(i64 op, i64 d, i64 a, i64 b, i64 bi, i64 k) {
+    i64 ni = ir_n;
     ir_op[ni] = op;
     ir_d[ni] = d;
     ir_a[ni] = a;
@@ -2577,8 +2577,8 @@ int cp_emit(int op, int d, int a, int b, int bi, int k) {
     return ni;
 }
 
-void cp_copy(int j) {
-    int ni = ir_n;
+void cp_copy(i64 j) {
+    i64 ni = ir_n;
     ir_op[ni] = ir_op[j];
     ir_d[ni] = ir_d[j];
     ir_a[ni] = ir_a[j];
@@ -2594,18 +2594,18 @@ void cp_copy(int j) {
 }
 
 // a register of the pool that the block does not mention and no cell holds
-int cp_take(int cls, int mention) {
+i64 cp_take(i64 cls, i64 mention) {
     if cls == 1 && (ir_opt & 4294967296) != 0 { return 0; }
     if cls == 0 && (ir_opt & 8589934592) != 0 { return 0; }
-    int n = 10;
+    i64 n = 10;
     if cls == 1 { n = 13; }
-    int i = 0;
+    i64 i = 0;
     while i < n {
-        int r = cp_pool_i[i % 10];
+        i64 r = cp_pool_i[i % 10];
         if cls == 1 { r = cp_pool_f[i]; }
         if i < n && (mention & op_bit(r)) == 0 {
             bool used = false;
-            int c = 0;
+            i64 c = 0;
             while c < cp_n { if cp_reg[c] == r { used = true; } c += 1; }
             if !used { return r; }
         }
@@ -2620,12 +2620,12 @@ void op_cell_promote() {
     vn_hints();
     // vn_neg_open: an address below the base is taken somewhere
     vn_neg_open = 0;
-    int zb = 0;
+    i64 zb = 0;
     while zb < ir_nb {
         if op_po[zb] >= 0 {
-            int zi = ir_bs[zb];
+            i64 zi = ir_bs[zb];
             while zi < ir_be[zb] {
-                int zo = ir_op[zi];
+                i64 zo = ir_op[zi];
                 if (zo == IR_ADDR_SLOT && ir_d[zi] != 30 && (ir_k[zi] < 0 || ir_b[zi] < 0)) || (zo == IR_ADD && ir_a[zi] == 30 && ir_bi[zi] == 1 && ir_b[zi] < 0) { vn_neg_open = 1; }
                 if ir_a[zi] == 30 && zo != IR_LOAD && zo != IR_STORE && zo != IR_ADDR_SLOT && !(zo == IR_ADD && ir_bi[zi] == 1) { vn_neg_open = 1; }
                 if (zo == IR_LOAD || zo == IR_STORE) && ir_a[zi] == 30 && ir_k[zi] < 0 && (ir_w[zi] != 8 || (ir_k[zi] % 8) != 0) { vn_neg_open = 1; }
@@ -2634,64 +2634,64 @@ void op_cell_promote() {
         }
         zb += 1;
     }
-    int pi = 0;
+    i64 pi = 0;
     while pi < 10 { cp_pool_i[pi] = 6 + pi; pi += 1; }              // x5 .. x14
-    int pf = 0;
+    i64 pf = 0;
     while pf < 5 { cp_pool_f[pf] = 35 + pf; pf += 1; }              // d3 .. d7
     while pf < 13 { cp_pool_f[pf] = 48 + (pf - 5); pf += 1; }       // d16 .. d23
     op_liveness();
-    int nb0 = ir_nb;
-    int b = 0;
+    i64 nb0 = ir_nb;
+    i64 b = 0;
     while b < nb0 {
         if op_po[b] >= 0 && ir_n + (ir_be[b] - ir_bs[b]) * 3 + 64 < IR_MAXI {
             // the registers that the block names or keeps alive
-            int mention = op_li[b] | op_lo[b];
-            int mj = ir_bs[b];
+            i64 mention = op_li[b] | op_lo[b];
+            i64 mj = ir_bs[b];
             while mj < ir_be[b] {
                 mention = mention | op_uses(mj) | op_defs(mj);
                 mj += 1;
             }
             // is there anything to do? a cell written or read twice
-            int cnt = 0;
-            int sj = ir_bs[b];
+            i64 cnt = 0;
+            i64 sj = ir_bs[b];
             while sj < ir_be[b] {
                 if (ir_op[sj] == IR_LOAD || ir_op[sj] == IR_STORE) && ir_a[sj] == 30 && ir_w[sj] == 8 && cp_cell_ok(ir_k[sj]) { cnt += 1; }
                 sj += 1;
             }
             // the last load of each cell in the block: after it the register is free again, and a store after it needs none
             cp_nll = 0;
-            int ll = ir_bs[b];
+            i64 ll = ir_bs[b];
             while ll < ir_be[b] {
                 if ir_op[ll] == IR_LOAD && ir_a[ll] == 30 && ir_w[ll] == 8 && cp_cell_ok(ir_k[ll]) {
-                    int lx = 0;
+                    i64 lx = 0;
                     while lx < cp_nll && cp_ll_off[lx] != ir_k[ll] { lx += 1; }
                     if lx == cp_nll && cp_nll < 64 { cp_nll += 1; cp_ll_off[lx] = ir_k[ll]; }
                     if lx < 64 { cp_ll_pos[lx] = ll; }
                 }
                 ll += 1;
             }
-            int capn = (ir_opt >> 40) & 4095;
+            i64 capn = (ir_opt >> 40) & 4095;
             if cnt >= 2 && (capn == 0 || cp_blocks < capn) {
-                int start = ir_n;
-                int before = cp_changes;
+                i64 start = ir_n;
+                i64 before = cp_changes;
                 cp_n = 0;
-                int fz = 0;
+                i64 fz = 0;
                 while fz < 64 { cp_fv[fz] = 0; fz += 1; }
-                int j = ir_bs[b];
-                int jend = ir_be[b];
+                i64 j = ir_bs[b];
+                i64 jend = ir_be[b];
                 while j < jend {
-                    int op = ir_op[j];
-                    int d = ir_d[j];
+                    i64 op = ir_op[j];
+                    i64 d = ir_d[j];
                     bool done = false;
                     if op == IR_CALL || op == IR_CALLIND || op == IR_SYSCALL {
                         cp_n = 0;
                         fz = 0;
                         while fz < 64 { cp_fv[fz] = 0; fz += 1; }
                     } else if op == IR_STORE && ir_a[j] == 30 && ir_w[j] == 8 && cp_cell_ok(ir_k[j]) {
-                        int k = ir_k[j];
-                        int c = cp_find(k);
-                        int r = ir_b[j];
-                        int rc = 2;
+                        i64 k = ir_k[j];
+                        i64 c = cp_find(k);
+                        i64 r = ir_b[j];
+                        i64 rc = 2;
                         if ir_bi[j] == 0 && r >= 1 && r < 64 { rc = ir_vcls[r]; }          // a scratch temporary (64 and up) lives for one instruction: not kept
                         if rc > 1 || j >= cp_lastload(k) {
                             if c >= 0 {
@@ -2699,17 +2699,17 @@ void op_cell_promote() {
                                 cp_off[c] = cp_off[cp_n]; cp_reg[c] = cp_reg[cp_n]; cp_cls[c] = cp_cls[cp_n];
                             }
                         } else {
-                            int fsrc = 0;
+                            i64 fsrc = 0;
                             if rc == 1 { fsrc = r; }
                             else if r < 64 && cp_fv[r] != 0 { fsrc = cp_fv[r]; }
-                            int want = 0;
+                            i64 want = 0;
                             if fsrc != 0 { want = 1; }
                             if c >= 0 && cp_cls[c] != want {
                                 cp_n -= 1;
                                 cp_off[c] = cp_off[cp_n]; cp_reg[c] = cp_reg[cp_n]; cp_cls[c] = cp_cls[cp_n];
                                 c = 0 - 1;
                             }
-                            int hreg = 0;
+                            i64 hreg = 0;
                             if c >= 0 { hreg = cp_reg[c]; } else if cp_n < CP_N { hreg = cp_take(want, mention); }
                             if hreg != 0 {
                                 if c < 0 {
@@ -2727,9 +2727,9 @@ void op_cell_promote() {
                             }
                         }
                     } else if op == IR_LOAD && ir_a[j] == 30 && ir_w[j] == 8 && cp_cell_ok(ir_k[j]) && d >= 1 && ir_vcls[d] <= 1 {
-                        int k2 = ir_k[j];
-                        int c2 = cp_find(k2);
-                        int dcls = ir_vcls[d];
+                        i64 k2 = ir_k[j];
+                        i64 c2 = cp_find(k2);
+                        i64 dcls = ir_vcls[d];
                         if c2 >= 0 {
                             if cp_cls[c2] == dcls {
                                 cp_emit(IR_COPY, d, cp_reg[c2], 0, 0, 0);
@@ -2745,12 +2745,12 @@ void op_cell_promote() {
                             done = true;
                             if j >= cp_lastload(k2) { cp_drop(c2); }
                         } else if cp_n < CP_N && d < 64 && j < cp_lastload(k2) {
-                            int h2 = cp_take(dcls, mention);
+                            i64 h2 = cp_take(dcls, mention);
                             if h2 != 0 {
                                 cp_copy(j);
                                 cp_emit(IR_COPY, h2, d, 0, 0, 0);
                                 if d < 64 { cp_kill_reg(d); }
-                                int c3 = cp_n;
+                                i64 c3 = cp_n;
                                 cp_n += 1;
                                 cp_off[c3] = k2;
                                 cp_reg[c3] = h2;
@@ -2759,17 +2759,17 @@ void op_cell_promote() {
                             }
                         }
                     } else if op == IR_BITS2F && ir_a[j] >= 1 && ir_a[j] < 64 && cp_fv[ir_a[j]] != 0 && d >= 32 && d < 64 {
-                        int src = cp_fv[ir_a[j]];
+                        i64 src = cp_fv[ir_a[j]];
                         cp_emit(IR_COPY, d, src, 0, 0, 0);
                         cp_kill_reg(d);
                         cp_changes += 1;
                         done = true;
                     } else if (op == IR_LOAD || op == IR_STORE) && ir_a[j] == 30 {
                         // another width: a cell that it touches is not known any more
-                        int kk = ir_k[j];
-                        int ww = ir_w[j];
+                        i64 kk = ir_k[j];
+                        i64 ww = ir_w[j];
                         if ww < 0 { ww = 0 - ww; }
-                        int ci = 0;
+                        i64 ci = 0;
                         while ci < cp_n {
                             if cp_off[ci] < kk + ww && cp_off[ci] + 8 > kk {
                                 cp_n -= 1;
@@ -2805,15 +2805,15 @@ void op_cell_promote() {
 // ---------------------------------------------------------------------------------------------- vectors written and read again
 // A 16-byte store and a 16-byte load of the same place (the same base vreg and number) in one block, with no other store, call or
 // change of the base in between: the load is a copy of the stored vector. (The store stays: another pass may find it dead.)
-int vf_a[8];
-int vf_k[8];
-int vf_v[8];
-int vf_n;
-int vf_changes;
+i64 vf_a[8];
+i64 vf_k[8];
+i64 vf_v[8];
+i64 vf_n;
+i64 vf_changes;
 
-void vf_kill_reg(int r) {
-    int j = 0;
-    int m = 0;
+void vf_kill_reg(i64 r) {
+    i64 j = 0;
+    i64 m = 0;
     while j < vf_n {
         if vf_a[j] != r && vf_v[j] != r {
             vf_a[m] = vf_a[j];
@@ -2827,22 +2827,22 @@ void vf_kill_reg(int r) {
 }
 
 void op_vfwd() {
-    int b = 0;
+    i64 b = 0;
     while b < ir_nb {
         vf_n = 0;
-        int i = ir_bs[b];
+        i64 i = ir_bs[b];
         while i < ir_be[b] {
-            int op = ir_op[i];
+            i64 op = ir_op[i];
             if op == IR_LOAD && ir_w[i] == 16 && ir_vcls[ir_d[i]] == 2 {
-                int j = 0;
-                int hit = 0 - 1;
+                i64 j = 0;
+                i64 hit = 0 - 1;
                 while j < vf_n {
                     if vf_a[j] == ir_a[i] && vf_k[j] == ir_k[i] { hit = j; }
                     j += 1;
                 }
                 if hit >= 0 {
-                    int v = vf_v[hit];
-                    int d = ir_d[i];
+                    i64 v = vf_v[hit];
+                    i64 d = ir_d[i];
                     ir_op[i] = IR_COPY;
                     ir_a[i] = v;
                     ir_b[i] = 0;
@@ -2872,13 +2872,13 @@ void op_vfwd() {
 // ---------------------------------------------------------------------------------------------- small copies of structs in place
 // bl j2k_copy (x0 = from, x3 = to, x2 = the size in bytes, a multiple of 8) with a size that is known and at most 128: loads and stores
 // instead of a call (a struct of three doubles is three pairs, not a call with a loop).
-int ci_changes;
+i64 ci_changes;
 
 // the size in bytes of the copy made by the call i, or -1 if it is not a small copy of known size
-int ci_size(int b, int i) {
+i64 ci_size(i64 b, i64 i) {
     if ir_op[i] != IR_CALL { return 0 - 1; }
     if !str_eq(@ir_name + ir_k[i] * 64, "j2k_copy") && !str_eq(@ir_name + ir_k[i] * 64, "j2k_copy16") { return 0 - 1; }
-    int j = i - 1;
+    i64 j = i - 1;
     while j >= ir_bs[b] {
         if ir_d[j] == 3 {
             if ir_op[j] == IR_CONST && ir_k[j] > 0 && ir_k[j] <= 128 && ir_k[j] % 8 == 0 { return ir_k[j]; }
@@ -2892,44 +2892,44 @@ int ci_size(int b, int i) {
 
 void op_copy_inline() {
     op_graph();
-    int nb0 = ir_nb;
-    int b = 0;
+    i64 nb0 = ir_nb;
+    i64 b = 0;
     while b < nb0 {
         if op_po[b] >= 0 {
-            int need = 0;
-            int i = ir_bs[b];
+            i64 need = 0;
+            i64 i = ir_bs[b];
             while i < ir_be[b] {
-                int sz = ci_size(b, i);
+                i64 sz = ci_size(b, i);
                 if sz > 0 { need += sz / 4; }
                 i += 1;
             }
             if need > 0 && ir_n + (ir_be[b] - ir_bs[b]) + need + 4 < IR_MAXI && ir_nv + need < IR_MAXV - 8 {
-                int ns = ir_n;
-                int e0 = ir_be[b];
+                i64 ns = ir_n;
+                i64 e0 = ir_be[b];
                 i = ir_bs[b];
                 while i < e0 {
-                    int sz2 = ci_size(b, i);
+                    i64 sz2 = ci_size(b, i);
                     if sz2 > 0 {
-                        int off = 0;
+                        i64 off = 0;
                         bool as_vec = sz2 == 16 && str_eq(@ir_name + ir_k[i] * 64, "j2k_copy16");
                         if as_vec {
                             // a simd value: one 16-byte load and store
-                            int tq = ir_vreg(2);
-                            int lq = ir_n;
+                            i64 tq = ir_vreg(2);
+                            i64 lq = ir_n;
                             ir_op[lq] = IR_LOAD; ir_d[lq] = tq; ir_a[lq] = 1; ir_b[lq] = 0; ir_bi[lq] = 0; ir_k[lq] = 0; ir_w[lq] = 16;
                             ir_t1[lq] = 0 - 1; ir_t2[lq] = 0 - 1; ir_as[lq] = 0; ir_ac[lq] = 0;
-                            int sq = lq + 1;
+                            i64 sq = lq + 1;
                             ir_op[sq] = IR_STORE; ir_d[sq] = 0; ir_a[sq] = 4; ir_b[sq] = tq; ir_bi[sq] = 0; ir_k[sq] = 0; ir_w[sq] = 16;
                             ir_t1[sq] = 0 - 1; ir_t2[sq] = 0 - 1; ir_as[sq] = 0; ir_ac[sq] = 0;
                             ir_n += 2;
                             off = sz2;
                         }
                         while off < sz2 {
-                            int t = ir_vreg(0);
-                            int l = ir_n;
+                            i64 t = ir_vreg(0);
+                            i64 l = ir_n;
                             ir_op[l] = IR_LOAD; ir_d[l] = t; ir_a[l] = 1; ir_b[l] = 0; ir_bi[l] = 0; ir_k[l] = off; ir_w[l] = 8;
                             ir_t1[l] = 0 - 1; ir_t2[l] = 0 - 1; ir_as[l] = 0; ir_ac[l] = 0;
-                            int s = l + 1;
+                            i64 s = l + 1;
                             ir_op[s] = IR_STORE; ir_d[s] = 0; ir_a[s] = 4; ir_b[s] = t; ir_bi[s] = 0; ir_k[s] = off; ir_w[s] = 8;
                             ir_t1[s] = 0 - 1; ir_t2[s] = 0 - 1; ir_as[s] = 0; ir_ac[s] = 0;
                             ir_n += 2;
@@ -2937,7 +2937,7 @@ void op_copy_inline() {
                         }
                         ci_changes += 1;
                     } else {
-                        int j2 = ir_n;
+                        i64 j2 = ir_n;
                         ir_op[j2] = ir_op[i]; ir_d[j2] = ir_d[i]; ir_a[j2] = ir_a[i]; ir_b[j2] = ir_b[i]; ir_bi[j2] = ir_bi[i]; ir_k[j2] = ir_k[i]; ir_w[j2] = ir_w[i];
                         ir_t1[j2] = ir_t1[i]; ir_t2[j2] = ir_t2[i]; ir_as[j2] = ir_as[i]; ir_ac[j2] = ir_ac[i];
                         ir_n += 1;
@@ -2966,55 +2966,55 @@ void op_copy_inline() {
 #define IS_MAXN 4096
 
 char is_fname[65536];            // 64 characters each
-int is_i0[IS_MAXF];              // the first instruction in the store
-int is_ni[IS_MAXF];
-int is_b0[IS_MAXF];
-int is_nb[IS_MAXF];
-int is_a0[IS_MAXF];
-int is_n0[IS_MAXF];              // its names (64 characters each in is_names)
-int is_frame[IS_MAXF];
-int is_h0[IS_MAXF];              // its hint line in is_hint
-int is_hn[IS_MAXF];
-int is_nv[IS_MAXF];              // how many vregs it uses (the classes of those from 64 are in is_vc from is_v0)
-int is_v0[IS_MAXF];
-int is_recursive[IS_MAXF];
-int is_size[IS_MAXF];                 // instructions that do something
-int is_count;
-int is_ti;
-int is_tb;
-int is_ta;
-int is_tn;
-int is_th;
-int is_tv;
+i64 is_i0[IS_MAXF];              // the first instruction in the store
+i64 is_ni[IS_MAXF];
+i64 is_b0[IS_MAXF];
+i64 is_nb[IS_MAXF];
+i64 is_a0[IS_MAXF];
+i64 is_n0[IS_MAXF];              // its names (64 characters each in is_names)
+i64 is_frame[IS_MAXF];
+i64 is_h0[IS_MAXF];              // its hint line in is_hint
+i64 is_hn[IS_MAXF];
+i64 is_nv[IS_MAXF];              // how many vregs it uses (the classes of those from 64 are in is_vc from is_v0)
+i64 is_v0[IS_MAXF];
+i64 is_recursive[IS_MAXF];
+i64 is_size[IS_MAXF];                 // instructions that do something
+i64 is_count;
+i64 is_ti;
+i64 is_tb;
+i64 is_ta;
+i64 is_tn;
+i64 is_th;
+i64 is_tv;
 
-int is_op[IS_MAXI];
-int is_d[IS_MAXI];
-int is_a[IS_MAXI];
-int is_b[IS_MAXI];
-int is_bi[IS_MAXI];
-int is_k[IS_MAXI];
-int is_w[IS_MAXI];
-int is_t1[IS_MAXI];
-int is_t2[IS_MAXI];
-int is_as[IS_MAXI];
-int is_ac[IS_MAXI];
-int is_args[IS_MAXA];
-int is_bs[IS_MAXB];
-int is_be[IS_MAXB];
+i64 is_op[IS_MAXI];
+i64 is_d[IS_MAXI];
+i64 is_a[IS_MAXI];
+i64 is_b[IS_MAXI];
+i64 is_bi[IS_MAXI];
+i64 is_k[IS_MAXI];
+i64 is_w[IS_MAXI];
+i64 is_t1[IS_MAXI];
+i64 is_t2[IS_MAXI];
+i64 is_as[IS_MAXI];
+i64 is_ac[IS_MAXI];
+i64 is_args[IS_MAXA];
+i64 is_bs[IS_MAXB];
+i64 is_be[IS_MAXB];
 char is_names[262144];
 char is_hint[65536];
-int is_vc[IS_MAXV];
+i64 is_vc[IS_MAXV];
 
-int inl_done;                    // how many calls were replaced by their bodies (all functions)
-int inl_maxsize = 60;
-int inl_tiny = 8;                // a callee this small is inlined everywhere, a bigger one only inside loops            // the biggest callee (instructions that do something)
+i64 inl_done;                    // how many calls were replaced by their bodies (all functions)
+i64 inl_maxsize = 60;
+i64 inl_tiny = 8;                // a callee this small is inlined everywhere, a bigger one only inside loops            // the biggest callee (instructions that do something)
 
-int is_ht[4096];                 // the kept functions by name: the index + 1 (open addressing); is_ht_n says how many are in it
-int is_ht_n;
+i64 is_ht[4096];                 // the kept functions by name: the index + 1 (open addressing); is_ht_n says how many are in it
+i64 is_ht_n;
 
-int is_hash(char^ name) {
-    int h = 5381;
-    int k = 0;
+i64 is_hash(char^ name) {
+    i64 h = 5381;
+    i64 k = 0;
     while name[k] != 0 {
         h = (h * 33 + name[k]) & 1073741823;
         k += 1;
@@ -3022,26 +3022,26 @@ int is_hash(char^ name) {
     return h & 4095;
 }
 
-int is_find(char^ name) {
+i64 is_find(char^ name) {
     if is_ht_n != is_count {
         // the table is made again when the number of kept functions is not the one it knows (a new collection)
-        int z = 0;
+        i64 z = 0;
         while z < 4096 {
             is_ht[z] = 0;
             z += 1;
         }
-        int f0 = 0;
+        i64 f0 = 0;
         while f0 < is_count {
-            int h0 = is_hash(@is_fname + f0 * 64);
+            i64 h0 = is_hash(@is_fname + f0 * 64);
             while is_ht[h0] != 0 { h0 = (h0 + 1) & 4095; }
             is_ht[h0] = f0 + 1;
             f0 += 1;
         }
         is_ht_n = is_count;
     }
-    int h = is_hash(name);
+    i64 h = is_hash(name);
     while is_ht[h] != 0 {
-        int f = is_ht[h] - 1;
+        i64 f = is_ht[h] - 1;
         if str_eq(@is_fname + f * 64, name) { return f; }
         h = (h + 1) & 4095;
     }
@@ -3052,27 +3052,27 @@ int is_find(char^ name) {
 void is_save(char^ name) {
     if is_count >= IS_MAXF { return; }
     if str_len(name) >= 63 { return; }
-    int cnt = op_count();
+    i64 cnt = op_count();
     if cnt > inl_maxsize || ir_nb > 40 { return; }
-    int total_b = ir_nb;
-    int total_i = 0;
-    int b = 0;
+    i64 total_b = ir_nb;
+    i64 total_i = 0;
+    i64 b = 0;
     while b < ir_nb {
         total_i += ir_be[b] - ir_bs[b];
         b += 1;
     }
     if is_ti + total_i >= IS_MAXI || is_tb + total_b >= IS_MAXB || is_ta + ir_nargs >= IS_MAXA || is_tn + ir_nnames >= IS_MAXN || is_th + lf_hint_n >= 65000 || is_tv + ir_nv >= IS_MAXV { return; }
     // no indirect calls, no system calls in the middle, and it must not call itself
-    int rec = 0;
+    i64 rec = 0;
     b = 0;
     while b < ir_nb {
-        int i = ir_bs[b];
+        i64 i = ir_bs[b];
         while i < ir_be[b] {
             if ir_op[i] == IR_CALLIND { return; }
             // the frame pointer may only be the base of a load / store, or the first operand of an add of a number (the slots are moved when the function is inlined)
-            int o5 = ir_op[i];
+            i64 o5 = ir_op[i];
             if o5 == IR_CALL || o5 == IR_SYSCALL {
-                int g5 = 0;
+                i64 g5 = 0;
                 while g5 < ir_ac[i] {
                     if ir_args[ir_as[i] + g5] == 30 { return; }
                     g5 += 1;
@@ -3085,7 +3085,7 @@ void is_save(char^ name) {
         }
         b += 1;
     }
-    int f = is_count;
+    i64 f = is_count;
     str_copy(@is_fname + f * 64, name, 64);
     is_i0[f] = is_ti;
     is_b0[f] = is_tb;
@@ -3100,18 +3100,18 @@ void is_save(char^ name) {
     is_recursive[f] = rec;
     is_size[f] = cnt;
     // blocks and instructions, in block order, with the blocks' ranges relative to the function's first instruction
-    int at = is_ti;
+    i64 at = is_ti;
     b = 0;
     while b < ir_nb {
         is_bs[is_tb + b] = at - is_ti;
-        int i2 = ir_bs[b];
+        i64 i2 = ir_bs[b];
         while i2 < ir_be[b] {
             is_op[at] = ir_op[i2]; is_d[at] = ir_d[i2]; is_a[at] = ir_a[i2]; is_b[at] = ir_b[i2]; is_bi[at] = ir_bi[i2];
             is_k[at] = ir_k[i2]; is_w[at] = ir_w[i2]; is_t1[at] = ir_t1[i2]; is_t2[at] = ir_t2[i2];
             is_ac[at] = ir_ac[i2];
             if ir_ac[i2] > 0 {
                 is_as[at] = is_ta;
-                int g = 0;
+                i64 g = 0;
                 while g < ir_ac[i2] {
                     is_args[is_ta] = ir_args[ir_as[i2] + g];
                     is_ta += 1;
@@ -3126,19 +3126,19 @@ void is_save(char^ name) {
     }
     is_ti = at;
     is_tb += ir_nb;
-    int n = 0;
+    i64 n = 0;
     while n < ir_nnames {
         str_copy(@is_names + (is_tn + n) * 64, @ir_name + n * 64, 64);
         n += 1;
     }
     is_tn += ir_nnames;
-    int h = 0;
+    i64 h = 0;
     while h < lf_hint_n {
         is_hint[is_th + h] = lf_hint_text[h];
         h += 1;
     }
     is_th += lf_hint_n;
-    int v = 0;
+    i64 v = 0;
     while v < ir_nv {
         is_vc[is_tv + v] = ir_vcls[v];
         v += 1;
@@ -3148,36 +3148,36 @@ void is_save(char^ name) {
 }
 
 // write one instruction at the end of the arrays
-int in_put(int op, int d, int a, int b, int bi, int k, int w, int t1, int t2) {
-    int j = ir_n;
+i64 in_put(i64 op, i64 d, i64 a, i64 b, i64 bi, i64 k, i64 w, i64 t1, i64 t2) {
+    i64 j = ir_n;
     ir_op[j] = op; ir_d[j] = d; ir_a[j] = a; ir_b[j] = b; ir_bi[j] = bi; ir_k[j] = k; ir_w[j] = w;
     ir_t1[j] = t1; ir_t2[j] = t2; ir_as[j] = 0; ir_ac[j] = 0;
     ir_n += 1;
     return j;
 }
 
-int in_map[IS_MAXV];
+i64 in_map[IS_MAXV];
 
-int in_v(int v) {
+i64 in_v(i64 v) {
     if v >= 64 { return in_map[v]; }
     return v;
 }
 
 // the hint line of the callee, its offsets moved by delta, added to the hint line of the caller
-void in_hint(int f, int delta) {
-    int n = is_hn[f];
-    int base = is_h0[f];
-    int p = 2;
+void in_hint(i64 f, i64 delta) {
+    i64 n = is_hn[f];
+    i64 base = is_h0[f];
+    i64 p = 2;
     while p < n {
         while p < n && is_hint[base + p] == ' ' { p += 1; }
         if p < n {
-            int off = 0;
+            i64 off = 0;
             while p < n && is_hint[base + p] >= '0' && is_hint[base + p] <= '9' { off = off * 10 + (is_hint[base + p] - '0'); p += 1; }
             p += 1;
-            int size = 0;
+            i64 size = 0;
             while p < n && is_hint[base + p] >= '0' && is_hint[base + p] <= '9' { size = size * 10 + (is_hint[base + p] - '0'); p += 1; }
             p += 1;
-            int flag = 0;
+            i64 flag = 0;
             while p < n && is_hint[base + p] >= '0' && is_hint[base + p] <= '9' { flag = flag * 10 + (is_hint[base + p] - '0'); p += 1; }
             // write " off:size:flag"
             if lf_hint_n < 16000 - 40 {
@@ -3188,15 +3188,15 @@ void in_hint(int f, int delta) {
                 }
                 lf_hint_text[lf_hint_n] = ' ';
                 lf_hint_n += 1;
-                int parts[3];
+                i64 parts[3];
                 parts[0] = off + delta;
                 parts[1] = size;
                 parts[2] = flag;
-                int q = 0;
+                i64 q = 0;
                 while q < 3 {
                     char dg[12];
-                    int dn = 0;
-                    int dv = parts[q];
+                    i64 dn = 0;
+                    i64 dv = parts[q];
                     if dv == 0 { dg[0] = '0'; dn = 1; }
                     while dv > 0 { dg[dn] = '0' + dv % 10; dv = dv / 10; dn += 1; }
                     while dn > 0 { dn -= 1; lf_hint_text[lf_hint_n] = dg[dn]; lf_hint_n += 1; }
@@ -3209,52 +3209,52 @@ void in_hint(int f, int delta) {
 }
 
 // replace the call c in the block b by the body of the function f; false if there is no room
-bool in_inline(int b, int c, int f) {
-    int nbc = is_nb[f];
+bool in_inline(i64 b, i64 c, i64 f) {
+    i64 nbc = is_nb[f];
     // room
     if ir_nb + nbc + 2 >= IR_MAXB - 2 || ir_n + 2 * (ir_be[b] - ir_bs[b]) + 4 * is_ni[f] + 64 >= IR_MAXI || ir_nv + is_nv[f] >= IR_MAXV - 8 { return false; }
     // the temporaries of the callee get new vregs
-    int v = 64;
+    i64 v = 64;
     while v < is_nv[f] {
         in_map[v] = ir_vreg(is_vc[is_v0[f] + v]);
         v += 1;
     }
     // frame: the slots (offsets from 16) move up by delta; the stack cells (negative offsets) go below the deepest one of the caller
-    int delta = lf_frame - 16;
-    int neg = op_maxq();
+    i64 delta = lf_frame - 16;
+    i64 neg = op_maxq();
     lf_frame = lf_frame + is_frame[f] - 16;
     in_hint(f, delta);
-    int base = ir_nb;
-    int kb = base + nbc;                      // the second half of the block of the call
+    i64 base = ir_nb;
+    i64 kb = base + nbc;                      // the second half of the block of the call
     // the first half: the instructions before the call, then a jump into the copy
-    int s0 = ir_n;
-    int i = ir_bs[b];
+    i64 s0 = ir_n;
+    i64 i = ir_bs[b];
     while i < c {
-        int j = in_put(ir_op[i], ir_d[i], ir_a[i], ir_b[i], ir_bi[i], ir_k[i], ir_w[i], ir_t1[i], ir_t2[i]);
+        i64 j = in_put(ir_op[i], ir_d[i], ir_a[i], ir_b[i], ir_bi[i], ir_k[i], ir_w[i], ir_t1[i], ir_t2[i]);
         ir_as[j] = ir_as[i];
         ir_ac[j] = ir_ac[i];
         i += 1;
     }
     in_put(IR_JMP, 0, 0, 0, 0, 0, 0, base, 0 - 1);
-    int oldend = ir_be[b];
-    int oldstart = ir_bs[b];
+    i64 oldend = ir_be[b];
+    i64 oldstart = ir_bs[b];
     // the copy of the callee's blocks
-    int cb = 0;
+    i64 cb = 0;
     while cb < nbc {
-        int bid = base + cb;
+        i64 bid = base + cb;
         ir_bs[bid] = ir_n;
-        int ci = is_i0[f] + is_bs[is_b0[f] + cb];
-        int ce = is_i0[f] + is_be[is_b0[f] + cb];
+        i64 ci = is_i0[f] + is_bs[is_b0[f] + cb];
+        i64 ce = is_i0[f] + is_be[is_b0[f] + cb];
         while ci < ce {
-            int op = is_op[ci];
-            int d = is_d[ci];
+            i64 op = is_op[ci];
+            i64 d = is_d[ci];
             if op == IR_PARAM || (op == IR_ADDR_SLOT && d == 30) {
                 ci += 1;
                 continue;
             }
-            int a = is_a[ci];
-            int k = is_k[ci];
-            int bb = is_b[ci];
+            i64 a = is_a[ci];
+            i64 k = is_k[ci];
+            i64 bb = is_b[ci];
             if is_bi[ci] == 0 && (ir_uses_b(op)) { bb = in_v(bb); }
             if (op == IR_LOAD || op == IR_STORE) && a == 30 {
                 if k >= 0 { k = k + delta; } else { k = k - neg; }
@@ -3269,17 +3269,17 @@ bool in_inline(int b, int c, int f) {
                 ci += 1;
                 continue;
             }
-            int t1 = is_t1[ci];
-            int t2 = is_t2[ci];
+            i64 t1 = is_t1[ci];
+            i64 t2 = is_t2[ci];
             if op == IR_JMP || op == IR_BR || op == IR_FBR { t1 = t1 + base; }
             if op == IR_BR || op == IR_FBR { t2 = t2 + base; }
             if op == IR_CALL {
                 k = ir_name_index(@is_names + (is_n0[f] + k) * 64);
             }
-            int j2 = in_put(op, in_v(d), in_v(a), bb, is_bi[ci], k, is_w[ci], t1, t2);
+            i64 j2 = in_put(op, in_v(d), in_v(a), bb, is_bi[ci], k, is_w[ci], t1, t2);
             if is_ac[ci] > 0 {
-                int regs[16];
-                int g = 0;
+                i64 regs[16];
+                i64 g = 0;
                 while g < is_ac[ci] && g < 16 {
                     regs[g] = in_v(is_args[is_as[ci] + g]);
                     g += 1;
@@ -3295,14 +3295,14 @@ bool in_inline(int b, int c, int f) {
     ir_bs[kb] = ir_n;
     i = c + 1;
     while i < oldend {
-        int j3 = in_put(ir_op[i], ir_d[i], ir_a[i], ir_b[i], ir_bi[i], ir_k[i], ir_w[i], ir_t1[i], ir_t2[i]);
+        i64 j3 = in_put(ir_op[i], ir_d[i], ir_a[i], ir_b[i], ir_bi[i], ir_k[i], ir_w[i], ir_t1[i], ir_t2[i]);
         ir_as[j3] = ir_as[i];
         ir_ac[j3] = ir_ac[i];
         i += 1;
     }
     ir_be[kb] = ir_n;
     ir_blab[kb] = 0 - 1;
-    int z = 0;
+    i64 z = 0;
     while z < nbc {
         ir_blab[base + z] = 0 - 1;
         z += 1;
@@ -3315,12 +3315,12 @@ bool in_inline(int b, int c, int f) {
     return true;
 }
 
-int inl_inloop[IR_MAXB];
+i64 inl_inloop[IR_MAXB];
 
 // the blocks that are in a loop of the function now
 void inl_find_loops() {
     op_graph();
-    int b = 0;
+    i64 b = 0;
     while b < ir_nb {
         inl_inloop[b] = 0;
         b += 1;
@@ -3328,15 +3328,15 @@ void inl_find_loops() {
     b = 0;
     while b < ir_nb {
         if op_po[b] >= 0 {
-            int k = 0;
+            i64 k = 0;
             while k < 2 {
-                int sc = op_succ(b, k);
+                i64 sc = op_succ(b, k);
                 if sc >= 0 && op_dom(sc, b) {
                     // the loop of the back edge b -> sc: sc and everything that reaches b without passing sc
                     op_stamp += 1;
                     op_mark[sc] = op_stamp;
                     inl_inloop[sc] = 1;
-                    int sp = 0;
+                    i64 sp = 0;
                     if b != sc {
                         op_mark[b] = op_stamp;
                         op_stack[0] = b;
@@ -3344,11 +3344,11 @@ void inl_find_loops() {
                     }
                     while sp > 0 {
                         sp -= 1;
-                        int x = op_stack[sp];
+                        i64 x = op_stack[sp];
                         inl_inloop[x] = 1;
-                        int e = op_phead[x];
+                        i64 e = op_phead[x];
                         while e >= 0 {
-                            int p = e / 2;
+                            i64 p = e / 2;
                             if op_po[p] >= 0 && op_mark[p] != op_stamp {
                                 op_mark[p] = op_stamp;
                                 op_stack[sp] = p;
@@ -3369,9 +3369,9 @@ void inl_find_loops() {
 void op_inline(char^ self) {
     // is there a call at all to a function that is kept?
     bool any = false;
-    int b0 = 0;
+    i64 b0 = 0;
     while b0 < ir_nb && !any {
-        int i0 = ir_bs[b0];
+        i64 i0 = ir_bs[b0];
         while i0 < ir_be[b0] && !any {
             if ir_op[i0] == IR_CALL && is_find(@ir_name + ir_k[i0] * 64) >= 0 { any = true; }
             i0 += 1;
@@ -3380,22 +3380,22 @@ void op_inline(char^ self) {
     }
     if !any { return; }
     inl_find_loops();
-    int guard = 0;
+    i64 guard = 0;
     bool again = true;
     while again && guard < 12 {
         again = false;
-        int b = 0;
+        i64 b = 0;
         while b < ir_nb && !again {
-            int i = ir_bs[b];
+            i64 i = ir_bs[b];
             while i < ir_be[b] && !again {
                 if ir_op[i] == IR_CALL && ir_n < 2500 {
-                    int f = is_find(@ir_name + ir_k[i] * 64);
+                    i64 f = is_find(@ir_name + ir_k[i] * 64);
                     if f >= 0 && is_recursive[f] == 0 && !str_eq(@is_fname + f * 64, self) && (is_size[f] <= inl_tiny || (inl_inloop[b] == 1 && is_size[f] <= inl_maxsize)) {
-                        int nb_before = ir_nb;
+                        i64 nb_before = ir_nb;
                         bool inloop = inl_inloop[b] == 1;
                         if in_inline(b, i, f) {
                             // the new blocks are in a loop if the block of the call was
-                            int z = nb_before;
+                            i64 z = nb_before;
                             while z < ir_nb {
                                 if z < IR_MAXB { inl_inloop[z] = 0; if inloop { inl_inloop[z] = 1; } }
                                 z += 1;
@@ -3418,32 +3418,32 @@ void op_inline(char^ self) {
 // comes from instructions that are pure and from registers that the loop does not write is made once, in a block in front of the loop:
 // the address of b[i] in the loop over j is the same in every turn. The chain of scratch registers that leads to it (x0, x1, ...) moves
 // with it and gets registers of its own (temporaries). A chain whose scratch values are read by anything else stays.
-int lc_D[64];                   // how many instructions of the loop write the register (a call writes all the registers it clobbers)
-int lc_in[IR_MAXB];
-int lc_taken[IR_MAXI];
-int lc_mem[64];                 // the instructions of the slice being built
-int lc_nm;
-int lc_hl[2048];                // the instructions to move in order, the slices one after the other; -1 ends a slice
-int lc_nh;
-int lc_from[64];
-int lc_to[64];
-int lc_nmap;
-int lc_keep;                    // the instruction that makes the value the root store writes and that something else in the loop reads too: it becomes a load of the cell
-int lc_kl[256];
-int lc_kk[256];
-int lc_nkl;
-int lc_live;                    // the registers live at the entrance of the loop (the moved code may not write them)
-int lc_moved;                   // how many instructions were moved (for the statistics)
-int lc_nst[16384];              // the stores to each plain frame slot (index offset / 8) and stack cell (8192 + (-offset) / 8) in the loop
-int lc_ldo[16384];              // 1: a load of the slot outside the loop
-int lc_rootb;                   // the block and the index of the store that is the root (for the check of the loads)
-int lc_rooti;
-int lc_rootslot;
+i64 lc_D[64];                   // how many instructions of the loop write the register (a call writes all the registers it clobbers)
+i64 lc_in[IR_MAXB];
+i64 lc_taken[IR_MAXI];
+i64 lc_mem[64];                 // the instructions of the slice being built
+i64 lc_nm;
+i64 lc_hl[2048];                // the instructions to move in order, the slices one after the other; -1 ends a slice
+i64 lc_nh;
+i64 lc_from[64];
+i64 lc_to[64];
+i64 lc_nmap;
+i64 lc_keep;                    // the instruction that makes the value the root store writes and that something else in the loop reads too: it becomes a load of the cell
+i64 lc_kl[256];
+i64 lc_kk[256];
+i64 lc_nkl;
+i64 lc_live;                    // the registers live at the entrance of the loop (the moved code may not write them)
+i64 lc_moved;                   // how many instructions were moved (for the statistics)
+i64 lc_nst[16384];              // the stores to each plain frame slot (index offset / 8) and stack cell (8192 + (-offset) / 8) in the loop
+i64 lc_ldo[16384];              // 1: a load of the slot outside the loop
+i64 lc_rootb;                   // the block and the index of the store that is the root (for the check of the loads)
+i64 lc_rooti;
+i64 lc_rootslot;
 
 // a load of a plain 8-byte frame slot that the loop never writes
-bool lc_inv_load(int m) {
+bool lc_inv_load(i64 m) {
     if ir_op[m] != IR_LOAD || ir_a[m] != 30 || ir_w[m] != 8 { return false; }
-    int k = ir_k[m];
+    i64 k = ir_k[m];
     if k % 8 != 0 { return false; }
     if k < 0 { return (0 - k) / 8 < 8192 && lc_nst[8192 + (0 - k) / 8] == 0; }
     if k / 8 >= 8192 { return false; }
@@ -3451,7 +3451,7 @@ bool lc_inv_load(int m) {
 }
 
 // the index of a frame slot or a stack cell (-1: not a whole slot)
-int lc_ci(int k) {
+i64 lc_ci(i64 k) {
     if k % 8 != 0 { return 0 - 1; }
     if k >= 0 {
         if k / 8 < 8192 { return k / 8; }
@@ -3461,7 +3461,7 @@ int lc_ci(int k) {
     return 0 - 1;
 }
 
-bool lc_pure(int op) {
+bool lc_pure(i64 op) {
     if op == IR_CONST || op == IR_COPY { return true; }
     if op >= IR_ADD && op <= IR_MULHS && op != IR_SDIV && op != IR_UDIV { return true; }
     if op == IR_NEG || op == IR_NOT || op == IR_EXT { return true; }
@@ -3471,8 +3471,8 @@ bool lc_pure(int op) {
 }
 
 // the registers an instruction reads: a (when it is a register) and b (when it is a register): -1 for none
-int lc_src(int i, int which) {
-    int op = ir_op[i];
+i64 lc_src(i64 i, i64 which) {
+    i64 op = ir_op[i];
     if op == IR_CONST || op == IR_FCONST { return 0 - 1; }
     if which == 0 {
         if ir_a[i] > 0 { return ir_a[i]; }
@@ -3482,8 +3482,8 @@ int lc_src(int i, int which) {
     return 0 - 1;
 }
 
-bool lc_in_slice(int m) {
-    int q = 0;
+bool lc_in_slice(i64 m) {
+    i64 q = 0;
     while q < lc_nm {
         if lc_mem[q] == m { return true; }
         q += 1;
@@ -3492,18 +3492,18 @@ bool lc_in_slice(int m) {
 }
 
 // the slice that makes the value of instruction root (in block b); true when it can move
-bool lc_slice(int b, int root) {
+bool lc_slice(i64 b, i64 root) {
     lc_nm = 1;
     lc_mem[0] = root;
-    int qi = 0;
+    i64 qi = 0;
     while qi < lc_nm {
-        int k = lc_mem[qi];
-        int w = 0;
+        i64 k = lc_mem[qi];
+        i64 w = 0;
         while w < 2 {
-            int r = lc_src(k, w);
+            i64 r = lc_src(k, w);
             if r >= 1 {
-                int m = 0 - 1;
-                int j = k - 1;
+                i64 m = 0 - 1;
+                i64 j = k - 1;
                 while j >= ir_bs[b] && m < 0 {
                     if ir_op[j] != IR_NOP && ir_d[j] == r { m = j; }
                     else if ir_op[j] == IR_CALL || ir_op[j] == IR_CALLIND || ir_op[j] == IR_SYSCALL {
@@ -3530,8 +3530,8 @@ bool lc_slice(int b, int root) {
     // the member that makes the value of a root store: when something else reads it afterwards it stays in the loop as a load of the cell
     lc_keep = 0 - 1;
     if ir_op[root] == IR_STORE {
-        int best = 0 - 1;
-        int c = 1;
+        i64 best = 0 - 1;
+        i64 c = 1;
         while c < lc_nm {
             if ir_d[lc_mem[c]] == ir_b[root] && lc_mem[c] < root && lc_mem[c] > best { best = lc_mem[c]; }
             c += 1;
@@ -3539,21 +3539,21 @@ bool lc_slice(int b, int root) {
         lc_keep = best;
     }
     // the scratch registers of the slice are read by nothing outside it, and the entrance of the loop does not need their values
-    int a = 1;
+    i64 a = 1;
     while a < lc_nm {
-        int m2 = lc_mem[a];
-        int r2 = ir_d[m2];
+        i64 m2 = lc_mem[a];
+        i64 r2 = ir_d[m2];
         if r2 >= 64 || r2 < 1 || (lc_live & (1 << r2)) != 0 { return false; }
         if m2 == lc_keep { a += 1; continue; }
-        int j2 = m2 + 1;
+        i64 j2 = m2 + 1;
         bool redef = false;
         while j2 < ir_be[b] && !redef {
             if !lc_in_slice(j2) && ir_op[j2] != IR_NOP {
                 if lc_src(j2, 0) == r2 || lc_src(j2, 1) == r2 { return false; }
-                int opj = ir_op[j2];
+                i64 opj = ir_op[j2];
                 if opj == IR_STORE && ir_b[j2] == r2 { return false; }
                 if opj == IR_CALL || opj == IR_CALLIND || opj == IR_SYSCALL {
-                    int g = 0;
+                    i64 g = 0;
                     while g < ir_ac[j2] {
                         if ir_args[ir_as[j2] + g] == r2 { return false; }
                         g += 1;
@@ -3576,39 +3576,39 @@ bool lc_slice(int b, int root) {
 }
 
 // the instructions that were moved out of the loop (written into the new block at the end)
-int lc_bop[1024];
-int lc_bd[1024];
-int lc_ba[1024];
-int lc_bb[1024];
-int lc_bbi[1024];
-int lc_bk[1024];
-int lc_bw[1024];
-int lc_nb2;
-int lc_q;                       // the deepest stack cell used (a new cell is 8 deeper)
-int lc_tl[16384];               // the cells and slots that the function touches (each once)
-int lc_ntl;
-int lc_tmark[16384];
-int lc_tstamp;
-int lc_tot[16384];              // the loads of each slot / cell in the whole function that do not follow a store of the cell in their own block (stack cells) or any load (slots)
+i64 lc_bop[1024];
+i64 lc_bd[1024];
+i64 lc_ba[1024];
+i64 lc_bb[1024];
+i64 lc_bbi[1024];
+i64 lc_bk[1024];
+i64 lc_bw[1024];
+i64 lc_nb2;
+i64 lc_q;                       // the deepest stack cell used (a new cell is 8 deeper)
+i64 lc_tl[16384];               // the cells and slots that the function touches (each once)
+i64 lc_ntl;
+i64 lc_tmark[16384];
+i64 lc_tstamp;
+i64 lc_tot[16384];              // the loads of each slot / cell in the whole function that do not follow a store of the cell in their own block (stack cells) or any load (slots)
 
 // the loads of the whole function (once, and again after a loop was changed)
 void lc_prep() {
-    int zi = 0;
+    i64 zi = 0;
     while zi < lc_ntl {
         lc_tot[lc_tl[zi]] = 0;
         zi += 1;
     }
     lc_ntl = 0;
     lc_tstamp += 1;
-    int b = 0;
+    i64 b = 0;
     while b < ir_nb {
         if op_po[b] >= 0 {
-            int i3 = ir_bs[b];
-            int seen_st[40];
-            int nseen = 0;
+            i64 i3 = ir_bs[b];
+            i64 seen_st[40];
+            i64 nseen = 0;
             while i3 < ir_be[b] {
                 if ir_a[i3] == 30 && ir_op[i3] != IR_NOP && lc_ci(ir_k[i3]) >= 0 {
-                    int ws = lc_ci(ir_k[i3]);
+                    i64 ws = lc_ci(ir_k[i3]);
                     if lc_tmark[ws] != lc_tstamp {
                         lc_tmark[ws] = lc_tstamp;
                         lc_tl[lc_ntl] = ws;
@@ -3619,7 +3619,7 @@ void lc_prep() {
                     if ir_op[i3] == IR_LOAD {
                         bool own = false;
                         if ir_k[i3] < 0 {
-                            int sq = 0;
+                            i64 sq = 0;
                             while sq < nseen { if seen_st[sq] == ws { own = true; } sq += 1; }
                         }
                         if !own { lc_tot[ws] += 1; }
@@ -3633,31 +3633,31 @@ void lc_prep() {
 }
 
 // the numbers of the loop: how often registers and cells are written there (only the blocks of the loop are looked at)
-void lc_count(int h) {
-    int r = 0;
+void lc_count(i64 h) {
+    i64 r = 0;
     while r < 64 {
         lc_D[r] = 0;
         r += 1;
     }
-    int zz = 0;
+    i64 zz = 0;
     while zz < lc_ntl {
-        int ti = lc_tl[zz];
+        i64 ti = lc_tl[zz];
         lc_nst[ti] = 0;
         lc_ldo[ti] = lc_tot[ti];
         zz += 1;
     }
-    int b = 0;
+    i64 b = 0;
     while b < ir_nb {
         if lc_in[b] == 1 {
-            int i = ir_bs[b];
-            int seen_st[40];
-            int nseen = 0;
+            i64 i = ir_bs[b];
+            i64 seen_st[40];
+            i64 nseen = 0;
             while i < ir_be[b] {
-                int op = ir_op[i];
+                i64 op = ir_op[i];
                 if op != IR_NOP {
-                    int dm = op_defs(i);
+                    i64 dm = op_defs(i);
                     if op == IR_SYSCALL { dm = dm | op_clobber(); }
-                    int v = 1;
+                    i64 v = 1;
                     while v < 64 {
                         if (dm & (1 << v)) != 0 { lc_D[v] += 1; }
                         v += 1;
@@ -3670,13 +3670,13 @@ void lc_count(int h) {
                         }
                     }
                     if ir_a[i] == 30 && lc_ci(ir_k[i]) >= 0 {
-                        int ws = lc_ci(ir_k[i]);
+                        i64 ws = lc_ci(ir_k[i]);
                         if op == IR_STORE { lc_nst[ws] += 1; if nseen < 40 { seen_st[nseen] = ws; nseen += 1; } }
                         if op == IR_LOAD {
                             // the loads inside the loop are not "outside"
                             bool own = false;
                             if ir_k[i] < 0 {
-                                int sq = 0;
+                                i64 sq = 0;
                                 while sq < nseen { if seen_st[sq] == ws { own = true; } sq += 1; }
                             }
                             if !own { lc_ldo[ws] -= 1; }
@@ -3692,9 +3692,9 @@ void lc_count(int h) {
 
 // is the slice in lc_mem worth a cell: a multiplication or a division in it, or three instructions
 bool lc_worth() {
-    int a = 0;
+    i64 a = 0;
     while a < lc_nm {
-        int op = ir_op[lc_mem[a]];
+        i64 op = ir_op[lc_mem[a]];
         if op == IR_MUL || op == IR_MULHS || op == IR_FMUL || op == IR_FDIV || op == IR_FSQRT { return true; }
         a += 1;
     }
@@ -3702,16 +3702,16 @@ bool lc_worth() {
 }
 
 // is the store i2 (in block b) a root that can be moved? every load of its slot in the loop comes after it
-bool lc_store_ok(int b, int i2) {
+bool lc_store_ok(i64 b, i64 i2) {
     if ir_op[i2] != IR_STORE || ir_a[i2] != 30 || ir_w[i2] != 8 || lc_taken[i2] != 0 { return false; }
-    int sk = lc_ci(ir_k[i2]);
+    i64 sk = lc_ci(ir_k[i2]);
     if sk < 0 { return false; }
     if !(ir_k[i2] < 0 || op_plain[sk] == 1) { return false; }
     if lc_nst[sk] != 1 || lc_ldo[sk] != 0 || ir_b[i2] <= 0 || ir_bi[i2] != 0 { return false; }
-    int lb = 0;
+    i64 lb = 0;
     while lb < ir_nb {
         if lc_in[lb] == 1 {
-            int li = ir_bs[lb];
+            i64 li = ir_bs[lb];
             while li < ir_be[lb] {
                 if ir_op[li] == IR_LOAD && ir_a[li] == 30 && ir_k[li] == ir_k[i2] {
                     if lb == b { if li < i2 { return false; } }
@@ -3727,19 +3727,19 @@ bool lc_store_ok(int b, int i2) {
 
 // the loop with the header h: expressions out of it, one at a time (what a move leaves behind can be moved the next time).
 // Returns true when something was moved (the graph is made again).
-bool lc_loop(int h) {
+bool lc_loop(i64 h) {
     // the blocks of the loop
-    int b = 0;
+    i64 b = 0;
     while b < ir_nb {
         lc_in[b] = 0;
         b += 1;
     }
     lc_in[h] = 1;
-    int sp = 0;
+    i64 sp = 0;
     b = 0;
     while b < ir_nb {
         if op_po[b] >= 0 && b != h {
-            int k = 0;
+            i64 k = 0;
             while k < 2 {
                 if op_succ(b, k) == h && lc_in[b] == 0 && op_dom(h, b) {
                     lc_in[b] = 1;
@@ -3753,10 +3753,10 @@ bool lc_loop(int h) {
     }
     while sp > 0 {
         sp -= 1;
-        int x = op_stack[sp];
-        int e = op_phead[x];
+        i64 x = op_stack[sp];
+        i64 e = op_phead[x];
         while e >= 0 {
-            int p = e / 2;
+            i64 p = e / 2;
             if op_po[p] >= 0 && lc_in[p] == 0 {
                 lc_in[p] = 1;
                 op_stack[sp] = p;
@@ -3769,7 +3769,7 @@ bool lc_loop(int h) {
     lc_live = op_li[h];
     lc_nb2 = 0;
     lc_nkl = 0;
-    int attempts = 0;
+    i64 attempts = 0;
     bool found = true;
     while found && attempts < 40 && lc_nb2 < 900 {
         found = false;
@@ -3778,11 +3778,11 @@ bool lc_loop(int h) {
         b = 0;
         while b < ir_nb && !found {
             if lc_in[b] == 1 {
-                int i2 = ir_bs[b];
-                int e2 = ir_be[b];
+                i64 i2 = ir_bs[b];
+                i64 e2 = ir_be[b];
                 while i2 < e2 && !found {
-                    int op2 = ir_op[i2];
-                    int d = ir_d[i2];
+                    i64 op2 = ir_op[i2];
+                    i64 d = ir_d[i2];
                     bool cand = false;
                     if op2 == IR_STORE { cand = lc_store_ok(b, i2); }
                     else if op2 != IR_NOP && lc_taken[i2] == 0 && lc_pure(op2) && op2 != IR_CONST && d >= 1 && d <= 63 && lc_D[d] == 1 && (lc_live & (1 << d)) == 0 { cand = true; }
@@ -3792,12 +3792,12 @@ bool lc_loop(int h) {
                     if (cand || value_root) && (value_root || lc_slice(b, i2)) {
                         if value_root { lc_keep = 0 - 1; }
                         // in the order of the instructions
-                        int a = 0;
+                        i64 a = 0;
                         while a < lc_nm {
-                            int c = a + 1;
+                            i64 c = a + 1;
                             while c < lc_nm {
                                 if lc_mem[c] < lc_mem[a] {
-                                    int t = lc_mem[a];
+                                    i64 t = lc_mem[a];
                                     lc_mem[a] = lc_mem[c];
                                     lc_mem[c] = t;
                                 }
@@ -3806,7 +3806,7 @@ bool lc_loop(int h) {
                             a += 1;
                         }
                         // the move: the copies go to the buffer, the originals go away (or become a load of the cell)
-                        int vcell = 0;
+                        i64 vcell = 0;
                         if value_root {
                             // the value of the last instruction is kept in a new cell: written once before the loop, read where it was made
                             lc_q += 8;
@@ -3814,7 +3814,7 @@ bool lc_loop(int h) {
                         }
                         a = 0;
                         while a < lc_nm && lc_nb2 < 1000 {
-                            int m = lc_mem[a];
+                            i64 m = lc_mem[a];
                             lc_bop[lc_nb2] = ir_op[m];
                             lc_bd[lc_nb2] = ir_d[m];
                             lc_ba[lc_nb2] = ir_a[m];
@@ -3865,23 +3865,23 @@ bool lc_loop(int h) {
     }
     if lc_nb2 == 0 { return false; }
     // the new block in front of the loop
-    int nb0 = ir_nb;
-    int pre = ir_new_block(0 - 1);
+    i64 nb0 = ir_nb;
+    i64 pre = ir_new_block(0 - 1);
     ir_set_block(pre);
-    int hi = 0;
+    i64 hi = 0;
     while hi < lc_nb2 {
-        int ni = ir_add(lc_bop[hi], lc_bd[hi], lc_ba[hi], lc_bb[hi], lc_bbi[hi], lc_bk[hi]);
+        i64 ni = ir_add(lc_bop[hi], lc_bd[hi], lc_ba[hi], lc_bb[hi], lc_bbi[hi], lc_bk[hi]);
         ir_w[ni] = lc_bw[hi];
         hi += 1;
     }
-    int jm = ir_add(IR_JMP, 0, 0, 0, 0, 0);
+    i64 jm = ir_add(IR_JMP, 0, 0, 0, 0, 0);
     ir_t1[jm] = h;
     // every jump to the header from outside the loop goes to the new block
     b = 0;
     while b < nb0 {
         if lc_in[b] == 0 {
-            int t = ir_be[b] - 1;
-            int top = ir_op[t];
+            i64 t = ir_be[b] - 1;
+            i64 top = ir_op[t];
             if (top == IR_JMP || top == IR_BR || top == IR_FBR) && ir_t1[t] == h { ir_t1[t] = pre; }
             if (top == IR_BR || top == IR_FBR) && ir_t2[t] == h { ir_t2[t] = pre; }
         }
@@ -3891,10 +3891,10 @@ bool lc_loop(int h) {
 }
 
 // all the loops, the innermost first (a header is found by its back edge; a header that is deeper in the tree of dominators is inner)
-int lc_us;                      // the time of this pass (the microseconds, for -xtime)
-int lc_calls;
+i64 lc_us;                      // the time of this pass (the microseconds, for -xtime)
+i64 lc_calls;
 void op_licm_exprs() {
-    int t0 = 0;
+    i64 t0 = 0;
     if x_time == 1 { t0 = tm_now(); lc_calls += 1; }
     op_licm_run();
     if x_time == 1 { lc_us += tm_now() - t0; }
@@ -3902,7 +3902,7 @@ void op_licm_exprs() {
 
 void op_licm_run() {
     op_graph();
-    int zc = 0;
+    i64 zc = 0;
     while zc < 16384 {              // nothing may be left from the function before (docs/design/16-separate-compilation.md, -xrepeat)
         lc_nst[zc] = 0;
         lc_ldo[zc] = 0;
@@ -3911,25 +3911,25 @@ void op_licm_run() {
         zc += 1;
     }
     lc_ntl = 0;
-    int hs[64];
-    int hd[64];
-    int nh = 0;
-    int b = 0;
+    i64 hs[64];
+    i64 hd[64];
+    i64 nh = 0;
+    i64 b = 0;
     while b < ir_nb {
         if op_po[b] >= 0 {
-            int k = 0;
+            i64 k = 0;
             while k < 2 {
-                int s = op_succ(b, k);
+                i64 s = op_succ(b, k);
                 if s > 0 && op_dom(s, b) && nh < 60 {
                     bool seen = false;
-                    int z = 0;
+                    i64 z = 0;
                     while z < nh {
                         if hs[z] == s { seen = true; }
                         z += 1;
                     }
                     if !seen {
-                        int dep = 0;
-                        int x = s;
+                        i64 dep = 0;
+                        i64 x = s;
                         while x > 0 && dep < 1000 {
                             x = op_idom[x];
                             dep += 1;
@@ -3946,11 +3946,11 @@ void op_licm_run() {
     }
     if nh == 0 { return; }
     // the deepest first
-    int i = 1;
+    i64 i = 1;
     while i < nh {
-        int th = hs[i];
-        int td = hd[i];
-        int j = i - 1;
+        i64 th = hs[i];
+        i64 td = hd[i];
+        i64 j = i - 1;
         while j >= 0 && hd[j] < td {
             hs[j + 1] = hs[j];
             hd[j + 1] = hd[j];
@@ -3974,24 +3974,24 @@ void op_licm_run() {
 }
 
 // ---------------------------------------------------------------------------------------------- stores to stack cells that nobody reads
-int dc_read[16384];
-int dc_changes;
+i64 dc_read[16384];
+i64 dc_changes;
 
 void op_dead_cells() {
     if (ir_opt & 524288) != 0 { return; }
-    int i = 0;
+    i64 i = 0;
     while i < 16384 {
         dc_read[i] = 0;
         i += 1;
     }
-    int b = 0;
+    i64 b = 0;
     while b < ir_nb {
         if op_po[b] >= 0 {
-            int j = ir_bs[b];
+            i64 j = ir_bs[b];
             while j < ir_be[b] {
                 if ir_op[j] == IR_LOAD && ir_a[j] == 30 {
-                    int k = ir_k[j];
-                    int w = ir_w[j];
+                    i64 k = ir_k[j];
+                    i64 w = ir_w[j];
                     if w < 0 { w = 0 - w; }
                     if w == 0 { w = 8; }
                     if k < 0 {
@@ -4010,11 +4010,11 @@ void op_dead_cells() {
     b = 0;
     while b < ir_nb {
         if op_po[b] >= 0 {
-            int j2 = ir_bs[b];
+            i64 j2 = ir_bs[b];
             while j2 < ir_be[b] {
                 if ir_op[j2] == IR_STORE && ir_a[j2] == 30 && ir_w[j2] == 8 {
-                    int k2 = ir_k[j2];
-                    int sl = 0 - 1;
+                    i64 k2 = ir_k[j2];
+                    i64 sl = 0 - 1;
                     if k2 < 0 && (0 - k2) % 8 == 0 && (0 - k2) / 8 < 8192 { sl = 8192 + (0 - k2) / 8; }
                     else if k2 >= 0 && k2 % 8 == 0 && k2 / 8 < 8192 && op_plain[k2 / 8] == 1 { sl = k2 / 8; }
                     if sl >= 0 && dc_read[sl] == 0 {
@@ -4041,15 +4041,15 @@ void op_dead_cells() {
 // frame object, the address computation is dead then and the object may become plain words (op_sroa).
 
 #define DT_MAXC 60
-int dt_cell[DT_MAXC];
-int dt_n;
-int dt_use[IR_MAXB];
-int dt_def[IR_MAXB];
-int dt_in[IR_MAXB];
-int dt_changes;
+i64 dt_cell[DT_MAXC];
+i64 dt_n;
+i64 dt_use[IR_MAXB];
+i64 dt_def[IR_MAXB];
+i64 dt_in[IR_MAXB];
+i64 dt_changes;
 
-int dt_index(int k) {
-    int i = 0;
+i64 dt_index(i64 k) {
+    i64 i = 0;
     while i < dt_n {
         if dt_cell[i] == k { return i; }
         i += 1;
@@ -4065,14 +4065,14 @@ void op_dead_temps() {
     op_graph();
     vn_hints();
     dt_n = 0;
-    int b = 0;
+    i64 b = 0;
     while b < ir_nb {
         if op_po[b] >= 0 {
-            int j = ir_bs[b];
+            i64 j = ir_bs[b];
             while j < ir_be[b] {
-                int op = ir_op[j];
+                i64 op = ir_op[j];
                 if (op == IR_LOAD || op == IR_STORE) && ir_a[j] == 30 && ir_k[j] < 0 {
-                    int w = ir_w[j];
+                    i64 w = ir_w[j];
                     if w < 0 { w = 0 - w; }
                     if w != 8 || (ir_k[j] % 8) != 0 { return; }
                     if dt_index(ir_k[j]) < 0 { return; }
@@ -4083,7 +4083,7 @@ void op_dead_temps() {
                 } else if ir_uses_b(op) && ir_bi[j] == 0 && ir_b[j] == 30 && op != IR_STORE {
                     return;
                 } else if op == IR_CALL || op == IR_CALLIND || op == IR_SYSCALL {
-                    int g = 0;
+                    i64 g = 0;
                     while g < ir_ac[j] {
                         if ir_args[ir_as[j] + g] == 30 { return; }
                         g += 1;
@@ -4101,10 +4101,10 @@ void op_dead_temps() {
         dt_def[b] = 0;
         dt_in[b] = 0;
         if op_po[b] >= 0 {
-            int j2 = ir_bs[b];
+            i64 j2 = ir_bs[b];
             while j2 < ir_be[b] {
                 if ir_op[j2] == IR_LOAD && ir_a[j2] == 30 && ir_k[j2] < 0 {
-                    int c = dt_index(ir_k[j2]);
+                    i64 c = dt_index(ir_k[j2]);
                     if (dt_def[b] & (1 << c)) == 0 { dt_use[b] = dt_use[b] | (1 << c); }
                 } else if ir_op[j2] == IR_STORE && ir_a[j2] == 30 && ir_k[j2] < 0 {
                     dt_def[b] = dt_def[b] | (1 << dt_index(ir_k[j2]));
@@ -4120,14 +4120,14 @@ void op_dead_temps() {
         b = ir_nb - 1;
         while b >= 0 {
             if op_po[b] >= 0 {
-                int out = 0;
-                int k = 0;
+                i64 out = 0;
+                i64 k = 0;
                 while k < 2 {
-                    int s = op_succ(b, k);
+                    i64 s = op_succ(b, k);
                     if s >= 0 { out = out | dt_in[s]; }
                     k += 1;
                 }
-                int nin = dt_use[b] | (out & (0 - 1 - dt_def[b]));
+                i64 nin = dt_use[b] | (out & (0 - 1 - dt_def[b]));
                 if nin != dt_in[b] { dt_in[b] = nin; again = true; }
             }
             b -= 1;
@@ -4136,17 +4136,17 @@ void op_dead_temps() {
     b = 0;
     while b < ir_nb {
         if op_po[b] >= 0 {
-            int live = 0;
-            int k2 = 0;
+            i64 live = 0;
+            i64 k2 = 0;
             while k2 < 2 {
-                int s2 = op_succ(b, k2);
+                i64 s2 = op_succ(b, k2);
                 if s2 >= 0 { live = live | dt_in[s2]; }
                 k2 += 1;
             }
-            int j3 = ir_be[b] - 1;
+            i64 j3 = ir_be[b] - 1;
             while j3 >= ir_bs[b] {
                 if ir_op[j3] == IR_STORE && ir_a[j3] == 30 && ir_k[j3] < 0 {
-                    int c2 = dt_index(ir_k[j3]);
+                    i64 c2 = dt_index(ir_k[j3]);
                     if (live & (1 << c2)) == 0 {
                         ir_op[j3] = IR_NOP;
                         ir_d[j3] = 0;
@@ -4171,16 +4171,16 @@ void op_dead_temps() {
 // written again before the load (the registers are not single-assignment, so value numbering cannot name it). The store becomes
 // `d = copy r` (d is neither read nor written in between) and the load goes away. Arguments of inlined calls are passed this way.
 
-int cf_changes;
+i64 cf_changes;
 
-int cf_loads[8192];             // the loads of each plain frame slot in the function
-int cf_nloads[8192];            // the loads of each cell below the frame base (the temporaries): index (0 - offset) / 8; +2 for another width
-int cf_vesc;                    // 1: the frame base is used as a value (an address of the frame is taken): no cell can be said to be private
+i64 cf_loads[8192];             // the loads of each plain frame slot in the function
+i64 cf_nloads[8192];            // the loads of each cell below the frame base (the temporaries): index (0 - offset) / 8; +2 for another width
+i64 cf_vesc;                    // 1: the frame base is used as a value (an address of the frame is taken): no cell can be said to be private
 
 void op_cell_fwd() {
     if (ir_opt & 16777216) != 0 { return; }
     vn_hints();
-    int zi = 0;
+    i64 zi = 0;
     while zi < 8192 {
         cf_loads[zi] = 0;
         zi += 1;
@@ -4191,10 +4191,10 @@ void op_cell_fwd() {
         zi += 1;
     }
     cf_vesc = 0;
-    int b = 0;
+    i64 b = 0;
     while b < ir_nb {
         if op_po[b] >= 0 {
-            int lj = ir_bs[b];
+            i64 lj = ir_bs[b];
             while lj < ir_be[b] {
                 if ir_op[lj] == IR_LOAD && ir_a[lj] == 30 && ir_k[lj] >= 0 && ir_k[lj] / 8 < 8192 {
                     cf_loads[ir_k[lj] / 8] += 1;
@@ -4202,14 +4202,14 @@ void op_cell_fwd() {
                 }
                 if ir_op[lj] == IR_LOAD && ir_a[lj] == 30 && ir_k[lj] < 0 {
                     // the cells below the base: a load of another width touches two of them
-                    int nk = (0 - ir_k[lj] + 7) / 8;
-                    int nk2 = (0 - ir_k[lj] + ir_w[lj] + 6) / 8;
+                    i64 nk = (0 - ir_k[lj] + 7) / 8;
+                    i64 nk2 = (0 - ir_k[lj] + ir_w[lj] + 6) / 8;
                     if nk >= 0 && nk < 8192 { cf_nloads[nk] += 1; }
                     if nk2 != nk && nk2 < 8192 { cf_nloads[nk2] += 2; }
                     if ir_k[lj] % 8 != 0 || ir_w[lj] != 8 { if nk < 8192 { cf_nloads[nk] += 2; } }
                 }
                 if ir_op[lj] != IR_NOP {
-                    int vu = op_uses(lj);
+                    i64 vu = op_uses(lj);
                     bool base_use = (ir_op[lj] == IR_LOAD && ir_a[lj] == 30) || (ir_op[lj] == IR_STORE && ir_a[lj] == 30 && !(ir_bi[lj] == 0 && ir_b[lj] == 30));
                     // the address of an object above the base (add xN, x29, #k with k >= 0) does not reach the cells below it
                     bool above = (ir_op[lj] == IR_ADD && ir_a[lj] == 30 && ir_bi[lj] == 1 && ir_b[lj] >= 0) || (ir_op[lj] == IR_ADDR_SLOT && ir_k[lj] >= 0 && ir_d[lj] != 30);
@@ -4224,9 +4224,9 @@ void op_cell_fwd() {
     b = 0;
     while b < ir_nb {
         if op_po[b] >= 0 {
-            int s = ir_bs[b];
-            int mention = op_lo[b];             // the registers that the block names, and the ones that live after it
-            int mj = ir_bs[b];
+            i64 s = ir_bs[b];
+            i64 mention = op_lo[b];             // the registers that the block names, and the ones that live after it
+            i64 mj = ir_bs[b];
             while mj < ir_be[b] {
                 mention = mention | op_uses(mj) | op_defs(mj);
                 mj += 1;
@@ -4238,20 +4238,20 @@ void op_cell_fwd() {
                 }
                 if ir_op[s] == IR_STORE && ir_a[s] == 30 && ir_w[s] == 8 && ir_k[s] < 0 && ir_k[s] % 8 == 0 && cf_vesc == 0 && ir_bi[s] == 0 {
                     // a temporary below the base that one load reads (the address of `b[i]` kept while the right side is computed)
-                    int nk = (0 - ir_k[s] + 7) / 8;
+                    i64 nk = (0 - ir_k[s] + 7) / 8;
                     if nk >= 0 && nk < 8192 && cf_nloads[nk] == 1 { lone = true; }
                 }
                 if ir_op[s] == IR_STORE && ir_a[s] == 30 && ir_w[s] == 8 && (ir_k[s] < 0 || lone) && ir_bi[s] == 0 {
-                    int c = ir_k[s];
-                    int r = ir_b[s];
-                    int ld = 0 - 1;
-                    int uses = 0;                     // registers read in between, by a call also the arguments
-                    int defs = 0;
+                    i64 c = ir_k[s];
+                    i64 r = ir_b[s];
+                    i64 ld = 0 - 1;
+                    i64 uses = 0;                     // registers read in between, by a call also the arguments
+                    i64 defs = 0;
                     bool over = false;
                     bool bad = false;
-                    int j = s + 1;
+                    i64 j = s + 1;
                     while j < ir_be[b] && !over && !bad {
-                        int op = ir_op[j];
+                        i64 op = ir_op[j];
                         if op == IR_LOAD && ir_a[j] == 30 && ir_k[j] < c + 8 && ir_k[j] + 8 > c {
                             if ir_k[j] == c && ir_w[j] == 8 && ld < 0 { ld = j; } else { bad = true; }
                         } else if op == IR_STORE && ir_a[j] == 30 && ir_k[j] < c + 8 && ir_k[j] + 8 > c {
@@ -4265,8 +4265,8 @@ void op_cell_fwd() {
                         j += 1;
                     }
                     if (over || lone) && !bad && ld > 0 {
-                        int d = ir_d[ld];
-                        int bt = op_bit(d);
+                        i64 d = ir_d[ld];
+                        i64 bt = op_bit(d);
                         if d >= 1 && d < 64 && r >= 1 && r < 64 && ir_vcls[d] == ir_vcls[r] && (uses & bt) == 0 && (defs & bt) == 0 {
                             ir_op[s] = IR_COPY;
                             ir_d[s] = d;
@@ -4281,11 +4281,11 @@ void op_cell_fwd() {
                             cf_changes += 1;
                         } else if d >= 1 && d < 64 && r >= 1 && r < 64 && ir_vcls[d] == ir_vcls[r] && lone {
                             // d or r is written or read in between: the value waits in a register that this block does not name
-                            int t = 0;
-                            int lo = 1;
-                            int hi = 14;
+                            i64 t = 0;
+                            i64 lo = 1;
+                            i64 hi = 14;
                             if ir_vcls[r] == 1 { lo = 32; hi = 39; }
-                            int tt = lo;
+                            i64 tt = lo;
                             while tt <= hi && t == 0 {
                                 if (mention & (1 << tt)) == 0 { t = tt; }
                                 tt += 1;
@@ -4320,28 +4320,28 @@ void op_cell_fwd() {
 // the same block, in a block that comes before every load of the slot: each load is the number itself. The loop bounds and the factors
 // of the products then fold (`n * n`, `cmp i, 200`), and the register pass has fewer variables to keep.
 
-int cc_cnt[8192];
-int cc_blk[8192];
-int cc_pos[8192];
-int cc_val[8192];
-int cc_const[8192];
-int cc_changes;
+i64 cc_cnt[8192];
+i64 cc_blk[8192];
+i64 cc_pos[8192];
+i64 cc_val[8192];
+i64 cc_const[8192];
+i64 cc_changes;
 
 // the instruction that defines the register r last before the instruction `from` of block b, looking back through blocks that have one way in
 // (a jump from a single predecessor); -1 when it is not found there (a call that may change r, a join of paths ...)
-int cc_def(int b, int from, int r) {
-    int steps = 0;
+i64 cc_def(i64 b, i64 from, i64 r) {
+    i64 steps = 0;
     while steps < 8 {
-        int q = from;
+        i64 q = from;
         while q >= ir_bs[b] {
             if ir_d[q] == r && ir_op[q] != IR_NOP { return q; }
             if (ir_op[q] == IR_CALL || ir_op[q] == IR_CALLIND || ir_op[q] == IR_SYSCALL) && r >= 1 && r <= 19 { return 0 - 1; }
             q -= 1;
         }
         // one predecessor?
-        int e = op_phead[b];
+        i64 e = op_phead[b];
         if e < 0 || op_enext[e] >= 0 { return 0 - 1; }
-        int pb = e / 2;
+        i64 pb = e / 2;
         if pb == b || op_po[pb] < 0 { return 0 - 1; }
         b = pb;
         from = ir_be[b] - 2;
@@ -4354,20 +4354,20 @@ void op_const_cells() {
     if (ir_opt & 33554432) != 0 { return; }
     vn_hints();
     op_graph();
-    int i = 0;
+    i64 i = 0;
     while i < 8192 {
         cc_cnt[i] = 0;
         cc_const[i] = 0;
         i += 1;
     }
-    int b = 0;
+    i64 b = 0;
     while b < ir_nb {
         if op_po[b] >= 0 {
-            int j = ir_bs[b];
+            i64 j = ir_bs[b];
             while j < ir_be[b] {
                 if ir_op[j] == IR_STORE && ir_a[j] == 30 && ir_k[j] >= 0 {
-                    int sl = ir_k[j] / 8;
-                    int w = ir_w[j];
+                    i64 sl = ir_k[j] / 8;
+                    i64 w = ir_w[j];
                     if w < 0 { w = 0 - w; }
                     if sl < 8192 {
                         // a store of a different width or place touches the slot of its first byte only; plain slots are whole words
@@ -4377,8 +4377,8 @@ void op_const_cells() {
                         cc_pos[sl] = j;
                         // the value: the last definition of the register before the store in this block
                         if ir_bi[j] == 0 {
-                            int r = ir_b[j];
-                            int q = cc_def(b, j - 1, r);
+                            i64 r = ir_b[j];
+                            i64 q = cc_def(b, j - 1, r);
                             if q >= 0 && ir_op[q] == IR_CONST && ir_d[q] == r {
                                 cc_val[sl] = ir_k[q];
                                 cc_const[sl] = 1;
@@ -4398,10 +4398,10 @@ void op_const_cells() {
     b = 0;
     while b < ir_nb {
         if op_po[b] >= 0 {
-            int j2 = ir_bs[b];
+            i64 j2 = ir_bs[b];
             while j2 < ir_be[b] {
                 if ir_op[j2] == IR_LOAD && ir_a[j2] == 30 && ir_k[j2] >= 0 && ir_w[j2] == 8 && ir_k[j2] % 8 == 0 && ir_k[j2] / 8 < 8192 {
-                    int sl2 = ir_k[j2] / 8;
+                    i64 sl2 = ir_k[j2] / 8;
                     if cc_cnt[sl2] == 1 && cc_const[sl2] == 1 && op_plain[sl2] == 1 && ir_d[j2] >= 1 && ir_d[j2] < 64 && ir_vcls[ir_d[j2]] == 0 {
                         bool before = false;
                         if cc_blk[sl2] == b { before = cc_pos[sl2] < j2; } else { before = op_dom(cc_blk[sl2], b); }
@@ -4429,39 +4429,39 @@ void op_const_cells() {
 // argument, ...) is not touched. Frame objects that are only accessed by whole 8-byte words after that are written to the hint line as plain
 // slots, so the passes that know the plain slots (value numbering, dead stores) and the register pass treat each word as a variable.
 
-int fa_reg[IR_MAXV];
-int fa_st[IR_MAXV];
-int fa_cur;
-int fa_cell[16384];
-int fa_cst[16384];
-int fa_changes;
+i64 fa_reg[IR_MAXV];
+i64 fa_st[IR_MAXV];
+i64 fa_cur;
+i64 fa_cell[16384];
+i64 fa_cst[16384];
+i64 fa_changes;
 
-int fa_get(int r) {
+i64 fa_get(i64 r) {
     if r == 30 { return 0; }
     if r < 1 || r >= ir_nv || fa_st[r] != fa_cur { return 0 - 1000000; }
     return fa_reg[r];
 }
 
-void fa_set(int r, int off) {
+void fa_set(i64 r, i64 off) {
     if r < 1 || r >= ir_nv { return; }
     fa_reg[r] = off;
     fa_st[r] = fa_cur;
 }
 
-void fa_clear(int r) {
+void fa_clear(i64 r) {
     if r >= 1 && r < ir_nv { fa_st[r] = 0; }
 }
 
-void fa_block(int b, int cont) {
+void fa_block(i64 b, i64 cont) {
     if cont == 0 { fa_cur += 1; }
-    int i = ir_bs[b];
+    i64 i = ir_bs[b];
     while i < ir_be[b] {
-        int op = ir_op[i];
-        int d = ir_d[i];
+        i64 op = ir_op[i];
+        i64 d = ir_d[i];
         // a load or a store through a frame pointer plus a number
         if (op == IR_LOAD || op == IR_STORE) && ir_a[i] != 30 {
-            int fo = fa_get(ir_a[i]);
-            int wq = ir_w[i];
+            i64 fo = fa_get(ir_a[i]);
+            i64 wq = ir_w[i];
             if wq < 0 { wq = 0 - wq; }
             if wq == 0 { wq = 1; }
             if fo > 0 - 1000000 && fo + ir_k[i] >= 16 && fo + ir_k[i] < 30000 && (fo + ir_k[i]) % wq == 0 {
@@ -4481,16 +4481,16 @@ void fa_block(int b, int cont) {
             fa_set(d, fa_get(ir_a[i]));
         } else if op == IR_LOAD && ir_a[i] == 30 && ir_w[i] == 8 {
             // a pointer that was stored in a stack cell
-            int sl = 0 - 1;
+            i64 sl = 0 - 1;
             if ir_k[i] < 0 && (0 - ir_k[i]) % 8 == 0 && (0 - ir_k[i]) / 8 < 8192 { sl = 8192 + (0 - ir_k[i]) / 8; }
             else if ir_k[i] >= 0 && ir_k[i] % 8 == 0 && ir_k[i] / 8 < 8192 && op_plain[ir_k[i] / 8] == 1 { sl = ir_k[i] / 8; }
             if sl >= 0 && fa_cst[sl] == fa_cur { fa_set(d, fa_cell[sl]); } else { fa_clear(d); }
         } else if op == IR_STORE && ir_a[i] == 30 && ir_w[i] == 8 {
-            int sl2 = 0 - 1;
+            i64 sl2 = 0 - 1;
             if ir_k[i] < 0 && (0 - ir_k[i]) % 8 == 0 && (0 - ir_k[i]) / 8 < 8192 { sl2 = 8192 + (0 - ir_k[i]) / 8; }
             else if ir_k[i] >= 0 && ir_k[i] % 8 == 0 && ir_k[i] / 8 < 8192 && op_plain[ir_k[i] / 8] == 1 { sl2 = ir_k[i] / 8; }
             if sl2 >= 0 {
-                int vo = fa_get(ir_b[i]);
+                i64 vo = fa_get(ir_b[i]);
                 if vo > 0 - 1000000 && ir_b[i] != 30 { fa_cell[sl2] = vo; fa_cst[sl2] = fa_cur; } else { fa_cst[sl2] = 0; }
             }
         } else if d != 0 {
@@ -4501,26 +4501,26 @@ void fa_block(int b, int cont) {
 }
 
 // the objects of the frame from the hint line
-int ob_off[2048];
-int ob_size[2048];
-int ob_flag[2048];
-int ob_esc[2048];
-int ob_n;
+i64 ob_off[2048];
+i64 ob_size[2048];
+i64 ob_flag[2048];
+i64 ob_esc[2048];
+i64 ob_n;
 
 void fa_objects() {
     ob_n = 0;
-    int n = lf_hint_n;
-    int p = 2;
+    i64 n = lf_hint_n;
+    i64 p = 2;
     while p < n && ob_n < 2048 {
         while p < n && lf_hint_text[p] == ' ' { p += 1; }
         if p < n {
-            int off = 0;
+            i64 off = 0;
             while p < n && lf_hint_text[p] >= '0' && lf_hint_text[p] <= '9' { off = off * 10 + (lf_hint_text[p] - '0'); p += 1; }
             p += 1;
-            int size = 0;
+            i64 size = 0;
             while p < n && lf_hint_text[p] >= '0' && lf_hint_text[p] <= '9' { size = size * 10 + (lf_hint_text[p] - '0'); p += 1; }
             p += 1;
-            int flag = 0;
+            i64 flag = 0;
             while p < n && lf_hint_text[p] >= '0' && lf_hint_text[p] <= '9' { flag = flag * 10 + (lf_hint_text[p] - '0'); p += 1; }
             ob_off[ob_n] = off;
             ob_size[ob_n] = size;
@@ -4531,8 +4531,8 @@ void fa_objects() {
     }
 }
 
-int fa_object_of(int k) {
-    int j = 0;
+i64 fa_object_of(i64 k) {
+    i64 j = 0;
     while j < ob_n {
         if k >= ob_off[j] && k < ob_off[j] + ob_size[j] { return j; }
         j += 1;
@@ -4543,33 +4543,33 @@ int fa_object_of(int k) {
 void op_sroa_finish() {
     fa_objects();
     bool all_esc = false;
-    int b = 0;
+    i64 b = 0;
     while b < ir_nb {
         if op_po[b] >= 0 {
-            int i = ir_bs[b];
+            i64 i = ir_bs[b];
             while i < ir_be[b] {
-                int op = ir_op[i];
-                int k = ir_k[i];
+                i64 op = ir_op[i];
+                i64 k = ir_k[i];
                 // the frame pointer in any other use (plus a register, a copy ...): any object may be reached
                 if (ir_a[i] == 30 && op != IR_LOAD && op != IR_STORE && !(op == IR_ADD && ir_bi[i] == 1) && op != IR_ADDR_SLOT) { all_esc = true; }
                 if ((ir_uses_b(op) && ir_bi[i] == 0 && ir_b[i] == 30) && !(op == IR_STORE && false)) { all_esc = true; }
                 if (op == IR_CALL || op == IR_CALLIND || op == IR_SYSCALL) {
-                    int g = 0;
+                    i64 g = 0;
                     while g < ir_ac[i] {
                         if ir_args[ir_as[i] + g] == 30 { all_esc = true; }
                         g += 1;
                     }
                 }
                 if (op == IR_ADDR_SLOT && ir_d[i] != 30) || (op == IR_ADD && ir_a[i] == 30 && ir_bi[i] == 1) {
-                    int off = k;
+                    i64 off = k;
                     if op == IR_ADD { off = ir_b[i]; }
-                    int o = fa_object_of(off);
+                    i64 o = fa_object_of(off);
                     if o >= 0 && !(opt_nullchk == 1 && nc_is_record(i, b, off)) { ob_esc[o] = 1; }
                     if (ir_opt & 262144) != 0 { write_err("  address of "); write_err_int(off); write_err(" by instruction "); write_err_int(i); write_err(" op "); write_err_int(op); write_err("\n"); }
                 } else if (op == IR_LOAD || op == IR_STORE) && ir_a[i] == 30 && k >= 16 {
-                    int o2 = fa_object_of(k);
+                    i64 o2 = fa_object_of(k);
                     if o2 >= 0 && ob_flag[o2] == 0 {
-                        int w = ir_w[i];
+                        i64 w = ir_w[i];
                         if w < 0 { w = 0 - w; }
                         if !(w == 8 && k % 8 == 0 && k % 8 == 0 && ob_off[o2] % 8 == 0 && k + 8 <= ob_off[o2] + ob_size[o2]) { ob_esc[o2] = 1; }
                     }
@@ -4581,7 +4581,7 @@ void op_sroa_finish() {
     }
     if (ir_opt & 262144) != 0 { write_err("function "); write_err(@ir_fname); if all_esc { write_err(" (all objects reached)"); } write_err("\n"); }
     if all_esc {
-        int jj = 0;
+        i64 jj = 0;
         while jj < ob_n {
             ob_esc[jj] = 1;
             jj += 1;
@@ -4589,16 +4589,16 @@ void op_sroa_finish() {
     }
     // the hint line again: an object that was not plain, is not used by its address any more and is made of whole words, is plain words now
     char nt[16384];
-    int nn = 0;
+    i64 nn = 0;
     nt[0] = ';';
     nt[1] = 'H';
     nn = 2;
-    int j = 0;
+    i64 j = 0;
     bool changed = false;
     while j < ob_n && nn < 15000 {
         bool conv = ob_flag[j] == 0 && ob_esc[j] == 0 && ob_size[j] % 8 == 0 && ob_off[j] % 8 == 0 && ob_size[j] <= 128;
-        int words = 1;
-        int osz = ob_size[j];
+        i64 words = 1;
+        i64 osz = ob_size[j];
         if conv { words = ob_size[j] / 8; osz = 8; changed = true; }
         if (ir_opt & 262144) != 0 {
             write_err("object "); write_err_int(ob_off[j]); write_err(":"); write_err_int(ob_size[j]); write_err(":"); write_err_int(ob_flag[j]);
@@ -4606,9 +4606,9 @@ void op_sroa_finish() {
             if conv { write_err(" -> words"); }
             write_err("\n");
         }
-        int w = 0;
+        i64 w = 0;
         while w < words {
-            int vals[3];
+            i64 vals[3];
             vals[0] = ob_off[j] + w * 8;
             vals[1] = osz;
             vals[2] = ob_flag[j];
@@ -4616,11 +4616,11 @@ void op_sroa_finish() {
             if ob_esc[j] == 1 && ob_flag[j] == 1 { vals[2] = 0; changed = true; }
             nt[nn] = ' ';
             nn += 1;
-            int q = 0;
+            i64 q = 0;
             while q < 3 {
                 char dg[12];
-                int dn = 0;
-                int dv = vals[q];
+                i64 dn = 0;
+                i64 dv = vals[q];
                 if dv == 0 { dg[0] = '0'; dn = 1; }
                 while dv > 0 { dg[dn] = '0' + dv % 10; dv = dv / 10; dn += 1; }
                 while dn > 0 { dn -= 1; nt[nn] = dg[dn]; nn += 1; }
@@ -4632,7 +4632,7 @@ void op_sroa_finish() {
         j += 1;
     }
     if changed && j == ob_n && (ir_opt & 65536) == 0 {
-        int t = 0;
+        i64 t = 0;
         while t < nn {
             lf_hint_text[t] = nt[t];
             t += 1;
@@ -4648,18 +4648,18 @@ void op_sroa_finish() {
 // cleanup record that frees the array at the end: the record is read by the code that unwinds, nothing else can write through it) can be changed only by
 // a store that names it. So a check is redundant when every way in to it has passed the same check and no store to the slot lies between: the branch
 // becomes a jump and the call of __Arr__nullerr is dead. (A data flow over the blocks: the set of slots known not to be null, joined by AND.)
-int nc_off[64];                  // the offsets of the slots that are checked
-int nc_addr[64];                 // how many times the address of the slot is used for anything but the cleanup record
-int nc_n;
-int nc_in[IR_MAXB];
-int nc_out[IR_MAXB];
-int nc_slot[IR_MAXB];            // the number of the slot that the block ends by checking, or -1
-int nc_ok[IR_MAXB];              // the block where the check passes to
-int nc_panic[IR_MAXB];           // 1: the block calls __Arr__nullerr (it never comes back)
-int nc_changes;
+i64 nc_off[64];                  // the offsets of the slots that are checked
+i64 nc_addr[64];                 // how many times the address of the slot is used for anything but the cleanup record
+i64 nc_n;
+i64 nc_in[IR_MAXB];
+i64 nc_out[IR_MAXB];
+i64 nc_slot[IR_MAXB];            // the number of the slot that the block ends by checking, or -1
+i64 nc_ok[IR_MAXB];              // the block where the check passes to
+i64 nc_panic[IR_MAXB];           // 1: the block calls __Arr__nullerr (it never comes back)
+i64 nc_changes;
 
-int nc_index(int off) {
-    int i = 0;
+i64 nc_index(i64 off) {
+    i64 i = 0;
     while i < nc_n {
         if nc_off[i] == off { return i; }
         i += 1;
@@ -4672,26 +4672,26 @@ int nc_index(int off) {
 }
 
 // the instruction after i in the block that is not a nop, or -1
-int nc_next(int i, int b) {
-    int j = i + 1;
+i64 nc_next(i64 i, i64 b) {
+    i64 j = i + 1;
     while j < ir_be[b] && ir_op[j] == IR_NOP { j += 1; }
     if j >= ir_be[b] { return 0 - 1; }
     return j;
 }
 
 // is the address made by instruction i (of block b), for the offset off, only given to the cleanup record (the store 16 bytes further)?
-bool nc_is_record(int i, int b, int off) {
-    int j = nc_next(i, b);
+bool nc_is_record(i64 i, i64 b, i64 off) {
+    i64 j = nc_next(i, b);
     if j < 0 || ir_op[j] != IR_STORE || ir_w[j] != 8 || ir_b[j] != ir_d[i] { return false; }
     // the record is written through the frame pointer (the store 16 bytes further) or, in the form that the lifter makes first, through the register that holds
     // its address (v = add v30, off + 8; the slot address goes to [v + 8], the function to [v + 16])
-    int rb = 0 - 1;
+    i64 rb = 0 - 1;
     if ir_a[j] == 30 {
         if ir_k[j] != off + 16 { return false; }
     } else {
         if ir_k[j] != 8 || ir_a[j] < 1 || ir_a[j] > 63 { return false; }
         rb = ir_a[j];
-        int q = i - 1;
+        i64 q = i - 1;
         bool found = false;
         while q >= ir_bs[b] && !found {
             if ir_op[q] != IR_NOP && ir_d[q] == rb {
@@ -4703,21 +4703,21 @@ bool nc_is_record(int i, int b, int off) {
         if !found { return false; }
     }
     // the record goes on with the address of the function that frees the object, stored 8 bytes further
-    int j2 = nc_next(j, b);
+    i64 j2 = nc_next(j, b);
     if !(j2 >= 0 && ir_op[j2] == IR_ADDR_FUNC) { return false; }
-    int j3 = nc_next(j2, b);
+    i64 j3 = nc_next(j2, b);
     if j3 < 0 || ir_op[j3] != IR_STORE || ir_b[j3] != ir_d[j2] { return false; }
     if rb < 0 { return ir_a[j3] == 30 && ir_k[j3] == off + 24; }
     return ir_a[j3] == rb && ir_k[j3] == 16;
 }
 
 // the hint line says that the slot off is a plain 8-byte value (flag 1): value numbering may then reuse its loads
-void nc_make_plain(int off) {
-    int p = 2;
+void nc_make_plain(i64 off) {
+    i64 p = 2;
     while p < lf_hint_n {
         while p < lf_hint_n && lf_hint_text[p] == 32 { p += 1; }
-        int start = p;
-        int o = 0;
+        i64 start = p;
+        i64 o = 0;
         while p < lf_hint_n && lf_hint_text[p] >= 48 && lf_hint_text[p] <= 57 { o = o * 10 + (lf_hint_text[p] - 48); p += 1; }
         if p < lf_hint_n && lf_hint_text[p] == 58 && o == off && p + 3 < lf_hint_n && lf_hint_text[p + 1] == 56 && lf_hint_text[p + 2] == 58 && lf_hint_text[p + 3] == 48
             && (p + 4 >= lf_hint_n || lf_hint_text[p + 4] == 32) {
@@ -4734,7 +4734,7 @@ void op_nullchk() {
     if nc_dbg == 1 { write_err("== nullchk of "); write_err(@ir_fname); write_err(" blocks "); write_err_int(ir_nb); write_err("\n"); }
     op_graph();
     nc_n = 0;
-    int b = 0;
+    i64 b = 0;
     while b < ir_nb {
         nc_slot[b] = 0 - 1;
         nc_ok[b] = 0 - 1;
@@ -4745,7 +4745,7 @@ void op_nullchk() {
     b = 0;
     while b < ir_nb {
         if op_po[b] >= 0 && ir_be[b] > ir_bs[b] {
-            int i0 = ir_bs[b];
+            i64 i0 = ir_bs[b];
             while i0 < ir_be[b] {
                 if ir_op[i0] == IR_CALL && (str_eq(@ir_name + ir_k[i0] * 64, "__Arr__nullerr") || str_eq(@ir_name + ir_k[i0] * 64, "__panic")) { nc_panic[b] = 1; }
                 i0 += 1;
@@ -4754,12 +4754,12 @@ void op_nullchk() {
         b += 1;
     }
     // a block that only jumps on to a block that panics panics too (the body of an inlined __Arr__nullerr is several blocks)
-    int pr = 0;
+    i64 pr = 0;
     while pr < 6 {
         b = 0;
         while b < ir_nb {
             if op_po[b] >= 0 && nc_panic[b] == 0 && ir_be[b] > ir_bs[b] {
-                int tt = ir_be[b] - 1;
+                i64 tt = ir_be[b] - 1;
                 if ir_op[tt] == IR_JMP && ir_t1[tt] >= 0 && nc_panic[ir_t1[tt]] == 1 { nc_panic[b] = 1; }
             }
             b += 1;
@@ -4769,15 +4769,15 @@ void op_nullchk() {
     b = 0;
     while b < ir_nb {
         if op_po[b] >= 0 && ir_be[b] > ir_bs[b] {
-            int t = ir_be[b] - 1;
+            i64 t = ir_be[b] - 1;
             if nc_dbg == 1 && ir_op[t] == IR_BR { write_err("  br in block "); write_err_int(b); write_err(" bi "); write_err_int(ir_bi[t]); write_err(" b "); write_err_int(ir_b[t]); write_err(" k "); write_err_int(ir_k[t]); write_err(" t2 "); write_err_int(ir_t2[t]); write_err(" panic "); if ir_t2[t] >= 0 { write_err_int(nc_panic[ir_t2[t]]); } write_err("\n"); }
             if ir_op[t] == IR_BR && ir_t2[t] >= 0 && nc_panic[ir_t2[t]] == 1 && ir_bi[t] == 1 && ir_b[t] == 0 && ir_k[t] == IR_NE {
                 // the register that is tested was loaded from a slot of the frame, as the last thing that wrote it in this block
-                int v = ir_a[t];
-                int j = t - 1;
+                i64 v = ir_a[t];
+                i64 j = t - 1;
                 while j >= ir_bs[b] && (ir_op[j] == IR_NOP || (ir_d[j] != v && !(ir_op[j] == IR_CALL || ir_op[j] == IR_CALLIND))) { j -= 1; }
                 if j >= ir_bs[b] && ir_op[j] == IR_LOAD && ir_a[j] == 30 && ir_w[j] == 8 && ir_d[j] == v && ir_k[j] >= 16 && ir_k[j] % 8 == 0 {
-                    int ix = nc_index(ir_k[j]);
+                    i64 ix = nc_index(ir_k[j]);
                     if ix >= 0 {
                         nc_slot[b] = ix;
                         nc_ok[b] = ir_t1[t];
@@ -4793,14 +4793,14 @@ void op_nullchk() {
     b = 0;
     while b < ir_nb {
         if op_po[b] >= 0 {
-            int i = ir_bs[b];
+            i64 i = ir_bs[b];
             while i < ir_be[b] {
-                int op = ir_op[i];
+                i64 op = ir_op[i];
                 if (op == IR_ADDR_SLOT && ir_d[i] != 30) || (op == IR_ADD && ir_a[i] == 30 && ir_bi[i] == 1) {
-                    int off = ir_k[i];
+                    i64 off = ir_k[i];
                     if op == IR_ADD { off = ir_b[i]; }
-                    int ix = 0 - 1;
-                    int q = 0;
+                    i64 ix = 0 - 1;
+                    i64 q = 0;
                     while q < nc_n { if nc_off[q] == off { ix = q; } q += 1; }
                     if ix >= 0 {
                         // the cleanup record: the address goes to the slot 16 bytes further, in the next instruction
@@ -4808,7 +4808,7 @@ void op_nullchk() {
                             nc_addr[ix] += 1;
                             if nc_dbg == 1 {
                                 write_err("  address of slot "); write_err_int(off); write_err(" in block "); write_err_int(b); write_err(" op "); write_err_int(op);
-                                int jj = nc_next(i, b);
+                                i64 jj = nc_next(i, b);
                                 if jj >= 0 { write_err(" next op "); write_err_int(ir_op[jj]); write_err(" a "); write_err_int(ir_a[jj]); write_err(" k "); write_err_int(ir_k[jj]); write_err(" w "); write_err_int(ir_w[jj]); write_err(" b "); write_err_int(ir_b[jj]); write_err(" d(i) "); write_err_int(ir_d[i]); }
                                 write_err("\n");
                             }
@@ -4818,14 +4818,14 @@ void op_nullchk() {
                 // a frame pointer that goes anywhere else may reach any slot
                 if (ir_a[i] == 30 && op != IR_LOAD && op != IR_STORE && op != IR_ADDR_SLOT && !(op == IR_ADD && ir_bi[i] == 1))
                     || (ir_uses_b(op) && ir_bi[i] == 0 && ir_b[i] == 30) {
-                    int q2 = 0;
+                    i64 q2 = 0;
                     while q2 < nc_n { nc_addr[q2] += 1; q2 += 1; }
                 }
                 if op == IR_CALL || op == IR_CALLIND || op == IR_SYSCALL {
-                    int g = 0;
+                    i64 g = 0;
                     while g < ir_ac[i] {
                         if ir_args[ir_as[i] + g] == 30 {
-                            int q3 = 0;
+                            i64 q3 = 0;
                             while q3 < nc_n { nc_addr[q3] += 1; q3 += 1; }
                         }
                         g += 1;
@@ -4837,8 +4837,8 @@ void op_nullchk() {
         b += 1;
     }
     // 3. the data flow: the slots known not to be null at the start of each block (all of them to begin with, except at the entry)
-    int all = 0;
-    int q4 = 0;
+    i64 all = 0;
+    i64 q4 = 0;
     while q4 < nc_n { if nc_addr[q4] == 0 { all = all | (1 << q4); } q4 += 1; }
     b = 0;
     while b < ir_nb {
@@ -4847,44 +4847,44 @@ void op_nullchk() {
         b += 1;
     }
     nc_in[0] = 0;
-    int round = 0;
+    i64 round = 0;
     bool changed = true;
     while changed && round < 30 {
         changed = false;
         round += 1;
-        int ri = 0;
+        i64 ri = 0;
         while ri < op_nrpo {
             b = op_rpo[ri];
             ri += 1;
             if b >= ir_nb || op_po[b] < 0 { continue; }
-            int in = all;
+            i64 in = all;
             if b == 0 { in = 0; }
             else {
-                int e = op_phead[b];
+                i64 e = op_phead[b];
                 bool any = false;
                 while e >= 0 {
-                    int p = e / 2;
+                    i64 p = e / 2;
                     e = op_enext[e];
                     if op_po[p] < 0 || nc_panic[p] == 1 { continue; }
-                    int pe = nc_out[p];
+                    i64 pe = nc_out[p];
                     if nc_slot[p] >= 0 && nc_ok[p] == b { pe = pe | (1 << nc_slot[p]); }
                     in = in & pe;
                     any = true;
                 }
                 if !any { in = 0; }
             }
-            int m = in;
-            int i = ir_bs[b];
+            i64 m = in;
+            i64 i = ir_bs[b];
             while i < ir_be[b] {
                 if ir_op[i] == IR_STORE && ir_a[i] == 30 {
                     // a store of the result of __Arr__make: that array exists (it panics when there is no memory), so the slot is not null from here on
                     bool made = false;
                     if ir_bi[i] == 0 && ir_w[i] == 8 && ir_b[i] >= 1 {
-                        int jm = i - 1;
+                        i64 jm = i - 1;
                         while jm >= ir_bs[b] && (ir_op[jm] == IR_NOP || ir_d[jm] != ir_b[i]) { jm -= 1; }
                         if jm >= ir_bs[b] && ir_op[jm] == IR_CALL && str_eq(@ir_name + ir_k[jm] * 64, "__Arr__make") { made = true; }
                     }
-                    int q5 = 0;
+                    i64 q5 = 0;
                     while q5 < nc_n {
                         if ir_k[i] < nc_off[q5] + 8 && ir_k[i] + 8 > nc_off[q5] {
                             m = m & ~(1 << q5);
@@ -4900,12 +4900,12 @@ void op_nullchk() {
             nc_out[b] = m;
         }
     }
-    if nc_dbg == 1 { int qd = 0; while qd < nc_n { write_err("  slot "); write_err_int(nc_off[qd]); write_err(" addr uses "); write_err_int(nc_addr[qd]); write_err("\n"); qd += 1; } }
+    if nc_dbg == 1 { i64 qd = 0; while qd < nc_n { write_err("  slot "); write_err_int(nc_off[qd]); write_err(" addr uses "); write_err_int(nc_addr[qd]); write_err("\n"); qd += 1; } }
     // 4. a check that every way in has passed is a jump
     b = 0;
     while b < ir_nb {
         if op_po[b] >= 0 && nc_slot[b] >= 0 && (nc_out[b] & (1 << nc_slot[b])) != 0 && nc_addr[nc_slot[b]] == 0 {
-            int t2 = ir_be[b] - 1;
+            i64 t2 = ir_be[b] - 1;
             ir_op[t2] = IR_JMP;
             ir_t1[t2] = nc_ok[b];
             ir_t2[t2] = 0 - 1;
@@ -4915,7 +4915,7 @@ void op_nullchk() {
         b += 1;
     }
     // the slots that nobody can change but a store that names them are plain values for value numbering
-    int q6 = 0;
+    i64 q6 = 0;
     while q6 < nc_n {
         if nc_addr[q6] == 0 { nc_make_plain(nc_off[q6]); }
         q6 += 1;
@@ -4936,9 +4936,9 @@ void op_sroa() {
 
 void al_run() {
     regs_len = 0;
-    int i = 0;
+    i64 i = 0;
     while i < out_len {
-        int en = rg_end(i);
+        i64 en = rg_end(i);
         if rg_has(i, ";N\n") {
             i = en + 1;                                   // the marker of a naked function: its job was to keep the passes away
             continue;
@@ -4951,7 +4951,7 @@ void al_run() {
         rg_copy(i, en);
         i = en + 1;
     }
-    int t = 0;
+    i64 t = 0;
     while t < regs_len {
         out_buf[t] = regs_buf[t];
         t += 1;
@@ -4963,9 +4963,9 @@ void al_run() {
 // after the code is made: the lines between ";NB" and ";NE" get a marker in front of each instruction
 void nr_run() {
     bool any = false;
-    int i = 0;
+    i64 i = 0;
     while i < out_len {
-        int en = rg_end(i);
+        i64 en = rg_end(i);
         if rg_has(i, ";NB\n") { any = true; }
         i = en + 1;
     }
@@ -4974,7 +4974,7 @@ void nr_run() {
     bool inside = false;
     i = 0;
     while i < out_len {
-        int en2 = rg_end(i);
+        i64 en2 = rg_end(i);
         if rg_has(i, ";NB\n") {
             inside = true;
         } else if rg_has(i, ";NE\n") {
@@ -4987,7 +4987,7 @@ void nr_run() {
         }
         i = en2 + 1;
     }
-    int t = 0;
+    i64 t = 0;
     while t < regs_len {
         out_buf[t] = regs_buf[t];
         t += 1;
@@ -5011,25 +5011,25 @@ void nr_run() {
 #define RN_NS 96                 // the tracked slots (RN_NT) and the registers v1 .. v63
 #define RN_MAXB 2048
 
-int rn_out[196608];              // [block * RN_NS + t]: the bounds of the tracked slots and of the registers at the end of the block
-int rn_cs[RN_NS];                // the bounds in the block being scanned
-int rn_ent[64];                  // the bounds of the registers when the block began
-int rn_lr[IR_MAXV];              // the bound of a vreg inside the block (valid when rn_ls is the stamp of the block)
-int rn_ls[IR_MAXV];
-int rn_stamp;
-int rn_ir[IR_MAXI];              // the bound of the result of each instruction (set when the block is scanned)
-int rn_id[16384];                // slot (vn_slot) -> index t, or -1
-int rn_nt;
-int rn_leak;
-int rn_changes;
-int rn_big;
-int rn_unk;
-int rn_total;                    // all functions (for -irstat)
+i64 rn_out[196608];              // [block * RN_NS + t]: the bounds of the tracked slots and of the registers at the end of the block
+i64 rn_cs[RN_NS];                // the bounds in the block being scanned
+i64 rn_ent[64];                  // the bounds of the registers when the block began
+i64 rn_lr[IR_MAXV];              // the bound of a vreg inside the block (valid when rn_ls is the stamp of the block)
+i64 rn_ls[IR_MAXV];
+i64 rn_stamp;
+i64 rn_ir[IR_MAXI];              // the bound of the result of each instruction (set when the block is scanned)
+i64 rn_id[16384];                // slot (vn_slot) -> index t, or -1
+i64 rn_nt;
+i64 rn_leak;
+i64 rn_changes;
+i64 rn_big;
+i64 rn_unk;
+i64 rn_total;                    // all functions (for -irstat)
 
-int rn_get(int v) {
+i64 rn_get(i64 v) {
     if v <= 0 || v >= IR_MAXV { return rn_unk; }
     if v < 64 {
-        int x = rn_cs[RN_NT + v];
+        i64 x = rn_cs[RN_NT + v];
         if x < 0 { return 0; }
         return x;
     }
@@ -5037,7 +5037,7 @@ int rn_get(int v) {
     return rn_lr[v];
 }
 
-void rn_set(int v, int x) {
+void rn_set(i64 v, i64 x) {
     if v > 0 && v < 64 { rn_cs[RN_NT + v] = x; }
     else if v >= 64 && v < IR_MAXV {
         rn_lr[v] = x;
@@ -5046,24 +5046,24 @@ void rn_set(int v, int x) {
 }
 
 // the slot index t of a load / store, or -1
-int rn_slot_t(int i) {
-    int s = vn_slot(i);
+i64 rn_slot_t(i64 i) {
+    i64 s = vn_slot(i);
     if s < 0 { return 0 - 1; }
     if s >= 8192 && rn_leak != 0 { return 0 - 1; }
     return rn_id[s];
 }
 
-int rn_add(int x, int y) {
+i64 rn_add(i64 x, i64 y) {
     if x == rn_unk || y == rn_unk { return rn_unk; }
     if x == rn_big && y == rn_big { return rn_unk; }
     if x == rn_big { if y <= 1048576 { return rn_big; } return rn_unk; }
     if y == rn_big { if x <= 1048576 { return rn_big; } return rn_unk; }
-    int s = x + y;
+    i64 s = x + y;
     if s >= rn_big { return rn_unk; }
     return s;
 }
 
-int rn_mul(int x, int y) {
+i64 rn_mul(i64 x, i64 y) {
     if x == rn_unk || y == rn_unk || x == rn_big || y == rn_big { return rn_unk; }
     if x == 0 || y == 0 { return 0; }
     if x > (rn_big - 1) / y { return rn_unk; }
@@ -5071,8 +5071,8 @@ int rn_mul(int x, int y) {
 }
 
 // all bits below the highest bit 1
-int rn_smear(int m) {
-    int r = m;
+i64 rn_smear(i64 m) {
+    i64 r = m;
     r = r | (r >> 1);
     r = r | (r >> 2);
     r = r | (r >> 4);
@@ -5083,9 +5083,9 @@ int rn_smear(int m) {
 }
 
 // the bound of the number the second operand is (a number of the instruction or a vreg)
-int rn_bval(int i) {
+i64 rn_bval(i64 i) {
     if ir_bi[i] == 1 {
-        int k = ir_b[i];
+        i64 k = ir_b[i];
         if k >= 0 && k < rn_big { return k; }
         return rn_unk;
     }
@@ -5093,12 +5093,12 @@ int rn_bval(int i) {
 }
 
 // the bound of the result of the instruction i
-int rn_eval(int i) {
-    int op = ir_op[i];
-    int d = ir_d[i];
+i64 rn_eval(i64 i) {
+    i64 op = ir_op[i];
+    i64 d = ir_d[i];
     if d <= 0 || d >= IR_MAXV { return rn_unk; }
     if ir_vcls[d] != 0 { return rn_unk; }
-    int a = rn_get(ir_a[i]);
+    i64 a = rn_get(ir_a[i]);
     if op == IR_CONST {
         if ir_k[i] >= 0 && ir_k[i] < rn_big { return ir_k[i]; }
         if ir_k[i] >= 0 { return rn_big; }       // a big positive number (the multiplier of a division): never negative
@@ -5109,35 +5109,35 @@ int rn_eval(int i) {
     if op == IR_MUL { return rn_mul(a, rn_bval(i)); }
     if op == IR_AND {
         if ir_bi[i] == 1 {
-            int k = ir_b[i];
+            i64 k = ir_b[i];
             if k >= 0 && k < rn_big { return k; }
             if k < 0 { return a; }         // a & ~mask: not bigger than a
             return rn_unk;
         }
-        int bb = rn_get(ir_b[i]);
+        i64 bb = rn_get(ir_b[i]);
         if a == rn_unk { return bb; }
         if bb == rn_unk { return a; }
         if a < bb { return a; }
         return bb;
     }
     if op == IR_OR || op == IR_XOR {
-        int bo = rn_bval(i);
+        i64 bo = rn_bval(i);
         if a == rn_unk || bo == rn_unk { return rn_unk; }
         if a == rn_big || bo == rn_big { return rn_big; }
-        int m = a;
+        i64 m = a;
         if bo > m { m = bo; }
         return rn_smear(m);
     }
     if op == IR_SHL {
         if ir_bi[i] == 0 || a == rn_unk || a == rn_big { return rn_unk; }
-        int k = ir_b[i];
+        i64 k = ir_b[i];
         if k < 0 || k > 61 { return rn_unk; }
         if a > (rn_big - 1) >> k { return rn_unk; }
         return a << k;
     }
     if op == IR_LSHR || op == IR_ASHR {
         if ir_bi[i] == 0 { return rn_unk; }
-        int k = ir_b[i];
+        i64 k = ir_b[i];
         if k < 0 || k > 63 { return rn_unk; }
         if a == rn_unk {
             if op == IR_LSHR && k >= 2 { return (1 << (64 - k)) - 1; }
@@ -5147,7 +5147,7 @@ int rn_eval(int i) {
         return a >> k;
     }
     if op == IR_MULHS {
-        int bm = rn_get(ir_b[i]);
+        i64 bm = rn_get(ir_b[i]);
         if ir_bi[i] == 1 { bm = rn_bval(i); }
         if a != rn_unk && bm != rn_unk { return rn_big; }
         return rn_unk;
@@ -5169,13 +5169,13 @@ int rn_eval(int i) {
     if op == IR_ROTR32 { return 4294967295; }
     if op == IR_CLZ || op == IR_POPCNT { return 64; }
     if op == IR_LOAD {
-        int w = ir_w[i];
+        i64 w = ir_w[i];
         if w == 1 { return 255; }
         if w == 2 { return 65535; }
         if w == 4 { return 4294967295; }
-        int t = rn_slot_t(i);
+        i64 t = rn_slot_t(i);
         if t >= 0 && w == 8 {
-            int v = rn_cs[t];
+            i64 v = rn_cs[t];
             if v < 0 { return 0; }
             return v;
         }
@@ -5185,10 +5185,10 @@ int rn_eval(int i) {
 }
 
 // the last instruction before `pos` in the block b that writes the vreg v (-1: none in the block, -2: a call in between)
-int rn_find_def(int b, int pos, int v) {
-    int j = pos - 1;
+i64 rn_find_def(i64 b, i64 pos, i64 v) {
+    i64 j = pos - 1;
     while j >= ir_bs[b] {
-        int op = ir_op[j];
+        i64 op = ir_op[j];
         if op == IR_CALL || op == IR_CALLIND || op == IR_SYSCALL { return 0 - 2; }
         if ir_d[j] == v && op != IR_NOP && op != IR_STORE { return j; }
         j -= 1;
@@ -5197,8 +5197,8 @@ int rn_find_def(int b, int pos, int v) {
 }
 
 // is the vreg v written by an instruction in [from, to)?
-bool rn_written(int from, int to, int v) {
-    int j = from;
+bool rn_written(i64 from, i64 to, i64 v) {
+    i64 j = from;
     while j < to {
         if ir_d[j] == v && ir_op[j] != IR_NOP && ir_op[j] != IR_STORE { return true; }
         j += 1;
@@ -5208,11 +5208,11 @@ bool rn_written(int from, int to, int v) {
 
 // where the value of v at `pos` comes from, through copies: the instruction that made it (>= 0), or -(v + 10) when it is the value the
 // block started with, or -1 when it cannot be said
-int rn_origin(int b, int pos, int v) {
-    int j = rn_find_def(b, pos, v);
-    int at = pos;
-    int x = v;
-    int n = 0;
+i64 rn_origin(i64 b, i64 pos, i64 v) {
+    i64 j = rn_find_def(b, pos, v);
+    i64 at = pos;
+    i64 x = v;
+    i64 n = 0;
     while j >= 0 && ir_op[j] == IR_COPY && n < 16 {
         at = j;
         x = ir_a[j];
@@ -5225,38 +5225,38 @@ int rn_origin(int b, int pos, int v) {
 }
 
 // the rotation of a 32-bit number: D = and(or(shr(x, n), shl(x, 32 - n)), 0xFFFFFFFF), x not bigger than 32 bits
-bool rn_rotate(int b, int i) {
+bool rn_rotate(i64 b, i64 i) {
     if ir_bi[i] != 1 || ir_b[i] != 4294967295 { return false; }
-    int c = rn_find_def(b, i, ir_a[i]);
+    i64 c = rn_find_def(b, i, ir_a[i]);
     if c < 0 || ir_op[c] != IR_OR || ir_bi[c] != 0 { return false; }
-    int p = rn_find_def(b, c, ir_a[c]);
-    int q = rn_find_def(b, c, ir_b[c]);
-    int hop = 0;
+    i64 p = rn_find_def(b, c, ir_a[c]);
+    i64 q = rn_find_def(b, c, ir_b[c]);
+    i64 hop = 0;
     while p >= 0 && ir_op[p] == IR_COPY && hop < 8 { p = rn_find_def(b, p, ir_a[p]); hop += 1; }
     hop = 0;
     while q >= 0 && ir_op[q] == IR_COPY && hop < 8 { q = rn_find_def(b, q, ir_a[q]); hop += 1; }
     if p < 0 || q < 0 || ir_bi[p] != 1 || ir_bi[q] != 1 { return false; }
-    int r = p;
-    int l = q;
+    i64 r = p;
+    i64 l = q;
     if ir_op[p] == IR_SHL { r = q; l = p; }
     if ir_op[l] != IR_SHL { return false; }
     if ir_op[r] != IR_LSHR && ir_op[r] != IR_ASHR { return false; }
-    int n = ir_b[r];
+    i64 n = ir_b[r];
     if n < 1 || n > 31 || ir_b[l] != 32 - n { return false; }
-    int o1 = rn_origin(b, r, ir_a[r]);
-    int o2 = rn_origin(b, l, ir_a[l]);
+    i64 o1 = rn_origin(b, r, ir_a[r]);
+    i64 o2 = rn_origin(b, l, ir_a[l]);
     if o1 == 0 - 1 || o1 != o2 { return false; }
     // the value must be known to fit in 32 bits (the instruction that made it)
-    int src = 0;
+    i64 src = 0;
     if o1 >= 0 {
         if rn_ir[o1] > 4294967295 { return false; }
         // made by `y & 0xFFFFFFFF`: the instruction ignores the upper half, so y itself can be turned
         if ir_op[o1] == IR_AND && ir_bi[o1] == 1 && ir_b[o1] == 4294967295 && ir_a[o1] > 0 && !rn_written(o1, i, ir_a[o1]) { src = ir_a[o1]; }
     } else {
         // the value the block started with: the bound at the start
-        int lv = 0 - (o1 + 10);
+        i64 lv = 0 - (o1 + 10);
         if lv < 1 || lv >= 64 { return false; }
-        int eb = rn_ent[lv];
+        i64 eb = rn_ent[lv];
         if eb < 0 || eb > 4294967295 { return false; }
     }
     // a vreg that still holds the value at D
@@ -5273,27 +5273,27 @@ bool rn_rotate(int b, int i) {
 }
 
 // run the transfer of the block b (rewrite: change instructions as well)
-void rn_block(int b, bool rewrite) {
+void rn_block(i64 b, bool rewrite) {
     rn_stamp += 1;
-    int ev = 1;
+    i64 ev = 1;
     while ev < 64 { rn_ent[ev] = rn_cs[RN_NT + ev]; ev += 1; }
-    int i = ir_bs[b];
+    i64 i = ir_bs[b];
     while i < ir_be[b] {
-        int op = ir_op[i];
+        i64 op = ir_op[i];
         if op == IR_NOP { i += 1; continue; }
         if op == IR_CALL || op == IR_CALLIND || op == IR_SYSCALL {
             rn_stamp += 1;
-            int cv = 1;
+            i64 cv = 1;
             while cv <= 19 { rn_cs[RN_NT + cv] = rn_unk; cv += 1; }
             if ir_d[i] > 0 { rn_set(ir_d[i], rn_unk); }
             i += 1;
             continue;
         }
         if op == IR_STORE {
-            int t = rn_slot_t(i);
+            i64 t = rn_slot_t(i);
             if t >= 0 && ir_w[i] == 8 {
                 if ir_bi[i] == 1 {
-                    int k = ir_b[i];
+                    i64 k = ir_b[i];
                     if k >= 0 && k < rn_big { rn_cs[t] = k; } else if k >= 0 { rn_cs[t] = rn_big; } else { rn_cs[t] = rn_unk; }
                 } else {
                     rn_cs[t] = rn_get(ir_b[i]);
@@ -5306,8 +5306,8 @@ void rn_block(int b, bool rewrite) {
         }
         if rewrite && ir_d[i] > 0 && ir_vcls[ir_d[i]] == 0 {
             if (op == IR_LSHR || op == IR_ASHR) && ir_bi[i] == 1 && ir_b[i] >= 1 && ir_b[i] <= 63 {
-                int v = rn_get(ir_a[i]);
-                int k = ir_b[i];
+                i64 v = rn_get(ir_a[i]);
+                i64 k = ir_b[i];
                 bool zero = false;
                 if v != rn_unk && v != rn_big && v < (1 << k) { zero = true; }
                 if v == rn_big && k == 63 { zero = true; }
@@ -5322,7 +5322,7 @@ void rn_block(int b, bool rewrite) {
                 }
             } else if op == IR_AND && ir_bi[i] == 1 && ir_b[i] == 4294967295 {
                 if !rn_rotate(b, i) {
-                    int v2 = rn_get(ir_a[i]);
+                    i64 v2 = rn_get(ir_a[i]);
                     if v2 != rn_unk && v2 != rn_big && v2 <= 4294967295 {
                         ir_op[i] = IR_COPY;
                         ir_b[i] = 0;
@@ -5335,7 +5335,7 @@ void rn_block(int b, bool rewrite) {
             }
         }
         if ir_d[i] > 0 {
-            int rv = rn_eval(i);
+            i64 rv = rn_eval(i);
             rn_ir[i] = rv;
             rn_set(ir_d[i], rv);
         }
@@ -5344,20 +5344,20 @@ void rn_block(int b, bool rewrite) {
 }
 
 // the state at the start of the block b: the join of the ends of the blocks that come before it
-void rn_entry(int b) {
-    int t = 0;
+void rn_entry(i64 b) {
+    i64 t = 0;
     while t < RN_NS {
         rn_cs[t] = 0 - 2;
         if b == 0 { rn_cs[t] = rn_unk; }
         t += 1;
     }
-    int e = op_phead[b];
+    i64 e = op_phead[b];
     while e >= 0 {
-        int p = e / 2;
+        i64 p = e / 2;
         if op_po[p] >= 0 {
             t = 0;
             while t < RN_NS {
-                int v = rn_out[p * RN_NS + t];
+                i64 v = rn_out[p * RN_NS + t];
                 if v > rn_cs[t] { rn_cs[t] = v; }
                 t += 1;
             }
@@ -5375,15 +5375,15 @@ void op_range_run() {
     rn_changes = 0;
     // can an address of the frame leak (a stack cell could then change behind our back)?
     rn_leak = 0;
-    int i = 0;
+    i64 i = 0;
     while i < ir_n {
-        int op = ir_op[i];
+        i64 op = ir_op[i];
         if op == IR_ADDR_SLOT { if ir_d[i] != 30 { rn_leak = 1; } }
         else if op != IR_LOAD && op != IR_STORE && op != IR_NOP {
             if ir_a[i] == 30 { rn_leak = 1; }
             if ir_uses_b(op) && ir_bi[i] == 0 && ir_b[i] == 30 { rn_leak = 1; }
             if op == IR_CALL || op == IR_CALLIND || op == IR_SYSCALL {
-                int g = 0;
+                i64 g = 0;
                 while g < ir_ac[i] {
                     if ir_args[ir_as[i] + g] == 30 { rn_leak = 1; }
                     g += 1;
@@ -5400,7 +5400,7 @@ void op_range_run() {
     i = 0;
     while i < ir_n {
         if (ir_op[i] == IR_LOAD || ir_op[i] == IR_STORE) && ir_a[i] == 30 {
-            int s = vn_slot(i);
+            i64 s = vn_slot(i);
             if s >= 0 && rn_id[s] < 0 && rn_nt < RN_NT && !(s >= 8192 && rn_leak != 0) {
                 rn_id[s] = rn_nt;
                 rn_nt += 1;
@@ -5414,20 +5414,20 @@ void op_range_run() {
     i = 0;
     while i < ir_nb * RN_NS { rn_out[i] = 0 - 2; i += 1; }
     // the flow
-    int pass = 0;
+    i64 pass = 0;
     bool changed = true;
     while changed && pass < 30 {
         changed = false;
         pass += 1;
-        int ri = 0;
+        i64 ri = 0;
         while ri < op_nrpo {
-            int b = op_rpo[ri];
+            i64 b = op_rpo[ri];
             rn_entry(b);
             rn_block(b, false);
-            int t = 0;
+            i64 t = 0;
             while t < RN_NS {
-                int old = rn_out[b * RN_NS + t];
-                int n = rn_cs[t];
+                i64 old = rn_out[b * RN_NS + t];
+                i64 n = rn_cs[t];
                 if n < 0 { n = 0; }
                 if old >= 0 && n < old { n = old; }
                 if pass >= 4 && old >= 0 && n > old && n != rn_unk { n = rn_big; }
@@ -5441,11 +5441,11 @@ void op_range_run() {
         }
     }
     if changed { return; }          // did not settle: change nothing
-    int rj = 0;
+    i64 rj = 0;
     while rj < op_nrpo {
-        int b2 = op_rpo[rj];
+        i64 b2 = op_rpo[rj];
         rn_entry(b2);
-        int t2 = 0;
+        i64 t2 = 0;
         while t2 < RN_NS {
             if rn_cs[t2] < 0 { rn_cs[t2] = 0; }
             t2 += 1;
@@ -5462,24 +5462,24 @@ void op_range_run() {
 // description is kept for the vectoriser (V3); `-irdbg 134217728` prints it.
 
 #define CL_MAX 64
-int cl_head[CL_MAX];             // the header block
-int cl_slot[CL_MAX];             // the slot index (vn_slot) of the counter
-int cl_step[CL_MAX];
-int cl_bkind[CL_MAX];            // the bound: 0 a number, 1 a slot that is not written in the loop
-int cl_bval[CL_MAX];             // the number, or the slot index
-int cl_cc[CL_MAX];               // the condition that keeps the loop going (IR_LT, IR_LE, IR_ULT, IR_ULE)
-int cl_body[CL_MAX];             // the first block of the body
-int cl_exit[CL_MAX];
-int cl_calls[CL_MAX];            // calls inside the loop (a loop with calls is never vectorised)
-int cl_nblk[CL_MAX];             // the blocks of the loop
-int cl_inner[CL_MAX];            // 1: no other loop inside
-int cl_lidx[CL_MAX];             // the loop (op_lh index) of the description
-int cl_stb[CL_MAX];              // the block and the instruction of the step of the counter
-int cl_sti[CL_MAX];
-int cl_n;
-int cl_total;                    // all functions (-irstat)
+i64 cl_head[CL_MAX];             // the header block
+i64 cl_slot[CL_MAX];             // the slot index (vn_slot) of the counter
+i64 cl_step[CL_MAX];
+i64 cl_bkind[CL_MAX];            // the bound: 0 a number, 1 a slot that is not written in the loop
+i64 cl_bval[CL_MAX];             // the number, or the slot index
+i64 cl_cc[CL_MAX];               // the condition that keeps the loop going (IR_LT, IR_LE, IR_ULT, IR_ULE)
+i64 cl_body[CL_MAX];             // the first block of the body
+i64 cl_exit[CL_MAX];
+i64 cl_calls[CL_MAX];            // calls inside the loop (a loop with calls is never vectorised)
+i64 cl_nblk[CL_MAX];             // the blocks of the loop
+i64 cl_inner[CL_MAX];            // 1: no other loop inside
+i64 cl_lidx[CL_MAX];             // the loop (op_lh index) of the description
+i64 cl_stb[CL_MAX];              // the block and the instruction of the step of the counter
+i64 cl_sti[CL_MAX];
+i64 cl_n;
+i64 cl_total;                    // all functions (-irstat)
 
-int cl_inv(int cc) {
+i64 cl_inv(i64 cc) {
     if cc == IR_GE { return IR_LT; }
     if cc == IR_GT { return IR_LE; }
     if cc == IR_UGE { return IR_ULT; }
@@ -5487,62 +5487,62 @@ int cl_inv(int cc) {
     return 0 - 1;
 }
 
-void cl_analyse(int l) {
-    int h = op_lh[l];
-    int stamp = op_stamp;
+void cl_analyse(i64 l) {
+    i64 h = op_lh[l];
+    i64 stamp = op_stamp;
     // the loop is marked with op_stamp (op_mark_loop was called just before)
-    int t = ir_be[h] - 1;
+    i64 t = ir_be[h] - 1;
     if ir_op[t] != IR_BR || cl_n >= CL_MAX { return; }
     bool in1 = op_mark[ir_t1[t]] == stamp;
     bool in2 = op_mark[ir_t2[t]] == stamp;
     if in1 == in2 { return; }
-    int cc = ir_k[t];
-    int body = ir_t1[t];
-    int ex = ir_t2[t];
+    i64 cc = ir_k[t];
+    i64 body = ir_t1[t];
+    i64 ex = ir_t2[t];
     if !in1 {
         cc = cl_inv(cc);
         body = ir_t2[t];
         ex = ir_t1[t];
     }
     if cc != IR_LT && cc != IR_LE && cc != IR_ULT && cc != IR_ULE { return; }
-    int ld = rn_find_def(h, t, ir_a[t]);
+    i64 ld = rn_find_def(h, t, ir_a[t]);
     if ld < 0 || ir_op[ld] != IR_LOAD || ir_w[ld] != 8 || ir_a[ld] != 30 { return; }
-    int sl = vn_slot(ld);
+    i64 sl = vn_slot(ld);
     if sl < 0 { return; }
     // the bound
-    int bk = 0;
-    int bv = 0;
+    i64 bk = 0;
+    i64 bv = 0;
     if ir_bi[t] == 1 {
         bv = ir_b[t];
     } else {
-        int bd = rn_find_def(h, t, ir_b[t]);
+        i64 bd = rn_find_def(h, t, ir_b[t]);
         if bd < 0 { return; }
         if ir_op[bd] == IR_CONST { bv = ir_k[bd]; }
         else if ir_op[bd] == IR_LOAD && ir_w[bd] == 8 && ir_a[bd] == 30 && vn_slot(bd) >= 0 { bk = 1; bv = vn_slot(bd); }
         else { return; }
     }
     // the writes inside the loop
-    int stores = 0;
-    int st_b = 0 - 1;
-    int st_i = 0 - 1;
-    int calls = 0;
-    int nblk = 0;
+    i64 stores = 0;
+    i64 st_b = 0 - 1;
+    i64 st_i = 0 - 1;
+    i64 calls = 0;
+    i64 nblk = 0;
     bool bound_written = false;
-    int b = 0;
+    i64 b = 0;
     while b < ir_nb {
         if op_po[b] >= 0 && op_mark[b] == stamp {
             nblk += 1;
-            int j = ir_bs[b];
+            i64 j = ir_bs[b];
             while j < ir_be[b] {
-                int op = ir_op[j];
+                i64 op = ir_op[j];
                 if op == IR_CALL || op == IR_CALLIND || op == IR_SYSCALL { calls += 1; }
                 if op == IR_STORE && ir_a[j] == 30 {
-                    int s2 = vn_slot(j);
+                    i64 s2 = vn_slot(j);
                     if s2 == sl { stores += 1; st_b = b; st_i = j; }
                     else if bk == 1 && s2 == bv { bound_written = true; }
                     else if s2 < 0 {
                         // a store at an offset that is not a plain word: it could be anywhere in the frame
-                        int k = ir_k[j];
+                        i64 k = ir_k[j];
                         if k >= 0 && (k / 8 == sl || k / 8 == bv) { return; }
                     }
                 }
@@ -5554,12 +5554,12 @@ void cl_analyse(int l) {
     if stores != 1 || bound_written { return; }
     // the store: i = (load i) + step, in the same block
     if ir_bi[st_i] != 0 { return; }
-    int ad = rn_find_def(st_b, st_i, ir_b[st_i]);
+    i64 ad = rn_find_def(st_b, st_i, ir_b[st_i]);
     if ad < 0 || ir_op[ad] != IR_ADD || ir_bi[ad] != 1 || ir_b[ad] < 1 || ir_b[ad] > 1024 { return; }
-    int ld2 = rn_find_def(st_b, ad, ir_a[ad]);
+    i64 ld2 = rn_find_def(st_b, ad, ir_a[ad]);
     if ld2 < 0 || ir_op[ld2] != IR_LOAD || ir_w[ld2] != 8 || ir_a[ld2] != 30 || vn_slot(ld2) != sl { return; }
     // nothing stores to the slot between the load and the store (there is one store only), so the value is i + step
-    int n = cl_n;
+    i64 n = cl_n;
     cl_head[n] = h;
     cl_slot[n] = sl;
     cl_step[n] = ir_b[ad];
@@ -5583,12 +5583,12 @@ void op_counted_loops() {
     op_graph();
     vn_hints();
     op_nback = 0;
-    int b = 0;
+    i64 b = 0;
     while b < ir_nb {
         if op_po[b] >= 0 {
-            int k = 0;
+            i64 k = 0;
             while k < 2 {
-                int s = op_succ(b, k);
+                i64 s = op_succ(b, k);
                 if s >= 0 && op_dom(s, b) && op_nback < OP_MAXL * 4 {
                     op_bsrc[op_nback] = b;
                     op_bdst[op_nback] = s;
@@ -5601,11 +5601,11 @@ void op_counted_loops() {
     }
     if op_nback == 0 { return; }
     op_nloops = 0;
-    int i = 0;
+    i64 i = 0;
     while i < op_nback {
-        int h = op_bdst[i];
+        i64 h = op_bdst[i];
         bool known = false;
-        int j = 0;
+        i64 j = 0;
         while j < op_nloops {
             if op_lh[j] == h { known = true; }
             j += 1;
@@ -5616,20 +5616,20 @@ void op_counted_loops() {
         }
         i += 1;
     }
-    int l = 0;
+    i64 l = 0;
     while l < op_nloops {
         op_lsize[l] = op_mark_loop(l);
         cl_analyse(l);
         l += 1;
     }
     // an inner loop has no other loop header inside it
-    int a = 0;
+    i64 a = 0;
     while a < cl_n {
-        int la = 0;
+        i64 la = 0;
         while la < op_nloops && op_lh[la] != cl_head[a] { la += 1; }
         if la < op_nloops {
             op_mark_loop(la);
-            int c = 0;
+            i64 c = 0;
             while c < op_nloops {
                 if c != la && op_mark[op_lh[c]] == op_stamp { cl_inner[a] = 0; }
                 c += 1;
@@ -5640,7 +5640,7 @@ void op_counted_loops() {
     cl_total += cl_n;
     if (ir_opt & 134217728) != 0 && cl_n > 0 {
         ir_plen = 0;
-        int q = 0;
+        i64 q = 0;
         while q < cl_n {
             ir_ps("counted loop in ");
             ir_ps(@ir_fname);
@@ -5685,122 +5685,122 @@ void op_counted_loops() {
 #define VZ_DINV 7                // a double that does not change in the loop
 #define VZ_VWORD 8               // the bits of a VZ_VEC
 
-int vz_kind[IR_MAXV];
-int vz_base[IR_MAXV];            // VZ_INV / VZ_ADDR: 0 a plain number, 29 the global area, 30 the frame
-int vz_off[IR_MAXV];             // the number added to the base
-int vz_vec[IR_MAXV];             // VZ_WORD / VZ_VEC / VZ_VWORD: the vector vreg in the vector body (class 2)
-int vz_def[IR_MAXV];             // the register is written in the body
+i64 vz_kind[IR_MAXV];
+i64 vz_base[IR_MAXV];            // VZ_INV / VZ_ADDR: 0 a plain number, 29 the global area, 30 the frame
+i64 vz_off[IR_MAXV];             // the number added to the base
+i64 vz_vec[IR_MAXV];             // VZ_WORD / VZ_VEC / VZ_VWORD: the vector vreg in the vector body (class 2)
+i64 vz_def[IR_MAXV];             // the register is written in the body
 #define VZ_I2 11                 // the counter + an invariant register (vz_dyn) + a number of elements (vz_off): the index of a matrix element
-int vz_dyn[IR_MAXV];             // VZ_I2 / VZ_IDX8 / VZ_ADDR: the invariant register that is added to the index (0: none)
-int vz_dinst[IR_MAXV];           // the instruction that wrote the register last (while scanning)
-int vz_ndef[IR_MAXV];            // how many instructions of the body write the register
-int vz_dep[64];                  // the instructions that make a dyn register (done again in front of the vector loop)
-int vz_ndep;
-int vz_chain[256];
-int vz_nchain;
-int vz_acc_base[64];             // the accesses: base, offset, store?
-int vz_acc_off[64];
-int vz_acc_st[64];
-int vz_nacc;
-int vz_count;                    // loops made (all functions)
-int vz_tried;
-int vz_lslot[IR_MAXV];           // an int value that is a load of a plain slot: the slot index (else -1)
-int vz_dslot[IR_MAXV];           // a double that is such a value's bits: the slot
-int vz_hs[16];                   // the slots whose double is broadcast once in VP
-int vz_hq[16];
-int vz_nhs;
-int vz_shift;                    // VB: bytes added to every element offset (the second copy of an unrolled body)
-int vz_ti;                       // VB: the counter, loaded once
-int vz_ab29;                     // VB: v29 + 8 * i (0: not made yet)
-int vz_ab30;                     // VB: v30 + 8 * i
+i64 vz_dyn[IR_MAXV];             // VZ_I2 / VZ_IDX8 / VZ_ADDR: the invariant register that is added to the index (0: none)
+i64 vz_dinst[IR_MAXV];           // the instruction that wrote the register last (while scanning)
+i64 vz_ndef[IR_MAXV];            // how many instructions of the body write the register
+i64 vz_dep[64];                  // the instructions that make a dyn register (done again in front of the vector loop)
+i64 vz_ndep;
+i64 vz_chain[256];
+i64 vz_nchain;
+i64 vz_acc_base[64];             // the accesses: base, offset, store?
+i64 vz_acc_off[64];
+i64 vz_acc_st[64];
+i64 vz_nacc;
+i64 vz_count;                    // loops made (all functions)
+i64 vz_tried;
+i64 vz_lslot[IR_MAXV];           // an int value that is a load of a plain slot: the slot index (else -1)
+i64 vz_dslot[IR_MAXV];           // a double that is such a value's bits: the slot
+i64 vz_hs[16];                   // the slots whose double is broadcast once in VP
+i64 vz_hq[16];
+i64 vz_nhs;
+i64 vz_shift;                    // VB: bytes added to every element offset (the second copy of an unrolled body)
+i64 vz_ti;                       // VB: the counter, loaded once
+i64 vz_ab29;                     // VB: v29 + 8 * i (0: not made yet)
+i64 vz_ab30;                     // VB: v30 + 8 * i
 #define VZ_ACCV 9                // the value of an accumulator slot at the start of the turn (a vector in the vector loop)
 #define VZ_ACCN 10               // the new value of an accumulator (acc + element)
-int vz_sl_ld[16384];             // loads / stores of each plain frame slot in the body
-int vz_sl_st[16384];
-int vz_acc_slot[8];              // the accumulators: the slot, and the vector that holds its two partial sums
-int vz_acc_q[32];                // the vectors of the partial sums: accumulator * 4 + chunk
-int vz_nacc2;
-int vz_pk_base[16];              // the pointers that walk along the arrays: base, offset, the stack cell that holds the pointer
-int vz_pk_off[16];
-int vz_pk_cell[16];
-int vz_hpv[16];
-int vz_null_off[8];              // the frame offsets of the array pointers that the loop checks for null
-int vz_nnull;
-int vz_ntmp;                     // address cells of the frame that the body writes and reads again
-int vz_tmp_k[8];
-int vz_tmp_ls[8];
-int vz_tmp_kind[8];
-int vz_tmp_vec[8];
-int vz_tmp_base[8];
-int vz_tmp_off[8];                  // the register that holds the data pointer of a heap array (for the pointer cell)
-int vz_npk;
-int vz_br_end;                   // the branch at the end of the vector body
-int vz_has_fp;                   // the body has floating point arithmetic on elements
-int vz_bq[64];                  // a double register that the body only reads: its broadcast made in VP (0: none)
-int vz_w;                        // the size of the elements the loop reads and writes: 8 (the original), 4 (float, i32) or 1 (char)
-int vz_lg;                       // log2 of it
-int vz_work[IR_MAXI];            // the body instructions in order
-int vz_nwork;
+i64 vz_sl_ld[16384];             // loads / stores of each plain frame slot in the body
+i64 vz_sl_st[16384];
+i64 vz_acc_slot[8];              // the accumulators: the slot, and the vector that holds its two partial sums
+i64 vz_acc_q[32];                // the vectors of the partial sums: accumulator * 4 + chunk
+i64 vz_nacc2;
+i64 vz_pk_base[16];              // the pointers that walk along the arrays: base, offset, the stack cell that holds the pointer
+i64 vz_pk_off[16];
+i64 vz_pk_cell[16];
+i64 vz_hpv[16];
+i64 vz_null_off[8];              // the frame offsets of the array pointers that the loop checks for null
+i64 vz_nnull;
+i64 vz_ntmp;                     // address cells of the frame that the body writes and reads again
+i64 vz_tmp_k[8];
+i64 vz_tmp_ls[8];
+i64 vz_tmp_kind[8];
+i64 vz_tmp_vec[8];
+i64 vz_tmp_base[8];
+i64 vz_tmp_off[8];                  // the register that holds the data pointer of a heap array (for the pointer cell)
+i64 vz_npk;
+i64 vz_br_end;                   // the branch at the end of the vector body
+i64 vz_has_fp;                   // the body has floating point arithmetic on elements
+i64 vz_bq[64];                  // a double register that the body only reads: its broadcast made in VP (0: none)
+i64 vz_w;                        // the size of the elements the loop reads and writes: 8 (the original), 4 (float, i32) or 1 (char)
+i64 vz_lg;                       // log2 of it
+i64 vz_work[IR_MAXI];            // the body instructions in order
+i64 vz_nwork;
 
 // the offset from the frame pointer of the slot index s (vn_slot)
-int vz_slot_off(int s) {
+i64 vz_slot_off(i64 s) {
     if s >= 8192 { return 0 - (s - 8192) * 8; }
     return s * 8;
 }
 
-bool vz_is_nop(int j) {
+bool vz_is_nop(i64 j) {
     return ir_op[j] == IR_NOP;
 }
 
 // the scalar instruction j cloned into the block that is being written
-void vz_clone(int j) {
-    int e = ir_add(ir_op[j], ir_d[j], ir_a[j], ir_b[j], ir_bi[j], ir_k[j]);
+void vz_clone(i64 j) {
+    i64 e = ir_add(ir_op[j], ir_d[j], ir_a[j], ir_b[j], ir_bi[j], ir_k[j]);
     ir_w[e] = ir_w[j];
 }
 
 // the arrangement code of IR_VOP / IR_VDUP for the element size: 1 = .2d, 2 = .4s, 3 = .16b
-int vz_arr() {
+i64 vz_arr() {
     if vz_w == 8 { return 1; }
     if vz_w == 4 { return 2; }
     return 3;
 }
 
 // the whole number r (a scalar) in every lane
-int vz_bcast(int r) {
-    int qv = ir_vreg(2);
-    int dp = ir_add(IR_VDUP, qv, r, 0, 0, 0);
+i64 vz_bcast(i64 r) {
+    i64 qv = ir_vreg(2);
+    i64 dp = ir_add(IR_VDUP, qv, r, 0, 0, 0);
     ir_w[dp] = vz_arr();
     return qv;
 }
 
-int vz_iabs(int w) {
+i64 vz_iabs(i64 w) {
     if w < 0 { return 0 - w; }
     return w;
 }
 
 // the register that holds base + 8 * i in the vector body (made at the first use)
-int vz_abase(int base) {
-    int cur = vz_ab29;
+i64 vz_abase(i64 base) {
+    i64 cur = vz_ab29;
     if base == 30 { cur = vz_ab30; }
     if cur != 0 { return cur; }
-    int tsh = ir_vreg(0);
+    i64 tsh = ir_vreg(0);
     if vz_lg == 0 { ir_add(IR_COPY, tsh, vz_ti, 0, 0, 0); } else { ir_add(IR_SHL, tsh, vz_ti, vz_lg, 1, 0); }
-    int ab = ir_vreg(0);
+    i64 ab = ir_vreg(0);
     ir_add(IR_ADD, ab, base, tsh, 0, 0);
     if base == 30 { vz_ab30 = ab; } else { vz_ab29 = ab; }
     return ab;
 }
 
 // the index of the pointer for base + off (a new one is made when emit is false)
-int vz_kadd;                     // vz_ptr: what the access adds to the pointer (its offset minus the offset the pointer was made with)
+i64 vz_kadd;                     // vz_ptr: what the access adds to the pointer (its offset minus the offset the pointer was made with)
 
 // one pointer serves every access of the same base whose offset is the same modulo 16 and within 60000 bytes (the offset of ldr q is
 // a multiple of 16 and at most 65520): three arrays are one pointer and one step for each turn, not three
-int vz_pk_find(int base, int off, bool make) {
-    int u = 0;
+i64 vz_pk_find(i64 base, i64 off, bool make) {
+    i64 u = 0;
     while u < vz_npk {
         if vz_pk_base[u] == base {
-            int dd = off - vz_pk_off[u];
+            i64 dd = off - vz_pk_off[u];
             if (dd & 15) == 0 && dd < 60000 && dd > 0 - 60000 {
                 if make && off < vz_pk_off[u] { vz_pk_off[u] = off; }       // the smallest offset is the anchor: no negative offsets
                 return u;
@@ -5816,18 +5816,18 @@ int vz_pk_find(int base, int off, bool make) {
 }
 
 // the pointer of the access `base + 8 * i + off`, loaded from its cell (the register pass keeps the cell in a register)
-int vz_ptr(int base, int off) {
-    int u = vz_pk_find(base, off, false);
-    int pt = ir_vreg(0);
-    int lp = ir_add(IR_LOAD, pt, 30, 0, 0, 0);
+i64 vz_ptr(i64 base, i64 off) {
+    i64 u = vz_pk_find(base, off, false);
+    i64 pt = ir_vreg(0);
+    i64 lp = ir_add(IR_LOAD, pt, 30, 0, 0, 0);
     ir_w[lp] = 8;
     ir_k[lp] = vz_pk_cell[u];
     vz_kadd = off - vz_pk_off[u];
     return pt;
 }
 
-int vz_hq_of(int slot) {
-    int u = 0;
+i64 vz_hq_of(i64 slot) {
+    i64 u = 0;
     while u < vz_nhs {
         if vz_hs[u] == slot { return vz_hq[u]; }
         u += 1;
@@ -5836,13 +5836,13 @@ int vz_hq_of(int slot) {
 }
 
 // can the register r be made again in front of the vector loop? (the instructions that wrote it are pure: a load of a frame cell, a number, + - * << and copies)
-bool vz_dep_ok(int r, int depth) {
+bool vz_dep_ok(i64 r, i64 depth) {
     if r == 29 || r == 30 || r <= 0 || r >= ir_nv { return true; }
     if vz_ndef[r] == 0 { return true; }                     // a value that comes into the loop
     if vz_ndef[r] > 1 || depth > 6 { return false; }
-    int j = vz_dinst[r];
+    i64 j = vz_dinst[r];
     if j <= 0 { return false; }
-    int op = ir_op[j];
+    i64 op = ir_op[j];
     if op == IR_CONST { return true; }
     if op == IR_LOAD { return ir_a[j] == 30 && ir_w[j] == 8 && vz_dep_ok(ir_a[j], depth + 1); }
     if op == IR_COPY { return vz_dep_ok(ir_a[j], depth + 1); }
@@ -5855,10 +5855,10 @@ bool vz_dep_ok(int r, int depth) {
 }
 
 // the instructions that make r, operands first (vz_dep, vz_ndep)
-void vz_collect(int r) {
+void vz_collect(i64 r) {
     if r == 29 || r == 30 || r <= 0 || r >= ir_nv || vz_ndef[r] == 0 { return; }
-    int j = vz_dinst[r];
-    int k = 0;
+    i64 j = vz_dinst[r];
+    i64 k = 0;
     while k < vz_ndep { if vz_dep[k] == j { return; } k += 1; }
     if ir_op[j] != IR_CONST { vz_collect(ir_a[j]); if ir_uses_b(ir_op[j]) && ir_bi[j] == 0 { vz_collect(ir_b[j]); } }
     if vz_ndep < 64 { vz_dep[vz_ndep] = j; vz_ndep += 1; }
@@ -5867,7 +5867,7 @@ void vz_collect(int r) {
 // walk the body: the kind of every value, the accesses; with emit the vector body is written too (into the block being written)
 // false when anything is not understood
 // -irdbg 4194304: say where the vectoriser gave up (the line of jc_opt.j)
-bool vz_fail(int line) {
+bool vz_fail(i64 line) {
     if (ir_opt & 4194304) != 0 {
         write_err("vz gave up at jc_opt.j:");
         write_err_int(line + 1);
@@ -5878,11 +5878,11 @@ bool vz_fail(int line) {
     return false;
 }
 
-bool vz_scan(int q, int islot, int incl, int inch, bool emit) {
-    int h = cl_head[q];
+bool vz_scan(i64 q, i64 islot, i64 incl, i64 inch, bool emit) {
+    i64 h = cl_head[q];
     vz_nacc = 0;
     if !emit { vz_has_fp = 0; }
-    int v = 0;
+    i64 v = 0;
     while v < ir_nv {
         vz_kind[v] = 0;
         vz_def[v] = 0;
@@ -5895,10 +5895,10 @@ bool vz_scan(int q, int islot, int incl, int inch, bool emit) {
     }
     if !emit { vz_nhs = 0; }
     // what the body writes
-    int c = 0;
+    i64 c = 0;
     while c < vz_nchain {
-        int b = vz_chain[c];
-        int j = ir_bs[b];
+        i64 b = vz_chain[c];
+        i64 j = ir_bs[b];
         while j < ir_be[b] - 1 {
             if ir_op[j] != IR_NOP && ir_d[j] > 0 && j != inch { vz_def[ir_d[j]] = 1; vz_ndef[ir_d[j]] += 1; }
             j += 1;
@@ -5907,15 +5907,15 @@ bool vz_scan(int q, int islot, int incl, int inch, bool emit) {
     }
     // the loads and stores of frame slots in the body (an accumulator is stored once and loaded once)
     {
-        int zi = 0;
+        i64 zi = 0;
         while zi < 16384 { vz_sl_ld[zi] = 0; vz_sl_st[zi] = 0; zi += 1; }
-        int zc = 0;
+        i64 zc = 0;
         while zc < vz_nchain {
-            int zb = vz_chain[zc];
-            int zj = ir_bs[zb];
+            i64 zb = vz_chain[zc];
+            i64 zj = ir_bs[zb];
             while zj < ir_be[zb] - 1 {
                 if (ir_op[zj] == IR_LOAD || ir_op[zj] == IR_STORE) && ir_a[zj] == 30 {
-                    int zs = vn_slot(zj);
+                    i64 zs = vn_slot(zj);
                     if zs >= 0 {
                         if ir_op[zj] == IR_LOAD { vz_sl_ld[zs] += 1; } else { vz_sl_st[zs] += 1; }
                     }
@@ -5929,13 +5929,13 @@ bool vz_scan(int q, int islot, int incl, int inch, bool emit) {
     // the size of the elements: all the accesses through an address that is not the frame must have the same one
     vz_w = 0;
     {
-        int pc = 0;
+        i64 pc = 0;
         while pc < vz_nchain {
-            int pb = vz_chain[pc];
-            int pj = ir_bs[pb];
+            i64 pb = vz_chain[pc];
+            i64 pj = ir_bs[pb];
             while pj < ir_be[pb] - 1 {
                 if (ir_op[pj] == IR_LOAD || ir_op[pj] == IR_STORE) && ir_a[pj] != 30 && pj != incl && pj != inch && !(ir_op[pj] == IR_LOAD && ir_w[pj] == 8 && ir_k[pj] == 16 && ir_bi[pj] == 0) {
-                    int pw = vz_iabs(ir_w[pj]);
+                    i64 pw = vz_iabs(ir_w[pj]);
                     if pw != 8 && pw != 4 && pw != 1 { return vz_fail(5318); }
                     if vz_w == 0 { vz_w = pw; } else if vz_w != pw { return vz_fail(5319); }
                 }
@@ -5954,21 +5954,21 @@ bool vz_scan(int q, int islot, int incl, int inch, bool emit) {
     vz_kind[30] = VZ_INV; vz_base[30] = 30; vz_off[30] = 0;
     c = 0;
     while c < vz_nchain {
-        int b2 = vz_chain[c];
-        int j2 = ir_bs[b2];
+        i64 b2 = vz_chain[c];
+        i64 j2 = ir_bs[b2];
         while j2 < ir_be[b2] - 1 {
-            int op = ir_op[j2];
+            i64 op = ir_op[j2];
             // the counter step: its load, add and store are not part of the work
             if j2 == incl || j2 == incl + 1 || j2 == inch { j2 += 1; continue; }
             if op == IR_NOP { j2 += 1; continue; }
             // reading a register that the body writes later (a value carried to the next turn)
-            int a = ir_a[j2];
+            i64 a = ir_a[j2];
             if a > 0 && a < ir_nv && vz_def[a] == 1 && vz_kind[a] == 0 { return vz_fail(5344); }
             if ir_uses_b(op) && ir_bi[j2] == 0 && ir_b[j2] > 0 && ir_b[j2] < ir_nv && vz_def[ir_b[j2]] == 1 && vz_kind[ir_b[j2]] == 0 { return vz_fail(5345); }
-            int d = ir_d[j2];
+            i64 d = ir_d[j2];
             // the address of an element kept in a temporary cell of the frame between two blocks (y[k] = ...): remembered, not stored
             if op == IR_STORE && ir_a[j2] == 30 && ir_w[j2] == 8 && ir_bi[j2] == 0 && ir_k[j2] < 0 && ir_b[j2] > 0 && (vz_kind[ir_b[j2]] == VZ_ADDR || vz_kind[ir_b[j2]] == VZ_WORD || vz_kind[ir_b[j2]] == VZ_VEC || vz_kind[ir_b[j2]] == VZ_VWORD || vz_kind[ir_b[j2]] == VZ_INV) && vz_ntmp < 8 {
-                int ti = 0;
+                i64 ti = 0;
                 while ti < vz_ntmp && vz_tmp_k[ti] != ir_k[j2] { ti += 1; }
                 if ti == vz_ntmp { vz_ntmp += 1; }
                 vz_tmp_k[ti] = ir_k[j2];
@@ -5982,7 +5982,7 @@ bool vz_scan(int q, int islot, int incl, int inch, bool emit) {
                 continue;
             }
             if op == IR_LOAD && ir_a[j2] == 30 && ir_w[j2] == 8 && ir_bi[j2] == 0 && ir_k[j2] < 0 && vz_ntmp > 0 {
-                int tl = 0;
+                i64 tl = 0;
                 while tl < vz_ntmp && vz_tmp_k[tl] != ir_k[j2] { tl += 1; }
                 if tl < vz_ntmp {
                     vz_kind[d] = vz_tmp_kind[tl]; vz_base[d] = vz_tmp_base[tl]; vz_off[d] = vz_tmp_off[tl]; vz_vec[d] = vz_tmp_vec[tl];
@@ -5994,13 +5994,13 @@ bool vz_scan(int q, int islot, int incl, int inch, bool emit) {
             }
             if op == IR_LOAD && ir_a[j2] == 30 && ir_w[j2] != 8 {
                 // a float or a 32-bit number kept in a slot, that the loop does not write: it does not change
-                int lk = ir_k[j2];
-                int lwn = vz_iabs(ir_w[j2]);
+                i64 lk = ir_k[j2];
+                i64 lwn = vz_iabs(ir_w[j2]);
                 if lwn != 4 && lwn != 1 { return vz_fail(5351); }
-                int sc2 = 0;
+                i64 sc2 = 0;
                 while sc2 < vz_nchain {
-                    int sb2 = vz_chain[sc2];
-                    int sj2 = ir_bs[sb2];
+                    i64 sb2 = vz_chain[sc2];
+                    i64 sj2 = ir_bs[sb2];
                     while sj2 < ir_be[sb2] - 1 {
                         if ir_op[sj2] == IR_STORE && ir_a[sj2] == 30 && ir_k[sj2] < lk + 8 && ir_k[sj2] + 8 > lk { return vz_fail(5357); }
                         sj2 += 1;
@@ -6021,13 +6021,13 @@ bool vz_scan(int q, int islot, int incl, int inch, bool emit) {
                 }
                 if ir_a[j2] != 30 && vz_iabs(ir_w[j2]) != vz_w { return vz_fail(5366); }
                 if ir_a[j2] == 30 && ir_bi[j2] == 0 {
-                    int s = vn_slot(j2);
+                    i64 s = vn_slot(j2);
                     if s < 0 { return vz_fail(5369); }
                     if s != islot && vz_sl_st[s] > 0 {
                         // an accumulator: one load, one store, a whole number, a plain slot, no use of the slot's value except `acc + x`
                         if vz_w != 8 { return vz_fail(5372); }
                         if vz_sl_st[s] != 1 || vz_sl_ld[s] != 1 || vz_nacc2 >= 8 && !emit { return vz_fail(5373); }
-                        int ai = 0;
+                        i64 ai = 0;
                         while ai < vz_nacc2 && vz_acc_slot[ai] != s { ai += 1; }
                         if ai >= vz_nacc2 {
                             if emit { return vz_fail(5377); }
@@ -6055,9 +6055,9 @@ bool vz_scan(int q, int islot, int incl, int inch, bool emit) {
                     vz_acc_st[vz_nacc] = 0;
                     vz_nacc += 1;
                     if emit {
-                        int qv = ir_vreg(2);
-                        int lpt = vz_ptr(vz_base[ir_a[j2]] + 1000000 * vz_dyn[ir_a[j2]], vz_off[ir_a[j2]] + ir_k[j2]);
-                        int le = ir_add(IR_LOAD, qv, lpt, 0, 0, vz_shift + vz_kadd);
+                        i64 qv = ir_vreg(2);
+                        i64 lpt = vz_ptr(vz_base[ir_a[j2]] + 1000000 * vz_dyn[ir_a[j2]], vz_off[ir_a[j2]] + ir_k[j2]);
+                        i64 le = ir_add(IR_LOAD, qv, lpt, 0, 0, vz_shift + vz_kadd);
                         ir_w[le] = 16;
                         vz_vec[d] = qv;
                     }
@@ -6070,8 +6070,8 @@ bool vz_scan(int q, int islot, int incl, int inch, bool emit) {
                 vz_kind[d] = VZ_INV; vz_base[d] = 0; vz_off[d] = 0;
                 if emit { vz_clone(j2); }
             } else if op == IR_COPY {
-                int sa = ir_a[j2];
-                int ks = vz_kind[sa];
+                i64 sa = ir_a[j2];
+                i64 ks = vz_kind[sa];
                 if ks == 0 || ks == VZ_ACCN { return vz_fail(5415); }
                 vz_kind[d] = ks; vz_base[d] = vz_base[sa]; vz_off[d] = vz_off[sa]; vz_vec[d] = vz_vec[sa]; vz_dyn[d] = vz_dyn[sa];
                 vz_lslot[d] = vz_lslot[sa]; vz_dslot[d] = vz_dslot[sa];
@@ -6080,11 +6080,11 @@ bool vz_scan(int q, int islot, int incl, int inch, bool emit) {
                 if vz_kind[ir_a[j2]] == VZ_WORD && ir_bi[j2] == 1 && ir_b[j2] >= 0 && ir_b[j2] < vz_w * 8 {
                     // a lane shifted to the left by a number (the bits that leave the lane are lost, as the store loses them)
                     if emit {
-                        int cn = ir_vreg(0);
+                        i64 cn = ir_vreg(0);
                         ir_add(IR_CONST, cn, 0, 0, 0, ir_b[j2]);
-                        int qc = vz_bcast(cn);
-                        int sh2 = ir_vreg(2);
-                        int shn = ir_add(IR_VOP, sh2, vz_vec[ir_a[j2]], qc, 0, 10);
+                        i64 qc = vz_bcast(cn);
+                        i64 sh2 = ir_vreg(2);
+                        i64 shn = ir_add(IR_VOP, sh2, vz_vec[ir_a[j2]], qc, 0, 10);
                         ir_w[shn] = vz_arr();
                         vz_vec[d] = sh2;
                     }
@@ -6092,32 +6092,32 @@ bool vz_scan(int q, int islot, int incl, int inch, bool emit) {
                     j2 += 1;
                     continue;
                 }
-                int shk = vz_kind[ir_a[j2]];
+                i64 shk = vz_kind[ir_a[j2]];
                 if ir_bi[j2] != 1 || ir_b[j2] != vz_lg || (shk != VZ_I && shk != VZ_I2) { return vz_fail(5435); }
-                int shdyn = 0;
-                int shoff = 0;
+                i64 shdyn = 0;
+                i64 shoff = 0;
                 if shk == VZ_I2 { shdyn = vz_dyn[ir_a[j2]]; shoff = vz_off[ir_a[j2]] << vz_lg; }
                 vz_kind[d] = VZ_IDX8;
                 vz_dyn[d] = shdyn;
                 vz_off[d] = shoff;
             } else if (op == IR_ADD || op == IR_SUB) && ir_bi[j2] == 0 && (vz_kind[ir_a[j2]] == VZ_ACCV || (op == IR_ADD && vz_kind[ir_b[j2]] == VZ_ACCV)) {
-                int ra5 = ir_a[j2];
-                int rx = ir_b[j2];
-                if vz_kind[rx] == VZ_ACCV { int t5 = ra5; ra5 = rx; rx = t5; }
+                i64 ra5 = ir_a[j2];
+                i64 rx = ir_b[j2];
+                if vz_kind[rx] == VZ_ACCV { i64 t5 = ra5; ra5 = rx; rx = t5; }
                 // the other operand: a loaded element or a value that does not change
-                int kx = vz_kind[rx];
+                i64 kx = vz_kind[rx];
                 if kx != VZ_WORD && kx != VZ_INV { return vz_fail(5443); }
                 if vz_kind[ra5] != VZ_ACCV { return vz_fail(5444); }
                 if emit {
-                    int qx = 0;
+                    i64 qx = 0;
                     if kx == VZ_WORD { qx = vz_vec[rx]; }
                     else {
                         qx = ir_vreg(2);
-                        int dupx = ir_add(IR_VDUP, qx, rx, 0, 0, 0);
+                        i64 dupx = ir_add(IR_VDUP, qx, rx, 0, 0, 0);
                         ir_w[dupx] = 1;
                     }
-                    int aq = vz_vec[ra5];
-                    int ve5 = ir_add(IR_VOP, aq, aq, qx, 0, 4);
+                    i64 aq = vz_vec[ra5];
+                    i64 ve5 = ir_add(IR_VOP, aq, aq, qx, 0, 4);
                     if op == IR_SUB { ir_k[ve5] = 5; }
                     ir_w[ve5] = 1;
                     vz_vec[d] = aq;
@@ -6126,64 +6126,64 @@ bool vz_scan(int q, int islot, int incl, int inch, bool emit) {
                 vz_lslot[d] = vz_lslot[ra5];
             } else if (op == IR_ADD || op == IR_SUB || op == IR_MUL || op == IR_AND || op == IR_OR || op == IR_XOR) && (vz_kind[ir_a[j2]] == VZ_WORD || (ir_bi[j2] == 0 && vz_kind[ir_b[j2]] == VZ_WORD)) {
                 // element-wise whole number arithmetic: the lanes hold the low bytes of the scalar result, which is all that a store keeps
-                int ra6 = ir_a[j2];
-                int ka6 = vz_kind[ra6];
-                int kb6 = VZ_INV;
+                i64 ra6 = ir_a[j2];
+                i64 ka6 = vz_kind[ra6];
+                i64 kb6 = VZ_INV;
                 if ir_bi[j2] == 0 { kb6 = vz_kind[ir_b[j2]]; }
                 if ka6 != VZ_WORD && ka6 != VZ_INV { return vz_fail(5467); }
                 if kb6 != VZ_WORD && kb6 != VZ_INV { return vz_fail(5468); }
                 if op == IR_MUL && vz_w == 8 { return vz_fail(5469); }
                 if emit {
-                    int qa6 = 0;
-                    int qb6 = 0;
+                    i64 qa6 = 0;
+                    i64 qb6 = 0;
                     if ka6 == VZ_WORD { qa6 = vz_vec[ra6]; } else { qa6 = vz_bcast(ra6); }
                     if ir_bi[j2] == 1 {
-                        int cn6 = ir_vreg(0);
+                        i64 cn6 = ir_vreg(0);
                         ir_add(IR_CONST, cn6, 0, 0, 0, ir_b[j2]);
                         qb6 = vz_bcast(cn6);
                     } else if kb6 == VZ_WORD { qb6 = vz_vec[ir_b[j2]]; }
                     else { qb6 = vz_bcast(ir_b[j2]); }
-                    int kk6 = 4;
+                    i64 kk6 = 4;
                     if op == IR_SUB { kk6 = 5; } else if op == IR_MUL { kk6 = 6; } else if op == IR_AND { kk6 = 7; } else if op == IR_OR { kk6 = 8; } else if op == IR_XOR { kk6 = 9; }
-                    int qr6 = ir_vreg(2);
-                    int ve6 = ir_add(IR_VOP, qr6, qa6, qb6, 0, kk6);
+                    i64 qr6 = ir_vreg(2);
+                    i64 ve6 = ir_add(IR_VOP, qr6, qa6, qb6, 0, kk6);
                     ir_w[ve6] = vz_arr();
                     vz_vec[d] = qr6;
                 }
                 vz_kind[d] = VZ_WORD;
             } else if op == IR_ADD {
-                int ka = vz_kind[ir_a[j2]];
+                i64 ka = vz_kind[ir_a[j2]];
                 if ir_bi[j2] == 1 {
                     if ka == VZ_INV { vz_kind[d] = VZ_INV; vz_base[d] = vz_base[ir_a[j2]]; vz_off[d] = vz_off[ir_a[j2]] + ir_b[j2]; vz_dyn[d] = 0; }
-                    else if ka == VZ_ADDR { int sd = vz_dyn[ir_a[j2]]; vz_kind[d] = VZ_ADDR; vz_base[d] = vz_base[ir_a[j2]]; vz_off[d] = vz_off[ir_a[j2]] + ir_b[j2]; vz_dyn[d] = sd; }
+                    else if ka == VZ_ADDR { i64 sd = vz_dyn[ir_a[j2]]; vz_kind[d] = VZ_ADDR; vz_base[d] = vz_base[ir_a[j2]]; vz_off[d] = vz_off[ir_a[j2]] + ir_b[j2]; vz_dyn[d] = sd; }
                     else if ka == VZ_I || ka == VZ_I2 {
                         // the counter plus a number of elements
-                        int id0 = 0;
-                        int io0 = 0;
+                        i64 id0 = 0;
+                        i64 io0 = 0;
                         if ka == VZ_I2 { id0 = vz_dyn[ir_a[j2]]; io0 = vz_off[ir_a[j2]]; }
                         vz_kind[d] = VZ_I2; vz_dyn[d] = id0; vz_off[d] = io0 + ir_b[j2];
                     }
                     else { return vz_fail(5493); }
                 } else {
-                    int kb = vz_kind[ir_b[j2]];
-                    int ra = ir_a[j2];
-                    int rb = ir_b[j2];
+                    i64 kb = vz_kind[ir_b[j2]];
+                    i64 ra = ir_a[j2];
+                    i64 rb = ir_b[j2];
                     bool handled = false;
                     // the counter plus an invariant number (the offset of a row): the index of a matrix element
-                    int invr = ra;
+                    i64 invr = ra;
                     if ka == VZ_I { invr = rb; }
                     if ((ka == VZ_I && kb == VZ_INV) || (ka == VZ_INV && kb == VZ_I)) && vz_base[invr] == 0 {
                         // the invariant number must be a load of a frame cell (a local such as the offset of a row): it is loaded again in front of the loop
-                        int j0 = vz_dinst[invr];
+                        i64 j0 = vz_dinst[invr];
                         if j0 <= 0 || ir_op[j0] != IR_LOAD || ir_a[j0] != 30 || ir_w[j0] != 8 || ir_bi[j0] != 0 { return vz_fail(5495); }
                         vz_kind[d] = VZ_I2; vz_dyn[d] = 500000 + ir_k[j0]; vz_off[d] = 0;
                         handled = true;
                     }
                     if !handled {
-                        int dyb = 0;
-                        int ofb = 0;
-                        int dya = 0;
-                        int ofa = 0;
+                        i64 dyb = 0;
+                        i64 ofb = 0;
+                        i64 dya = 0;
+                        i64 ofa = 0;
                         if vz_w == 1 {
                             // elements of one byte: the address is the base plus the counter itself
                             if ka == VZ_I { ka = VZ_IDX8; }
@@ -6193,7 +6193,7 @@ bool vz_scan(int q, int islot, int incl, int inch, bool emit) {
                         }
                         if ka == VZ_IDX8 && dya == 0 && ofa == 0 && vz_w != 1 { dya = vz_dyn[ra]; ofa = vz_off[ra]; }
                         if kb == VZ_IDX8 && dyb == 0 && ofb == 0 && vz_w != 1 { dyb = vz_dyn[rb]; ofb = vz_off[rb]; }
-                        if ka == VZ_IDX8 && kb == VZ_INV { int tmp = ra; ra = rb; rb = tmp; int tk = ka; ka = kb; kb = tk; int td = dya; dya = dyb; dyb = td; int to = ofa; ofa = ofb; ofb = to; }
+                        if ka == VZ_IDX8 && kb == VZ_INV { i64 tmp = ra; ra = rb; rb = tmp; i64 tk = ka; ka = kb; kb = tk; i64 td = dya; dya = dyb; dyb = td; i64 to = ofa; ofa = ofb; ofb = to; }
                         if ka == VZ_INV && kb == VZ_IDX8 && vz_base[ra] != 0 {
                             vz_kind[d] = VZ_ADDR; vz_base[d] = vz_base[ra]; vz_off[d] = vz_off[ra] + ofb; vz_dyn[d] = dyb;
                         } else if ka == VZ_INV && kb == VZ_IDX8 && vz_base[ra] == 0 && vz_lslot[ra] >= 0 && (ir_opt & 36028797018963968) == 0 {
@@ -6204,12 +6204,12 @@ bool vz_scan(int q, int islot, int incl, int inch, bool emit) {
                 }
                 if emit && vz_kind[d] != VZ_ADDR && vz_kind[d] != VZ_I2 { vz_clone(j2); }
             } else if op == IR_F32IN {
-                int kx = vz_kind[ir_a[j2]];
+                i64 kx = vz_kind[ir_a[j2]];
                 if (kx == VZ_WORD || kx == VZ_VWORD) && vz_w == 4 { vz_kind[d] = VZ_VEC; vz_vec[d] = vz_vec[ir_a[j2]]; }
                 else if kx == VZ_INV { vz_kind[d] = VZ_DINV; if emit { vz_clone(j2); } }
                 else { return vz_fail(5513); }
             } else if op == IR_F32OUT {
-                int kx2 = vz_kind[ir_a[j2]];
+                i64 kx2 = vz_kind[ir_a[j2]];
                 if kx2 == VZ_VEC && vz_w == 4 { vz_kind[d] = VZ_VWORD; vz_vec[d] = vz_vec[ir_a[j2]]; }
                 else if kx2 == VZ_DINV { vz_kind[d] = VZ_INV; vz_base[d] = 0; vz_off[d] = 0; if emit { vz_clone(j2); } }
                 else { return vz_fail(5518); }
@@ -6218,23 +6218,23 @@ bool vz_scan(int q, int islot, int incl, int inch, bool emit) {
                 vz_kind[d] = VZ_DINV;
                 if emit { vz_clone(j2); }
             } else if op >= IR_FADD32 && op <= IR_FDIV32 {
-                int ra7 = ir_a[j2];
-                int rb7 = ir_b[j2];
-                int ka7 = vz_kind[ra7];
-                int kb7 = vz_kind[rb7];
+                i64 ra7 = ir_a[j2];
+                i64 rb7 = ir_b[j2];
+                i64 ka7 = vz_kind[ra7];
+                i64 kb7 = vz_kind[rb7];
                 if (ka7 != VZ_VEC && ka7 != VZ_DINV) || (kb7 != VZ_VEC && kb7 != VZ_DINV) { return vz_fail(5528); }
                 if ka7 == VZ_VEC || kb7 == VZ_VEC {
                     if vz_w != 4 { return vz_fail(5530); }
                     if !emit { vz_has_fp = 1; }
                     if !emit {
                         // a number that does not change: broadcast once in front of the loop (a slot is broadcast as .4s here, as .2d for a double)
-                        int hk7 = 0;
+                        i64 hk7 = 0;
                         while hk7 < 2 {
-                            int rr7 = ra7;
-                            int kk7b = ka7;
+                            i64 rr7 = ra7;
+                            i64 kk7b = ka7;
                             if hk7 == 1 { rr7 = rb7; kk7b = kb7; }
                             if kk7b == VZ_DINV && vz_dslot[rr7] >= 0 && vz_nhs < 16 {
-                                int hx7 = 0;
+                                i64 hx7 = 0;
                                 bool have7 = false;
                                 while hx7 < vz_nhs { if vz_hs[hx7] == vz_dslot[rr7] { have7 = true; } hx7 += 1; }
                                 if !have7 { vz_hs[vz_nhs] = vz_dslot[rr7]; vz_nhs += 1; }
@@ -6243,25 +6243,25 @@ bool vz_scan(int q, int islot, int incl, int inch, bool emit) {
                         }
                     }
                     if emit {
-                        int qa7 = 0;
-                        int qb7 = 0;
+                        i64 qa7 = 0;
+                        i64 qb7 = 0;
                         if ka7 == VZ_VEC { qa7 = vz_vec[ra7]; }
                         else if vz_dslot[ra7] >= 0 && vz_hq_of(vz_dslot[ra7]) != 0 { qa7 = vz_hq_of(vz_dslot[ra7]); }
                         else {
-                            int xa7 = ir_vreg(0);
+                            i64 xa7 = ir_vreg(0);
                             ir_add(IR_F32OUT, xa7, ra7, 0, 0, 0);
                             qa7 = vz_bcast(xa7);
                         }
                         if kb7 == VZ_VEC { qb7 = vz_vec[rb7]; }
                         else if vz_dslot[rb7] >= 0 && vz_hq_of(vz_dslot[rb7]) != 0 { qb7 = vz_hq_of(vz_dslot[rb7]); }
                         else {
-                            int xb7 = ir_vreg(0);
+                            i64 xb7 = ir_vreg(0);
                             ir_add(IR_F32OUT, xb7, rb7, 0, 0, 0);
                             qb7 = vz_bcast(xb7);
                         }
-                        int kk7 = op - IR_FADD32;
-                        int qr7 = ir_vreg(2);
-                        int ve7 = ir_add(IR_VOP, qr7, qa7, qb7, 0, kk7);
+                        i64 kk7 = op - IR_FADD32;
+                        i64 qr7 = ir_vreg(2);
+                        i64 ve7 = ir_add(IR_VOP, qr7, qa7, qb7, 0, kk7);
                         ir_w[ve7] = 2;
                         vz_vec[d] = qr7;
                     }
@@ -6271,7 +6271,7 @@ bool vz_scan(int q, int islot, int incl, int inch, bool emit) {
                     if emit { vz_clone(j2); }
                 }
             } else if op == IR_BITS2F {
-                int ka2 = vz_kind[ir_a[j2]];
+                i64 ka2 = vz_kind[ir_a[j2]];
                 if ka2 == VZ_WORD && vz_w != 8 { return vz_fail(5560); }
                 if ka2 == VZ_WORD { vz_kind[d] = VZ_VEC; vz_vec[d] = vz_vec[ir_a[j2]]; }
                 else if ka2 == VZ_INV { vz_kind[d] = VZ_DINV; vz_dslot[d] = vz_lslot[ir_a[j2]]; if emit { vz_clone(j2); } }
@@ -6280,10 +6280,10 @@ bool vz_scan(int q, int islot, int incl, int inch, bool emit) {
                 vz_kind[d] = VZ_DINV;
                 if emit { vz_clone(j2); }
             } else if op == IR_FADD || op == IR_FSUB || op == IR_FMUL || op == IR_FDIV {
-                int ra3 = ir_a[j2];
-                int rb3 = ir_b[j2];
-                int ka3 = vz_kind[ra3];
-                int kb3 = vz_kind[rb3];
+                i64 ra3 = ir_a[j2];
+                i64 rb3 = ir_b[j2];
+                i64 ka3 = vz_kind[ra3];
+                i64 kb3 = vz_kind[rb3];
                 bool oka = ka3 == VZ_VEC || ka3 == VZ_DINV;
                 bool okb = kb3 == VZ_VEC || kb3 == VZ_DINV;
                 if !oka || !okb { return vz_fail(5574); }
@@ -6291,13 +6291,13 @@ bool vz_scan(int q, int islot, int incl, int inch, bool emit) {
                     if vz_w != 8 { return vz_fail(5576); }
                     if !emit { vz_has_fp = 1; }
                     if !emit {
-                        int hk = 0;
+                        i64 hk = 0;
                         while hk < 2 {
-                            int rr = ra3;
-                            int kk2 = ka3;
+                            i64 rr = ra3;
+                            i64 kk2 = ka3;
                             if hk == 1 { rr = rb3; kk2 = kb3; }
                             if kk2 == VZ_DINV && vz_dslot[rr] >= 0 && vz_nhs < 16 {
-                                int hx = 0;
+                                i64 hx = 0;
                                 bool have = false;
                                 while hx < vz_nhs { if vz_hs[hx] == vz_dslot[rr] { have = true; } hx += 1; }
                                 if !have { vz_hs[vz_nhs] = vz_dslot[rr]; vz_nhs += 1; }
@@ -6306,32 +6306,32 @@ bool vz_scan(int q, int islot, int incl, int inch, bool emit) {
                         }
                     }
                     if emit {
-                        int qa = 0;
-                        int qb = 0;
+                        i64 qa = 0;
+                        i64 qb = 0;
                         if ka3 == VZ_VEC { qa = vz_vec[ra3]; }
                         else if vz_dslot[ra3] >= 0 && vz_hq_of(vz_dslot[ra3]) != 0 { qa = vz_hq_of(vz_dslot[ra3]); }
                         else if ra3 < 64 && vz_def[ra3] == 0 && vz_bq[ra3] != 0 { qa = vz_bq[ra3]; }
                         else {
-                            int xa = ir_vreg(0);
+                            i64 xa = ir_vreg(0);
                             ir_add(IR_F2BITS, xa, ra3, 0, 0, 0);
                             qa = ir_vreg(2);
-                            int dupa = ir_add(IR_VDUP, qa, xa, 0, 0, 0);
+                            i64 dupa = ir_add(IR_VDUP, qa, xa, 0, 0, 0);
                             ir_w[dupa] = 1;
                         }
                         if kb3 == VZ_VEC { qb = vz_vec[rb3]; }
                         else if vz_dslot[rb3] >= 0 && vz_hq_of(vz_dslot[rb3]) != 0 { qb = vz_hq_of(vz_dslot[rb3]); }
                         else if rb3 < 64 && vz_def[rb3] == 0 && vz_bq[rb3] != 0 { qb = vz_bq[rb3]; }
                         else {
-                            int xb = ir_vreg(0);
+                            i64 xb = ir_vreg(0);
                             ir_add(IR_F2BITS, xb, rb3, 0, 0, 0);
                             qb = ir_vreg(2);
-                            int dupb = ir_add(IR_VDUP, qb, xb, 0, 0, 0);
+                            i64 dupb = ir_add(IR_VDUP, qb, xb, 0, 0, 0);
                             ir_w[dupb] = 1;
                         }
-                        int qr = ir_vreg(2);
-                        int kk = 0;
+                        i64 qr = ir_vreg(2);
+                        i64 kk = 0;
                         if op == IR_FSUB { kk = 1; } else if op == IR_FMUL { kk = 2; } else if op == IR_FDIV { kk = 3; }
-                        int ve = ir_add(IR_VOP, qr, qa, qb, 0, kk);
+                        i64 ve = ir_add(IR_VOP, qr, qa, qb, 0, kk);
                         ir_w[ve] = 1;
                         vz_vec[d] = qr;
                     }
@@ -6341,7 +6341,7 @@ bool vz_scan(int q, int islot, int incl, int inch, bool emit) {
                     if emit { vz_clone(j2); }
                 }
             } else if op == IR_F2BITS {
-                int ka4 = vz_kind[ir_a[j2]];
+                i64 ka4 = vz_kind[ir_a[j2]];
                 if ka4 == VZ_VEC && vz_w != 8 { return vz_fail(5630); }
                 if ka4 == VZ_VEC { vz_kind[d] = VZ_VWORD; vz_vec[d] = vz_vec[ir_a[j2]]; }
                 else if ka4 == VZ_DINV { vz_kind[d] = VZ_INV; vz_base[d] = 0; vz_off[d] = 0; if emit { vz_clone(j2); } }
@@ -6352,7 +6352,7 @@ bool vz_scan(int q, int islot, int incl, int inch, bool emit) {
             } else if op == IR_STORE {
                 if vz_iabs(ir_w[j2]) != vz_w || ir_bi[j2] != 0 { return vz_fail(5638); }
                 if vz_kind[ir_a[j2]] != VZ_ADDR { return vz_fail(5639); }
-                int kv = vz_kind[ir_b[j2]];
+                i64 kv = vz_kind[ir_b[j2]];
                 if kv != VZ_VWORD && kv != VZ_WORD && kv != VZ_INV { return vz_fail(5641); }
                 if vz_nacc >= 64 { return vz_fail(5642); }
                 vz_acc_base[vz_nacc] = vz_base[ir_a[j2]] + 1000000 * vz_dyn[ir_a[j2]];
@@ -6360,13 +6360,13 @@ bool vz_scan(int q, int islot, int incl, int inch, bool emit) {
                 vz_acc_st[vz_nacc] = 1;
                 vz_nacc += 1;
                 if emit {
-                    int qs = 0;
+                    i64 qs = 0;
                     if kv == VZ_VWORD || kv == VZ_WORD { qs = vz_vec[ir_b[j2]]; }
                     else {
                         qs = vz_bcast(ir_b[j2]);
                     }
-                    int spt = vz_ptr(vz_base[ir_a[j2]] + 1000000 * vz_dyn[ir_a[j2]], vz_off[ir_a[j2]] + ir_k[j2]);
-                    int se = ir_add(IR_STORE, 0, spt, qs, 0, vz_shift + vz_kadd);
+                    i64 spt = vz_ptr(vz_base[ir_a[j2]] + 1000000 * vz_dyn[ir_a[j2]], vz_off[ir_a[j2]] + ir_k[j2]);
+                    i64 se = ir_add(IR_STORE, 0, spt, qs, 0, vz_shift + vz_kadd);
                     ir_w[se] = 16;
                 }
             } else {
@@ -6378,14 +6378,14 @@ bool vz_scan(int q, int islot, int incl, int inch, bool emit) {
         c += 1;
     }
     // the accesses must not get in each other's way
-    int x = 0;
+    i64 x = 0;
     while x < vz_nacc {
-        int y = 0;
+        i64 y = 0;
         while y < vz_nacc {
             // the same array reached with different invariant offsets: the distance is not known
             if x != y && (vz_acc_st[x] == 1 || vz_acc_st[y] == 1) && vz_acc_base[x] != vz_acc_base[y] && vz_acc_base[x] % 1000000 == vz_acc_base[y] % 1000000 { return vz_fail(5671); }
             if x != y && (vz_acc_st[x] == 1 || vz_acc_st[y] == 1) && vz_acc_base[x] == vz_acc_base[y] {
-                int dd = vz_acc_off[x] - vz_acc_off[y];
+                i64 dd = vz_acc_off[x] - vz_acc_off[y];
                 if dd < 0 { dd = 0 - dd; }
                 if dd != 0 && dd < 16 { return vz_fail(5672); }
             }
@@ -6395,29 +6395,29 @@ bool vz_scan(int q, int islot, int incl, int inch, bool emit) {
     }
     // at least one store, or an accumulator
     bool st = vz_nacc2 > 0;
-    int w = 0;
+    i64 w = 0;
     while w < vz_nacc { if vz_acc_st[w] == 1 { st = true; } w += 1; }
     return st;
 }
 
 // the live-in doubles that a vector operation reads: broadcast once in the block being written (VP)
-void vz_hoist(int q) {
-    int c = 0;
+void vz_hoist(i64 q) {
+    i64 c = 0;
     while c < vz_nchain {
-        int b = vz_chain[c];
-        int j = ir_bs[b];
+        i64 b = vz_chain[c];
+        i64 j = ir_bs[b];
         while j < ir_be[b] - 1 {
-            int op = ir_op[j];
+            i64 op = ir_op[j];
             if op == IR_FADD || op == IR_FSUB || op == IR_FMUL || op == IR_FDIV {
-                int k = 0;
+                i64 k = 0;
                 while k < 2 {
-                    int r = ir_a[j];
+                    i64 r = ir_a[j];
                     if k == 1 { r = ir_b[j]; }
                     if r >= 32 && r < 64 && vz_def[r] == 0 && vz_bq[r] == 0 && ir_vcls[r] == 1 {
-                        int xv = ir_vreg(0);
+                        i64 xv = ir_vreg(0);
                         ir_add(IR_F2BITS, xv, r, 0, 0, 0);
-                        int qv = ir_vreg(2);
-                        int dp = ir_add(IR_VDUP, qv, xv, 0, 0, 0);
+                        i64 qv = ir_vreg(2);
+                        i64 dp = ir_add(IR_VDUP, qv, xv, 0, 0, 0);
                         ir_w[dp] = 1;
                         vz_bq[r] = qv;
                     }
@@ -6435,20 +6435,20 @@ void vz_hoist(int q) {
 // body is renamed (every register that is written before it is read gets a new name at each write), then the instructions that
 // read only registers the body does not write, or the results of such instructions, are moved into a new block that runs once:
 // the broadcast of `k`, the float `2.0`, the loads of the slots that the body does not write.
-int vz_rn_to[IR_MAXV];
-int vz_rn_st[IR_MAXV];
-int vz_rn_stamp;
-int vz_inv_def[IR_MAXV];        // stamp: written in the body (after renaming), and the instruction is moved
-int vz_wr_st[IR_MAXV];          // stamp: written in the body
-int vz_rd_first[IR_MAXV];       // stamp: read before it is written
-int vz_hoisted_n;
+i64 vz_rn_to[IR_MAXV];
+i64 vz_rn_st[IR_MAXV];
+i64 vz_rn_stamp;
+i64 vz_inv_def[IR_MAXV];        // stamp: written in the body (after renaming), and the instruction is moved
+i64 vz_wr_st[IR_MAXV];          // stamp: written in the body
+i64 vz_rd_first[IR_MAXV];       // stamp: read before it is written
+i64 vz_hoisted_n;
 
-int vz_rename_of(int v) {
+i64 vz_rename_of(i64 v) {
     if v > 0 && v < IR_MAXV && vz_rn_st[v] == vz_rn_stamp { return vz_rn_to[v]; }
     return v;
 }
 
-bool vz_hoistable_op(int op) {
+bool vz_hoistable_op(i64 op) {
     if op == IR_CONST || op == IR_FCONST || op == IR_COPY || op == IR_F32IN || op == IR_F32OUT || op == IR_FCVT_DS || op == IR_FCVT_SD { return true; }
     if op == IR_BITS2F || op == IR_F2BITS || op == IR_VDUP || op == IR_VOP || op == IR_EXT || op == IR_NEG || op == IR_NOT { return true; }
     if op >= IR_ADD && op <= IR_ASHR { return op != IR_SDIV && op != IR_UDIV; }
@@ -6462,17 +6462,17 @@ bool vz_hoistable_op(int op) {
 // a load in the vector body whose register is written again before anything reads it (the copies of a pointer made for every chunk): dropped.
 // Only loads of the frame or of a header ([reg + 16]); a register that is still unread at the end of the body is kept (it can be live after the loop),
 // except a scratch temporary (64 and up).
-void vz_dead_loads(int vb) {
-    int s = ir_bs[vb];
-    int e = ir_n - 1;
-    int j = s;
+void vz_dead_loads(i64 vb) {
+    i64 s = ir_bs[vb];
+    i64 e = ir_n - 1;
+    i64 j = s;
     while j <= e {
         if ir_op[j] == IR_LOAD && ir_d[j] > 0 && ir_d[j] < IR_MAXV && ir_vcls[ir_d[j]] == 0 && (ir_a[j] == 30 || ir_k[j] == 16) && ir_w[j] == 8 {
-            int d = ir_d[j];
-            int m = j + 1;
-            int state = 0;           // 1 read, 2 written again first
+            i64 d = ir_d[j];
+            i64 m = j + 1;
+            i64 state = 0;           // 1 read, 2 written again first
             while m <= e && state == 0 {
-                int op = ir_op[m];
+                i64 op = ir_op[m];
                 if op != IR_NOP {
                     if ir_a[m] == d { state = 1; }
                     else if ir_uses_b(op) && ir_bi[m] == 0 && ir_b[m] == d { state = 1; }
@@ -6487,15 +6487,15 @@ void vz_dead_loads(int vb) {
     }
 }
 
-int vz_licm(int vb, int br0) {
-    int s = ir_bs[vb];
-    int e = ir_n - 1;
+i64 vz_licm(i64 vb, i64 br0) {
+    i64 s = ir_bs[vb];
+    i64 e = ir_n - 1;
     if e <= s { return 0; }
     vz_rn_stamp += 1;
     // 1. which registers are read before they are written
-    int j = s;
+    i64 j = s;
     while j <= e {
-        int op = ir_op[j];
+        i64 op = ir_op[j];
         if op != IR_NOP {
             if ir_a[j] > 0 && ir_a[j] < IR_MAXV && vz_wr_st[ir_a[j]] != vz_rn_stamp { vz_rd_first[ir_a[j]] = vz_rn_stamp; }
             if ir_uses_b(op) && ir_bi[j] == 0 && ir_b[j] > 0 && ir_b[j] < IR_MAXV && vz_wr_st[ir_b[j]] != vz_rn_stamp { vz_rd_first[ir_b[j]] = vz_rn_stamp; }
@@ -6506,13 +6506,13 @@ int vz_licm(int vb, int br0) {
     // 2. the renaming: a register that is not carried gets a new name at every write
     j = s;
     while j <= e {
-        int op = ir_op[j];
+        i64 op = ir_op[j];
         if op != IR_NOP {
             if ir_a[j] > 0 { ir_a[j] = vz_rename_of(ir_a[j]); }
             if ir_uses_b(op) && ir_bi[j] == 0 && ir_b[j] > 0 { ir_b[j] = vz_rename_of(ir_b[j]); }
-            int d = ir_d[j];
+            i64 d = ir_d[j];
             if d > 0 && d < IR_MAXV && d != 29 && d != 30 && vz_rd_first[d] != vz_rn_stamp {
-                int nv = ir_vreg(ir_vcls[d]);
+                i64 nv = ir_vreg(ir_vcls[d]);
                 vz_rn_to[d] = nv;
                 vz_rn_st[d] = vz_rn_stamp;
                 ir_d[j] = nv;
@@ -6522,8 +6522,8 @@ int vz_licm(int vb, int br0) {
         j += 1;
     }
     // the frame bytes that the body writes
-    int nst = 0;
-    int sk[64];
+    i64 nst = 0;
+    i64 sk[64];
     j = s;
     while j <= e {
         if ir_op[j] == IR_STORE && ir_a[j] == 30 && nst < 64 { sk[nst] = ir_k[j]; nst += 1; }
@@ -6532,19 +6532,19 @@ int vz_licm(int vb, int br0) {
         j += 1;
     }
     // 3. what can go: the instruction reads nothing that the body writes except the results of instructions that go
-    int moved[512];
-    int nm = 0;
-    int stamp2 = vz_rn_stamp;
+    i64 moved[512];
+    i64 nm = 0;
+    i64 stamp2 = vz_rn_stamp;
     j = s;
     while j < e {
-        int op = ir_op[j];
-        int d = ir_d[j];
+        i64 op = ir_op[j];
+        i64 d = ir_d[j];
         bool can = false;
         if op != IR_NOP && d > 0 && d < IR_MAXV && vz_rd_first[d] != stamp2 && nm < 500 {
             if vz_hoistable_op(op) { can = true; }
             if op == IR_LOAD && ir_a[j] == 30 && ir_bi[j] == 0 && ir_w[j] != 16 {
                 can = true;
-                int z = 0;
+                i64 z = 0;
                 while z < nst { if sk[z] < ir_k[j] + 8 && sk[z] + 8 > ir_k[j] { can = false; } z += 1; }
             }
         }
@@ -6561,9 +6561,9 @@ int vz_licm(int vb, int br0) {
     if nm == 0 { return 0; }
     // a scalar result may be used by moved instructions only (the register pass does not keep a scalar across blocks); a vector may
     // be used in the body
-    int flagged[512];
+    i64 flagged[512];
     if nm > 0 {
-        int fi = 0;
+        i64 fi = 0;
         while fi < nm { flagged[fi] = 1; fi += 1; }
         bool again = true;
         while again {
@@ -6571,23 +6571,23 @@ int vz_licm(int vb, int br0) {
             fi = 0;
             while fi < nm {
                 if flagged[fi] == 1 {
-                    int fj = moved[fi];
-                    int fd = ir_d[fj];
+                    i64 fj = moved[fi];
+                    i64 fd = ir_d[fj];
                     bool ok = true;
                     // an operand that was in the list but is not any more
-                    int oa = ir_a[fj];
+                    i64 oa = ir_a[fj];
                     if oa > 0 && oa < IR_MAXV && vz_wr_st[oa] == stamp2 && vz_inv_def[oa] != stamp2 { ok = false; }
                     if ir_uses_b(ir_op[fj]) && ir_bi[fj] == 0 {
-                        int ob = ir_b[fj];
+                        i64 ob = ir_b[fj];
                         if ob > 0 && ob < IR_MAXV && vz_wr_st[ob] == stamp2 && vz_inv_def[ob] != stamp2 { ok = false; }
                     }
                     if ok && ir_vcls[fd] != 2 {
                         // the readers that stay in the body
-                        int rj = s;
+                        i64 rj = s;
                         while rj <= e && ok {
                             if ir_op[rj] != IR_NOP {
                                 bool is_moved = false;
-                                int mi = 0;
+                                i64 mi = 0;
                                 while mi < nm { if moved[mi] == rj && flagged[mi] == 1 { is_moved = true; } mi += 1; }
                                 if !is_moved {
                                     if ir_a[rj] == fd { ok = false; }
@@ -6607,7 +6607,7 @@ int vz_licm(int vb, int br0) {
             }
         }
         // keep the flagged ones only
-        int kn = 0;
+        i64 kn = 0;
         fi = 0;
         while fi < nm {
             if flagged[fi] == 1 { moved[kn] = moved[fi]; kn += 1; }
@@ -6619,20 +6619,20 @@ int vz_licm(int vb, int br0) {
     // the registers that the moved instructions write must be written there only: the renaming made them unique unless a register
     // was read before its first write in the body (then it was not renamed and cannot be here: vz_rd_first)
     // the same value computed twice (the two chunks of the body): the second one is dropped, its uses read the first
-    int dup_of[512];
-    int du = 0;
+    i64 dup_of[512];
+    i64 du = 0;
     while du < nm {
         dup_of[du] = 0 - 1;
-        int dj = moved[du];
-        int dv = 0;
+        i64 dj = moved[du];
+        i64 dv = 0;
         while dv < du && dup_of[du] < 0 {
-            int vj = moved[dv];
+            i64 vj = moved[dv];
             if dup_of[dv] < 0 && ir_op[vj] == ir_op[dj] && ir_a[vj] == ir_a[dj] && ir_bi[vj] == ir_bi[dj] && ir_k[vj] == ir_k[dj] && ir_w[vj] == ir_w[dj] && (ir_bi[dj] == 1 || !ir_uses_b(ir_op[dj]) || ir_b[vj] == ir_b[dj]) && ir_vcls[ir_d[vj]] == ir_vcls[ir_d[dj]] {
                 dup_of[du] = vj;
                 // every use of the dropped register reads the first one
-                int old_r = ir_d[dj];
-                int new_r = ir_d[vj];
-                int uj = s;
+                i64 old_r = ir_d[dj];
+                i64 new_r = ir_d[vj];
+                i64 uj = s;
                 while uj <= e {
                     if ir_op[uj] != IR_NOP {
                         if ir_a[uj] == old_r { ir_a[uj] = new_r; }
@@ -6646,11 +6646,11 @@ int vz_licm(int vb, int br0) {
         du += 1;
     }
     // 4. the new block, that runs once between the test and the body
-    int vk = ir_new_block(0 - 1);
+    i64 vk = ir_new_block(0 - 1);
     ir_set_block(vk);
-    int u = 0;
+    i64 u = 0;
     while u < nm {
-        int jj = moved[u];
+        i64 jj = moved[u];
         if dup_of[u] >= 0 {
             ir_op[jj] = IR_NOP;
             ir_d[jj] = 0;
@@ -6659,7 +6659,7 @@ int vz_licm(int vb, int br0) {
             u += 1;
             continue;
         }
-        int ne = ir_add(ir_op[jj], ir_d[jj], ir_a[jj], ir_b[jj], ir_bi[jj], ir_k[jj]);
+        i64 ne = ir_add(ir_op[jj], ir_d[jj], ir_a[jj], ir_b[jj], ir_bi[jj], ir_k[jj]);
         ir_w[ne] = ir_w[jj];
         ir_op[jj] = IR_NOP;
         ir_d[jj] = 0;
@@ -6667,7 +6667,7 @@ int vz_licm(int vb, int br0) {
         ir_bi[jj] = 1;
         u += 1;
     }
-    int jk = ir_add(IR_JMP, 0, 0, 0, 0, 0);
+    i64 jk = ir_add(IR_JMP, 0, 0, 0, 0, 0);
     ir_t1[jk] = vb;
     ir_t1[br0] = vk;
     vz_hoisted_n += nm;
@@ -6675,11 +6675,11 @@ int vz_licm(int vb, int br0) {
 }
 
 // a block that only reports a missing array (a call of __Arr__nullerr, then a jump)
-bool vz_is_nulltrap(int b) {
+bool vz_is_nulltrap(i64 b) {
     bool ok = false;
-    int j = ir_bs[b];
+    i64 j = ir_bs[b];
     while j < ir_be[b] {
-        int op = ir_op[j];
+        i64 op = ir_op[j];
         if op == IR_CALL {
             // the check inlined (the call of __panic with the text) or not (a call of __Arr__nullerr)
             if !str_eq(@ir_name + ir_k[j] * 64, "__Arr__nullerr") && !str_eq(@ir_name + ir_k[j] * 64, "__panic") { return false; }
@@ -6692,33 +6692,33 @@ bool vz_is_nulltrap(int b) {
     return ok;
 }
 
-bool vz_make(int q, int l) {
-    int h = cl_head[q];
-    int islot = cl_slot[q];
+bool vz_make(i64 q, i64 l) {
+    i64 h = cl_head[q];
+    i64 islot = cl_slot[q];
     // the blocks of the loop other than the header must be one chain from the body to the block that jumps back
     op_mark_loop(l);
-    int stamp = op_stamp;
-    int total = 0;
-    int b = 0;
+    i64 stamp = op_stamp;
+    i64 total = 0;
+    i64 b = 0;
     while b < ir_nb {
         if op_po[b] >= 0 && op_mark[b] == stamp { total += 1; }
         b += 1;
     }
     vz_nchain = 0;
     vz_nnull = 0;
-    int cur = cl_body[q];
+    i64 cur = cl_body[q];
     while cur != h {
         if op_mark[cur] != stamp || vz_nchain >= 250 { return vz_fail(5946); }
-        int tt = ir_be[cur] - 1;
-        int trapb = 0 - 1;
-        int nextb = 0 - 1;
+        i64 tt = ir_be[cur] - 1;
+        i64 trapb = 0 - 1;
+        i64 nextb = 0 - 1;
         if ir_op[tt] == IR_BR && ir_bi[tt] == 1 && ir_b[tt] == 0 && vz_nnull < 8 {
             if ir_k[tt] == IR_NE && vz_is_nulltrap(ir_t2[tt]) { trapb = ir_t2[tt]; nextb = ir_t1[tt]; }
             else if ir_k[tt] == IR_EQ && vz_is_nulltrap(ir_t1[tt]) { trapb = ir_t1[tt]; nextb = ir_t2[tt]; }
         }
         if trapb >= 0 {
             // the check that an array exists: a branch to a block that reports it; the vector loop checks the arrays once, in front
-            int nd = rn_find_def(cur, tt, ir_a[tt]);
+            i64 nd = rn_find_def(cur, tt, ir_a[tt]);
             if nd < 0 || ir_op[nd] != IR_LOAD || ir_a[nd] != 30 || ir_w[nd] != 8 { return vz_fail(5947); }
             vz_null_off[vz_nnull] = ir_k[nd];
             vz_nnull += 1;
@@ -6738,23 +6738,23 @@ bool vz_make(int q, int l) {
     }
     if vz_nchain + 1 != total || vz_nchain == 0 { return vz_fail(5953); }
     // the header: loads and the branch only
-    int j = ir_bs[h];
+    i64 j = ir_bs[h];
     while j < ir_be[h] - 1 {
         if ir_op[j] != IR_LOAD && ir_op[j] != IR_NOP && ir_op[j] != IR_CONST { return vz_fail(5957); }
         j += 1;
     }
     // the step of the counter: the three instructions load, add, store at the end of the last block
-    int lastb = vz_chain[vz_nchain - 1];
-    int e = ir_be[lastb] - 2;
+    i64 lastb = vz_chain[vz_nchain - 1];
+    i64 e = ir_be[lastb] - 2;
     while e >= ir_bs[lastb] && ir_op[e] == IR_NOP { e -= 1; }
-    int inch = e;
+    i64 inch = e;
     if inch < ir_bs[lastb] || ir_op[inch] != IR_STORE || ir_a[inch] != 30 || vn_slot(inch) != islot || ir_bi[inch] != 0 { return vz_fail(5965); }
-    int ad = rn_find_def(lastb, inch, ir_b[inch]);
+    i64 ad = rn_find_def(lastb, inch, ir_b[inch]);
     if ad < 0 || ir_op[ad] != IR_ADD || ir_bi[ad] != 1 || ir_b[ad] != 1 { return vz_fail(5967); }
-    int ld = rn_find_def(lastb, ad, ir_a[ad]);
+    i64 ld = rn_find_def(lastb, ad, ir_a[ad]);
     if ld < 0 || ir_op[ld] != IR_LOAD || ir_a[ld] != 30 || vn_slot(ld) != islot { return vz_fail(5969); }
     // between the load and the store only the add (and nops)
-    int m = ld + 1;
+    i64 m = ld + 1;
     while m < inch {
         if m != ad && ir_op[m] != IR_NOP { return vz_fail(5973); }
         m += 1;
@@ -6765,22 +6765,22 @@ bool vz_make(int q, int l) {
     if vz_has_fp == 1 && (ir_opt & 536870912) != 0 { return vz_fail(5979); }
     vz_npk = 0;
     {
-        int ak = 0;
+        i64 ak = 0;
         while ak < vz_nacc {
             if vz_pk_find(vz_acc_base[ak], vz_acc_off[ak], true) < 0 { return vz_fail(5984); }
             ak += 1;
         }
     }
     // the registers the body writes must not be needed after the loop (the original header runs once more and writes its own)
-    int ex = cl_exit[q];
-    int c = 0;
+    i64 ex = cl_exit[q];
+    i64 c = 0;
     while c < vz_nchain {
-        int jj = ir_bs[vz_chain[c]];
+        i64 jj = ir_bs[vz_chain[c]];
         while jj < ir_be[vz_chain[c]] - 1 {
-            int dr = ir_d[jj];
+            i64 dr = ir_d[jj];
             if dr > 0 && dr < 64 && ir_op[jj] != IR_NOP {
                 bool in_header = false;
-                int hj = ir_bs[h];
+                i64 hj = ir_bs[h];
                 while hj < ir_be[h] { if ir_d[hj] == dr { in_header = true; } hj += 1; }
                 // x2..x7 (v3..v8) look live at every call after the loop (the lifter passes all the argument registers); no value of the loop is kept there
                 if !in_header && (dr < 3 || dr > 8) && (op_li[ex] & (1 << dr)) != 0 { if (ir_opt & 4194304) != 0 { write_err("live reg "); write_err_int(dr); write_err(" exit B"); write_err_int(ex); write_err("\n"); } return vz_fail(5999); }
@@ -6791,33 +6791,33 @@ bool vz_make(int q, int l) {
         c += 1;
     }
     // the new blocks: VP (once: the broadcasts, the limit n - 1 into a stack cell), VH (the test of every turn), VB (the body)
-    int qcell = 0 - (op_maxq() + 8);
-    int boff = vz_slot_off(cl_bval[q]);
-    int vp = ir_new_block(0 - 1);
+    i64 qcell = 0 - (op_maxq() + 8);
+    i64 boff = vz_slot_off(cl_bval[q]);
+    i64 vp = ir_new_block(0 - 1);
     ir_set_block(vp);
     // the doubles that the body reads and does not write: made into vectors once
     {
-        int u = 0;
+        i64 u = 0;
         while u < 64 { vz_bq[u] = 0; u += 1; }
     }
-    int vbnd = ir_vreg(0);
-    int br_guard = 0 - 1;
-    int vpb = 0 - 1;
+    i64 vbnd = ir_vreg(0);
+    i64 br_guard = 0 - 1;
+    i64 vpb = 0 - 1;
     if cl_bkind[q] == 0 {
         ir_add(IR_CONST, vbnd, 0, 0, 0, cl_bval[q]);
     } else {
-        int lb = ir_add(IR_LOAD, vbnd, 30, 0, 0, 0);
+        i64 lb = ir_add(IR_LOAD, vbnd, 30, 0, 0, 0);
         ir_w[lb] = 8;
         ir_k[lb] = boff;
     }
     // n - 1 must not wrap: the smallest number (0 for an unsigned compare) skips the vector loop
-    int vlim = ir_vreg(0);
-    int vmin = ir_vreg(0);
-    int minv = 0;
-    int gcc = IR_ULT;
-    int nchunks = 4;                             // 16-byte chunks in one turn of the vector loop
+    i64 vlim = ir_vreg(0);
+    i64 vmin = ir_vreg(0);
+    i64 minv = 0;
+    i64 gcc = IR_ULT;
+    i64 nchunks = 4;                             // 16-byte chunks in one turn of the vector loop
     if vz_w == 1 { nchunks = 2; }
-    int per_turn = 16 * nchunks / vz_w;          // elements in one turn
+    i64 per_turn = 16 * nchunks / vz_w;          // elements in one turn
     if cl_cc[q] == IR_LT { minv = (1 << 63) + per_turn - 1; gcc = IR_LT; } else { minv = per_turn - 1; }
     ir_add(IR_CONST, vmin, 0, 0, 0, minv);
     br_guard = ir_add(IR_BR, 0, vbnd, vmin, 0, gcc);
@@ -6826,26 +6826,26 @@ bool vz_make(int q, int l) {
     // the broadcasts (the registers of the loop's doubles are live in here)
     vz_hoist(q);
     {
-        int hu = 0;
+        i64 hu = 0;
         while hu < vz_nhs {
-            int hx = ir_vreg(0);
-            int hl = ir_add(IR_LOAD, hx, 30, 0, 0, 0);
+            i64 hx = ir_vreg(0);
+            i64 hl = ir_add(IR_LOAD, hx, 30, 0, 0, 0);
             ir_w[hl] = 8;
             ir_k[hl] = vz_slot_off(vz_hs[hu]);
-            int hqv = ir_vreg(2);
-            int hd = ir_add(IR_VDUP, hqv, hx, 0, 0, 0);
+            i64 hqv = ir_vreg(2);
+            i64 hd = ir_add(IR_VDUP, hqv, hx, 0, 0, 0);
             ir_w[hd] = vz_arr();
             vz_hq[hu] = hqv;
             hu += 1;
         }
-        int au = 0;
+        i64 au = 0;
         while au < vz_nacc2 {
-            int zx = ir_vreg(0);
+            i64 zx = ir_vreg(0);
             ir_add(IR_CONST, zx, 0, 0, 0, 0);
-            int zch = 0;
+            i64 zch = 0;
             while zch < nchunks {
-                int zq = ir_vreg(2);
-                int zd = ir_add(IR_VDUP, zq, zx, 0, 0, 0);
+                i64 zq = ir_vreg(2);
+                i64 zd = ir_add(IR_VDUP, zq, zx, 0, 0, 0);
                 ir_w[zd] = 1;
                 vz_acc_q[au * 4 + zch] = zq;
                 zch += 1;
@@ -6853,82 +6853,82 @@ bool vz_make(int q, int l) {
             au += 1;
         }
     }
-    int vbnd2 = ir_vreg(0);
+    i64 vbnd2 = ir_vreg(0);
     if cl_bkind[q] == 0 {
         ir_add(IR_CONST, vbnd2, 0, 0, 0, cl_bval[q]);
     } else {
-        int lb2 = ir_add(IR_LOAD, vbnd2, 30, 0, 0, 0);
+        i64 lb2 = ir_add(IR_LOAD, vbnd2, 30, 0, 0, 0);
         ir_w[lb2] = 8;
         ir_k[lb2] = boff;
     }
     ir_add(IR_ADD, vlim, vbnd2, 0 - (per_turn - 1), 1, 0);
-    int stl = ir_add(IR_STORE, 0, 30, vlim, 0, qcell);
+    i64 stl = ir_add(IR_STORE, 0, 30, vlim, 0, qcell);
     ir_w[stl] = 8;
     // the data pointers of heap arrays (base 100000 + slot): loaded once; two different arrays must not overlap (else the scalar loop runs)
     {
-        int hu = 0;
+        i64 hu = 0;
         while hu < vz_npk {
             vz_hpv[hu] = 0;
             if vz_pk_base[hu] % 1000000 >= 100000 {
-                int hs = 0 - 1;
-                int hv = 0;
+                i64 hs = 0 - 1;
+                i64 hv = 0;
                 while hv < hu { if vz_pk_base[hv] % 1000000 == vz_pk_base[hu] % 1000000 { hs = hv; } hv += 1; }
                 if hs >= 0 { vz_hpv[hu] = vz_hpv[hs]; }
                 else {
-                    int hh = ir_vreg(0);
-                    int lh0 = ir_add(IR_LOAD, hh, 30, 0, 0, 0);
+                    i64 hh = ir_vreg(0);
+                    i64 lh0 = ir_add(IR_LOAD, hh, 30, 0, 0, 0);
                     ir_w[lh0] = 8;
-                    int hd = hh;
+                    i64 hd = hh;
                     if vz_pk_base[hu] % 1000000 >= 200000 {
                         ir_k[lh0] = vz_slot_off(vz_pk_base[hu] % 1000000 - 200000);       // a pointer variable: the slot holds the data pointer itself
                     } else {
                         ir_k[lh0] = vz_slot_off(vz_pk_base[hu] % 1000000 - 100000);
                         hd = ir_vreg(0);
-                        int lh1 = ir_add(IR_LOAD, hd, hh, 0, 0, 0);
+                        i64 lh1 = ir_add(IR_LOAD, hd, hh, 0, 0, 0);
                         ir_w[lh1] = 8;
                         ir_k[lh1] = 16;
                     }
-                    int shd = ir_add(IR_STORE, 0, 30, hd, 0, qcell - 8 * (17 + hu));
+                    i64 shd = ir_add(IR_STORE, 0, 30, hd, 0, qcell - 8 * (17 + hu));
                     ir_w[shd] = 8;
                     vz_hpv[hu] = 1 + hu;                    // the cell qcell - 8 * (17 + hu) holds the pointer
                 }
             }
             hu += 1;
         }
-        int nu = 0;
+        i64 nu = 0;
         while nu < vz_nnull {
-            int nr = ir_vreg(0);
-            int nl = ir_add(IR_LOAD, nr, 30, 0, 0, 0);
+            i64 nr = ir_vreg(0);
+            i64 nl = ir_add(IR_LOAD, nr, 30, 0, 0, 0);
             ir_w[nl] = 8;
             ir_k[nl] = vz_null_off[nu];
-            int nbr = ir_add(IR_BR, 0, nr, 0, 1, IR_EQ);
+            i64 nbr = ir_add(IR_BR, 0, nr, 0, 1, IR_EQ);
             ir_t1[nbr] = h;
-            int nnx = ir_new_block(0 - 1);
+            i64 nnx = ir_new_block(0 - 1);
             ir_t2[nbr] = nnx;
             ir_set_block(nnx);
             nu += 1;
         }
-        int ha = 0;
+        i64 ha = 0;
         while ha < vz_npk {
-            int hb = ha + 1;
+            i64 hb = ha + 1;
             while hb < vz_npk {
                 if vz_hpv[ha] != 0 && vz_hpv[hb] != 0 && vz_hpv[ha] != vz_hpv[hb] {
-                    int span = per_turn * vz_w + 256;
-                    int df = ir_vreg(0);
-                    int ra1 = ir_vreg(0);
-                    int rb1 = ir_vreg(0);
-                    int lca = ir_add(IR_LOAD, ra1, 30, 0, 0, 0);
+                    i64 span = per_turn * vz_w + 256;
+                    i64 df = ir_vreg(0);
+                    i64 ra1 = ir_vreg(0);
+                    i64 rb1 = ir_vreg(0);
+                    i64 lca = ir_add(IR_LOAD, ra1, 30, 0, 0, 0);
                     ir_w[lca] = 8;
                     ir_k[lca] = qcell - 8 * (17 + vz_hpv[ha] - 1);
-                    int lcb = ir_add(IR_LOAD, rb1, 30, 0, 0, 0);
+                    i64 lcb = ir_add(IR_LOAD, rb1, 30, 0, 0, 0);
                     ir_w[lcb] = 8;
                     ir_k[lcb] = qcell - 8 * (17 + vz_hpv[hb] - 1);
                     ir_add(IR_SUB, df, ra1, rb1, 0, 0);
-                    int df2 = ir_vreg(0);
+                    i64 df2 = ir_vreg(0);
                     ir_add(IR_ADD, df2, df, span, 1, 0);
-                    int brx = ir_add(IR_BR, 0, df2, 2 * span, 1, IR_ULE);
+                    i64 brx = ir_add(IR_BR, 0, df2, 2 * span, 1, IR_ULE);
                     ir_t1[brx] = h;
-                    int nxt = ir_new_block(0 - 1);
+                    i64 nxt = ir_new_block(0 - 1);
                     ir_t2[brx] = nxt;
                     ir_set_block(nxt);
                 }
@@ -6939,84 +6939,84 @@ bool vz_make(int q, int l) {
     }
     // the pointers: base + 8 * i + offset at the start, one cell each
     {
-        int pu = 0;
+        i64 pu = 0;
         while pu < vz_npk {
             vz_pk_cell[pu] = qcell - 8 * (pu + 1);
-            int ti0 = ir_vreg(0);
-            int li0 = ir_add(IR_LOAD, ti0, 30, 0, 0, 0);
+            i64 ti0 = ir_vreg(0);
+            i64 li0 = ir_add(IR_LOAD, ti0, 30, 0, 0, 0);
             ir_w[li0] = 8;
             ir_k[li0] = vz_slot_off(cl_slot[q]);
-            int sh0 = ir_vreg(0);
+            i64 sh0 = ir_vreg(0);
             if vz_lg == 0 { ir_add(IR_COPY, sh0, ti0, 0, 0, 0); } else { ir_add(IR_SHL, sh0, ti0, vz_lg, 1, 0); }
             // every temporary below lives for one instruction (the scratch registers are reused): the sum is built in a stack cell
-            int pbase = vz_pk_base[pu] % 1000000;
-            int pdyn = vz_pk_base[pu] / 1000000;
-            int acell = vz_pk_cell[pu];
+            i64 pbase = vz_pk_base[pu] % 1000000;
+            i64 pdyn = vz_pk_base[pu] / 1000000;
+            i64 acell = vz_pk_cell[pu];
             if pbase >= 100000 {
-                int pbv = ir_vreg(0);
-                int lcp = ir_add(IR_LOAD, pbv, 30, 0, 0, 0);
+                i64 pbv = ir_vreg(0);
+                i64 lcp = ir_add(IR_LOAD, pbv, 30, 0, 0, 0);
                 ir_w[lcp] = 8;
                 ir_k[lcp] = qcell - 8 * (17 + vz_hpv[pu] - 1);
-                int pbs = ir_vreg(0);
+                i64 pbs = ir_vreg(0);
                 if vz_lg == 0 { ir_add(IR_ADD, pbs, pbv, sh0, 0, 0); } else { ir_add(IR_ADD, pbs, pbv, sh0, 0, 0); }
-                int sa0 = ir_add(IR_STORE, 0, 30, pbs, 0, acell);
+                i64 sa0 = ir_add(IR_STORE, 0, 30, pbs, 0, acell);
                 ir_w[sa0] = 8;
             } else {
-                int pa = ir_vreg(0);
+                i64 pa = ir_vreg(0);
                 ir_add(IR_ADD, pa, pbase, sh0, 0, 0);
-                int sa1 = ir_add(IR_STORE, 0, 30, pa, 0, acell);
+                i64 sa1 = ir_add(IR_STORE, 0, 30, pa, 0, acell);
                 ir_w[sa1] = 8;
             }
             if pdyn != 0 {
                 // the invariant part of the index (the offset of a row): the cell is read here, shifted and added
-                int dreg = ir_vreg(0);
-                int dld = ir_add(IR_LOAD, dreg, 30, 0, 0, 0);
+                i64 dreg = ir_vreg(0);
+                i64 dld = ir_add(IR_LOAD, dreg, 30, 0, 0, 0);
                 ir_w[dld] = 8;
                 ir_k[dld] = pdyn - 500000;
-                int dsh = ir_vreg(0);
+                i64 dsh = ir_vreg(0);
                 if vz_lg == 0 { ir_add(IR_COPY, dsh, dreg, 0, 0, 0); } else { ir_add(IR_SHL, dsh, dreg, vz_lg, 1, 0); }
-                int sd0 = ir_add(IR_STORE, 0, 30, dsh, 0, qcell - 8 * 40);
+                i64 sd0 = ir_add(IR_STORE, 0, 30, dsh, 0, qcell - 8 * 40);
                 ir_w[sd0] = 8;
-                int cur0 = ir_vreg(0);
-                int lcu = ir_add(IR_LOAD, cur0, 30, 0, 0, 0);
+                i64 cur0 = ir_vreg(0);
+                i64 lcu = ir_add(IR_LOAD, cur0, 30, 0, 0, 0);
                 ir_w[lcu] = 8;
                 ir_k[lcu] = acell;
-                int dsv = ir_vreg(0);
-                int lds = ir_add(IR_LOAD, dsv, 30, 0, 0, 0);
+                i64 dsv = ir_vreg(0);
+                i64 lds = ir_add(IR_LOAD, dsv, 30, 0, 0, 0);
                 ir_w[lds] = 8;
                 ir_k[lds] = qcell - 8 * 40;
-                int sm = ir_vreg(0);
+                i64 sm = ir_vreg(0);
                 ir_add(IR_ADD, sm, cur0, dsv, 0, 0);
-                int sd1 = ir_add(IR_STORE, 0, 30, sm, 0, acell);
+                i64 sd1 = ir_add(IR_STORE, 0, 30, sm, 0, acell);
                 ir_w[sd1] = 8;
             }
-            int cur1 = ir_vreg(0);
-            int lc1 = ir_add(IR_LOAD, cur1, 30, 0, 0, 0);
+            i64 cur1 = ir_vreg(0);
+            i64 lc1 = ir_add(IR_LOAD, cur1, 30, 0, 0, 0);
             ir_w[lc1] = 8;
             ir_k[lc1] = acell;
-            int pb = ir_vreg(0);
+            i64 pb = ir_vreg(0);
             ir_add(IR_ADD, pb, cur1, vz_pk_off[pu], 1, 0);
-            int sp0 = ir_add(IR_STORE, 0, 30, pb, 0, vz_pk_cell[pu]);
+            i64 sp0 = ir_add(IR_STORE, 0, 30, pb, 0, vz_pk_cell[pu]);
             ir_w[sp0] = 8;
             pu += 1;
         }
     }
-    int jpb = ir_add(IR_JMP, 0, 0, 0, 0, 0);
-    int vh0 = ir_new_block(0 - 1);
+    i64 jpb = ir_add(IR_JMP, 0, 0, 0, 0, 0);
+    i64 vh0 = ir_new_block(0 - 1);
     ir_t1[jpb] = vh0;
     ir_set_block(vh0);
-    int t0 = ir_vreg(0);
-    int t1 = ir_vreg(0);
+    i64 t0 = ir_vreg(0);
+    i64 t1 = ir_vreg(0);
     {
-        int la = ir_add(IR_LOAD, t0, 30, 0, 0, 0);
+        i64 la = ir_add(IR_LOAD, t0, 30, 0, 0, 0);
         ir_w[la] = 8;
         ir_k[la] = vz_slot_off(cl_slot[q]);
-        int lc = ir_add(IR_LOAD, t1, 30, 0, 0, 0);
+        i64 lc = ir_add(IR_LOAD, t1, 30, 0, 0, 0);
         ir_w[lc] = 8;
         ir_k[lc] = qcell;
     }
-    int br0 = ir_add(IR_BR, 0, t0, t1, 0, cl_cc[q]);
-    int vb = ir_new_block(0 - 1);
+    i64 br0 = ir_add(IR_BR, 0, t0, t1, 0, cl_cc[q]);
+    i64 vb = ir_new_block(0 - 1);
     ir_t1[br0] = vb;
     ir_t2[br0] = h;
     ir_t1[br_guard] = h;
@@ -7024,13 +7024,13 @@ bool vz_make(int q, int l) {
     // the vector body
     ir_set_block(vb);
     {
-        int chunk = 0;
+        i64 chunk = 0;
         while chunk < nchunks {
             vz_shift = chunk * 16;
             vz_ab29 = 0;
             vz_ab30 = 0;
             vz_ti = ir_vreg(0);
-            int lti = ir_add(IR_LOAD, vz_ti, 30, 0, 0, 0);
+            i64 lti = ir_add(IR_LOAD, vz_ti, 30, 0, 0, 0);
             ir_w[lti] = 8;
             ir_k[lti] = ir_k[ld];
             vz_scan(q, islot, ld, inch, true);
@@ -7040,32 +7040,32 @@ bool vz_make(int q, int l) {
     }
     // the pointers move on by four elements
     {
-        int pv = 0;
+        i64 pv = 0;
         while pv < vz_npk {
-            int pcur = ir_vreg(0);
-            int lc0 = ir_add(IR_LOAD, pcur, 30, 0, 0, 0);
+            i64 pcur = ir_vreg(0);
+            i64 lc0 = ir_add(IR_LOAD, pcur, 30, 0, 0, 0);
             ir_w[lc0] = 8;
             ir_k[lc0] = vz_pk_cell[pv];
-            int pnext = ir_vreg(0);
+            i64 pnext = ir_vreg(0);
             ir_add(IR_ADD, pnext, pcur, 16 * nchunks, 1, 0);
-            int sc0 = ir_add(IR_STORE, 0, 30, pnext, 0, vz_pk_cell[pv]);
+            i64 sc0 = ir_add(IR_STORE, 0, 30, pnext, 0, vz_pk_cell[pv]);
             ir_w[sc0] = 8;
             pv += 1;
         }
     }
     // i = i + 4
     {
-        int tk = ir_vreg(0);
-        int lk = ir_add(IR_LOAD, tk, 30, 0, 0, 0);
+        i64 tk = ir_vreg(0);
+        i64 lk = ir_add(IR_LOAD, tk, 30, 0, 0, 0);
         ir_w[lk] = 8;
         ir_k[lk] = ir_k[ld];
-        int tj = ir_vreg(0);
+        i64 tj = ir_vreg(0);
         ir_add(IR_ADD, tj, tk, per_turn, 1, 0);
-        int si = ir_add(IR_STORE, 0, 30, tj, 0, ir_k[ld]);
+        i64 si = ir_add(IR_STORE, 0, 30, tj, 0, ir_k[ld]);
         ir_w[si] = 8;
         // the test at the bottom: one branch for each turn
-        int tlim = ir_vreg(0);
-        int lq = ir_add(IR_LOAD, tlim, 30, 0, 0, 0);
+        i64 tlim = ir_vreg(0);
+        i64 lq = ir_add(IR_LOAD, tlim, 30, 0, 0, 0);
         ir_w[lq] = 8;
         ir_k[lq] = qcell;
         vz_br_end = ir_add(IR_BR, 0, tj, tlim, 0, cl_cc[q]);
@@ -7077,49 +7077,49 @@ bool vz_make(int q, int l) {
     vz_licm(vb, br0);
     // the exit of the vector loop: the two partial sums of every accumulator are added to its slot
     if vz_nacc2 > 0 {
-        int vx = ir_new_block(0 - 1);
+        i64 vx = ir_new_block(0 - 1);
         ir_set_block(vx);
-        int au2 = 0;
+        i64 au2 = 0;
         while au2 < vz_nacc2 {
             // two temporaries at a time (the lowering has few scratch registers): slot + lane 0, then + lane 1
-            int ov = ir_vreg(0);
-            int lo = ir_add(IR_LOAD, ov, 30, 0, 0, 0);
+            i64 ov = ir_vreg(0);
+            i64 lo = ir_add(IR_LOAD, ov, 30, 0, 0, 0);
             ir_w[lo] = 8;
             ir_k[lo] = vz_slot_off(vz_acc_slot[au2]);
-            int run = ov;
-            int xch = 0;
+            i64 run = ov;
+            i64 xch = 0;
             while xch < nchunks {
-                int l0 = ir_vreg(0);
-                int e0 = ir_add(IR_VLANE, l0, vz_acc_q[au2 * 4 + xch], 0, 0, 0);
+                i64 l0 = ir_vreg(0);
+                i64 e0 = ir_add(IR_VLANE, l0, vz_acc_q[au2 * 4 + xch], 0, 0, 0);
                 ir_w[e0] = 8;
-                int s1 = ir_vreg(0);
+                i64 s1 = ir_vreg(0);
                 ir_add(IR_ADD, s1, run, l0, 0, 0);
-                int l1 = ir_vreg(0);
-                int e1 = ir_add(IR_VLANE, l1, vz_acc_q[au2 * 4 + xch], 0, 0, 8);
+                i64 l1 = ir_vreg(0);
+                i64 e1 = ir_add(IR_VLANE, l1, vz_acc_q[au2 * 4 + xch], 0, 0, 8);
                 ir_w[e1] = 8;
-                int s2 = ir_vreg(0);
+                i64 s2 = ir_vreg(0);
                 ir_add(IR_ADD, s2, s1, l1, 0, 0);
                 run = s2;
                 xch += 1;
             }
-            int so = ir_add(IR_STORE, 0, 30, run, 0, 0);
+            i64 so = ir_add(IR_STORE, 0, 30, run, 0, 0);
             ir_w[so] = 8;
             ir_k[so] = vz_slot_off(vz_acc_slot[au2]);
             au2 += 1;
         }
-        int jx = ir_add(IR_JMP, 0, 0, 0, 0, 0);
+        i64 jx = ir_add(IR_JMP, 0, 0, 0, 0, 0);
         ir_t1[jx] = h;
         ir_t2[br0] = vx;
         ir_t2[vz_br_end] = vx;
     }
     // the jumps into the header from outside the loop go to VP
-    int nb0 = vp;
+    i64 nb0 = vp;
     op_mark_loop(l);
-    int bb = 0;
+    i64 bb = 0;
     while bb < nb0 {
         if op_mark[bb] != op_stamp && op_po[bb] >= 0 {
-            int tb = ir_be[bb] - 1;
-            int top = ir_op[tb];
+            i64 tb = ir_be[bb] - 1;
+            i64 top = ir_op[tb];
             if (top == IR_JMP || top == IR_BR || top == IR_FBR) && ir_t1[tb] == h { ir_t1[tb] = vp; }
             if (top == IR_BR || top == IR_FBR) && ir_t2[tb] == h { ir_t2[tb] = vp; }
         }
@@ -7144,32 +7144,32 @@ bool vz_make(int q, int l) {
 // must not depend on j, no call, and the stores of POST must go to arrays that nothing in the loop reads (tested at run time: the headers
 // of the arrays are different objects). `-irdbg 4503599627370496` switches it off, `-irdbg 9007199254740992` says why it did not fire.
 #define UJ_MAXB 48
-int uj_pre[UJ_MAXB];
-int uj_npre;
-int uj_inn[UJ_MAXB];
-int uj_ninn;
-int uj_post[UJ_MAXB];
-int uj_npost;
-int uj_m1[RN_MAXB];
-int uj_m2[RN_MAXB];
-int uj_wo[64];                   // the frame cells that the loop writes (offsets), and the new cells for the turn j
-int uj_wt[64];
-int uj_wseen[64];                // 1: stored before it was read in the order of the turn
-int uj_nw;
-int uj_f[2048];                  // all instructions of the parts in the order of the turn
-int uj_fs[2048];                 // the part of each (0 PRE, 1 H3, 2 I, 3 POST)
-int uj_nf;
-int uj_wkey[16];                 // the arrays that POST writes (keys), and the ones that are read
-int uj_nwk;
-int uj_rkey[16];
-int uj_nrk;
-int uj_jo;
-int uj_ko;
-int uj_done[32];
-int uj_ndone;
-int uj_count;                    // all functions
+i64 uj_pre[UJ_MAXB];
+i64 uj_npre;
+i64 uj_inn[UJ_MAXB];
+i64 uj_ninn;
+i64 uj_post[UJ_MAXB];
+i64 uj_npost;
+i64 uj_m1[RN_MAXB];
+i64 uj_m2[RN_MAXB];
+i64 uj_wo[64];                   // the frame cells that the loop writes (offsets), and the new cells for the turn j
+i64 uj_wt[64];
+i64 uj_wseen[64];                // 1: stored before it was read in the order of the turn
+i64 uj_nw;
+i64 uj_f[2048];                  // all instructions of the parts in the order of the turn
+i64 uj_fs[2048];                 // the part of each (0 PRE, 1 H3, 2 I, 3 POST)
+i64 uj_nf;
+i64 uj_wkey[16];                 // the arrays that POST writes (keys), and the ones that are read
+i64 uj_nwk;
+i64 uj_rkey[16];
+i64 uj_nrk;
+i64 uj_jo;
+i64 uj_ko;
+i64 uj_done[32];
+i64 uj_ndone;
+i64 uj_count;                    // all functions
 
-bool uj_fail(int line) {
+bool uj_fail(i64 line) {
     if ((ir_opt & 9007199254740992) != 0) {
         write_err("uj gave up at jc_opt.j:");
         write_err_int(line);
@@ -7181,15 +7181,15 @@ bool uj_fail(int line) {
 }
 
 // the straight chain of blocks from start up to (not including) stop
-int uj_walk(int start, int stop, int stamp, int^ out) {
-    int n = 0;
-    int cur = start;
+i64 uj_walk(i64 start, i64 stop, i64 stamp, i64^ out) {
+    i64 n = 0;
+    i64 cur = start;
     while cur != stop {
         if cur < 0 || op_mark[cur] != stamp || n >= UJ_MAXB - 1 { return 0 - 1; }
         out[n] = cur;
         n += 1;
-        int tt = ir_be[cur] - 1;
-        int nxt = 0 - 1;
+        i64 tt = ir_be[cur] - 1;
+        i64 nxt = 0 - 1;
         if ir_op[tt] == IR_JMP { nxt = ir_t1[tt]; }
         else if ir_op[tt] == IR_BR && ir_bi[tt] == 1 && ir_b[tt] == 0 {
             if ir_k[tt] == IR_NE && vz_is_nulltrap(ir_t2[tt]) { nxt = ir_t1[tt]; }
@@ -7202,28 +7202,28 @@ int uj_walk(int start, int stop, int stamp, int^ out) {
 }
 
 // is the frame cell with this offset stored by an instruction of the nest? (a cell that is only read, such as the cell with the handle of an array, may stay)
-bool uj_stored(int off) {
-    int p = 0;
+bool uj_stored(i64 off) {
+    i64 p = 0;
     while p < uj_nf {
-        int x = uj_f[p];
+        i64 x = uj_f[p];
         if ir_op[x] == IR_STORE && ir_a[x] == 30 && ir_k[x] == off { return true; }
         p += 1;
     }
     return false;
 }
 
-int uj_wfind(int off) {
-    int i = 0;
+i64 uj_wfind(i64 off) {
+    i64 i = 0;
     while i < uj_nw { if uj_wo[i] == off { return i; } i += 1; }
     return 0 - 1;
 }
 
 // the last instruction before position p of the list (inside the same part) that writes the register r
-int uj_def(int p, int r) {
-    int s = uj_fs[p];
-    int q = p - 1;
+i64 uj_def(i64 p, i64 r) {
+    i64 s = uj_fs[p];
+    i64 q = p - 1;
     while q >= 0 && uj_fs[q] == s {
-        int x = uj_f[q];
+        i64 x = uj_f[q];
         if ir_d[x] == r && ir_op[x] != IR_NOP && ir_op[x] != IR_STORE && ir_op[x] != IR_BR && ir_op[x] != IR_JMP { return q; }
         q -= 1;
     }
@@ -7232,21 +7232,21 @@ int uj_def(int p, int r) {
 
 // the cell that holds the array whose header is in the register r at position p (copies are followed): 1000000 * (29 or 30) + the offset
 // of the cell + 500000, or -1
-int uj_hdr(int p, int r) {
-    int hreg = r;
-    int at = p;
-    int guard = 0;
+i64 uj_hdr(i64 p, i64 r) {
+    i64 hreg = r;
+    i64 at = p;
+    i64 guard = 0;
     while guard < 6 {
-        int dh = uj_def(at, hreg);
+        i64 dh = uj_def(at, hreg);
         if dh < 0 { return 0 - 1; }
-        int xh = uj_f[dh];
+        i64 xh = uj_f[dh];
         if ir_op[xh] == IR_COPY { hreg = ir_a[xh]; at = dh; guard += 1; continue; }
         if ir_op[xh] == IR_LOAD && ir_w[xh] == 8 && ir_a[xh] == 30 {
             // a reload of a frame cell: if this part stored the header there before, follow the stored register
-            int sq = dh - 1;
-            int found = 0 - 1;
+            i64 sq = dh - 1;
+            i64 found = 0 - 1;
             while sq >= 0 && uj_fs[sq] == uj_fs[dh] && found < 0 {
-                int sx = uj_f[sq];
+                i64 sx = uj_f[sq];
                 if ir_op[sx] == IR_STORE && ir_a[sx] == 30 && ir_k[sx] == ir_k[xh] { found = sq; }
                 sq -= 1;
             }
@@ -7267,22 +7267,22 @@ int uj_hdr(int p, int r) {
 }
 
 // the array object behind the register r (the data pointer of an array, used at position p): the data pointer is  load [header + 16]
-int uj_key_of_data(int p, int r) {
-    int d2 = uj_def(p, r);
+i64 uj_key_of_data(i64 p, i64 r) {
+    i64 d2 = uj_def(p, r);
     if d2 < 0 { return 0 - 1; }
-    int x2 = uj_f[d2];
+    i64 x2 = uj_f[d2];
     if ir_op[x2] != IR_LOAD || ir_w[x2] != 8 || ir_k[x2] != 16 { return 0 - 1; }
     return uj_hdr(d2, ir_a[x2]);
 }
 
-int uj_key(int p) {
-    int x = uj_f[p];
-    int a = ir_a[x];
+i64 uj_key(i64 p) {
+    i64 x = uj_f[p];
+    i64 a = ir_a[x];
     if a == 29 || a == 30 { return 0 - 1; }
-    int d1 = uj_def(p, a);
+    i64 d1 = uj_def(p, a);
     if d1 < 0 { return 0 - 1; }
-    int x1 = uj_f[d1];
-    int cg = 0;
+    i64 x1 = uj_f[d1];
+    i64 cg = 0;
     while ir_op[x1] == IR_COPY && cg < 6 {
         a = ir_a[x1];
         d1 = uj_def(d1, a);
@@ -7296,31 +7296,31 @@ int uj_key(int p) {
     // Like the vectoriser: two accesses with displacements that are 16 or more bytes apart are different arrays, the same displacement is the same array
     // (two displacements closer than 16 are not told apart here: the key is the displacement rounded down to 16, and the scan of a part refuses a store and a load of one key)
     if ir_a[x1] == 29 || ir_b[x1] == 29 { return 2000000000 + (ir_k[x] / 16) * 16; }
-    int k1 = uj_key_of_data(d1, ir_a[x1]);
+    i64 k1 = uj_key_of_data(d1, ir_a[x1]);
     if k1 >= 0 { return k1; }
     return uj_key_of_data(d1, ir_b[x1]);
 }
 
-bool uj_scan(int qo, int qi) {
+bool uj_scan(i64 qo, i64 qi) {
     uj_nf = 0;
     uj_nw = 0;
     uj_nwk = 0;
     uj_nrk = 0;
-    int seg = 0;
+    i64 seg = 0;
     while seg < 4 {
-        int cnt = 0;
+        i64 cnt = 0;
         if seg == 0 { cnt = uj_npre; }
         else if seg == 1 { cnt = 1; }
         else if seg == 2 { cnt = uj_ninn; }
         else { cnt = uj_npost; }
-        int c = 0;
+        i64 c = 0;
         while c < cnt {
-            int b = 0;
+            i64 b = 0;
             if seg == 0 { b = uj_pre[c]; }
             else if seg == 1 { b = cl_head[qi]; }
             else if seg == 2 { b = uj_inn[c]; }
             else { b = uj_post[c]; }
-            int j = ir_bs[b];
+            i64 j = ir_bs[b];
             while j < ir_be[b] {
                 if ir_op[j] != IR_NOP {
                     if uj_nf >= 2000 { return uj_fail(1); }
@@ -7334,22 +7334,22 @@ bool uj_scan(int qo, int qi) {
         }
         seg += 1;
     }
-    int jo = uj_jo;
-    int ko = uj_ko;
-    int p = 0;
+    i64 jo = uj_jo;
+    i64 ko = uj_ko;
+    i64 p = 0;
     while p < uj_nf {
-        int x = uj_f[p];
-        int op = ir_op[x];
-        int seg2 = uj_fs[p];
+        i64 x = uj_f[p];
+        i64 op = ir_op[x];
+        i64 seg2 = uj_fs[p];
         if op == IR_CALL || op == IR_CALLIND || op == IR_SYSCALL { return uj_fail(2); }
         if op == IR_BR || op == IR_JMP { p += 1; continue; }
         if ir_d[x] >= 64 || ir_a[x] >= 64 || (ir_uses_b(op) && ir_bi[x] == 0 && ir_b[x] >= 64) { return uj_fail(3); }
         if op == IR_LOAD && ir_a[x] == 30 {
-            int off = ir_k[x];
+            i64 off = ir_k[x];
             if ir_w[x] != 8 || off % 8 != 0 { return uj_fail(4); }
             if off >= 0 && (off / 8 >= 8192 || op_plain[off / 8] != 1) { return uj_fail(5); }
             if off != jo && off != ko {
-                int wi = uj_wfind(off);
+                i64 wi = uj_wfind(off);
                 if wi < 0 {
                     if uj_nw >= 60 { return uj_fail(6); }
                     uj_wo[uj_nw] = off;
@@ -7361,13 +7361,13 @@ bool uj_scan(int qo, int qi) {
                 }
             }
         } else if op == IR_STORE && ir_a[x] == 30 {
-            int off2 = ir_k[x];
+            i64 off2 = ir_k[x];
             if ir_w[x] != 8 || off2 % 8 != 0 { return uj_fail(7); }
             if off2 >= 0 && (off2 / 8 >= 8192 || op_plain[off2 / 8] != 1) { return uj_fail(8); }
             if off2 == jo && x != cl_sti[qo] { return uj_fail(22); }
             if off2 == ko && !(seg2 == 0 || x == cl_sti[qi]) { return uj_fail(23); }
             if off2 != jo && off2 != ko {
-                int wj = uj_wfind(off2);
+                i64 wj = uj_wfind(off2);
                 if wj < 0 {
                     if uj_nw >= 60 { return uj_fail(9); }
                     uj_wo[uj_nw] = off2;
@@ -7380,18 +7380,18 @@ bool uj_scan(int qo, int qi) {
         } else if op == IR_STORE {
             if ir_a[x] == 29 { return uj_fail(11); }
             if seg2 != 3 { return uj_fail(12); }
-            int ky = uj_key(p);
+            i64 ky = uj_key(p);
             if ky < 0 { return uj_fail(13); }
-            int u = 0;
+            i64 u = 0;
             bool have = false;
             while u < uj_nwk { if uj_wkey[u] == ky { have = true; } u += 1; }
             if !have { if uj_nwk >= 8 { return uj_fail(14); } uj_wkey[uj_nwk] = ky; uj_nwk += 1; }
         } else if op == IR_LOAD && ir_a[x] != 29 && ir_k[x] == 16 && ir_w[x] == 8 && uj_hdr(p, ir_a[x]) >= 0 {
             // the data pointer of an array: it reads the header, which nothing in the loop writes
         } else if op == IR_LOAD && ir_a[x] != 29 {
-            int ky2 = uj_key(p);
+            i64 ky2 = uj_key(p);
             if ky2 < 0 { return uj_fail(15); }
-            int u2 = 0;
+            i64 u2 = 0;
             bool have2 = false;
             while u2 < uj_nrk { if uj_rkey[u2] == ky2 { have2 = true; } u2 += 1; }
             if !have2 { if uj_nrk >= 8 { return uj_fail(16); } uj_rkey[uj_nrk] = ky2; uj_nrk += 1; }
@@ -7401,13 +7401,13 @@ bool uj_scan(int qo, int qi) {
         p += 1;
     }
     // a cell that is read before it is stored in the turn (and stored somewhere in the loop) goes from one turn to the next
-    int w = 0;
+    i64 w = 0;
     while w < uj_nw {
         if uj_wseen[w] == 2 {
             // read first: allowed only when nothing stores it
-            int p2 = 0;
+            i64 p2 = 0;
             while p2 < uj_nf {
-                int x2 = uj_f[p2];
+                i64 x2 = uj_f[p2];
                 if ir_op[x2] == IR_STORE && ir_a[x2] == 30 && ir_k[x2] == uj_wo[w] { return uj_fail(18); }
                 p2 += 1;
             }
@@ -7415,14 +7415,14 @@ bool uj_scan(int qo, int qi) {
         w += 1;
     }
     // the cells that are only read keep their place; the ones that are stored get new cells
-    int base = op_maxq();
-    int nn = 0;
+    i64 base = op_maxq();
+    i64 nn = 0;
     w = 0;
     while w < uj_nw {
         bool stored = false;
-        int p3 = 0;
+        i64 p3 = 0;
         while p3 < uj_nf {
-            int x3 = uj_f[p3];
+            i64 x3 = uj_f[p3];
             if ir_op[x3] == IR_STORE && ir_a[x3] == 30 && ir_k[x3] == uj_wo[w] { stored = true; }
             p3 += 1;
         }
@@ -7431,20 +7431,20 @@ bool uj_scan(int qo, int qi) {
         w += 1;
     }
     // the arrays that are written are not read by the loop (the same cell would be the same array)
-    int a1 = 0;
+    i64 a1 = 0;
     while a1 < uj_nwk {
-        int a2 = 0;
+        i64 a2 = 0;
         while a2 < uj_nrk { if uj_wkey[a1] == uj_rkey[a2] { return uj_fail(19); } a2 += 1; }
         // the cell with the array must not be written by the loop
-        int cellb = uj_wkey[a1] / 1000000;
-        int cello = uj_wkey[a1] % 1000000 - 500000;
+        i64 cellb = uj_wkey[a1] / 1000000;
+        i64 cello = uj_wkey[a1] % 1000000 - 500000;
         if cellb == 30 && uj_stored(cello) { return uj_fail(20); }
         a1 += 1;
     }
-    int a3 = 0;
+    i64 a3 = 0;
     while a3 < uj_nrk {
-        int cb = uj_rkey[a3] / 1000000;
-        int co = uj_rkey[a3] % 1000000 - 500000;
+        i64 cb = uj_rkey[a3] / 1000000;
+        i64 co = uj_rkey[a3] % 1000000 - 500000;
         if cb == 30 && uj_stored(co) { return uj_fail(21); }
         a3 += 1;
     }
@@ -7453,18 +7453,18 @@ bool uj_scan(int qo, int qi) {
 
 // the block b copied as a new block (mode 1: the turn j, new cells; mode 2: the turn j + 1, the cells of the loop); the step of j is left out,
 // the step of k only when keepk is false
-int uj_copy_block(int b, int mode, bool keepk) {
-    int nb = ir_new_block(0 - 1);
+i64 uj_copy_block(i64 b, i64 mode, bool keepk) {
+    i64 nb = ir_new_block(0 - 1);
     ir_set_block(nb);
-    int j = ir_bs[b];
+    i64 j = ir_bs[b];
     while j < ir_be[b] {
-        int op = ir_op[j];
+        i64 op = ir_op[j];
         if op == IR_NOP { j += 1; continue; }
         if (op == IR_LOAD || op == IR_STORE) && ir_a[j] == 30 {
-            int off = ir_k[j];
+            i64 off = ir_k[j];
             if off == uj_jo {
                 if op == IR_STORE { j += 1; continue; }
-                int e = ir_add(op, ir_d[j], ir_a[j], ir_b[j], ir_bi[j], off);
+                i64 e = ir_add(op, ir_d[j], ir_a[j], ir_b[j], ir_bi[j], off);
                 ir_w[e] = ir_w[j];
                 if mode == 2 { ir_add(IR_ADD, ir_d[j], ir_d[j], 1, 1, 0); }
                 j += 1;
@@ -7472,15 +7472,15 @@ int uj_copy_block(int b, int mode, bool keepk) {
             }
             if off == uj_ko && op == IR_STORE && !keepk { j += 1; continue; }
             if mode == 1 {
-                int wi = uj_wfind(off);
+                i64 wi = uj_wfind(off);
                 if wi >= 0 { off = uj_wt[wi]; }
             }
-            int e2 = ir_add(op, ir_d[j], ir_a[j], ir_b[j], ir_bi[j], off);
+            i64 e2 = ir_add(op, ir_d[j], ir_a[j], ir_b[j], ir_bi[j], off);
             ir_w[e2] = ir_w[j];
             j += 1;
             continue;
         }
-        int e3 = ir_add(op, ir_d[j], ir_a[j], ir_b[j], ir_bi[j], ir_k[j]);
+        i64 e3 = ir_add(op, ir_d[j], ir_a[j], ir_b[j], ir_bi[j], ir_k[j]);
         ir_w[e3] = ir_w[j];
         ir_t1[e3] = ir_t1[j];
         ir_t2[e3] = ir_t2[j];
@@ -7490,16 +7490,16 @@ int uj_copy_block(int b, int mode, bool keepk) {
 }
 
 // a chain copied; the targets inside the chain are changed to the copies
-void uj_copy_chain(int^ list, int n, int^ map, int mode, bool keepk) {
-    int first = ir_nb;
-    int c = 0;
+void uj_copy_chain(i64^ list, i64 n, i64^ map, i64 mode, bool keepk) {
+    i64 first = ir_nb;
+    i64 c = 0;
     while c < n {
         map[list[c]] = uj_copy_block(list[c], mode, keepk);
         c += 1;
     }
-    int nbk = first;
+    i64 nbk = first;
     while nbk < ir_nb {
-        int tt = ir_be[nbk] - 1;
+        i64 tt = ir_be[nbk] - 1;
         if ir_op[tt] == IR_JMP || ir_op[tt] == IR_BR {
             if ir_t1[tt] >= 0 && ir_t1[tt] < RN_MAXB && map[ir_t1[tt]] >= 0 { ir_t1[tt] = map[ir_t1[tt]]; }
             if ir_op[tt] == IR_BR && ir_t2[tt] >= 0 && ir_t2[tt] < RN_MAXB && map[ir_t2[tt]] >= 0 { ir_t2[tt] = map[ir_t2[tt]]; }
@@ -7508,25 +7508,25 @@ void uj_copy_chain(int^ list, int n, int^ map, int mode, bool keepk) {
     }
 }
 
-bool uj_make(int qo, int qi) {
-    int ho = cl_head[qo];
-    int hi = cl_head[qi];
-    int lo = 0;
+bool uj_make(i64 qo, i64 qi) {
+    i64 ho = cl_head[qo];
+    i64 hi = cl_head[qi];
+    i64 lo = 0;
     while lo < op_nloops && op_lh[lo] != ho { lo += 1; }
     if lo >= op_nloops { return uj_fail(30); }
     op_mark_loop(lo);
-    int stamp = op_stamp;
+    i64 stamp = op_stamp;
     if op_mark[hi] != stamp { return uj_fail(31); }
     uj_npre = uj_walk(cl_body[qo], hi, stamp, @uj_pre);
     uj_ninn = uj_walk(cl_body[qi], hi, stamp, @uj_inn);
     uj_npost = uj_walk(cl_exit[qi], ho, stamp, @uj_post);
     if uj_npre < 1 || uj_ninn < 1 || uj_npost < 1 { return uj_fail(32); }
     // every block of the loop is in a part (or the header, or a block that reports a null)
-    int b = 0;
+    i64 b = 0;
     while b < ir_nb {
         if op_po[b] >= 0 && op_mark[b] == stamp && b != ho && b != hi {
             bool inpart = false;
-            int c = 0;
+            i64 c = 0;
             while c < uj_npre { if uj_pre[c] == b { inpart = true; } c += 1; }
             c = 0;
             while c < uj_ninn { if uj_inn[c] == b { inpart = true; } c += 1; }
@@ -7542,10 +7542,10 @@ bool uj_make(int qo, int qi) {
     uj_ko = vz_slot_off(cl_slot[qi]);
     // nothing is live in a register where a part starts
     // (v2 .. v8 look live in every block that can reach a null report: the call of __panic reads all the argument registers)
-    int m28 = (1 << 28) - 2 - 508;          // x1 .. x27 without x2 .. x8; x28 holds the base of the globals and is live everywhere
+    i64 m28 = (1 << 28) - 2 - 508;          // x1 .. x27 without x2 .. x8; x28 holds the base of the globals and is live everywhere
     if (op_li[uj_pre[0]] & m28) != 0 {
-        int lm = op_li[uj_pre[0]] & m28;
-        int lb = 0;
+        i64 lm = op_li[uj_pre[0]] & m28;
+        i64 lb = 0;
         while ((lm >> lb) & 1) == 0 { lb += 1; }
         return uj_fail(3500 + lb);              // 3500 + the number of the first register that is live
     }
@@ -7557,13 +7557,13 @@ bool uj_make(int qo, int qi) {
     // the start of I is a number; the bound of I and of O are not written by the loop
     {
         bool kinit = false;
-        int c2 = 0;
+        i64 c2 = 0;
         while c2 < uj_npre {
-            int bb = uj_pre[c2];
-            int jj = ir_bs[bb];
+            i64 bb = uj_pre[c2];
+            i64 jj = ir_bs[bb];
             while jj < ir_be[bb] {
                 if ir_op[jj] == IR_STORE && ir_a[jj] == 30 && ir_k[jj] == uj_ko {
-                    int dd = rn_find_def(bb, jj, ir_b[jj]);
+                    i64 dd = rn_find_def(bb, jj, ir_b[jj]);
                     if dd < 0 || ir_op[dd] != IR_CONST { return uj_fail(36); }
                     kinit = true;
                 }
@@ -7575,19 +7575,19 @@ bool uj_make(int qo, int qi) {
         if cl_bkind[qi] == 1 {
             // the bound of I is a cell. The loop may set it at the start of every turn (the copy of n that `for k in 0..n` makes), but only
             // in PRE and only from a number or a cell that the loop does not write: then it does not depend on j
-            int bo = vz_slot_off(cl_bval[qi]);
+            i64 bo = vz_slot_off(cl_bval[qi]);
             if bo == uj_jo { return uj_fail(38); }
-            int p4 = 0;
+            i64 p4 = 0;
             while p4 < uj_nf {
-                int x4 = uj_f[p4];
+                i64 x4 = uj_f[p4];
                 if ir_op[x4] == IR_STORE && ir_a[x4] == 30 && ir_k[x4] == bo {
                     if uj_fs[p4] != 0 { return uj_fail(39); }
-                    int dv = uj_def(p4, ir_b[x4]);
+                    i64 dv = uj_def(p4, ir_b[x4]);
                     if dv < 0 { return uj_fail(40); }
-                    int xv = uj_f[dv];
+                    i64 xv = uj_f[dv];
                     if ir_op[xv] == IR_CONST { }
                     else if ir_op[xv] == IR_LOAD && ir_a[xv] == 30 && ir_w[xv] == 8 && ir_k[xv] != uj_jo && ir_k[xv] != uj_ko {
-                        int wv = uj_wfind(ir_k[xv]);
+                        i64 wv = uj_wfind(ir_k[xv]);
                         if wv >= 0 && uj_wt[wv] != ir_k[xv] { return uj_fail(41); }
                     } else { return uj_fail(42); }
                 }
@@ -7596,28 +7596,28 @@ bool uj_make(int qo, int qi) {
         }
     }
     // ---- build
-    int nb0 = ir_nb;
+    i64 nb0 = ir_nb;
     {
-        int u = 0;
+        i64 u = 0;
         while u < RN_MAXB { uj_m1[u] = 0 - 1; uj_m2[u] = 0 - 1; u += 1; }
     }
     // G: one block for each pair (array written, array read)
-    int gfirst = 0 - 1;
-    int prevbr = 0 - 1;
-    int pa = 0;
+    i64 gfirst = 0 - 1;
+    i64 prevbr = 0 - 1;
+    i64 pa = 0;
     while pa < uj_nwk {
-        int pb = 0;
+        i64 pb = 0;
         while pb < uj_nrk {
             if uj_wkey[pa] >= 2000000000 || uj_rkey[pb] >= 2000000000 { pb += 1; continue; }       // a global array has no cell with its pointer: its key tells it from the others
-            int gb = ir_new_block(0 - 1);
+            i64 gb = ir_new_block(0 - 1);
             ir_set_block(gb);
             if gfirst < 0 { gfirst = gb; }
             if prevbr >= 0 { ir_t2[prevbr] = gb; }
-            int ta = ir_vreg(0);
-            int tb = ir_vreg(0);
-            int la = ir_add(IR_LOAD, ta, uj_wkey[pa] / 1000000, 0, 0, uj_wkey[pa] % 1000000 - 500000);
+            i64 ta = ir_vreg(0);
+            i64 tb = ir_vreg(0);
+            i64 la = ir_add(IR_LOAD, ta, uj_wkey[pa] / 1000000, 0, 0, uj_wkey[pa] % 1000000 - 500000);
             ir_w[la] = 8;
-            int lb = ir_add(IR_LOAD, tb, uj_rkey[pb] / 1000000, 0, 0, uj_rkey[pb] % 1000000 - 500000);
+            i64 lb = ir_add(IR_LOAD, tb, uj_rkey[pb] / 1000000, 0, 0, uj_rkey[pb] % 1000000 - 500000);
             ir_w[lb] = 8;
             prevbr = ir_add(IR_BR, 0, ta, tb, 0, IR_EQ);
             ir_t1[prevbr] = ho;
@@ -7626,64 +7626,64 @@ bool uj_make(int qo, int qi) {
         pa += 1;
     }
     // H2: j + 1 < n
-    int h2 = ir_new_block(0 - 1);
+    i64 h2 = ir_new_block(0 - 1);
     ir_set_block(h2);
     if gfirst < 0 { gfirst = h2; }
     if prevbr >= 0 { ir_t2[prevbr] = h2; }
-    int tj = ir_vreg(0);
-    int tj1 = ir_vreg(0);
-    int lj = ir_add(IR_LOAD, tj, 30, 0, 0, uj_jo);
+    i64 tj = ir_vreg(0);
+    i64 tj1 = ir_vreg(0);
+    i64 lj = ir_add(IR_LOAD, tj, 30, 0, 0, uj_jo);
     ir_w[lj] = 8;
     ir_add(IR_ADD, tj1, tj, 1, 1, 0);
-    int brh2 = 0 - 1;
+    i64 brh2 = 0 - 1;
     if cl_bkind[qo] == 0 {
         brh2 = ir_add(IR_BR, 0, tj1, cl_bval[qo], 1, cl_cc[qo]);
     } else {
-        int tn = ir_vreg(0);
-        int ln = ir_add(IR_LOAD, tn, 30, 0, 0, vz_slot_off(cl_bval[qo]));
+        i64 tn = ir_vreg(0);
+        i64 ln = ir_add(IR_LOAD, tn, 30, 0, 0, vz_slot_off(cl_bval[qo]));
         ir_w[ln] = 8;
         brh2 = ir_add(IR_BR, 0, tj1, tn, 0, cl_cc[qo]);
     }
     ir_t2[brh2] = ho;
     // PRE (two copies), H3, I (two copies), POST (two copies), the step
     uj_copy_chain(@uj_pre, uj_npre, @uj_m1, 1, true);
-    int pre1 = uj_m1[uj_pre[0]];
-    int pre1_last = uj_m1[uj_pre[uj_npre - 1]];
+    i64 pre1 = uj_m1[uj_pre[0]];
+    i64 pre1_last = uj_m1[uj_pre[uj_npre - 1]];
     uj_copy_chain(@uj_pre, uj_npre, @uj_m2, 2, true);
-    int pre2 = uj_m2[uj_pre[0]];
-    int pre2_last = uj_m2[uj_pre[uj_npre - 1]];
+    i64 pre2 = uj_m2[uj_pre[0]];
+    i64 pre2_last = uj_m2[uj_pre[uj_npre - 1]];
     // H3: the header of I (the loads and the branch)
-    int h3 = uj_copy_block(hi, 2, true);
+    i64 h3 = uj_copy_block(hi, 2, true);
     uj_copy_chain(@uj_inn, uj_ninn, @uj_m1, 1, false);
-    int in1 = uj_m1[uj_inn[0]];
-    int in1_last = uj_m1[uj_inn[uj_ninn - 1]];
+    i64 in1 = uj_m1[uj_inn[0]];
+    i64 in1_last = uj_m1[uj_inn[uj_ninn - 1]];
     uj_copy_chain(@uj_inn, uj_ninn, @uj_m2, 2, true);
-    int in2 = uj_m2[uj_inn[0]];
-    int in2_last = uj_m2[uj_inn[uj_ninn - 1]];
+    i64 in2 = uj_m2[uj_inn[0]];
+    i64 in2_last = uj_m2[uj_inn[uj_ninn - 1]];
     uj_copy_chain(@uj_post, uj_npost, @uj_m1, 1, true);
-    int po1 = uj_m1[uj_post[0]];
-    int po1_last = uj_m1[uj_post[uj_npost - 1]];
+    i64 po1 = uj_m1[uj_post[0]];
+    i64 po1_last = uj_m1[uj_post[uj_npost - 1]];
     uj_copy_chain(@uj_post, uj_npost, @uj_m2, 2, true);
-    int po2 = uj_m2[uj_post[0]];
-    int po2_last = uj_m2[uj_post[uj_npost - 1]];
+    i64 po2 = uj_m2[uj_post[0]];
+    i64 po2_last = uj_m2[uj_post[uj_npost - 1]];
     // the step: j = j + 2
-    int st = ir_new_block(0 - 1);
+    i64 st = ir_new_block(0 - 1);
     ir_set_block(st);
-    int sj = ir_vreg(0);
-    int sj2 = ir_vreg(0);
-    int slj = ir_add(IR_LOAD, sj, 30, 0, 0, uj_jo);
+    i64 sj = ir_vreg(0);
+    i64 sj2 = ir_vreg(0);
+    i64 slj = ir_add(IR_LOAD, sj, 30, 0, 0, uj_jo);
     ir_w[slj] = 8;
     ir_add(IR_ADD, sj2, sj, 2, 1, 0);
-    int ssj = ir_add(IR_STORE, 0, 30, sj2, 0, uj_jo);
+    i64 ssj = ir_add(IR_STORE, 0, 30, sj2, 0, uj_jo);
     ir_w[ssj] = 8;
-    int jst = ir_add(IR_JMP, 0, 0, 0, 0, 0);
+    i64 jst = ir_add(IR_JMP, 0, 0, 0, 0, 0);
     ir_t1[jst] = h2;
     // the wiring
     ir_t1[brh2] = pre1;
     ir_t1[ir_be[pre1_last] - 1] = pre2;
     ir_t1[ir_be[pre2_last] - 1] = h3;
     {
-        int th = ir_be[h3] - 1;
+        i64 th = ir_be[h3] - 1;
         // the branch of H3: the body of I goes to the first copy, the exit to POST
         if ir_t1[th] == cl_body[qi] { ir_t1[th] = in1; ir_t2[th] = po1; }
         else { ir_t2[th] = in1; ir_t1[th] = po1; }
@@ -7694,11 +7694,11 @@ bool uj_make(int qo, int qi) {
     ir_t1[ir_be[po2_last] - 1] = st;
     // the jumps into the header from outside the loop go to G
     op_mark_loop(lo);
-    int bb2 = 0;
+    i64 bb2 = 0;
     while bb2 < nb0 {
         if op_mark[bb2] != op_stamp && op_po[bb2] >= 0 {
-            int tb2 = ir_be[bb2] - 1;
-            int top = ir_op[tb2];
+            i64 tb2 = ir_be[bb2] - 1;
+            i64 top = ir_op[tb2];
             if (top == IR_JMP || top == IR_BR || top == IR_FBR) && ir_t1[tb2] == ho { ir_t1[tb2] = gfirst; }
             if (top == IR_BR || top == IR_FBR) && ir_t2[tb2] == ho { ir_t2[tb2] = gfirst; }
         }
@@ -7712,32 +7712,32 @@ bool uj_make(int qo, int qi) {
 
 void uj_run() {
     uj_ndone = 0;
-    int rounds = 0;
+    i64 rounds = 0;
     while rounds < 4 {
         rounds += 1;
         op_counted_loops();
         if cl_n < 2 { return; }
         op_liveness();
         bool fired = false;
-        int q = 0;
+        i64 q = 0;
         while q < cl_n && !fired {
             bool done = false;
-            int d = 0;
+            i64 d = 0;
             while d < uj_ndone { if uj_done[d] == cl_head[q] { done = true; } d += 1; }
             if !done && cl_inner[q] == 0 && cl_step[q] == 1 && (cl_cc[q] == IR_LT || cl_cc[q] == IR_ULT) {
-                int lo = 0;
+                i64 lo = 0;
                 while lo < op_nloops && op_lh[lo] != cl_head[q] { lo += 1; }
                 if lo < op_nloops {
                     op_mark_loop(lo);
-                    int st = op_stamp;
-                    int ninner = 0;
-                    int qi = 0 - 1;
-                    int c = 0;
+                    i64 st = op_stamp;
+                    i64 ninner = 0;
+                    i64 qi = 0 - 1;
+                    i64 c = 0;
                     while c < op_nloops {
                         if op_lh[c] != cl_head[q] && op_mark[op_lh[c]] == st { ninner += 1; }
                         c += 1;
                     }
-                    int r = 0;
+                    i64 r = 0;
                     while r < cl_n {
                         if r != q && op_mark[cl_head[r]] == st && cl_inner[r] == 1 && cl_step[r] == 1 && (cl_cc[r] == IR_LT || cl_cc[r] == IR_ULT) { qi = r; }
                         r += 1;
@@ -7761,9 +7761,9 @@ void op_vectorize() {
     if (ir_opt & 4194304) != 0 { write_err("op_vectorize in "); write_err(@ir_fname); write_err(" counted loops "); write_err_int(cl_n); write_err("\n"); }
     if cl_n == 0 { return; }
     if (ir_opt & 8388608) != 0 { ir_print(); syscall(64, 2, @ir_pbuf, ir_plen); }
-    int nl = cl_n;
-    int heads[CL_MAX];
-    int q = 0;
+    i64 nl = cl_n;
+    i64 heads[CL_MAX];
+    i64 q = 0;
     while q < nl { heads[q] = cl_head[q]; q += 1; }
     q = 0;
     while q < nl {
@@ -7771,7 +7771,7 @@ void op_vectorize() {
         bool fine = cl_inner[q] == 1 && cl_calls[q] == 0 && cl_step[q] == 1 && (cl_cc[q] == IR_LT || cl_cc[q] == IR_ULT);
         if (ir_opt & 4194304) != 0 { write_err("loop in "); write_err(@ir_fname); write_err(": inner "); write_err_int(cl_inner[q]); write_err(" calls "); write_err_int(cl_calls[q]); write_err(" step "); write_err_int(cl_step[q]); write_err(" cc "); write_err_int(cl_cc[q]); write_err("\n"); }
         if fine {
-            int l = 0;
+            i64 l = 0;
             while l < op_nloops && op_lh[l] != heads[q] { l += 1; }
             if l < op_nloops {
                 vz_tried += 1;
@@ -7792,61 +7792,61 @@ void op_vectorize() {
 
 #define SS_MAXK 24
 #define SS_MAXP 64
-int ss_kf[SS_MAXK];              // the scale
-int ss_kbase[SS_MAXK];           // 29 the global area, 30 the frame, 1000 + k: the plain slot at the frame offset k (a pointer)
-int ss_koff[SS_MAXK];
-int ss_kcell[SS_MAXK];
-int ss_nk;
+i64 ss_kf[SS_MAXK];              // the scale
+i64 ss_kbase[SS_MAXK];           // 29 the global area, 30 the frame, 1000 + k: the plain slot at the frame offset k (a pointer)
+i64 ss_koff[SS_MAXK];
+i64 ss_kcell[SS_MAXK];
+i64 ss_nk;
 // affine keys (kind 6): the address is  stride * i + sum(coef * [slot]) + off,  the stride a number (ss_kac) or a number times a plain slot
-int ss_kk[SS_MAXK];              // 0 the old keys (f, base, off), 6 an affine key
-int ss_khas[SS_MAXK];            // 1: the stride is ss_kac * [slot ss_kas]
-int ss_kas[SS_MAXK];
-int ss_kac[SS_MAXK];
-int ss_kn[SS_MAXK];
-int ss_kt[72];
-int ss_kc[72];
-int ss_kcell2[SS_MAXK];          // the step of the pointer when the stride is a slot
+i64 ss_kk[SS_MAXK];              // 0 the old keys (f, base, off), 6 an affine key
+i64 ss_khas[SS_MAXK];            // 1: the stride is ss_kac * [slot ss_kas]
+i64 ss_kas[SS_MAXK];
+i64 ss_kac[SS_MAXK];
+i64 ss_kn[SS_MAXK];
+i64 ss_kt[72];
+i64 ss_kc[72];
+i64 ss_kcell2[SS_MAXK];          // the step of the pointer when the stride is a slot
 // the affine values of the vregs of the block being scanned: entries 0, 1 and 2 are temporaries
 #define SS_MAXA 512
-int ssa_has[SS_MAXA];
-int ssa_as[SS_MAXA];
-int ssa_ac[SS_MAXA];
-int ssa_n[SS_MAXA];
-int ssa_t[1536];
-int ssa_c[1536];
-int ssa_off[SS_MAXA];
-int ssa_np;
-int ss_wo[256];                  // the frame cells (below the slots) that the loop writes
-int ss_nwo;
-int ss_inner;                    // the loop is an innermost loop (the affine forms and the cells are only used there)
-int ss_noinv;                    // 1: the cells cannot be told to be invariant
-int ss_pj[SS_MAXP];              // the instructions to become `load pointer`, and their keys
-int ss_pk[SS_MAXP];
-int ss_np;
-int ss_kind[IR_MAXV];            // 1 the counter, 2 f * i, 3 a number, 4 an invariant pointer (base + c), 5 base + f * i + c
-int ss_f[IR_MAXV];
-int ss_base[IR_MAXV];
-int ss_off[IR_MAXV];
-int ss_stampv[IR_MAXV];
-int ss_prodv[IR_MAXV];           // kind 5: the instruction that made it (-1: not a producer that is changed)
-int ss_stamp;
-int ss_ce_cell[8];               // cells (frame offsets) that the entry block of the loop fills once with an address `base + f * i + c`
-int ss_ce_f[8];
-int ss_ce_base[8];
-int ss_ce_off[8];
-int ss_nce;
-int ss_chb[16];                  // the blocks that every turn of the loop runs through first, in order (the header jumps into the first; each ends in a
-int ss_chn;                      // test that leaves the loop or a jump): a cell filled in one of them is filled before every later use in the turn
-int ss_lst[16384];               // slots written in the loop
-int ss_total;                    // all functions
-int ss_nb0;                      // the blocks the function had before the loops were changed
+i64 ssa_has[SS_MAXA];
+i64 ssa_as[SS_MAXA];
+i64 ssa_ac[SS_MAXA];
+i64 ssa_n[SS_MAXA];
+i64 ssa_t[1536];
+i64 ssa_c[1536];
+i64 ssa_off[SS_MAXA];
+i64 ssa_np;
+i64 ss_wo[256];                  // the frame cells (below the slots) that the loop writes
+i64 ss_nwo;
+i64 ss_inner;                    // the loop is an innermost loop (the affine forms and the cells are only used there)
+i64 ss_noinv;                    // 1: the cells cannot be told to be invariant
+i64 ss_pj[SS_MAXP];              // the instructions to become `load pointer`, and their keys
+i64 ss_pk[SS_MAXP];
+i64 ss_np;
+i64 ss_kind[IR_MAXV];            // 1 the counter, 2 f * i, 3 a number, 4 an invariant pointer (base + c), 5 base + f * i + c
+i64 ss_f[IR_MAXV];
+i64 ss_base[IR_MAXV];
+i64 ss_off[IR_MAXV];
+i64 ss_stampv[IR_MAXV];
+i64 ss_prodv[IR_MAXV];           // kind 5: the instruction that made it (-1: not a producer that is changed)
+i64 ss_stamp;
+i64 ss_ce_cell[8];               // cells (frame offsets) that the entry block of the loop fills once with an address `base + f * i + c`
+i64 ss_ce_f[8];
+i64 ss_ce_base[8];
+i64 ss_ce_off[8];
+i64 ss_nce;
+i64 ss_chb[16];                  // the blocks that every turn of the loop runs through first, in order (the header jumps into the first; each ends in a
+i64 ss_chn;                      // test that leaves the loop or a jump): a cell filled in one of them is filled before every later use in the turn
+i64 ss_lst[16384];               // slots written in the loop
+i64 ss_total;                    // all functions
+i64 ss_nb0;                      // the blocks the function had before the loops were changed
 
-int ss_get(int v) {
+i64 ss_get(i64 v) {
     if v <= 0 || v >= IR_MAXV || ss_stampv[v] != ss_stamp { return 0; }
     return ss_kind[v];
 }
 
-void ss_set(int v, int kind, int f, int base, int off) {
+void ss_set(i64 v, i64 kind, i64 f, i64 base, i64 off) {
     if v <= 0 || v >= IR_MAXV { return; }
     ss_stampv[v] = ss_stamp;
     ss_kind[v] = kind;
@@ -7856,8 +7856,8 @@ void ss_set(int v, int kind, int f, int base, int off) {
     ss_prodv[v] = 0 - 1;
 }
 
-int ss_key(int f, int base, int off) {
-    int u = 0;
+i64 ss_key(i64 f, i64 base, i64 off) {
+    i64 u = 0;
     while u < ss_nk {
         if ss_kk[u] == 0 && ss_kf[u] == f && ss_kbase[u] == base && ss_koff[u] == off { return u; }
         u += 1;
@@ -7871,13 +7871,13 @@ int ss_key(int f, int base, int off) {
     return ss_nk - 1;
 }
 
-void ss_acopy(int a, int r) {
+void ss_acopy(i64 a, i64 r) {
     ssa_has[r] = ssa_has[a];
     ssa_as[r] = ssa_as[a];
     ssa_ac[r] = ssa_ac[a];
     ssa_n[r] = ssa_n[a];
     ssa_off[r] = ssa_off[a];
-    int t = 0;
+    i64 t = 0;
     while t < 3 {
         ssa_t[r * 3 + t] = ssa_t[a * 3 + t];
         ssa_c[r * 3 + t] = ssa_c[a * 3 + t];
@@ -7886,8 +7886,8 @@ void ss_acopy(int a, int r) {
 }
 
 // the value of a vreg as an affine form in entry e
-bool ss_toaff(int v, int e) {
-    int k = ss_get(v);
+bool ss_toaff(i64 v, i64 e) {
+    i64 k = ss_get(v);
     ssa_has[e] = 0;
     ssa_as[e] = 0;
     ssa_ac[e] = 0;
@@ -7913,8 +7913,8 @@ bool ss_toaff(int v, int e) {
     return false;
 }
 
-bool ss_aadd(int a, int b) {
-    int r = 2;
+bool ss_aadd(i64 a, i64 b) {
+    i64 r = 2;
     if ssa_has[a] != 0 && ssa_has[b] != 0 {
         if ssa_as[a] != ssa_as[b] { return false; }
         ssa_has[r] = 1;
@@ -7936,16 +7936,16 @@ bool ss_aadd(int a, int b) {
         ssa_ac[r] = ssa_ac[a] + ssa_ac[b];
     }
     ssa_off[r] = ssa_off[a] + ssa_off[b];
-    int n = 0;
+    i64 n = 0;
     while n < ssa_n[a] {
         ssa_t[r * 3 + n] = ssa_t[a * 3 + n];
         ssa_c[r * 3 + n] = ssa_c[a * 3 + n];
         n += 1;
     }
-    int u = 0;
+    i64 u = 0;
     while u < ssa_n[b] {
-        int f = 0;
-        int w = 0;
+        i64 f = 0;
+        i64 w = 0;
         while w < n {
             if ssa_t[r * 3 + w] == ssa_t[b * 3 + u] { ssa_c[r * 3 + w] += ssa_c[b * 3 + u]; f = 1; }
             w += 1;
@@ -7962,19 +7962,19 @@ bool ss_aadd(int a, int b) {
     return true;
 }
 
-bool ss_abig(int x) {
+bool ss_abig(i64 x) {
     return x > 1073741824 || x < 0 - 1073741824;
 }
 
 // entry e times a number, into entry 2
-bool ss_ascale(int e, int m) {
+bool ss_ascale(i64 e, i64 m) {
     if m > 4096 || m < 0 - 4096 { return false; }
-    int r = 2;
+    i64 r = 2;
     ss_acopy(e, r);
     ssa_ac[r] = ssa_ac[e] * m;
     ssa_off[r] = ssa_off[e] * m;
     bool bad = ss_abig(ssa_ac[r]) || ss_abig(ssa_off[r]);
-    int t = 0;
+    i64 t = 0;
     while t < ssa_n[e] {
         ssa_c[r * 3 + t] = ssa_c[e * 3 + t] * m;
         if ss_abig(ssa_c[r * 3 + t]) { bad = true; }
@@ -7984,10 +7984,10 @@ bool ss_ascale(int e, int m) {
 }
 
 // (a number times the counter) times a plain slot, into entry 2
-bool ss_amulvar(int a, int b) {
+bool ss_amulvar(i64 a, i64 b) {
     if ssa_has[a] != 0 || ssa_ac[a] == 0 || ssa_n[a] != 0 || ssa_off[a] != 0 { return false; }
     if ssa_has[b] != 0 || ssa_ac[b] != 0 || ssa_n[b] != 1 || ssa_off[b] != 0 { return false; }
-    int c = ssa_ac[a] * ssa_c[b * 3];
+    i64 c = ssa_ac[a] * ssa_c[b * 3];
     if ss_abig(c) { return false; }
     ssa_has[2] = 1;
     ssa_as[2] = ssa_t[b * 3];
@@ -7998,9 +7998,9 @@ bool ss_amulvar(int a, int b) {
 }
 
 // the frame cell at a negative offset is the same at every turn
-bool ss_cellinv(int off) {
+bool ss_cellinv(i64 off) {
     if ss_noinv != 0 { return false; }
-    int i = 0;
+    i64 i = 0;
     while i < ss_nwo {
         if ss_wo[i] < off + 8 && off < ss_wo[i] + 16 { return false; }
         i += 1;
@@ -8009,9 +8009,9 @@ bool ss_cellinv(int off) {
 }
 
 // how many stores of the loop touch the cell off (the same test as ss_cellinv)
-int ss_cellwrites(int off) {
-    int n = 0;
-    int i = 0;
+i64 ss_cellwrites(i64 off) {
+    i64 n = 0;
+    i64 i = 0;
     while i < ss_nwo {
         if ss_wo[i] < off + 8 && off < ss_wo[i] + 16 { n += 1; }
         i += 1;
@@ -8019,8 +8019,8 @@ int ss_cellwrites(int off) {
     return n;
 }
 
-bool ss_inchain(int b) {
-    int i = 0;
+bool ss_inchain(i64 b) {
+    i64 i = 0;
     while i < ss_chn {
         if ss_chb[i] == b { return true; }
         i += 1;
@@ -8028,8 +8028,8 @@ bool ss_inchain(int b) {
     return false;
 }
 
-int ss_cefind(int off) {
-    int i = 0;
+i64 ss_cefind(i64 off) {
+    i64 i = 0;
     while i < ss_nce {
         if ss_ce_cell[i] == off { return i; }
         i += 1;
@@ -8037,12 +8037,12 @@ int ss_cefind(int off) {
     return 0 - 1;
 }
 
-int ss_key6(int e) {
-    int u = 0;
+i64 ss_key6(i64 e) {
+    i64 u = 0;
     while u < ss_nk {
         if ss_kk[u] == 6 && ss_khas[u] == ssa_has[e] && ss_kas[u] == ssa_as[e] && ss_kac[u] == ssa_ac[e] && ss_kn[u] == ssa_n[e] && ss_koff[u] == ssa_off[e] {
             bool same = true;
-            int t = 0;
+            i64 t = 0;
             while t < ssa_n[e] {
                 if ss_kt[u * 3 + t] != ssa_t[e * 3 + t] || ss_kc[u * 3 + t] != ssa_c[e * 3 + t] { same = false; }
                 t += 1;
@@ -8061,7 +8061,7 @@ int ss_key6(int e) {
     ss_kn[u] = ssa_n[e];
     ss_koff[u] = ssa_off[e];
     ss_kbase[u] = 0;
-    int t2 = 0;
+    i64 t2 = 0;
     while t2 < ssa_n[e] {
         ss_kt[u * 3 + t2] = ssa_t[e * 3 + t2];
         ss_kc[u * 3 + t2] = ssa_c[e * 3 + t2];
@@ -8072,37 +8072,37 @@ int ss_key6(int e) {
 }
 
 // a vreg that holds c * reg
-int ss_mulc(int reg, int c) {
+i64 ss_mulc(i64 reg, i64 c) {
     if c == 1 { return reg; }
-    int m = ir_vreg(0);
+    i64 m = ir_vreg(0);
     if c > 0 && (c & (c - 1)) == 0 {
-        int sh = 0;
+        i64 sh = 0;
         while (1 << sh) != c { sh += 1; }
         ir_add(IR_SHL, m, reg, sh, 1, 0);
     } else {
-        int cf = ir_vreg(0);
+        i64 cf = ir_vreg(0);
         ir_add(IR_CONST, cf, 0, 0, 0, c);
         ir_add(IR_MUL, m, reg, cf, 0, 0);
     }
     return m;
 }
 
-int ss_term(int slot, int c) {
-    int t = ir_vreg(0);
-    int l = ir_add(IR_LOAD, t, 30, 0, 0, 0);
+i64 ss_term(i64 slot, i64 c) {
+    i64 t = ir_vreg(0);
+    i64 l = ir_add(IR_LOAD, t, 30, 0, 0, 0);
     ir_w[l] = 8;
     ir_k[l] = slot;
     return ss_mulc(t, c);
 }
 
 // scan one block of the loop; the producers that an access uses are collected
-void ss_block(int b, int islot) {
+void ss_block(i64 b, i64 islot) {
     ss_stamp += 1;
     ssa_np = 3;
-    int j = ir_bs[b];
+    i64 j = ir_bs[b];
     while j < ir_be[b] - 1 {
-        int op = ir_op[j];
-        int d = ir_d[j];
+        i64 op = ir_op[j];
+        i64 d = ir_d[j];
         if op == IR_NOP { j += 1; continue; }
         if op == IR_CALL || op == IR_CALLIND || op == IR_SYSCALL {
             ss_stamp += 1;
@@ -8112,7 +8112,7 @@ void ss_block(int b, int islot) {
         // the entry block of the loop keeps an address in a frame cell (value numbering shares it with the other blocks): the loads of the
         // cell in the blocks after it are the same address (-irdbg 1152921504606846976 switches this off)
         if op == IR_STORE && ir_a[j] == 30 && ir_k[j] < 0 && ir_w[j] == 8 && ir_bi[j] == 0 && ss_inchain(b) && ss_inner == 1 && ss_noinv == 0 && ss_nce < 8 && (ir_opt & 1152921504606846976) == 0 {
-            int sv = ir_b[j];
+            i64 sv = ir_b[j];
             if ss_get(sv) == 5 && ss_prodv[sv] >= 0 && ss_cellwrites(ir_k[j]) == 1 && ss_cefind(ir_k[j]) < 0 {
                 ss_ce_cell[ss_nce] = ir_k[j];
                 ss_ce_f[ss_nce] = ss_f[sv];
@@ -8123,12 +8123,12 @@ void ss_block(int b, int islot) {
         }
         // a use of a changed address: the instruction that made it needs the pointer
         if (op == IR_LOAD || op == IR_STORE) && ir_a[j] > 0 && (ss_get(ir_a[j]) == 5 || ss_get(ir_a[j]) == 6) && ss_prodv[ir_a[j]] >= 0 && ss_np < SS_MAXP {
-            int pr = ss_prodv[ir_a[j]];
-            int k = 0 - 1;
+            i64 pr = ss_prodv[ir_a[j]];
+            i64 k = 0 - 1;
             if ss_get(ir_a[j]) == 6 { k = ss_key6(ss_f[ir_a[j]]); }
             else { k = ss_key(ss_f[ir_a[j]], ss_base[ir_a[j]], ss_off[ir_a[j]]); }
             bool known = false;
-            int u = 0;
+            i64 u = 0;
             while u < ss_np { if ss_pj[u] == pr { known = true; } u += 1; }
             if k >= 0 && !known {
                 ss_pj[ss_np] = pr;
@@ -8142,18 +8142,18 @@ void ss_block(int b, int islot) {
             j += 1;
             continue;
         }
-        int nk = 0;
-        int nf = 0;
-        int nb = 0;
-        int no = 0;
-        int a = ir_a[j];
-        int ka = ss_get(a);
+        i64 nk = 0;
+        i64 nf = 0;
+        i64 nb = 0;
+        i64 no = 0;
+        i64 a = ir_a[j];
+        i64 ka = ss_get(a);
         if op == IR_LOAD && ir_w[j] == 8 && a == 30 && ir_k[j] < 0 {
-            int ce = ss_cefind(ir_k[j]);
+            i64 ce = ss_cefind(ir_k[j]);
             if ce >= 0 { nk = 5; nf = ss_ce_f[ce]; nb = ss_ce_base[ce]; no = ss_ce_off[ce]; }
             else if ss_inner == 1 && ss_cellinv(ir_k[j]) { nk = 9; no = ir_k[j]; }
         } else if op == IR_LOAD && ir_w[j] == 8 && a == 30 {
-            int sl = vn_slot(j);
+            i64 sl = vn_slot(j);
             if sl == islot { nk = 1; nf = 1; }
             else if sl >= 0 && sl < 8192 && ss_lst[sl] == 0 && op_plain[sl] == 1 { nk = 4; nb = 1000 + sl * 8; }
         } else if op == IR_CONST {
@@ -8164,7 +8164,7 @@ void ss_block(int b, int islot) {
             nk = 2; nf = 1 << ir_b[j];
         } else if op == IR_MUL && ka == 1 {
             // i * number (the number a constant register or an immediate)
-            int mv = 0;
+            i64 mv = 0;
             bool have = false;
             if ir_bi[j] == 1 { mv = ir_b[j]; have = true; }
             else if ss_get(ir_b[j]) == 3 { mv = ss_off[ir_b[j]]; have = true; }
@@ -8172,9 +8172,9 @@ void ss_block(int b, int islot) {
         } else if op == IR_ADD && ir_bi[j] == 1 && (a == 29 || a == 30) {
             nk = 4; nb = a; no = ir_b[j];
         } else if op == IR_ADD {
-            int kb = 0;
-            int bv = 0;
-            int rb = 0;
+            i64 kb = 0;
+            i64 bv = 0;
+            i64 rb = 0;
             if ir_bi[j] == 1 { kb = 3; bv = ir_b[j]; } else { rb = ir_b[j]; kb = ss_get(rb); if kb == 3 { bv = ss_off[rb]; } }
             if ka == 4 && kb == 3 { nk = 4; nb = ss_base[a]; no = ss_off[a] + bv; }
             else if ka == 5 && kb == 3 { nk = 5; nf = ss_f[a]; nb = ss_base[a]; no = ss_off[a] + bv; }
@@ -8184,10 +8184,10 @@ void ss_block(int b, int islot) {
         }
         // the global area and the frame are pointers
         if op == IR_ADD && ir_bi[j] == 0 {
-            int xa = ir_a[j];
-            int xb = ir_b[j];
-            int kxa = ss_get(xa);
-            int kxb = ss_get(xb);
+            i64 xa = ir_a[j];
+            i64 xb = ir_b[j];
+            i64 kxa = ss_get(xa);
+            i64 kxb = ss_get(xb);
             if xa == 29 && kxb == 2 { nk = 5; nf = ss_f[xb]; nb = 29; no = 0; }
             else if xb == 29 && kxa == 2 { nk = 5; nf = ss_f[xa]; nb = 29; no = 0; }
             else if xa == 30 && kxb == 2 { nk = 5; nf = ss_f[xb]; nb = 30; no = 0; }
@@ -8225,41 +8225,41 @@ void ss_block(int b, int islot) {
     }
 }
 
-bool ss_loop(int q) {
-    int h = cl_head[q];
-    int l = cl_lidx[q];
-    int islot = cl_slot[q];
-    int stb = cl_stb[q];
-    int sti = cl_sti[q];
+bool ss_loop(i64 q) {
+    i64 h = cl_head[q];
+    i64 l = cl_lidx[q];
+    i64 islot = cl_slot[q];
+    i64 stb = cl_stb[q];
+    i64 sti = cl_sti[q];
     if cl_step[q] < 1 || cl_step[q] > 64 { return false; }
     // the step of the counter is the last instruction of its block (nops and the jump after it), and the block jumps to the header
-    int t = ir_be[stb] - 1;
+    i64 t = ir_be[stb] - 1;
     if ir_op[t] != IR_JMP || ir_t1[t] != h { return false; }
-    int m = sti + 1;
+    i64 m = sti + 1;
     while m < t {
         if ir_op[m] != IR_NOP { return false; }
         m += 1;
     }
     op_mark_loop(l);
-    int stamp = op_stamp;
+    i64 stamp = op_stamp;
     // the slots that the loop writes
-    int zi = 0;
+    i64 zi = 0;
     while zi < 16384 { ss_lst[zi] = 0; zi += 1; }
     ss_nwo = 0;
     ss_noinv = 0;
     ss_inner = cl_inner[q];
-    int b = 0;
+    i64 b = 0;
     while b < ss_nb0 {
         if op_po[b] >= 0 && op_mark[b] == stamp {
-            int j = ir_bs[b];
+            i64 j = ir_bs[b];
             while j < ir_be[b] {
-                int jo = ir_op[j];
+                i64 jo = ir_op[j];
                 if jo == IR_ATOMIC || jo == IR_RAW || jo == IR_ADDR_SLOT { ss_noinv = 1; }
                 if jo == IR_STORE && ir_a[j] == 30 && ir_k[j] < 0 {
                     if ss_nwo < 256 { ss_wo[ss_nwo] = ir_k[j]; ss_nwo += 1; } else { ss_noinv = 1; }
                 }
                 if ir_op[j] == IR_STORE && ir_a[j] == 30 {
-                    int s2 = vn_slot(j);
+                    i64 s2 = vn_slot(j);
                     if s2 >= 0 && s2 < 16384 { ss_lst[s2] = 1; }
                     else if ir_k[j] >= 0 && ir_k[j] / 8 < 16384 { ss_lst[ir_k[j] / 8] = 1; }
                 }
@@ -8273,15 +8273,15 @@ bool ss_loop(int q) {
     ss_nce = 0;
     ss_chn = 0;
     {
-        int cb = h;
+        i64 cb = h;
         bool go = true;
         while go && ss_chn < 16 {
-            int ht = ir_be[cb] - 1;
-            int nx = 0 - 1;
+            i64 ht = ir_be[cb] - 1;
+            i64 nx = 0 - 1;
             if ir_op[ht] == IR_JMP { nx = ir_t1[ht]; }
             else if ir_op[ht] == IR_BR || ir_op[ht] == IR_FBR {
-                int e1 = ir_t1[ht];
-                int e2 = ir_t2[ht];
+                i64 e1 = ir_t1[ht];
+                i64 e2 = ir_t2[ht];
                 bool in1 = e1 >= 0 && e1 < ss_nb0 && op_po[e1] >= 0 && op_mark[e1] == stamp && e1 != h;
                 bool in2 = e2 >= 0 && e2 < ss_nb0 && op_po[e2] >= 0 && op_mark[e2] == stamp && e2 != h;
                 if in1 && !in2 { nx = e1; }
@@ -8292,9 +8292,9 @@ bool ss_loop(int q) {
         }
     }
     b = 0;
-    int nb0 = ss_nb0;
+    i64 nb0 = ss_nb0;
     {
-        int ci = 0;
+        i64 ci = 0;
         while ci < ss_chn { ss_block(ss_chb[ci], islot); ci += 1; }
     }
     while b < nb0 {
@@ -8303,9 +8303,9 @@ bool ss_loop(int q) {
     }
     // memory cells that move on cost a load and a store for each turn: many pointers with a stride from a slot do not pay (the loop of a
     // matmul that makes two columns at a time is slower), so at most one such key and two affine keys are kept
-    int nv6 = 0;
-    int na6 = 0;
-    int ku = 0;
+    i64 nv6 = 0;
+    i64 na6 = 0;
+    i64 ku = 0;
     while ku < ss_nk {
         if ss_kk[ku] == 6 {
             na6 += 1;
@@ -8314,8 +8314,8 @@ bool ss_loop(int q) {
         ku += 1;
     }
     if nv6 > 1 || na6 > 2 {
-        int wp = 0;
-        int rp = 0;
+        i64 wp = 0;
+        i64 rp = 0;
         while rp < ss_np {
             if ss_kk[ss_pk[rp]] != 6 {
                 ss_pj[wp] = ss_pj[rp];
@@ -8333,8 +8333,8 @@ bool ss_loop(int q) {
     }
     if ss_np == 0 { return false; }
     // cells
-    int cellbase = 0 - (op_maxq() + 8);
-    int u = 0;
+    i64 cellbase = 0 - (op_maxq() + 8);
+    i64 u = 0;
     while u < ss_nk {
         ss_kcell[u] = cellbase - 8 * u;
         ss_kcell2[u] = cellbase - 8 * (ss_nk + u);
@@ -8343,7 +8343,7 @@ bool ss_loop(int q) {
     // the instructions become loads of the pointers
     u = 0;
     while u < ss_np {
-        int pj = ss_pj[u];
+        i64 pj = ss_pj[u];
         ir_op[pj] = IR_LOAD;
         ir_a[pj] = 30;
         ir_b[pj] = 0;
@@ -8353,137 +8353,137 @@ bool ss_loop(int q) {
         u += 1;
     }
     // the block in front of the loop: the pointers from the counter
-    int pre = ir_new_block(0 - 1);
+    i64 pre = ir_new_block(0 - 1);
     ir_set_block(pre);
     u = 0;
     while u < ss_nk {
-        int ti = ir_vreg(0);
-        int li = ir_add(IR_LOAD, ti, 30, 0, 0, 0);
+        i64 ti = ir_vreg(0);
+        i64 li = ir_add(IR_LOAD, ti, 30, 0, 0, 0);
         ir_w[li] = 8;
         ir_k[li] = vz_slot_off(islot);
         if ss_kk[u] == 99 { u += 1; continue; }
         if ss_kk[u] == 6 {
             // every value is used by the next instruction or the one after it (the register pass does not keep a value alive over more),
             // the sum is built in the cell of the pointer
-            int cellp = ss_kcell[u];
+            i64 cellp = ss_kcell[u];
             if ss_khas[u] != 0 {
-                int sv = ss_term(ss_kas[u], ss_kac[u]);
-                int dl = ss_mulc(sv, cl_step[q]);
-                int sd = ir_add(IR_STORE, 0, 30, dl, 0, ss_kcell2[u]);
+                i64 sv = ss_term(ss_kas[u], ss_kac[u]);
+                i64 dl = ss_mulc(sv, cl_step[q]);
+                i64 sd = ir_add(IR_STORE, 0, 30, dl, 0, ss_kcell2[u]);
                 ir_w[sd] = 8;
-                int sv2 = ss_term(ss_kas[u], ss_kac[u]);
-                int ti6 = ir_vreg(0);
-                int li6 = ir_add(IR_LOAD, ti6, 30, 0, 0, 0);
+                i64 sv2 = ss_term(ss_kas[u], ss_kac[u]);
+                i64 ti6 = ir_vreg(0);
+                i64 li6 = ir_add(IR_LOAD, ti6, 30, 0, 0, 0);
                 ir_w[li6] = 8;
                 ir_k[li6] = vz_slot_off(islot);
-                int cv = ir_vreg(0);
+                i64 cv = ir_vreg(0);
                 ir_add(IR_MUL, cv, ti6, sv2, 0, 0);
-                int s6 = ir_add(IR_STORE, 0, 30, cv, 0, cellp);
+                i64 s6 = ir_add(IR_STORE, 0, 30, cv, 0, cellp);
                 ir_w[s6] = 8;
             } else {
-                int ti7 = ir_vreg(0);
-                int li7 = ir_add(IR_LOAD, ti7, 30, 0, 0, 0);
+                i64 ti7 = ir_vreg(0);
+                i64 li7 = ir_add(IR_LOAD, ti7, 30, 0, 0, 0);
                 ir_w[li7] = 8;
                 ir_k[li7] = vz_slot_off(islot);
-                int cv7 = ss_mulc(ti7, ss_kac[u]);
-                int s7 = ir_add(IR_STORE, 0, 30, cv7, 0, cellp);
+                i64 cv7 = ss_mulc(ti7, ss_kac[u]);
+                i64 s7 = ir_add(IR_STORE, 0, 30, cv7, 0, cellp);
                 ir_w[s7] = 8;
             }
-            int w6 = 0;
+            i64 w6 = 0;
             while w6 < ss_kn[u] {
-                int tv = ss_term(ss_kt[u * 3 + w6], ss_kc[u * 3 + w6]);
-                int ov = ir_vreg(0);
-                int lo = ir_add(IR_LOAD, ov, 30, 0, 0, 0);
+                i64 tv = ss_term(ss_kt[u * 3 + w6], ss_kc[u * 3 + w6]);
+                i64 ov = ir_vreg(0);
+                i64 lo = ir_add(IR_LOAD, ov, 30, 0, 0, 0);
                 ir_w[lo] = 8;
                 ir_k[lo] = cellp;
-                int nv = ir_vreg(0);
+                i64 nv = ir_vreg(0);
                 ir_add(IR_ADD, nv, ov, tv, 0, 0);
-                int s8 = ir_add(IR_STORE, 0, 30, nv, 0, cellp);
+                i64 s8 = ir_add(IR_STORE, 0, 30, nv, 0, cellp);
                 ir_w[s8] = 8;
                 w6 += 1;
             }
             if ss_koff[u] != 0 {
-                int ov2 = ir_vreg(0);
-                int lo2 = ir_add(IR_LOAD, ov2, 30, 0, 0, 0);
+                i64 ov2 = ir_vreg(0);
+                i64 lo2 = ir_add(IR_LOAD, ov2, 30, 0, 0, 0);
                 ir_w[lo2] = 8;
                 ir_k[lo2] = cellp;
-                int nv2 = ir_vreg(0);
+                i64 nv2 = ir_vreg(0);
                 ir_add(IR_ADD, nv2, ov2, ss_koff[u], 1, 0);
-                int s9 = ir_add(IR_STORE, 0, 30, nv2, 0, cellp);
+                i64 s9 = ir_add(IR_STORE, 0, 30, nv2, 0, cellp);
                 ir_w[s9] = 8;
             }
             u += 1;
             continue;
         }
-        int cur = ti;
+        i64 cur = ti;
         if ss_kf[u] != 1 {
-            int tm = ir_vreg(0);
+            i64 tm = ir_vreg(0);
             if ss_kf[u] == 2 || ss_kf[u] == 4 || ss_kf[u] == 8 || ss_kf[u] == 16 || ss_kf[u] == 32 || ss_kf[u] == 64 || ss_kf[u] == 128 || ss_kf[u] == 256 || ss_kf[u] == 512 || ss_kf[u] == 1024 || ss_kf[u] == 2048 || ss_kf[u] == 4096 {
-                int sh = 0;
+                i64 sh = 0;
                 while (1 << sh) != ss_kf[u] { sh += 1; }
                 ir_add(IR_SHL, tm, ti, sh, 1, 0);
             } else {
-                int cf = ir_vreg(0);
+                i64 cf = ir_vreg(0);
                 ir_add(IR_CONST, cf, 0, 0, 0, ss_kf[u]);
                 ir_add(IR_MUL, tm, ti, cf, 0, 0);
             }
             cur = tm;
         }
-        int tb = ir_vreg(0);
+        i64 tb = ir_vreg(0);
         if ss_kbase[u] >= 1000 {
             // the pointer in the plain slot at the frame offset kbase - 1000
-            int lb = ir_add(IR_LOAD, tb, 30, 0, 0, 0);
+            i64 lb = ir_add(IR_LOAD, tb, 30, 0, 0, 0);
             ir_w[lb] = 8;
             ir_k[lb] = ss_kbase[u] - 1000;
-            int ta = ir_vreg(0);
+            i64 ta = ir_vreg(0);
             ir_add(IR_ADD, ta, tb, cur, 0, 0);
             cur = ta;
         } else {
-            int ta2 = ir_vreg(0);
+            i64 ta2 = ir_vreg(0);
             ir_add(IR_ADD, ta2, ss_kbase[u], cur, 0, 0);
             cur = ta2;
         }
-        int tc = ir_vreg(0);
+        i64 tc = ir_vreg(0);
         ir_add(IR_ADD, tc, cur, ss_koff[u], 1, 0);
-        int sp = ir_add(IR_STORE, 0, 30, tc, 0, ss_kcell[u]);
+        i64 sp = ir_add(IR_STORE, 0, 30, tc, 0, ss_kcell[u]);
         ir_w[sp] = 8;
         u += 1;
     }
-    int jp = ir_add(IR_JMP, 0, 0, 0, 0, 0);
+    i64 jp = ir_add(IR_JMP, 0, 0, 0, 0, 0);
     ir_t1[jp] = h;
     // the block after the step of the counter: the pointers move on
-    int inc = ir_new_block(0 - 1);
+    i64 inc = ir_new_block(0 - 1);
     ir_set_block(inc);
     u = 0;
     while u < ss_nk {
         if ss_kk[u] == 99 { u += 1; continue; }
-        int pc = ir_vreg(0);
-        int lc = ir_add(IR_LOAD, pc, 30, 0, 0, 0);
+        i64 pc = ir_vreg(0);
+        i64 lc = ir_add(IR_LOAD, pc, 30, 0, 0, 0);
         ir_w[lc] = 8;
         ir_k[lc] = ss_kcell[u];
-        int pn = ir_vreg(0);
+        i64 pn = ir_vreg(0);
         if ss_kk[u] == 6 && ss_khas[u] != 0 {
-            int dv = ir_vreg(0);
-            int ldv = ir_add(IR_LOAD, dv, 30, 0, 0, 0);
+            i64 dv = ir_vreg(0);
+            i64 ldv = ir_add(IR_LOAD, dv, 30, 0, 0, 0);
             ir_w[ldv] = 8;
             ir_k[ldv] = ss_kcell2[u];
             ir_add(IR_ADD, pn, pc, dv, 0, 0);
         } else {
             ir_add(IR_ADD, pn, pc, ss_kf[u] * cl_step[q], 1, 0);
         }
-        int sc = ir_add(IR_STORE, 0, 30, pn, 0, ss_kcell[u]);
+        i64 sc = ir_add(IR_STORE, 0, 30, pn, 0, ss_kcell[u]);
         ir_w[sc] = 8;
         u += 1;
     }
-    int ji = ir_add(IR_JMP, 0, 0, 0, 0, 0);
+    i64 ji = ir_add(IR_JMP, 0, 0, 0, 0, 0);
     ir_t1[ji] = h;
     ir_t1[t] = inc;
     // every jump into the header from outside the loop goes to the new block in front of it
     b = 0;
     while b < nb0 {
         if op_po[b] >= 0 && op_mark[b] != stamp {
-            int tb2 = ir_be[b] - 1;
-            int top = ir_op[tb2];
+            i64 tb2 = ir_be[b] - 1;
+            i64 top = ir_op[tb2];
             if (top == IR_JMP || top == IR_BR || top == IR_FBR) && ir_t1[tb2] == h { ir_t1[tb2] = pre; }
             if (top == IR_BR || top == IR_FBR) && ir_t2[tb2] == h { ir_t2[tb2] = pre; }
         }
@@ -8497,8 +8497,8 @@ void op_ssr() {
     if opt_debug == 1 { return; }
     op_counted_loops();
     ss_nb0 = ir_nb;
-    int n = cl_n;
-    int q = 0;
+    i64 n = cl_n;
+    i64 q = 0;
     while q < n {
         if cl_calls[q] >= 0 { ss_loop(q); }
         q += 1;
@@ -8515,38 +8515,38 @@ void op_ssr() {
 // loop that is one straight chain of blocks (the body may have an `if`: a block that runs at every turn decides what is hoisted).
 #define AH_MAXH 12
 #define AH_MAXC 64
-int ah_cell[AH_MAXH];            // the frame cell of the handle
-int ah_trap[AH_MAXH];            // the trap block of its check
-int ah_ncell[AH_MAXH];           // the new cell for the data pointer
-int ah_n;
-int ah_cv[IR_MAXV];              // vreg -> the handle cell whose value it holds (while scanning)
-int ah_cs[IR_MAXV];
-int ah_stamp;
-int ah_br[AH_MAXC];              // the checks to turn into jumps
-int ah_nbr;
-int ah_ld[AH_MAXC];              // the data loads to turn into loads of the new cell, and the hoist index
-int ah_li[AH_MAXC];
-int ah_nld;
-int ah_chain[UJ_MAXB];
-int ah_total;
+i64 ah_cell[AH_MAXH];            // the frame cell of the handle
+i64 ah_trap[AH_MAXH];            // the trap block of its check
+i64 ah_ncell[AH_MAXH];           // the new cell for the data pointer
+i64 ah_n;
+i64 ah_cv[IR_MAXV];              // vreg -> the handle cell whose value it holds (while scanning)
+i64 ah_cs[IR_MAXV];
+i64 ah_stamp;
+i64 ah_br[AH_MAXC];              // the checks to turn into jumps
+i64 ah_nbr;
+i64 ah_ld[AH_MAXC];              // the data loads to turn into loads of the new cell, and the hoist index
+i64 ah_li[AH_MAXC];
+i64 ah_nld;
+i64 ah_chain[UJ_MAXB];
+i64 ah_total;
 
-int ah_get(int v) {
+i64 ah_get(i64 v) {
     if v <= 0 || v >= IR_MAXV || ah_cs[v] != ah_stamp { return 0 - 1000000; }
     return ah_cv[v];
 }
 
-void ah_set(int v, int c) {
+void ah_set(i64 v, i64 c) {
     if v <= 0 || v >= IR_MAXV { return; }
     ah_cs[v] = ah_stamp;
     ah_cv[v] = c;
 }
 
-int ah_npred(int t) {
-    int n = 0;
-    int b = 0;
+i64 ah_npred(i64 t) {
+    i64 n = 0;
+    i64 b = 0;
     while b < ir_nb {
         if op_po[b] >= 0 {
-            int k = 0;
+            i64 k = 0;
             while k < 2 {
                 if op_succ(b, k) == t { n += 1; }
                 k += 1;
@@ -8557,18 +8557,18 @@ int ah_npred(int t) {
     return n;
 }
 
-int ah_tmpc[UJ_MAXB];
-int ah_lastpred;
-int ah_nall;                     // the blocks of the loop (without the header), in reverse post order
-int ah_prevb;
+i64 ah_tmpc[UJ_MAXB];
+i64 ah_lastpred;
+i64 ah_nall;                     // the blocks of the loop (without the header), in reverse post order
+i64 ah_prevb;
 
-int ah_npred1(int t) {
-    int n = 0;
+i64 ah_npred1(i64 t) {
+    i64 n = 0;
     ah_lastpred = 0 - 1;
-    int b = 0;
+    i64 b = 0;
     while b < ir_nb {
         if op_po[b] >= 0 {
-            int k = 0;
+            i64 k = 0;
             while k < 2 {
                 if op_succ(b, k) == t { n += 1; ah_lastpred = b; }
                 k += 1;
@@ -8580,13 +8580,13 @@ int ah_npred1(int t) {
 }
 
 // does an instruction of the loop write the 8 bytes at this frame offset?
-bool ah_written(int nch, int off) {
-    int c = 0;
+bool ah_written(i64 nch, i64 off) {
+    i64 c = 0;
     while c < nch {
-        int b = ah_chain[c];
-        int j = ir_bs[b];
+        i64 b = ah_chain[c];
+        i64 j = ir_bs[b];
         while j < ir_be[b] {
-            int op = ir_op[j];
+            i64 op = ir_op[j];
             if op == IR_STORE {
                 if ir_a[j] == 30 {
                     if ir_k[j] < off + 8 && off < ir_k[j] + 16 { return true; }
@@ -8600,8 +8600,8 @@ bool ah_written(int nch, int off) {
     return false;
 }
 
-bool ah_istrap(int b) {
-    int j = ir_bs[b];
+bool ah_istrap(i64 b) {
+    i64 j = ir_bs[b];
     while j < ir_be[b] {
         if ir_op[j] == IR_TRAP { return true; }
         j += 1;
@@ -8611,11 +8611,11 @@ bool ah_istrap(int b) {
 
 // is the handle in this frame cell checked for null somewhere in the function (a branch to a trap block)? Then it is an array handle,
 // and its data field at 16 can be read in front of a loop where the check in the loop was dropped; a field of a struct at 16 would not do
-int ah_ck[64];
-int ah_nck;
+i64 ah_ck[64];
+i64 ah_nck;
 
-bool ah_incheck(int cell) {
-    int i = 0;
+bool ah_incheck(i64 cell) {
+    i64 i = 0;
     while i < ah_nck {
         if ah_ck[i] == cell { return true; }
         i += 1;
@@ -8625,14 +8625,14 @@ bool ah_incheck(int cell) {
 
 void ah_collect_checked() {
     ah_nck = 0;
-    int b = 0;
+    i64 b = 0;
     while b < ir_nb {
         if op_po[b] >= 0 {
             ah_stamp += 1;
-            int j = ir_bs[b];
+            i64 j = ir_bs[b];
             while j < ir_be[b] {
-                int op = ir_op[j];
-                int d = ir_d[j];
+                i64 op = ir_op[j];
+                i64 d = ir_d[j];
                 if op == IR_BR && ir_k[j] == IR_NE && ir_bi[j] == 1 && ir_b[j] == 0 && ah_get(ir_a[j]) >= 0 && ir_t2[j] >= 0 && ah_nck < 64 && ah_istrap(ir_t2[j]) {
                     if !ah_incheck(ah_get(ir_a[j])) { ah_ck[ah_nck] = ah_get(ir_a[j]); ah_nck += 1; }
                 }
@@ -8648,24 +8648,24 @@ void ah_collect_checked() {
     }
 }
 
-int ah_cellidx(int cell) {
-    int hi = 0;
+i64 ah_cellidx(i64 cell) {
+    i64 hi = 0;
     while hi < ah_n && ah_cell[hi] != cell { hi += 1; }
     return hi;
 }
 
 // the data pointer loaded at j (register d) is used as the base of an indexed access in the same block: the handle is an array whose
 // null check was dropped earlier (known not to be null), so it is hoisted like a checked one. `-irdbg 288230376151711744` switches this off.
-bool ah_indexed(int b, int j, int d) {
+bool ah_indexed(i64 b, i64 j, i64 d) {
     if (ir_opt & 288230376151711744) != 0 || d <= 0 { return false; }
-    int e = ir_be[b] - 1;
-    int m = j + 1;
+    i64 e = ir_be[b] - 1;
+    i64 m = j + 1;
     while m < e {
-        int op = ir_op[m];
+        i64 op = ir_op[m];
         if (op == IR_LOAD || op == IR_STORE) && ir_bi[m] == 0 && ir_b[m] == d && ir_a[m] != 30 { return true; }
         if op == IR_ADD && ir_bi[m] == 0 && (ir_a[m] == d || ir_b[m] == d) && ir_d[m] > 0 {
             // data + index, and the sum is the address of the next access
-            int n2 = m + 1;
+            i64 n2 = m + 1;
             while n2 < e && ir_op[n2] == IR_NOP { n2 += 1; }
             if n2 < e && (ir_op[n2] == IR_LOAD || ir_op[n2] == IR_STORE) && ir_a[n2] == ir_d[m] && ir_a[n2] != 30 { return true; }
         }
@@ -8677,16 +8677,16 @@ bool ah_indexed(int b, int j, int d) {
 // a block that runs at every turn (spine = 1) decides which handles are hoisted: from its checks, and from the data loads of handles
 // that no check guards any more (the check was dropped because the handle is known not to be null); the other blocks (inside an `if`)
 // only use what the spine gave
-void ah_scan(int b, int nch, int spine) {
-    int j = ir_bs[b];
-    int e = ir_be[b] - 1;
+void ah_scan(i64 b, i64 nch, i64 spine) {
+    i64 j = ir_bs[b];
+    i64 e = ir_be[b] - 1;
     while j < e {
-        int op = ir_op[j];
-        int d = ir_d[j];
+        i64 op = ir_op[j];
+        i64 d = ir_d[j];
         if op == IR_NOP || op == IR_STORE { j += 1; continue; }
         if op == IR_LOAD && ir_a[j] != 30 && ah_get(ir_a[j]) >= 0 && ir_k[j] == 16 && ir_w[j] == 8 {
-            int cell = ah_get(ir_a[j]);
-            int hi = ah_cellidx(cell);
+            i64 cell = ah_get(ir_a[j]);
+            i64 hi = ah_cellidx(cell);
             if hi == ah_n && spine == 1 && ah_n < AH_MAXH && (ir_opt & 144115188075855872) == 0 && (ah_incheck(cell) || ah_indexed(b, j, d)) {
                 ah_cell[ah_n] = cell;
                 ah_trap[ah_n] = 0 - 1;
@@ -8699,9 +8699,9 @@ void ah_scan(int b, int nch, int spine) {
             }
             ah_set(d, 0 - 1000000);
         } else if d > 0 && ir_vcls[d] == 0 {
-            int nc = 0 - 1000000;
+            i64 nc = 0 - 1000000;
             if op == IR_LOAD && ir_a[j] == 30 && ir_w[j] == 8 && ir_k[j] >= 0 {
-                int sl = vn_slot(j);
+                i64 sl = vn_slot(j);
                 if sl >= 0 && sl < 8192 && !ah_written(nch, ir_k[j]) { nc = ir_k[j]; }
             } else if op == IR_COPY {
                 nc = ah_get(ir_a[j]);
@@ -8712,10 +8712,10 @@ void ah_scan(int b, int nch, int spine) {
         }
         j += 1;
     }
-    int tt = ir_be[b] - 1;
+    i64 tt = ir_be[b] - 1;
     if ir_op[tt] == IR_BR && ir_k[tt] == IR_NE && ir_bi[tt] == 1 && ir_b[tt] == 0 && ah_get(ir_a[tt]) >= 0 {
-        int cell2 = ah_get(ir_a[tt]);
-        int hi2 = ah_cellidx(cell2);
+        i64 cell2 = ah_get(ir_a[tt]);
+        i64 hi2 = ah_cellidx(cell2);
         if hi2 == ah_n && spine == 1 && ah_n < AH_MAXH {
             ah_cell[ah_n] = cell2;
             ah_trap[ah_n] = ir_t2[tt];
@@ -8728,34 +8728,34 @@ void ah_scan(int b, int nch, int spine) {
     }
 }
 
-bool ah_loop(int q) {
-    int h = cl_head[q];
-    int l = cl_lidx[q];
+bool ah_loop(i64 q) {
+    i64 h = cl_head[q];
+    i64 l = cl_lidx[q];
     if cl_inner[q] != 1 || cl_calls[q] != 0 { return false; }
-    int th = ir_be[h] - 1;
+    i64 th = ir_be[h] - 1;
     if ir_op[th] != IR_BR { return false; }
     // the header: only reads of cells, then the test
-    int j0 = ir_bs[h];
+    i64 j0 = ir_bs[h];
     while j0 < th {
-        int o0 = ir_op[j0];
+        i64 o0 = ir_op[j0];
         if o0 != IR_LOAD && o0 != IR_CONST && o0 != IR_NOP && o0 != IR_COPY { return false; }
         if o0 == IR_LOAD && (ir_a[j0] != 30 || ir_w[j0] != 8) { return false; }
         j0 += 1;
     }
     op_mark_loop(l);
-    int stamp = op_stamp;
+    i64 stamp = op_stamp;
     // the blocks of the loop in reverse post order; nothing leaves the loop but the test of the header and the traps
-    int nch = 0;
-    int r = 0;
+    i64 nch = 0;
+    i64 r = 0;
     while r < op_nrpo {
-        int rb = op_rpo[r];
+        i64 rb = op_rpo[r];
         if op_mark[rb] == stamp && rb != h {
             if nch >= UJ_MAXB { return false; }
             ah_chain[nch] = rb;
             nch += 1;
-            int k = 0;
+            i64 k = 0;
             while k < 2 {
-                int sx = op_succ(rb, k);
+                i64 sx = op_succ(rb, k);
                 if sx >= 0 && op_mark[sx] != stamp && !ah_istrap(sx) { return false; }
                 k += 1;
             }
@@ -8765,26 +8765,26 @@ bool ah_loop(int q) {
     if nch <= 0 || nch > 40 { return false; }
     if (ir_opt & 72057594037927936) != 0 {
         // -irdbg 72057594037927936: only a loop whose blocks are one straight chain
-        int nwalk = uj_walk(cl_body[q], h, stamp, @ah_tmpc);
+        i64 nwalk = uj_walk(cl_body[q], h, stamp, @ah_tmpc);
         if nwalk <= 0 || cl_nblk[q] != nwalk + 1 { return false; }
     }
-    int stb = cl_stb[q];
+    i64 stb = cl_stb[q];
     ah_n = 0;
     ah_nbr = 0;
     ah_nld = 0;
     ah_collect_checked();
-    int pass = 0;
+    i64 pass = 0;
     while pass < 2 {
-        int c = 0;
+        i64 c = 0;
         ah_stamp += 1;
         ah_prevb = 0 - 1;
         while c < nch {
-            int b = ah_chain[c];
+            i64 b = ah_chain[c];
             bool sp = op_dom(b, stb);
             if (pass == 0 && sp) || (pass == 1 && !sp) {
-                int np = ah_npred1(b);
+                i64 np = ah_npred1(b);
                 if np != 1 || ah_lastpred != ah_prevb { ah_stamp += 1; }
-                int spn = 0;
+                i64 spn = 0;
                 if pass == 0 { spn = 1; }
                 ah_scan(b, nch, spn);
                 ah_prevb = b;
@@ -8796,12 +8796,12 @@ bool ah_loop(int q) {
     if ah_n == 0 || ah_nld == 0 { return false; }
     // an access of a cell is only changed when the check of that cell was seen before it, and the check is only removed when the
     // data pointer is used: every hoisted cell must have at least one data load
-    int cellbase = 0 - (op_maxq() + 8);
-    int u = 0;
+    i64 cellbase = 0 - (op_maxq() + 8);
+    i64 u = 0;
     while u < ah_n { ah_ncell[u] = cellbase - 8 * u; u += 1; }
     u = 0;
     while u < ah_nld {
-        int x = ah_ld[u];
+        i64 x = ah_ld[u];
         ir_a[x] = 30;
         ir_b[x] = 0;
         ir_bi[x] = 0;
@@ -8811,7 +8811,7 @@ bool ah_loop(int q) {
     }
     u = 0;
     while u < ah_nbr {
-        int br = ah_br[u];
+        i64 br = ah_br[u];
         ir_op[br] = IR_JMP;
         ir_a[br] = 0;
         ir_b[br] = 0;
@@ -8820,53 +8820,53 @@ bool ah_loop(int q) {
         ir_t2[br] = 0 - 1;
         u += 1;
     }
-    int nb0 = ir_nb;
+    i64 nb0 = ir_nb;
     // the blocks: P (the test), E (first check), C0 .. Cn-1
-    int pb = ir_new_block(0 - 1);
+    i64 pb = ir_new_block(0 - 1);
     ir_set_block(pb);
-    int jh = ir_bs[h];
+    i64 jh = ir_bs[h];
     while jh < th {
-        int ox = ir_op[jh];
+        i64 ox = ir_op[jh];
         if ox != IR_NOP {
-            int ni = ir_add(ox, ir_d[jh], ir_a[jh], ir_b[jh], ir_bi[jh], ir_k[jh]);
+            i64 ni = ir_add(ox, ir_d[jh], ir_a[jh], ir_b[jh], ir_bi[jh], ir_k[jh]);
             ir_w[ni] = ir_w[jh];
         }
         jh += 1;
     }
-    int pbr = ir_add(IR_BR, 0, ir_a[th], ir_b[th], ir_bi[th], ir_k[th]);
-    int body = cl_body[q];
-    int eb = ir_new_block(0 - 1);
+    i64 pbr = ir_add(IR_BR, 0, ir_a[th], ir_b[th], ir_bi[th], ir_k[th]);
+    i64 body = cl_body[q];
+    i64 eb = ir_new_block(0 - 1);
     if ir_t1[th] == body { ir_t1[pbr] = eb; ir_t2[pbr] = ir_t2[th]; }
     else { ir_t1[pbr] = ir_t1[th]; ir_t2[pbr] = eb; }
     ir_set_block(eb);
     u = 0;
     while u < ah_n {
-        int hv = ir_vreg(0);
-        int lh = ir_add(IR_LOAD, hv, 30, 0, 0, 0);
+        i64 hv = ir_vreg(0);
+        i64 lh = ir_add(IR_LOAD, hv, 30, 0, 0, 0);
         ir_w[lh] = 8;
         ir_k[lh] = ah_cell[u];
         if ah_trap[u] >= 0 {
-            int bk = ir_add(IR_BR, 0, hv, 0, 1, IR_NE);
+            i64 bk = ir_add(IR_BR, 0, hv, 0, 1, IR_NE);
             ir_t2[bk] = ah_trap[u];
-            int cb = ir_new_block(0 - 1);
+            i64 cb = ir_new_block(0 - 1);
             ir_t1[bk] = cb;
             ir_set_block(cb);
         }
-        int dv = ir_vreg(0);
-        int ld = ir_add(IR_LOAD, dv, hv, 0, 0, 16);
+        i64 dv = ir_vreg(0);
+        i64 ld = ir_add(IR_LOAD, dv, hv, 0, 0, 16);
         ir_w[ld] = 8;
-        int st = ir_add(IR_STORE, 0, 30, dv, 0, ah_ncell[u]);
+        i64 st = ir_add(IR_STORE, 0, 30, dv, 0, ah_ncell[u]);
         ir_w[st] = 8;
         u += 1;
     }
-    int jp = ir_add(IR_JMP, 0, 0, 0, 0, 0);
+    i64 jp = ir_add(IR_JMP, 0, 0, 0, 0, 0);
     ir_t1[jp] = h;
     // every edge into the header from outside the loop goes to the new test
-    int b2 = 0;
+    i64 b2 = 0;
     while b2 < nb0 {
         if op_po[b2] >= 0 && op_mark[b2] != stamp {
-            int tb2 = ir_be[b2] - 1;
-            int top = ir_op[tb2];
+            i64 tb2 = ir_be[b2] - 1;
+            i64 top = ir_op[tb2];
             if (top == IR_JMP || top == IR_BR || top == IR_FBR) && ir_t1[tb2] == h { ir_t1[tb2] = pb; }
             if (top == IR_BR || top == IR_FBR) && ir_t2[tb2] == h { ir_t2[tb2] = pb; }
         }
@@ -8880,8 +8880,8 @@ bool ah_loop(int q) {
 void op_arrhoist() {
     if opt_debug == 1 || (ir_opt & 1125899906842624) != 0 { return; }
     op_counted_loops();
-    int n = cl_n;
-    int q = 0;
+    i64 n = cl_n;
+    i64 q = 0;
     while q < n {
         if cl_inner[q] == 1 && cl_calls[q] == 0 { ah_loop(q); }
         q += 1;

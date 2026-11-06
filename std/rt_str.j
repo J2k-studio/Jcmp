@@ -3,48 +3,48 @@
 // An operand is a text (kind 0), another String (kind 1) or one character (kind 2).
 char std_str_ch[16];
 struct __Str {
-    static void^ make(int cap) {
-        int^ h = (int^)__Arr::make(1, cap + 1);
+    static void^ make(i64 cap) {
+        i64^ h = (i64^)__Arr::make(1, cap + 1);
         char^ d = (char^)h[2];
         d[0] = 0;
         return (void^)h;
     }
-    static int textlen(char^ t) {
-        int n = 0;
+    static i64 textlen(char^ t) {
+        i64 n = 0;
         while t[n] != 0 { n += 1; }
         return n;
     }
     static void check(void^ hv) {
-        if (int)hv == 0 { __panic("the String is null"); }
+        if (i64)hv == 0 { __panic("the String is null"); }
     }
     // the characters of an operand
-    static char^ ptr(void^ x, int k, int slot) {
+    static char^ ptr(void^ x, i64 k, i64 slot) {
         if k == 1 {
             __Str::check(x);
-            int^ h = (int^)x;
+            i64^ h = (i64^)x;
             return (char^)h[2];
         }
         if k == 2 {
-            std_str_ch[slot * 8] = (int)x;
+            std_str_ch[slot * 8] = (i64)x;
             std_str_ch[slot * 8 + 1] = 0;
             return @std_str_ch + slot * 8;
         }
         return (char^)x;
     }
-    static int len(void^ x, int k) {
+    static i64 len(void^ x, i64 k) {
         if k == 1 {
             __Str::check(x);
-            int^ h = (int^)x;
+            i64^ h = (i64^)x;
             return h[0];
         }
         if k == 2 { return 1; }
         return __Str::textlen((char^)x);
     }
     // the whole number v written at the end of r (u = 1: v is read as an unsigned number)
-    static void push_int(void^ r, int v, int u) {
+    static void push_int(void^ r, i64 v, i64 u) {
         char d[24];
-        int n = 0;
-        int neg = 0;
+        i64 n = 0;
+        i64 neg = 0;
         if u == 0 && v < 0 { neg = 1; }
         u64 m = (u64)v;
         if neg == 1 { m = (u64)0 - m; }
@@ -53,7 +53,7 @@ struct __Str {
             n = 1;
         }
         while m > 0 {
-            d[n] = '0' + (int)(m % 10);
+            d[n] = '0' + (i64)(m % 10);
             n += 1;
             m = m / 10;
         }
@@ -64,29 +64,29 @@ struct __Str {
         }
     }
     // a new String with the whole number v (u = 1: v is read as an unsigned number)
-    static void^ from_int(int v, int u) {
+    static void^ from_int(i64 v, i64 u) {
         void^ r = __Str::make(24);
         __Str::push_int(r, v, u);
         return r;
     }
     // a new String with one character
-    static void^ from_char(int c) {
+    static void^ from_char(i64 c) {
         void^ r = __Str::make(2);
         __Str::push(r, c);
         return r;
     }
     // the digits of n written with exactly `width` digits (leading zeros), without the trailing zeros: for the part after the point
-    static void frac_digits(void^ r, int n, int width) {
+    static void frac_digits(void^ r, i64 n, i64 width) {
         char d[24];
-        int k = width;
+        i64 k = width;
         while k > 0 {
             k -= 1;
             d[k] = '0' + n % 10;
             n = n / 10;
         }
-        int last = width;
+        i64 last = width;
         while last > 0 && d[last - 1] == '0' { last -= 1; }
-        int i = 0;
+        i64 i = 0;
         while i < last {
             __Str::push(r, d[i]);
             i += 1;
@@ -113,7 +113,7 @@ struct __Str {
         }
         if x >= 1.0e15 || x < 1.0e-5 {
             // the form  d.ddde+XX : bring the number into 1 .. 10
-            int e = 0;
+            i64 e = 0;
             while x >= 10.0 {
                 x = x / 10.0;
                 e += 1;
@@ -122,8 +122,8 @@ struct __Str {
                 x = x * 10.0;
                 e -= 1;
             }
-            int d0 = (int)x;
-            int f = (int)((x - (double)d0) * 1.0e14 + 0.5);
+            i64 d0 = (i64)x;
+            i64 f = (i64)((x - (double)d0) * 1.0e14 + 0.5);
             if f >= 100000000000000 {
                 f -= 100000000000000;
                 d0 += 1;
@@ -148,18 +148,18 @@ struct __Str {
             __Str::push_int(r, e, 0);
             return r;
         }
-        int ip = (int)x;
+        i64 ip = (i64)x;
         double frac = x - (double)ip;
         // the number of digits after the point: 15 digits in all
-        int fd = 15;
-        int t = ip;
+        i64 fd = 15;
+        i64 t = ip;
         while t > 0 {
             fd -= 1;
             t = t / 10;
         }
         if ip == 0 {
             double q = frac;
-            int zeros = 0;
+            i64 zeros = 0;
             while q < 0.1 && zeros < 6 {
                 q = q * 10.0;
                 zeros += 1;
@@ -167,13 +167,13 @@ struct __Str {
             fd = 15 + zeros;
         }
         if fd < 0 { fd = 0; }
-        int pw = 1;
-        int k = 0;
+        i64 pw = 1;
+        i64 k = 0;
         while k < fd {
             pw = pw * 10;
             k += 1;
         }
-        int f = (int)(frac * (double)pw + 0.5);
+        i64 f = (i64)(frac * (double)pw + 0.5);
         if f >= pw {
             f -= pw;
             ip += 1;
@@ -188,8 +188,8 @@ struct __Str {
     }
     // a new String holding a copy of the text
     static void^ from(char^ t) {
-        int n = __Str::textlen(t);
-        int^ h = (int^)__Str::make(n);
+        i64 n = __Str::textlen(t);
+        i64^ h = (i64^)__Str::make(n);
         Mem::copy((void^)h[2], (void^)t, n);
         char^ d = (char^)h[2];
         d[n] = 0;
@@ -201,10 +201,10 @@ struct __Str {
         return __Str::cat(x, 1, (void^)"", 0);
     }
     // a new String: a followed by b
-    static void^ cat(void^ a, int ka, void^ b, int kb) {
-        int na = __Str::len(a, ka);
-        int nb = __Str::len(b, kb);
-        int^ h = (int^)__Str::make(na + nb);
+    static void^ cat(void^ a, i64 ka, void^ b, i64 kb) {
+        i64 na = __Str::len(a, ka);
+        i64 nb = __Str::len(b, kb);
+        i64^ h = (i64^)__Str::make(na + nb);
         char^ d = (char^)h[2];
         Mem::copy((void^)d, (void^)__Str::ptr(a, ka, 0), na);
         Mem::copy((void^)(d + na), (void^)__Str::ptr(b, kb, 1), nb);
@@ -213,16 +213,16 @@ struct __Str {
         return (void^)h;
     }
     // a followed by b, in a (returns a)
-    static void^ append(void^ a, void^ b, int kb) {
+    static void^ append(void^ a, void^ b, i64 kb) {
         __Str::check(a);
-        if kb == 1 && (int)b == (int)a {                 // s.append(s): the data may move
+        if kb == 1 && (i64)b == (i64)a {                 // s.append(s): the data may move
             void^ same = __Str::clone(a);
             __Str::append(a, same, 1);
             __Arr::free(same);
             return a;
         }
-        int^ h = (int^)a;
-        int nb = __Str::len(b, kb);
+        i64^ h = (i64^)a;
+        i64 nb = __Str::len(b, kb);
         char^ src = __Str::ptr(b, kb, 1);
         __Arr::grow(h, h[0] + nb + 1);
         Mem::copy((void^)(h[2] + h[0]), (void^)src, nb);
@@ -231,40 +231,40 @@ struct __Str {
         d[h[0]] = 0;
         return a;
     }
-    static void push(void^ a, int c) {
+    static void push(void^ a, i64 c) {
         __Str::check(a);
-        int^ h = (int^)a;
+        i64^ h = (i64^)a;
         __Arr::grow(h, h[0] + 2);
         char^ d = (char^)h[2];
         d[h[0]] = c;
         h[0] += 1;
         d[h[0]] = 0;
     }
-    static int pop(void^ a) {
+    static i64 pop(void^ a) {
         __Str::check(a);
-        int^ h = (int^)a;
+        i64^ h = (i64^)a;
         if h[0] == 0 { __panic("pop from an empty String"); }
         h[0] -= 1;
         char^ d = (char^)h[2];
-        int c = d[h[0]];
+        i64 c = d[h[0]];
         d[h[0]] = 0;
         return c;
     }
     static void clear(void^ a) {
         __Str::check(a);
-        int^ h = (int^)a;
+        i64^ h = (i64^)a;
         h[0] = 0;
         char^ d = (char^)h[2];
         d[0] = 0;
     }
     // 1 if the two operands hold the same characters
-    static int eq(void^ a, int ka, void^ b, int kb) {
-        int na = __Str::len(a, ka);
-        int nb = __Str::len(b, kb);
+    static i64 eq(void^ a, i64 ka, void^ b, i64 kb) {
+        i64 na = __Str::len(a, ka);
+        i64 nb = __Str::len(b, kb);
         if na != nb { return 0; }
         char^ pa = __Str::ptr(a, ka, 0);
         char^ pb = __Str::ptr(b, kb, 1);
-        int i = 0;
+        i64 i = 0;
         while i < na {
             if pa[i] != pb[i] { return 0; }
             i += 1;
@@ -272,15 +272,15 @@ struct __Str {
         return 1;
     }
     // -1, 0 or 1: a is before, the same as, or after b (by the codes of the bytes, like strcmp)
-    static int order(void^ a, int ka, void^ b, int kb) {
-        int na = __Str::len(a, ka);
-        int nb = __Str::len(b, kb);
+    static i64 order(void^ a, i64 ka, void^ b, i64 kb) {
+        i64 na = __Str::len(a, ka);
+        i64 nb = __Str::len(b, kb);
         char^ pa = __Str::ptr(a, ka, 0);
         char^ pb = __Str::ptr(b, kb, 1);
-        int i = 0;
+        i64 i = 0;
         while i < na && i < nb {
-            int ca = pa[i] & 255;
-            int cb = pb[i] & 255;
+            i64 ca = pa[i] & 255;
+            i64 cb = pb[i] & 255;
             if ca < cb { return 0 - 1; }
             if ca > cb { return 1; }
             i += 1;
@@ -290,14 +290,14 @@ struct __Str {
         return 0;
     }
     // the first place of t in s at or after `from`, or -1
-    static int find(void^ s, void^ t, int kt) {
-        int ns = __Str::len(s, 1);
-        int nt = __Str::len(t, kt);
+    static i64 find(void^ s, void^ t, i64 kt) {
+        i64 ns = __Str::len(s, 1);
+        i64 nt = __Str::len(t, kt);
         char^ ps = __Str::ptr(s, 1, 0);
         char^ pt = __Str::ptr(t, kt, 1);
-        int i = 0;
+        i64 i = 0;
         while i + nt <= ns {
-            int j = 0;
+            i64 j = 0;
             while j < nt && ps[i + j] == pt[j] { j += 1; }
             if j == nt { return i; }
             i += 1;
@@ -305,10 +305,10 @@ struct __Str {
         return 0 - 1;
     }
     // a new String: the characters a .. b - 1
-    static void^ slice(void^ s, int a, int b) {
-        int n = __Str::len(s, 1);
+    static void^ slice(void^ s, i64 a, i64 b) {
+        i64 n = __Str::len(s, 1);
         if a < 0 || b > n || a > b { __panic("String slice out of range"); }
-        int^ h = (int^)__Str::make(b - a);
+        i64^ h = (i64^)__Str::make(b - a);
         char^ d = (char^)h[2];
         char^ ps = __Str::ptr(s, 1, 0);
         Mem::copy((void^)d, (void^)(ps + a), b - a);
@@ -320,14 +320,14 @@ struct __Str {
         return __Str::ptr(s, 1, 0);
     }
     // hash of a whole number / of a String (FNV-1a over the bytes)
-    static int hashint(int x) {
-        int h = x * -7046029254386353131;
+    static i64 hashint(i64 x) {
+        i64 h = x * -7046029254386353131;
         return h xor (h shr 29);
     }
-    static int hash(void^ s) {
+    static i64 hash(void^ s) {
         char^ p = __Str::ptr(s, 1, 0);
-        int h = -3750763034362895579;
-        int i = 0;
+        i64 h = -3750763034362895579;
+        i64 i = 0;
         while p[i] != 0 {
             h = (h xor p[i]) * 1099511628211;
             i += 1;
@@ -335,18 +335,18 @@ struct __Str {
         return h xor (h shr 29);
     }
     // String[]: n places (new ones are null, cut ones are freed)
-    static void aresize(void^ hv, int n) {
+    static void aresize(void^ hv, i64 n) {
         __Str::aprep(hv);
-        int^ h = (int^)hv;
+        i64^ h = (i64^)hv;
         if n < 0 { __panic("negative array size"); }
-        int^ el = (int^)h[2];
-        int i = n;
+        i64^ el = (i64^)h[2];
+        i64 i = n;
         while i < h[0] {
             __Arr::free((void^)el[i]);
             i += 1;
         }
         __Arr::grow(h, n);
-        el = (int^)h[2];
+        el = (i64^)h[2];
         i = h[0];
         while i < n {
             el[i] = 0;
@@ -355,10 +355,10 @@ struct __Str {
         h[0] = n;
     }
     // -1, 0, 1: a before, equal to, after b (bytes)
-    static int cmp(void^ a, void^ b) {
+    static i64 cmp(void^ a, void^ b) {
         char^ pa = __Str::ptr(a, 1, 0);
         char^ pb = __Str::ptr(b, 1, 1);
-        int i = 0;
+        i64 i = 0;
         while pa[i] != 0 && pa[i] == pb[i] { i += 1; }
         if pa[i] == pb[i] { return 0; }
         if pa[i] < pb[i] { return 0 - 1; }
@@ -366,22 +366,22 @@ struct __Str {
     }
 
     // ---- more String functions (the bytes are treated as ASCII where case matters)
-    static bool isspace(int c) {
+    static bool isspace(i64 c) {
         return c == 32 || c == 9 || c == 10 || c == 13;
     }
     // a new String: s without the white space at both ends
     static void^ trim(void^ s) {
-        int n = __Str::len(s, 1);
+        i64 n = __Str::len(s, 1);
         char^ p = __Str::ptr(s, 1, 0);
-        int a = 0;
-        int b = n;
+        i64 a = 0;
+        i64 b = n;
         while a < b && __Str::isspace(p[a]) { a += 1; }
         while b > a && __Str::isspace(p[b - 1]) { b -= 1; }
         return __Str::slice(s, a, b);
     }
     // ---- UTF-8: len counts bytes; these work on characters (code points)
     // the upper case of a code point (ASCII, Latin-1, Latin Extended-A, Greek, Cyrillic); others stay
-    static int cp_upper(int c) {
+    static i64 cp_upper(i64 c) {
         if c < 128 {
             if c >= 'a' && c <= 'z' { return c - 32; }
             return c;
@@ -398,7 +398,7 @@ struct __Str {
         if c >= 0x450 && c <= 0x45F { return c - 80; }
         return c;
     }
-    static int cp_lower(int c) {
+    static i64 cp_lower(i64 c) {
         if c < 128 {
             if c >= 'A' && c <= 'Z' { return c + 32; }
             return c;
@@ -415,16 +415,16 @@ struct __Str {
         return c;
     }
     // r (a fresh copy) changed in place to upper (up = 1) or lower case; every mapped letter keeps its size
-    static void map_case(void^ r, int up) {
+    static void map_case(void^ r, i64 up) {
         char^ p = __Str::ptr(r, 1, 0);
-        int i = 0;
+        i64 i = 0;
         while p[i] != 0 {
-            int b = p[i] & 255;
+            i64 b = p[i] & 255;
             if b < 128 {
                 if up == 1 { p[i] = (char)__Str::cp_upper(b); } else { p[i] = (char)__Str::cp_lower(b); }
                 i += 1;
             } else if b >= 0xC2 && b <= 0xDF && (p[i + 1] & 0xC0) == 0x80 {
-                int c = ((b & 0x1F) << 6) | (p[i + 1] & 0x3F);
+                i64 c = ((b & 0x1F) << 6) | (p[i + 1] & 0x3F);
                 if up == 1 { c = __Str::cp_upper(c); } else { c = __Str::cp_lower(c); }
                 p[i] = (char)(0xC0 | (c >> 6));
                 p[i + 1] = (char)(0x80 | (c & 0x3F));
@@ -445,11 +445,11 @@ struct __Str {
         return r;
     }
     // the number of characters (code points)
-    static int count(void^ s) {
+    static i64 count(void^ s) {
         char^ p = __Str::ptr(s, 1, 0);
-        int n = __Str::len(s, 1);
-        int k = 0;
-        int i = 0;
+        i64 n = __Str::len(s, 1);
+        i64 k = 0;
+        i64 i = 0;
         while i < n {
             if (p[i] & 0xC0) != 0x80 { k += 1; }
             i += 1;
@@ -457,9 +457,9 @@ struct __Str {
         return k;
     }
     // the size in bytes of the character that starts at byte i
-    static int cp_size(char^ p, int i, int n) {
-        int b = p[i] & 255;
-        int k = 1;
+    static i64 cp_size(char^ p, i64 i, i64 n) {
+        i64 b = p[i] & 255;
+        i64 k = 1;
         if b >= 0xF0 { k = 4; } else if b >= 0xE0 { k = 3; } else if b >= 0xC0 { k = 2; }
         if i + k > n { k = n - i; }
         return k;
@@ -468,23 +468,23 @@ struct __Str {
     static void^ chars(void^ s) {
         void^ r = __Arr::make(8, 4);
         char^ p = __Str::ptr(s, 1, 0);
-        int n = __Str::len(s, 1);
-        int i = 0;
+        i64 n = __Str::len(s, 1);
+        i64 i = 0;
         while i < n {
-            int k = __Str::cp_size(p, i, n);
+            i64 k = __Str::cp_size(p, i, n);
             __Str::apush(r, __Str::slice(s, i, i + k));
             i += k;
         }
         return r;
     }
     // the character number idx (counted from 0) as a String
-    static void^ char_at(void^ s, int idx) {
+    static void^ char_at(void^ s, i64 idx) {
         char^ p = __Str::ptr(s, 1, 0);
-        int n = __Str::len(s, 1);
-        int i = 0;
-        int k = 0;
+        i64 n = __Str::len(s, 1);
+        i64 i = 0;
+        i64 k = 0;
         while i < n {
-            int sz = __Str::cp_size(p, i, n);
+            i64 sz = __Str::cp_size(p, i, n);
             if k == idx { return __Str::slice(s, i, i + sz); }
             i += sz;
             k += 1;
@@ -492,26 +492,26 @@ struct __Str {
         __panic("char_at: the position is out of range");
         return __Str::make(1);
     }
-    static int starts_with(void^ s, void^ x, int kx) {
-        int ns = __Str::len(s, 1);
-        int nx = __Str::len(x, kx);
+    static i64 starts_with(void^ s, void^ x, i64 kx) {
+        i64 ns = __Str::len(s, 1);
+        i64 nx = __Str::len(x, kx);
         if nx > ns { return 0; }
         char^ ps = __Str::ptr(s, 1, 0);
         char^ px = __Str::ptr(x, kx, 1);
-        int i = 0;
+        i64 i = 0;
         while i < nx {
             if ps[i] != px[i] { return 0; }
             i += 1;
         }
         return 1;
     }
-    static int ends_with(void^ s, void^ x, int kx) {
-        int ns = __Str::len(s, 1);
-        int nx = __Str::len(x, kx);
+    static i64 ends_with(void^ s, void^ x, i64 kx) {
+        i64 ns = __Str::len(s, 1);
+        i64 nx = __Str::len(x, kx);
         if nx > ns { return 0; }
         char^ ps = __Str::ptr(s, 1, 0);
         char^ px = __Str::ptr(x, kx, 1);
-        int i = 0;
+        i64 i = 0;
         while i < nx {
             if ps[ns - nx + i] != px[i] { return 0; }
             i += 1;
@@ -519,16 +519,16 @@ struct __Str {
         return 1;
     }
     // a new String: every a in s replaced by b
-    static void^ replace(void^ s, void^ a, int ka, void^ b, int kb) {
-        int na = __Str::len(a, ka);
+    static void^ replace(void^ s, void^ a, i64 ka, void^ b, i64 kb) {
+        i64 na = __Str::len(a, ka);
         if na == 0 { __panic("replace: the text to look for is empty"); }
         void^ r = __Str::make(__Str::len(s, 1));
-        int ns = __Str::len(s, 1);
+        i64 ns = __Str::len(s, 1);
         char^ ps = __Str::ptr(s, 1, 0);
         char^ pa = __Str::ptr(a, ka, 1);
-        int i = 0;
+        i64 i = 0;
         while i < ns {
-            int j = 0;
+            i64 j = 0;
             while j < na && i + j < ns && ps[i + j] == pa[j] { j += 1; }
             if j == na {
                 __Str::append(r, b, kb);
@@ -541,9 +541,9 @@ struct __Str {
         return r;
     }
     // a new String: s repeated n times
-    static void^ repeat(void^ s, int n) {
+    static void^ repeat(void^ s, i64 n) {
         void^ r = __Str::make(__Str::len(s, 1) * (n + 1));
-        int i = 0;
+        i64 i = 0;
         while i < n {
             __Str::append(r, s, 1);
             i += 1;
@@ -551,18 +551,18 @@ struct __Str {
         return r;
     }
     // the whole String as a number (an optional sign and digits); throws "not a number"
-    static int to_int(void^ s) {
+    static i64 to_int(void^ s) {
         char^ p = __Str::ptr(s, 1, 0);
-        int n = __Str::len(s, 1);
-        int i = 0;
+        i64 n = __Str::len(s, 1);
+        i64 i = 0;
         while i < n && __Str::isspace(p[i]) { i += 1; }
-        int neg = 0;
+        i64 neg = 0;
         if i < n && (p[i] == '-' || p[i] == '+') {
             if p[i] == '-' { neg = 1; }
             i += 1;
         }
         if i >= n || p[i] < '0' || p[i] > '9' { throw "not a number"; }
-        int v = 0;
+        i64 v = 0;
         while i < n && p[i] >= '0' && p[i] <= '9' {
             v = v * 10 + (p[i] - '0');
             i += 1;
@@ -575,16 +575,16 @@ struct __Str {
     // the whole String as a decimal number (sign, digits, a point, digits, e and an exponent); throws "not a number"
     static double to_double(void^ s) {
         char^ p = __Str::ptr(s, 1, 0);
-        int n = __Str::len(s, 1);
-        int i = 0;
+        i64 n = __Str::len(s, 1);
+        i64 i = 0;
         while i < n && __Str::isspace(p[i]) { i += 1; }
-        int neg = 0;
+        i64 neg = 0;
         if i < n && (p[i] == '-' || p[i] == '+') {
             if p[i] == '-' { neg = 1; }
             i += 1;
         }
         double v = 0.0;
-        int any = 0;
+        i64 any = 0;
         while i < n && p[i] >= '0' && p[i] <= '9' {
             v = v * 10.0 + (double)(p[i] - '0');
             any = 1;
@@ -603,13 +603,13 @@ struct __Str {
         if any == 0 { throw "not a number"; }
         if i < n && (p[i] == 'e' || p[i] == 'E') {
             i += 1;
-            int eneg = 0;
+            i64 eneg = 0;
             if i < n && (p[i] == '-' || p[i] == '+') {
                 if p[i] == '-' { eneg = 1; }
                 i += 1;
             }
             if i >= n || p[i] < '0' || p[i] > '9' { throw "not a number"; }
-            int e = 0;
+            i64 e = 0;
             while i < n && p[i] >= '0' && p[i] <= '9' {
                 e = e * 10 + (p[i] - '0');
                 i += 1;
@@ -625,17 +625,17 @@ struct __Str {
         return v;
     }
     // a String[] with the pieces of s between the separators (an empty separator throws)
-    static void^ split(void^ s, void^ sep, int ksep) {
-        int nsep = __Str::len(sep, ksep);
+    static void^ split(void^ s, void^ sep, i64 ksep) {
+        i64 nsep = __Str::len(sep, ksep);
         if nsep == 0 { __panic("split: the separator is empty"); }
         void^ r = __Arr::make(8, 4);
-        int ns = __Str::len(s, 1);
+        i64 ns = __Str::len(s, 1);
         char^ ps = __Str::ptr(s, 1, 0);
         char^ pp = __Str::ptr(sep, ksep, 1);
-        int start = 0;
-        int i = 0;
+        i64 start = 0;
+        i64 i = 0;
         while i + nsep <= ns {
-            int j = 0;
+            i64 j = 0;
             while j < nsep && ps[i + j] == pp[j] { j += 1; }
             if j == nsep {
                 __Str::apush(r, __Str::slice(s, start, i));
@@ -649,12 +649,12 @@ struct __Str {
         return r;
     }
     // a new String: the elements of a String[] with sep between them
-    static void^ ajoin(void^ hv, void^ sep, int ksep) {
+    static void^ ajoin(void^ hv, void^ sep, i64 ksep) {
         __Str::aprep(hv);
-        int^ h = (int^)hv;
-        int^ el = (int^)h[2];
+        i64^ h = (i64^)hv;
+        i64^ el = (i64^)h[2];
         void^ r = __Str::make(16);
-        int i = 0;
+        i64 i = 0;
         while i < h[0] {
             if i > 0 { __Str::append(r, sep, ksep); }
             __Str::append(r, (void^)el[i], 1);
@@ -667,13 +667,13 @@ struct __Str {
     // a deep copy of a String[] (every String is copied)
     static void^ aclone(void^ hv) {
         __Str::aprep(hv);
-        int^ h = (int^)hv;
+        i64^ h = (i64^)hv;
         void^ rv = __Arr::make(8, h[0]);
-        int^ el = (int^)h[2];
-        int i = 0;
+        i64^ el = (i64^)h[2];
+        i64 i = 0;
         while i < h[0] {
             if el[i] == 0 {
-                int^ slot = (int^)__Arr::slot(rv);
+                i64^ slot = (i64^)__Arr::slot(rv);
                 slot[0] = 0;
             } else {
                 __Str::apush(rv, __Str::clone((void^)el[i]));
@@ -683,14 +683,14 @@ struct __Str {
         return rv;
     }
     static void aprep(void^ hv) {
-        if (int)hv == 0 { __panic("the array is null"); }
+        if (i64)hv == 0 { __panic("the array is null"); }
     }
     // the elements and the array are given back
     static void free_all(void^ hv) {
-        int^ h = (int^)hv;
-        if (int)h == 0 { return; }
-        int^ el = (int^)h[2];
-        int i = 0;
+        i64^ h = (i64^)hv;
+        if (i64)h == 0 { return; }
+        i64^ el = (i64^)h[2];
+        i64 i = 0;
         while i < h[0] {
             __Arr::free((void^)el[i]);
             i += 1;
@@ -699,9 +699,9 @@ struct __Str {
     }
     static void clear_all(void^ hv) {
         __Str::aprep(hv);
-        int^ h = (int^)hv;
-        int^ el = (int^)h[2];
-        int i = 0;
+        i64^ h = (i64^)hv;
+        i64^ el = (i64^)h[2];
+        i64 i = 0;
         while i < h[0] {
             __Arr::free((void^)el[i]);
             i += 1;
@@ -711,38 +711,38 @@ struct __Str {
     // append s (the array takes it over)
     static void apush(void^ hv, void^ s) {
         __Str::aprep(hv);
-        int^ slot = (int^)__Arr::slot(hv);
-        slot[0] = (int)s;
+        i64^ slot = (i64^)__Arr::slot(hv);
+        slot[0] = (i64)s;
     }
     // remove the last one and give it to the caller
     static void^ apop(void^ hv) {
         __Str::aprep(hv);
-        int^ slot = (int^)__Arr::pop(hv);
+        i64^ slot = (i64^)__Arr::pop(hv);
         return (void^)slot[0];
     }
     // put s (taken over) at place i
-    static void ainsert(void^ hv, int i, void^ s) {
+    static void ainsert(void^ hv, i64 i, void^ s) {
         __Str::aprep(hv);
-        int^ h = (int^)hv;
+        i64^ h = (i64^)hv;
         if i < 0 || i > h[0] { __panic("insert position out of range"); }
         __Arr::grow(h, h[0] + 1);
-        int^ el = (int^)h[2];
-        int k = h[0];
+        i64^ el = (i64^)h[2];
+        i64 k = h[0];
         while k > i {
             el[k] = el[k - 1];
             k -= 1;
         }
-        el[i] = (int)s;
+        el[i] = (i64)s;
         h[0] += 1;
     }
     // remove the one at place i (it is freed)
-    static void aremove(void^ hv, int i) {
+    static void aremove(void^ hv, i64 i) {
         __Str::aprep(hv);
-        int^ h = (int^)hv;
+        i64^ h = (i64^)hv;
         if i < 0 || i >= h[0] { __panic("remove position out of range"); }
-        int^ el = (int^)h[2];
+        i64^ el = (i64^)h[2];
         __Arr::free((void^)el[i]);
-        int k = i;
+        i64 k = i;
         while k + 1 < h[0] {
             el[k] = el[k + 1];
             k += 1;
@@ -750,11 +750,11 @@ struct __Str {
         h[0] -= 1;
     }
     // the place of the first element equal to the operand, or -1
-    static int aindex(void^ hv, void^ x, int kx) {
+    static i64 aindex(void^ hv, void^ x, i64 kx) {
         __Str::aprep(hv);
-        int^ h = (int^)hv;
-        int^ el = (int^)h[2];
-        int i = 0;
+        i64^ h = (i64^)hv;
+        i64^ el = (i64^)h[2];
+        i64 i = 0;
         while i < h[0] {
             if __Str::eq((void^)el[i], 1, x, kx) == 1 { return i; }
             i += 1;
@@ -764,30 +764,30 @@ struct __Str {
     // sort ascending (heap sort, no extra memory)
     static void asort(void^ hv) {
         __Str::aprep(hv);
-        int^ h = (int^)hv;
-        int^ el = (int^)h[2];
-        int n = h[0];
-        int start = n / 2 - 1;
+        i64^ h = (i64^)hv;
+        i64^ el = (i64^)h[2];
+        i64 n = h[0];
+        i64 start = n / 2 - 1;
         while start >= 0 {
             __Str::asift(el, start, n);
             start -= 1;
         }
-        int end = n - 1;
+        i64 end = n - 1;
         while end > 0 {
-            int t = el[0];
+            i64 t = el[0];
             el[0] = el[end];
             el[end] = t;
             __Str::asift(el, 0, end);
             end -= 1;
         }
     }
-    static void asift(int^ el, int root, int n) {
+    static void asift(i64^ el, i64 root, i64 n) {
         while true {
-            int child = root * 2 + 1;
+            i64 child = root * 2 + 1;
             if child >= n { return; }
             if child + 1 < n && __Str::cmp((void^)el[child], (void^)el[child + 1]) < 0 { child += 1; }
             if __Str::cmp((void^)el[root], (void^)el[child]) >= 0 { return; }
-            int t = el[root];
+            i64 t = el[root];
             el[root] = el[child];
             el[child] = t;
             root = child;

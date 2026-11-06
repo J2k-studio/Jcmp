@@ -8,7 +8,7 @@
 #import <net>
 
 struct HttpResponse {
-    int status;
+    i64 status;
     String head;                       // the lines of the header, without the status line, each ended by \r\n
     String body;
 
@@ -16,10 +16,10 @@ struct HttpResponse {
     String header(self, String name) {
         String key = Net::http_lower_ascii("\r\n" + name + ":");
         String lh = Net::http_lower_ascii("\r\n" + self.head);
-        int at = lh.find(key);
+        i64 at = lh.find(key);
         if at < 0 { return ""; }
-        int from = at + key.len;
-        int end = Net::http_find_from(lh, "\r\n", from);
+        i64 from = at + key.len;
+        i64 end = Net::http_find_from(lh, "\r\n", from);
         if end < 0 { end = lh.len; }
         String v = ("\r\n" + self.head).slice(from, end);
         return v.trim();
@@ -31,17 +31,17 @@ struct Web {
         return Result<HttpResponse, Error>::Err(Error::make(k, why));
     }
 
-    static Result<HttpResponse, Error> request_at(String method, String url, String headers, String body, int depth) {
+    static Result<HttpResponse, Error> request_at(String method, String url, String headers, String body, i64 depth) {
         if depth > 5 { return Web::bad(ErrorKind::Invalid, "too many redirects"); }
-        int secure = 0;
-        int plen = 7;
-        int port = 80;
+        i64 secure = 0;
+        i64 plen = 7;
+        i64 port = 80;
         if url.starts_with("https://") { secure = 1; plen = 8; port = 443; }
         else if !url.starts_with("http://") { return Web::bad(ErrorKind::Invalid, "not an http or https address: " + url); }
         String scheme = "http://";
         if secure == 1 { scheme = "https://"; }
         String rest = url.slice(plen, url.len);
-        int slash = rest.find("/");
+        i64 slash = rest.find("/");
         String hostport = rest;
         String path = "/";
         if slash >= 0 {
@@ -49,7 +49,7 @@ struct Web {
             path = rest.slice(slash, rest.len);
         }
         String host = hostport;
-        int colon = hostport.find(":");
+        i64 colon = hostport.find(":");
         if colon >= 0 {
             host = hostport.slice(0, colon);
             String ps = hostport.slice(colon + 1, hostport.len);
@@ -60,7 +60,7 @@ struct Web {
             }
         }
         if host.len == 0 { return Web::bad(ErrorKind::Invalid, "no host in " + url); }
-        int h = 0;
+        i64 h = 0;
         switch Net::http_open(host, port, secure) {
             Result::Ok(x): { h = x; }
             Result::Err(e): { return Web::bad(e.kind, e.message); }
@@ -79,25 +79,25 @@ struct Web {
             Result::Err(e): { Net::http_chan_close(secure, h); return Web::bad(e.kind, e.message); }
         }
         Net::http_chan_close(secure, h);
-        int he = all.find("\r\n\r\n");
+        i64 he = all.find("\r\n\r\n");
         if he < 0 { return Web::bad(ErrorKind::Parse, "the answer of " + host + " has no header"); }
         String head = all.slice(0, he);
         String rbody = all.slice(he + 4, all.len);
         if head.len < 12 || !head.starts_with("HTTP/") { return Web::bad(ErrorKind::Parse, "the answer of " + host + " is not HTTP"); }
-        int code = 0;
+        i64 code = 0;
         for i in 9..12 {
             if head[i] < '0' || head[i] > '9' { return Web::bad(ErrorKind::Parse, "bad status line from " + host); }
             code = code * 10 + (head[i] - '0');
         }
-        int eol = head.find("\r\n");
+        i64 eol = head.find("\r\n");
         String lines = "";
         if eol >= 0 { lines = head.slice(eol + 2, head.len) + "\r\n"; }
         String lh = Net::http_lower_ascii(head);
         if code == 301 || code == 302 || code == 303 || code == 307 || code == 308 {
-            int li = lh.find("\r\nlocation:");
+            i64 li = lh.find("\r\nlocation:");
             if li >= 0 {
-                int ls = li + 11;
-                int le = Net::http_find_from(head, "\r\n", ls);
+                i64 ls = li + 11;
+                i64 le = Net::http_find_from(head, "\r\n", ls);
                 if le < 0 { le = head.len; }
                 String loc = head.slice(ls, le).trim();
                 if loc.starts_with("/") { loc = scheme + hostport + loc; }
@@ -108,7 +108,7 @@ struct Web {
             }
         }
         if lh.contains("\r\ntransfer-encoding: chunked") {
-            int ok[1];
+            i64 ok[1];
             String d = Net::http_unchunk(rbody, @ok);
             if ok[0] == 0 { return Web::bad(ErrorKind::Parse, "the chunks of " + url + " are damaged"); }
             rbody = d;
@@ -139,7 +139,7 @@ struct Web {
         String hex = "0123456789ABCDEF";
         String r = "";
         for i in 0..s.len {
-            int c = s[i] & 255;
+            i64 c = s[i] & 255;
             bool keep = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '_' || c == '.' || c == '~';
             if keep { r.push((char)c); }
             else { r.push('%'); r.push(hex[c >> 4]); r.push(hex[c & 15]); }

@@ -2,7 +2,7 @@
 //   String h = Sha256::hex("abc");            // ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad
 //   String f = Sha256::file("jcmp")?;         // the same for a file (any bytes)
 struct Sha256 {
-    static void init(int^ st) {
+    static void init(i64^ st) {
         st[0] = 0x6a09e667;
         st[1] = 0xbb67ae85;
         st[2] = 0x3c6ef372;
@@ -12,7 +12,7 @@ struct Sha256 {
         st[6] = 0x1f83d9ab;
         st[7] = 0x5be0cd19;
     }
-    static void constants(int^ st) {
+    static void constants(i64^ st) {
         st[8] = 0x428a2f98;
         st[9] = 0x71374491;
         st[10] = 0xb5c0fbcf;
@@ -80,35 +80,35 @@ struct Sha256 {
     }
     // the 32 bits of x turned right by n places (n = 1 .. 31); the mask first: the compiler then knows the value fits in 32 bits and
     // makes one `ror w` of it
-    static int rotr(int x, int n) {
-        int y = x & 0xFFFFFFFF;
+    static i64 rotr(i64 x, i64 n) {
+        i64 y = x & 0xFFFFFFFF;
         return ((y >> n) | (y << (32 - n))) & 0xFFFFFFFF;
     }
     // one block of 64 bytes at p
-    static void block(int^ st, char^ p) {
+    static void block(i64^ st, char^ p) {
         for i in 0..16 {
             st[72 + i] = ((p[i * 4] & 255) << 24) | ((p[i * 4 + 1] & 255) << 16) | ((p[i * 4 + 2] & 255) << 8) | (p[i * 4 + 3] & 255);
         }
         for i in 16..64 {
-            int s0 = Sha256::rotr(st[72 + i - 15], 7) xor Sha256::rotr(st[72 + i - 15], 18) xor (st[72 + i - 15] >> 3);
-            int s1 = Sha256::rotr(st[72 + i - 2], 17) xor Sha256::rotr(st[72 + i - 2], 19) xor (st[72 + i - 2] >> 10);
+            i64 s0 = Sha256::rotr(st[72 + i - 15], 7) xor Sha256::rotr(st[72 + i - 15], 18) xor (st[72 + i - 15] >> 3);
+            i64 s1 = Sha256::rotr(st[72 + i - 2], 17) xor Sha256::rotr(st[72 + i - 2], 19) xor (st[72 + i - 2] >> 10);
             st[72 + i] = (st[72 + i - 16] + s0 + st[72 + i - 7] + s1) & 0xFFFFFFFF;
         }
-        int a = st[0];
-        int b = st[1];
-        int c = st[2];
-        int d = st[3];
-        int e = st[4];
-        int f = st[5];
-        int g = st[6];
-        int hh = st[7];
+        i64 a = st[0];
+        i64 b = st[1];
+        i64 c = st[2];
+        i64 d = st[3];
+        i64 e = st[4];
+        i64 f = st[5];
+        i64 g = st[6];
+        i64 hh = st[7];
         for i in 0..64 {
-            int s1 = Sha256::rotr(e, 6) xor Sha256::rotr(e, 11) xor Sha256::rotr(e, 25);
-            int ch = (e & f) xor ((e xor 0xFFFFFFFF) & g);
-            int t1 = (hh + s1 + ch + st[8 + i] + st[72 + i]) & 0xFFFFFFFF;
-            int s0 = Sha256::rotr(a, 2) xor Sha256::rotr(a, 13) xor Sha256::rotr(a, 22);
-            int maj = (a & b) xor (a & c) xor (b & c);
-            int t2 = (s0 + maj) & 0xFFFFFFFF;
+            i64 s1 = Sha256::rotr(e, 6) xor Sha256::rotr(e, 11) xor Sha256::rotr(e, 25);
+            i64 ch = (e & f) xor ((e xor 0xFFFFFFFF) & g);
+            i64 t1 = (hh + s1 + ch + st[8 + i] + st[72 + i]) & 0xFFFFFFFF;
+            i64 s0 = Sha256::rotr(a, 2) xor Sha256::rotr(a, 13) xor Sha256::rotr(a, 22);
+            i64 maj = (a & b) xor (a & c) xor (b & c);
+            i64 t2 = (s0 + maj) & 0xFFFFFFFF;
             hh = g;
             g = f;
             f = e;
@@ -128,14 +128,14 @@ struct Sha256 {
         st[7] = (st[7] + hh) & 0xFFFFFFFF;
     }
     // the last bytes (tn < 64) of a message of total bytes, padded; then the digest as hex
-    static String finish(int^ st, char^ tail, int tn, int total) {
+    static String finish(i64^ st, char^ tail, i64 tn, i64 total) {
         char buf[128];
         for i in 0..128 { buf[i] = 0; }
         for i in 0..tn { buf[i] = tail[i]; }
         buf[tn] = (char)128;
-        int n = 64;
+        i64 n = 64;
         if tn >= 56 { n = 128; }
-        int bits = total * 8;
+        i64 bits = total * 8;
         for i in 0..8 { buf[n - 1 - i] = (char)((bits >> (i * 8)) & 255); }
         Sha256::block(st, (char^)@buf);
         if n == 128 { Sha256::block(st, (char^)@buf + 64); }
@@ -143,7 +143,7 @@ struct Sha256 {
         String r = "";
         for i in 0..8 {
             for j in 0..8 {
-                int nib = (st[i] >> (28 - j * 4)) & 15;
+                i64 nib = (st[i] >> (28 - j * 4)) & 15;
                 r.push(digits[nib]);
             }
         }
@@ -151,34 +151,34 @@ struct Sha256 {
     }
     // the digest of the bytes of a String
     static String hex(String s) {
-        int st[136];                 // h (8), k (64), w (64)
-        Sha256::init((int^)@st);
-        Sha256::constants((int^)@st);
+        i64 st[136];                 // h (8), k (64), w (64)
+        Sha256::init((i64^)@st);
+        Sha256::constants((i64^)@st);
         char^ p = s.c();
-        int n = s.len;
-        int pos = 0;
+        i64 n = s.len;
+        i64 pos = 0;
         while n - pos >= 64 {
-            Sha256::block((int^)@st, p + pos);
+            Sha256::block((i64^)@st, p + pos);
             pos += 64;
         }
-        return Sha256::finish((int^)@st, p + pos, n - pos, n);
+        return Sha256::finish((i64^)@st, p + pos, n - pos, n);
     }
     // the digest of the bytes of a file
     static Result<String, Error> file(String path) {
-        int fd = Sys::open_read(path.c());
+        i64 fd = Sys::open_read(path.c());
         if fd < 0 { return Result<String, Error>::Err(Fs::error(fd, "cannot open ", path)); }
-        int st[136];                 // h (8), k (64), w (64)
-        Sha256::init((int^)@st);
-        Sha256::constants((int^)@st);
+        i64 st[136];                 // h (8), k (64), w (64)
+        Sha256::init((i64^)@st);
+        Sha256::constants((i64^)@st);
         char buf[4096];
-        int total = 0;
-        int have = 0;
+        i64 total = 0;
+        i64 have = 0;
         bool more = true;
         while more {
             // fill the buffer (a read may give less than asked)
             have = 0;
             while have < 4096 {
-                int n = Sys::read(fd, (char^)@buf + have, 4096 - have);
+                i64 n = Sys::read(fd, (char^)@buf + have, 4096 - have);
                 if n < 0 {
                     Sys::close(fd);
                     return Result<String, Error>::Err(Fs::error(n, "cannot read ", path));
@@ -190,14 +190,14 @@ struct Sha256 {
                 have += n;
             }
             total += have;
-            int pos = 0;
+            i64 pos = 0;
             while have - pos >= 64 {
-                Sha256::block((int^)@st, (char^)@buf + pos);
+                Sha256::block((i64^)@st, (char^)@buf + pos);
                 pos += 64;
             }
             if !more {
                 Sys::close(fd);
-                return Result<String, Error>::Ok(Sha256::finish((int^)@st, (char^)@buf + pos, have - pos, total));
+                return Result<String, Error>::Ok(Sha256::finish((i64^)@st, (char^)@buf + pos, have - pos, total));
             }
         }
         return Result<String, Error>::Ok("");

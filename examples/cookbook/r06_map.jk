@@ -2,9 +2,9 @@
 #import <stdlib>
 using stdlib;
 
-int main() {
+i64 main() {
     String text = "the cat and the dog and the bird";
-    Map<String, int> count;
+    Map<String, i64> count;
     String[] words = text.split(" ");
     for i in 0..words.len {
         if count.has(words[i]) { count.put(words[i], count.get(words[i]) + 1); }
@@ -18,9 +18,9 @@ int main() {
         }
     }
     for i in 0..keys.len { jout << pad(keys[i], 6) << count.get(keys[i]) << "\n"; }
-    Set<int> seen;
-    int dup = 0;
-    int[] nums = arr(6);
+    Set<i64> seen;
+    i64 dup = 0;
+    i64[] nums = arr(6);
     nums.push(3); nums.push(1); nums.push(3); nums.push(2); nums.push(1); nums.push(3);
     for i in 0..nums.len { if !seen.add(nums[i]) { dup += 1; } }
     jout << seen.len << " different, " << dup << " repeats\n";

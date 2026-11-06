@@ -2,7 +2,7 @@
 #import <stdlib>
 using stdlib;
 
-int main() {
+i64 main() {
     String[] a = Env::args();
     jout << "arguments: " << a.len - 1 << "\n";
     String[] args = arr(2);

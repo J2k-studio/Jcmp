@@ -16,13 +16,13 @@ struct Path {
     }
     // the part after the last /
     static String name(String p) {
-        int cut = -1;
+        i64 cut = -1;
         for i in 0..p.len { if p[i] == '/' { cut = i; } }
         return p.slice(cut + 1, p.len);
     }
     // everything before the last / ("." if there is none, "/" for a file in the root)
     static String parent(String p) {
-        int cut = -1;
+        i64 cut = -1;
         for i in 0..p.len { if p[i] == '/' { cut = i; } }
         if cut < 0 { return "."; }
         if cut == 0 { return "/"; }
@@ -31,7 +31,7 @@ struct Path {
     // the part of the name after the last . ("" if there is none, or if the name starts with the only .)
     static String ext(String p) {
         String n = Path::name(p);
-        int dot = -1;
+        i64 dot = -1;
         for i in 0..n.len { if n[i] == '.' { dot = i; } }
         if dot <= 0 { return ""; }
         return n.slice(dot + 1, n.len);
@@ -39,7 +39,7 @@ struct Path {
     // the name without its extension
     static String stem(String p) {
         String n = Path::name(p);
-        int dot = -1;
+        i64 dot = -1;
         for i in 0..n.len { if n[i] == '.' { dot = i; } }
         if dot <= 0 { return n; }
         return n.slice(0, dot);
@@ -55,22 +55,22 @@ struct __Files {
     static Result<String, Error> fs_try_read(String path) { return Fs::read_text(path); }
     static String[] fs_lines(String path) { return Fs::read_lines(path).take(); }
     static Result<String[], Error> fs_try_lines(String path) { return Fs::read_lines(path); }
-    static int fs_write(String path, String text) { return Fs::write_text(path, text).take(); }
-    static Result<int, Error> fs_try_write(String path, String text) { return Fs::write_text(path, text); }
-    static int fs_append(String path, String text) { return Fs::append_text(path, text).take(); }
-    static Result<int, Error> fs_try_append(String path, String text) { return Fs::append_text(path, text); }
+    static i64 fs_write(String path, String text) { return Fs::write_text(path, text).take(); }
+    static Result<i64, Error> fs_try_write(String path, String text) { return Fs::write_text(path, text); }
+    static i64 fs_append(String path, String text) { return Fs::append_text(path, text).take(); }
+    static Result<i64, Error> fs_try_append(String path, String text) { return Fs::append_text(path, text); }
     // the long names of the same functions (owner 2026-11-03: "f.read_text is fine too"): fs.read_text(p), fs.read_lines(p), fs.write_text(p, t), fs.append_text(p, t)
     static String fs_read_text(String path) { return Fs::read_text(path).take(); }
     static String[] fs_read_lines(String path) { return Fs::read_lines(path).take(); }
-    static int fs_write_text(String path, String text) { return Fs::write_text(path, text).take(); }
-    static int fs_append_text(String path, String text) { return Fs::append_text(path, text).take(); }
+    static i64 fs_write_text(String path, String text) { return Fs::write_text(path, text).take(); }
+    static i64 fs_append_text(String path, String text) { return Fs::append_text(path, text).take(); }
     static bool fs_exists(String path) { return Fs::exists(path); }
-    static int fs_size(String path) { return Fs::size(path).take(); }
-    static Result<int, Error> fs_try_size(String path) { return Fs::size(path); }
-    static int fs_remove(String path) { return Fs::remove(path).take(); }
-    static Result<int, Error> fs_try_remove(String path) { return Fs::remove(path); }
-    static int fs_rename(String from, String to) { return Fs::rename(from, to).take(); }
-    static Result<int, Error> fs_try_rename(String from, String to) { return Fs::rename(from, to); }
+    static i64 fs_size(String path) { return Fs::size(path).take(); }
+    static Result<i64, Error> fs_try_size(String path) { return Fs::size(path); }
+    static i64 fs_remove(String path) { return Fs::remove(path).take(); }
+    static Result<i64, Error> fs_try_remove(String path) { return Fs::remove(path); }
+    static i64 fs_rename(String from, String to) { return Fs::rename(from, to).take(); }
+    static Result<i64, Error> fs_try_rename(String from, String to) { return Fs::rename(from, to); }
     static String read_text(String path) { return Fs::read_text(path).take(); }
     static Result<String, Error> read_try_text(String path) { return Fs::read_text(path); }
     static String read_bytes(String path) { return Fs::read_bytes(path).take(); }
@@ -78,12 +78,12 @@ struct __Files {
     static String[] read_lines(String path) { return Fs::read_lines(path).take(); }
     static Result<String[], Error> read_try_lines(String path) { return Fs::read_lines(path); }
     static bool dir_exists(String path) { return Dir::exists(path); }
-    static int dir_make(String path) { return Dir::make(path).take(); }
-    static Result<int, Error> dir_try_make(String path) { return Dir::make(path); }
-    static int dir_make_all(String path) { return Dir::make_all(path).take(); }
-    static Result<int, Error> dir_try_make_all(String path) { return Dir::make_all(path); }
-    static int dir_remove(String path) { return Dir::remove(path).take(); }
-    static Result<int, Error> dir_try_remove(String path) { return Dir::remove(path); }
+    static i64 dir_make(String path) { return Dir::make(path).take(); }
+    static Result<i64, Error> dir_try_make(String path) { return Dir::make(path); }
+    static i64 dir_make_all(String path) { return Dir::make_all(path).take(); }
+    static Result<i64, Error> dir_try_make_all(String path) { return Dir::make_all(path); }
+    static i64 dir_remove(String path) { return Dir::remove(path).take(); }
+    static Result<i64, Error> dir_try_remove(String path) { return Dir::remove(path); }
     static String[] dir_list(String path) { return Dir::list(path).take(); }
     static Result<String[], Error> dir_try_list(String path) { return Dir::list(path); }
     static String dir_current() { return Dir::current().take(); }

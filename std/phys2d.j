@@ -7,8 +7,8 @@
 // The body is moved one axis at a time and put against the tile it meets (no passing through at speeds below one tile in a step).
 
 // the whole number below or equal (the cast cuts towards zero)
-int p2d_floor(double v) {
-    int i = (int)v;
+i64 p2d_floor(double v) {
+    i64 i = (i64)v;
     if (double)i > v { i -= 1; }
     return i;
 }
@@ -39,14 +39,14 @@ struct Body {
     }
 
     // is there a solid tile in the world where the box (bx, by, bw, bh) is
-    static bool blocked(TileMap m, int layer, int ts, int solid_max, double bx, double by, double bw, double bh) {
-        int x0 = p2d_floor(bx / (double)ts);
-        int y0 = p2d_floor(by / (double)ts);
-        int x1 = p2d_floor((bx + bw - 0.001) / (double)ts);
-        int y1 = p2d_floor((by + bh - 0.001) / (double)ts);
+    static bool blocked(TileMap m, i64 layer, i64 ts, i64 solid_max, double bx, double by, double bw, double bh) {
+        i64 x0 = p2d_floor(bx / (double)ts);
+        i64 y0 = p2d_floor(by / (double)ts);
+        i64 x1 = p2d_floor((bx + bw - 0.001) / (double)ts);
+        i64 y1 = p2d_floor((by + bh - 0.001) / (double)ts);
         for ty in y0..(y1 + 1) {
             for tx in x0..(x1 + 1) {
-                int t = m.get(layer, tx, ty);
+                i64 t = m.get(layer, tx, ty);
                 if t >= 1 && t <= solid_max { return true; }
                 if tx < 0 || tx >= m.w { return true; }                  // the edges of the world are walls and the floor
                 if ty >= m.h { return true; }
@@ -59,7 +59,7 @@ struct Body {
         if self.on_ground { self.vy = 0.0 - speed; }
     }
 
-    void step(self, TileMap m, int layer, int ts, int solid_max, double dt, double gravity) {
+    void step(self, TileMap m, i64 layer, i64 ts, i64 solid_max, double dt, double gravity) {
         self.vy = self.vy + gravity * dt;
         self.hit_x = false;
         self.hit_y = false;
@@ -99,12 +99,12 @@ struct Body {
 struct Camera {
     double x;                         // the top left corner of what is seen, in the dots of the world
     double y;
-    int vw;                           // the size of the view in dots of the screen
-    int vh;
+    i64 vw;                           // the size of the view in dots of the screen
+    i64 vh;
     double max_x;
     double max_y;
 
-    static Camera make(int vw, int vh) {
+    static Camera make(i64 vw, i64 vh) {
         Camera c;
         c.x = 0.0;
         c.y = 0.0;
@@ -116,7 +116,7 @@ struct Camera {
     }
 
     // the world is this big: the camera does not show beyond it
-    void limit(self, int world_w, int world_h) {
+    void limit(self, i64 world_w, i64 world_h) {
         self.max_x = (double)(world_w - self.vw);
         self.max_y = (double)(world_h - self.vh);
         if self.max_x < 0.0 { self.max_x = 0.0; }
@@ -135,8 +135,8 @@ struct Camera {
         if self.y > self.max_y { self.y = self.max_y; }
     }
 
-    int screen_x(self, double wx) { return (int)(wx - self.x); }
-    int screen_y(self, double wy) { return (int)(wy - self.y); }
-    double world_x(self, int sx) { return (double)sx + self.x; }
-    double world_y(self, int sy) { return (double)sy + self.y; }
+    i64 screen_x(self, double wx) { return (i64)(wx - self.x); }
+    i64 screen_y(self, double wy) { return (i64)(wy - self.y); }
+    double world_x(self, i64 sx) { return (double)sx + self.x; }
+    double world_y(self, i64 sy) { return (double)sy + self.y; }
 }

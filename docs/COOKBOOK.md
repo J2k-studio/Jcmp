@@ -44,12 +44,12 @@ longest: 129 characters
 #import <stdlib>
 using stdlib;
 
-int main() {
+i64 main() {
     switch Fs::read_text("no/such/file.txt") {
         Result::Ok(text): { jout << "read " << text.len << " bytes\n"; }
         Result::Err(e): { jout << "could not read: " << e.message << "\n"; }
     }
-    Result<int, Error> r = Fs::write_text("_cook_tmp.txt", "hello\n");
+    Result<i64, Error> r = Fs::write_text("_cook_tmp.txt", "hello\n");
     switch r {
         Result::Ok(n): { jout << "wrote " << n << " bytes\n"; }
         Result::Err(e): { jout << "could not write: " << e.message << "\n"; }

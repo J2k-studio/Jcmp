@@ -10,11 +10,11 @@
 
 struct GpuBuffer {
     Gl gl;
-    int id;
-    int binding;
-    int n;                       // numbers (4 bytes each)
+    i64 id;
+    i64 binding;
+    i64 n;                       // numbers (4 bytes each)
 
-    static GpuBuffer make(Gl gl, int binding, Floats data) {
+    static GpuBuffer make(Gl gl, i64 binding, Floats data) {
         GpuBuffer b;
         b.gl = gl;
         b.binding = binding;
@@ -37,7 +37,7 @@ struct GpuBuffer {
         Floats out = Floats::make(self.n);
         self.gl.bind_buffer(37074, self.id);
         Native::call1(self.gl.fn("glMemoryBarrier"), 0xffffffff);
-        int mapped = Native::call4(self.gl.fn("glMapBufferRange"), 37074, 0, self.n * 4, 1);       // GL_MAP_READ_BIT
+        i64 mapped = Native::call4(self.gl.fn("glMapBufferRange"), 37074, 0, self.n * 4, 1);       // GL_MAP_READ_BIT
         if mapped != 0 {
             char^ src_p = (char^)mapped;
             char^ dst_p = (char^)out.ptr;
@@ -50,7 +50,7 @@ struct GpuBuffer {
 
 struct Kernel {
     Gl gl;
-    int prog;
+    i64 prog;
     bool ok;
     String error;
 
@@ -59,7 +59,7 @@ struct Kernel {
         k.gl = gl;
         k.ok = false;
         k.error = "";
-        int sh = gl.shader(37305, src);                                   // GL_COMPUTE_SHADER
+        i64 sh = gl.shader(37305, src);                                   // GL_COMPUTE_SHADER
         if sh == 0 {
             k.error = gl.log + "";
             return k;
@@ -67,7 +67,7 @@ struct Kernel {
         k.prog = Native::call0(gl.fn("glCreateProgram"));
         Native::call2(gl.fn("glAttachShader"), k.prog, sh);
         Native::call1(gl.fn("glLinkProgram"), k.prog);
-        int st = (int)Mem::alloc(16);
+        i64 st = (i64)Mem::alloc(16);
         Native::poke32(st, 0);
         Native::call3(gl.fn("glGetProgramiv"), k.prog, 35714, st);
         if Native::peek32(st) == 0 {
@@ -78,7 +78,7 @@ struct Kernel {
         return k;
     }
 
-    void run(self, int gx, int gy, int gz) {
+    void run(self, i64 gx, i64 gy, i64 gz) {
         if !self.ok { return; }
         self.gl.use(self.prog);
         Native::call3(self.gl.fn("glDispatchCompute"), gx, gy, gz);

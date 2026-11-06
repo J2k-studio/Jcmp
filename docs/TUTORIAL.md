@@ -1302,7 +1302,7 @@ A hot function should stay small. `#expect instructions <= N` in front of a func
 using stdlib;
 
 #expect instructions <= 12
-int clamp(int x, int lo, int hi) {
+i64 clamp(i64 x, i64 lo, i64 hi) {
     if x < lo { return lo; }
     if x > hi { return hi; }
     return x;
@@ -1366,8 +1366,8 @@ Inside the block every statement is one instruction.
 #import <stdlib>
 using stdlib;
 
-int add_mul(int a, int b, int c) {
-    int r = 0;
+i64 add_mul(i64 a, i64 b, i64 c) {
+    i64 r = 0;
     register {
         in x1 = a;
         in x2 = b;
@@ -1432,8 +1432,8 @@ After an addition or a comparison the CPU keeps four flags: `n` (negative), `z` 
 #import <stdlib>
 using stdlib;
 
-int carry_of(int a, int b) {
-    int r = 0;
+i64 carry_of(i64 a, i64 b) {
+    i64 r = 0;
     register {
         in x1 = a;
         in x2 = b;
@@ -1466,7 +1466,7 @@ At the bottom there is nothing but numbers. `raw<u32>[...]` puts a 32-bit machin
 using stdlib;
 
 void main() {
-    int v = 5;
+    i64 v = 5;
     register {
         in x1 = v + 1;
         raw<u32>[0xd503201f];
@@ -3199,31 +3199,31 @@ Every instruction of the ARM64 CPU of the phone is exactly **32 bits**, cut into
 ```jk
 #import <stdlib>
 
-String hex(int n, int width) {
+String hex(i64 n, i64 width) {
     String digits = "0123456789abcdef";
     String s = "";
-    int i = width - 1;
+    i64 i = width - 1;
     while i >= 0 { s.push(digits[(n >> (4 * i)) & 15]); i -= 1; }
     return s;
 }
 
 // add xd, xn, xm  (64 bits)
-int encode_add(int d, int n, int m) { return 0x8B000000 | (m << 16) | (n << 5) | d; }
+i64 encode_add(i64 d, i64 n, i64 m) { return 0x8B000000 | (m << 16) | (n << 5) | d; }
 
 // sub xd, xn, xm
-int encode_sub(int d, int n, int m) { return 0xCB000000 | (m << 16) | (n << 5) | d; }
+i64 encode_sub(i64 d, i64 n, i64 m) { return 0xCB000000 | (m << 16) | (n << 5) | d; }
 
 // mov xd, #imm16  (movz: the number in bits 5-20)
-int encode_movz(int d, int imm) { return 0xD2800000 | (imm << 5) | d; }
+i64 encode_movz(i64 d, i64 imm) { return 0xD2800000 | (imm << 5) | d; }
 
-int main() {
+i64 main() {
     jout << "add x1, x1, x2  = 0x" << hex(encode_add(1, 1, 2), 8) << "\n";     // 8b020021
     jout << "sub x0, x3, x4  = 0x" << hex(encode_sub(0, 3, 4), 8) << "\n";     // cb040060
     jout << "mov x5, #1000   = 0x" << hex(encode_movz(5, 1000), 8) << "\n";    // d2807d05
     // run the word that we built: x1 = x1 + x2 through a raw machine word
-    int a = 40;
-    int b = 2;
-    int r = 0;
+    i64 a = 40;
+    i64 b = 2;
+    i64 r = 0;
     register {
         in x1 = a;
         in x2 = b;

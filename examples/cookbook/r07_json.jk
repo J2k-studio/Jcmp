@@ -2,11 +2,11 @@
 #import <stdlib>
 using stdlib;
 
-int main() {
+i64 main() {
     String src = "{\"name\": \"j2k\", \"version\": 1.2, \"tags\": [\"fast\", \"small\"], \"ok\": true}";
     JsonDoc doc = Json::parse(src).take();
     jout << doc.text(doc.get(doc.root(), "name")) << " " << doc.number(doc.get(doc.root(), "version")) << "\n";
-    int tags = doc.get(doc.root(), "tags");
+    i64 tags = doc.get(doc.root(), "tags");
     for i in 0..doc.len(tags) { jout << "tag " << doc.text(doc.at(tags, i)) << "\n"; }
     jout << doc.dump(doc.root()).len << "\n";
     return 0;

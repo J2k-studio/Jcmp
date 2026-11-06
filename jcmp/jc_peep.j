@@ -10,18 +10,18 @@
 //   b L / L:                                                the jump to the next line goes
 
 char peep_buf[8388608];
-int peep_len;
-int peep_next;               // the index in out_buf of the line after the one that was just copied (for the rules that look ahead)
+i64 peep_len;
+i64 peep_next;               // the index in out_buf of the line after the one that was just copied (for the rules that look ahead)
 
 // is x16 not mentioned in the next three lines of out_buf? (a label or a branch ends the look: x16 is a scratch inside a statement)
 bool peep_x16_quiet() {
-    int p = peep_next;
-    int k = 0;
+    i64 p = peep_next;
+    i64 k = 0;
     while k < 3 && p < out_len {
-        int q = p;
+        i64 q = p;
         while q < out_len && out_buf[q] != 10 { q += 1; }
         if out_buf[q - 1] == ':' { return true; }
-        int r = p;
+        i64 r = p;
         while r + 2 < q {
             if out_buf[r] == 'x' && out_buf[r + 1] == '1' && out_buf[r + 2] == '6' { return false; }
             r += 1;
@@ -33,11 +33,11 @@ bool peep_x16_quiet() {
 }
 
 // the start of the line that is `back` lines before the last one in peep_buf (0 = the last), or -1
-int peep_start(int back) {
-    int e = peep_len;
+i64 peep_start(i64 back) {
+    i64 e = peep_len;
     if e == 0 || peep_buf[e - 1] != 10 { return 0 - 1; }
-    int st = e - 1;
-    int k = 0;
+    i64 st = e - 1;
+    i64 k = 0;
     while true {
         while st > 0 && peep_buf[st - 1] != 10 { st -= 1; }
         if k == back { return st; }
@@ -49,9 +49,9 @@ int peep_start(int back) {
 }
 
 // is the line that starts at st exactly the text s (up to the newline)?
-bool peep_is(int st, char^ s) {
+bool peep_is(i64 st, char^ s) {
     if st < 0 { return false; }
-    int i = 0;
+    i64 i = 0;
     while s[i] != 0 {
         if peep_buf[st + i] != s[i] { return false; }
         i += 1;
@@ -60,9 +60,9 @@ bool peep_is(int st, char^ s) {
 }
 
 // does the line start with the text s?
-bool peep_has(int st, char^ s) {
+bool peep_has(i64 st, char^ s) {
     if st < 0 { return false; }
-    int i = 0;
+    i64 i = 0;
     while s[i] != 0 {
         if peep_buf[st + i] != s[i] { return false; }
         i += 1;
@@ -71,25 +71,25 @@ bool peep_has(int st, char^ s) {
 }
 
 // the end of the line (the index of its newline)
-int peep_end(int st) {
-    int e = st;
+i64 peep_end(i64 st) {
+    i64 e = st;
     while peep_buf[e] != 10 { e += 1; }
     return e;
 }
 
 // is the line a label ("L12:")?
-bool peep_is_label(int st) {
+bool peep_is_label(i64 st) {
     if st < 0 { return false; }
-    int e = peep_end(st);
+    i64 e = peep_end(st);
     return e > st && peep_buf[e - 1] == ':';
 }
 
 // the number at p (digits only up to the end of the line), or -1
-int peep_number(int p, int e) {
+i64 peep_number(i64 p, i64 e) {
     if p >= e { return 0 - 1; }
-    int n = 0;
+    i64 n = 0;
     while p < e {
-        int c = peep_buf[p];
+        i64 c = peep_buf[p];
         if c < '0' || c > '9' { return 0 - 1; }
         n = n * 10 + (c - '0');
         p += 1;
@@ -113,10 +113,10 @@ bool peep_inverse(char^ c, char^ out) {
 }
 
 // writes the number n (digits) at peep_buf[at...] and returns the index after it
-int peep_put_number(int n, int at) {
+i64 peep_put_number(i64 n, i64 at) {
     char d[12];
-    int dn = 0;
-    int v = n;
+    i64 dn = 0;
+    i64 v = n;
     if v == 0 {
         d[0] = '0';
         dn = 1;
@@ -136,13 +136,13 @@ int peep_put_number(int n, int at) {
 
 // may the line after the one just copied read x0? (a label, a jump or a line without x0 does not)
 bool peep_next_free0() {
-    int p = peep_next;
+    i64 p = peep_next;
     if p >= out_len { return true; }
-    int q = p;
+    i64 q = p;
     while q < out_len && out_buf[q] != 10 { q += 1; }
     if q > p && out_buf[q - 1] == ':' { return true; }
     if out_buf[p] == 'b' && out_buf[p + 1] == ' ' { return true; }
-    int r = p;
+    i64 r = p;
     while r + 1 < q {
         if out_buf[r] == 'x' && out_buf[r + 1] == '0' { return false; }
         r += 1;
@@ -151,35 +151,35 @@ bool peep_next_free0() {
 }
 
 // is there a register name x19 .. x25 at p?
-bool peep_isreg(int p) {
-    int a = peep_buf[p];
-    int b = peep_buf[p + 1];
+bool peep_isreg(i64 p) {
+    i64 a = peep_buf[p];
+    i64 b = peep_buf[p + 1];
     if peep_buf[p + 2] >= '0' && peep_buf[p + 2] <= '9' { return false; }
     return (a == '1' && b == '9') || (a == '2' && b >= '0' && b <= '5');
 }
 
 // tries every rule on the end of peep_buf; true if something was changed
 bool peep_try() {
-    int l0 = peep_start(0);
+    i64 l0 = peep_start(0);
     if l0 < 0 { return false; }
     if peep_is_label(l0) {
         // b L / L: : the jump to the next line
-        int l1 = peep_start(1);
+        i64 l1 = peep_start(1);
         if l1 >= 0 && peep_has(l1, "b L") {
-            int e1 = peep_end(l1);
-            int e0 = peep_end(l0);
+            i64 e1 = peep_end(l1);
+            i64 e0 = peep_end(l0);
             // the label of the last line equals the target of the b line?
             if e0 - l0 - 1 == e1 - l1 - 2 {
                 bool same = true;
-                int i = 0;
+                i64 i = 0;
                 while i < e0 - l0 - 1 {
                     if peep_buf[l0 + i] != peep_buf[l1 + 2 + i] { same = false; }
                     i += 1;
                 }
                 if same {
                     // delete the b line (move the label line over it)
-                    int n = e0 - l0 + 1;
-                    int t = 0;
+                    i64 n = e0 - l0 + 1;
+                    i64 t = 0;
                     while t < n {
                         peep_buf[l1 + t] = peep_buf[l0 + t];
                         t += 1;
@@ -193,11 +193,11 @@ bool peep_try() {
     }
     // OP x16, ... / mov xK, x16  (K = 19..25; x16 is a scratch that nothing reads after the move)  ->  OP xK, ...   (-irdbg 18014398509481984: off; the rule after it: 2251799813685248)
     if (ir_opt & 18014398509481984) == 0 && peep_has(l0, "mov x") && peep_isreg(l0 + 5) && peep_has(l0 + 7, ", x16\n") && peep_x16_quiet() {
-        int l1 = peep_start(1);
+        i64 l1 = peep_start(1);
         if l1 >= 0 && (peep_has(l1, "add x16, ") || peep_has(l1, "sub x16, ") || peep_has(l1, "mov x16, ")) {
-            int e1 = peep_end(l1);
+            i64 e1 = peep_end(l1);
             bool uses = false;
-            int q = l1 + 9;
+            i64 q = l1 + 9;
             while q + 2 < e1 {
                 if peep_buf[q] == 'x' && peep_buf[q + 1] == '1' && peep_buf[q + 2] == '6' { uses = true; }
                 q += 1;
@@ -213,25 +213,25 @@ bool peep_try() {
     // add x0, xK, #c / mov xK, x0 / (add/ldr/mov lines that do not touch x0 or xK) / cmp x0, A / b.cc L
     //   ->  add xK, xK, #c / (those lines) / cmp xK, A / b.cc L      (x0 is a temporary of the statement; nobody reads it after the compare)
     if (ir_opt & 2251799813685248) == 0 && peep_has(l0, "b.") && peep_next_free0() {
-        int l1 = peep_start(1);
+        i64 l1 = peep_start(1);
         if l1 >= 0 && peep_has(l1, "cmp x0, ") {
-            int e1 = peep_end(l1);
+            i64 e1 = peep_end(l1);
             bool uses0 = false;
-            int q = l1 + 8;
+            i64 q = l1 + 8;
             while q + 1 < e1 {
                 if peep_buf[q] == 'x' && peep_buf[q + 1] == '0' { uses0 = true; }
                 q += 1;
             }
-            int back = 2;
-            int mv = -1;
+            i64 back = 2;
+            i64 mv = -1;
             bool ok = !uses0;
             while ok && mv < 0 && back < 6 {
-                int lb = peep_start(back);
+                i64 lb = peep_start(back);
                 if lb < 0 { ok = false; }
                 else if peep_has(lb, "mov x") && peep_isreg(lb + 5) && peep_has(lb + 7, ", x0\n") { mv = lb; }
                 else if peep_has(lb, "add x") || peep_has(lb, "ldr x") || peep_has(lb, "mov x") || peep_has(lb, "sub x") {
-                    int eb = peep_end(lb);
-                    int kk = lb;
+                    i64 eb = peep_end(lb);
+                    i64 kk = lb;
                     while kk + 1 < eb {
                         if peep_buf[kk] == 'x' && peep_buf[kk + 1] == '0' { ok = false; }
                         kk += 1;
@@ -240,18 +240,18 @@ bool peep_try() {
                 } else { ok = false; }
             }
             if ok && mv >= 0 {
-                int la = peep_start(back + 1);
-                int d1 = peep_buf[mv + 5];
-                int d2 = peep_buf[mv + 6];
+                i64 la = peep_start(back + 1);
+                i64 d1 = peep_buf[mv + 5];
+                i64 d2 = peep_buf[mv + 6];
                 if la >= 0 && peep_has(la, "add x0, x") && peep_buf[la + 9] == d1 && peep_buf[la + 10] == d2 && peep_buf[la + 11] == ',' && peep_buf[la + 13] == '#' {
                     // the lines between must not mention xK
                     bool free = true;
-                    int lb = peep_start(back - 1);
-                    int bb = back - 1;
+                    i64 lb = peep_start(back - 1);
+                    i64 bb = back - 1;
                     while bb >= 2 {
                         lb = peep_start(bb);
-                        int eb = peep_end(lb);
-                        int kk = lb;
+                        i64 eb = peep_end(lb);
+                        i64 kk = lb;
                         while kk + 2 < eb {
                             if peep_buf[kk] == 'x' && peep_buf[kk + 1] == d1 && peep_buf[kk + 2] == d2 { free = false; }
                             kk += 1;
@@ -261,17 +261,17 @@ bool peep_try() {
                     if free && peep_end(mv) + 1 + 0 > 0 {
                         // build the new tail in t[]
                         char t[640];
-                        int tn = 0;
-                        int ea = peep_end(la);
+                        i64 tn = 0;
+                        i64 ea = peep_end(la);
                         // add xK, xK, #c
                         str_copy(@t + tn, "add x", 8); tn += 5;
                         t[tn] = d1; t[tn + 1] = d2; tn += 2;
                         str_copy(@t + tn, ", x", 8); tn += 3;
                         t[tn] = d1; t[tn + 1] = d2; tn += 2;
-                        int r = la + 11;
+                        i64 r = la + 11;
                         while r <= ea { t[tn] = peep_buf[r]; tn += 1; r += 1; }
                         // the lines between the mov and the cmp
-                        int emv = peep_end(mv);
+                        i64 emv = peep_end(mv);
                         r = emv + 1;
                         while r < l1 { t[tn] = peep_buf[r]; tn += 1; r += 1; }
                         // cmp xK, A
@@ -280,7 +280,7 @@ bool peep_try() {
                         r = l1 + 6;
                         while r < peep_len { t[tn] = peep_buf[r]; tn += 1; r += 1; }
                         if tn < 600 {
-                            int w = 0;
+                            i64 w = 0;
                             while w < tn { peep_buf[la + w] = t[w]; w += 1; }
                             peep_len = la + tn;
                             return true;
@@ -292,20 +292,20 @@ bool peep_try() {
     }
     // str xR, [xB, #N] / ldr xR, [xB, #N]  : the load goes (the base is the frame, the globals or the stack, never xR itself)
     if peep_has(l0, "ldr x") {
-        int l1 = peep_start(1);
+        i64 l1 = peep_start(1);
         if l1 >= 0 && peep_has(l1, "str x") {
-            int e0 = peep_end(l0);
-            int e1 = peep_end(l1);
+            i64 e0 = peep_end(l0);
+            i64 e1 = peep_end(l1);
             if e0 - l0 == e1 - l1 {
                 bool same = true;
-                int i = 3;
+                i64 i = 3;
                 while i < e0 - l0 {
                     if peep_buf[l0 + i] != peep_buf[l1 + i] { same = false; }
                     i += 1;
                 }
                 if same {
                     // the text has the form  ldr xR, [xB, #N]  : look for the base
-                    int p = l0 + 4;
+                    i64 p = l0 + 4;
                     while p < e0 && peep_buf[p] != '[' { p += 1; }
                     bool ok = peep_has(p, "[x29, ") || peep_has(p, "[x28, ") || peep_has(p, "[sp, ");
                     if ok {
@@ -317,9 +317,9 @@ bool peep_try() {
         }
     }
     if peep_is(l0, "add sp, sp, #16") {
-        int l1 = peep_start(1);
-        int l2 = peep_start(2);
-        int l3 = peep_start(3);
+        i64 l1 = peep_start(1);
+        i64 l2 = peep_start(2);
+        i64 l3 = peep_start(3);
         if peep_is(l1, "ldr x0, [sp, #0]") && peep_is(l2, "str x0, [sp, #0]") && peep_is(l3, "sub sp, sp, #16") {
             peep_len = l3;
             return true;
@@ -336,10 +336,10 @@ bool peep_try() {
     bool is_sub = peep_is(l0, "sub x0, x0, x1");
     bool is_cmp = peep_is(l0, "cmp x0, x1");
     if is_add || is_sub || is_cmp {
-        int l1 = peep_start(1);
+        i64 l1 = peep_start(1);
         if l1 >= 0 && peep_has(l1, "mov x1, ") {
-            int e1 = peep_end(l1);
-            int n = peep_number(l1 + 8, e1);
+            i64 e1 = peep_end(l1);
+            i64 n = peep_number(l1 + 8, e1);
             if n >= 0 && n < 4096 {
                 // rewrite: the mov line becomes the instruction with the number
                 peep_len = l1;
@@ -348,8 +348,8 @@ bool peep_try() {
                 if is_cmp { str_copy(@peep_buf + peep_len, "cmp x0, ", 20); peep_len += 8; }
                 // the digits are still in place after the old line start: they were overwritten, so write the number again
                 char d[12];
-                int dn = 0;
-                int v = n;
+                i64 dn = 0;
+                i64 v = n;
                 if v == 0 {
                     d[0] = '0';
                     dn = 1;
@@ -374,21 +374,21 @@ bool peep_try() {
     // x op= value:  add x3, xB, #N / mov x1, x0 / ldr x0, [x3, #0] / OP x0, x0, x1 / mov x1, x0 / str x1, [x3, #0]
     //   ->  mov x1, x0 / ldr x0, [xB, #N] / OP x0, x0, x1 / str x0, [xB, #N]
     if peep_is(l0, "str x1, [x3, #0]") {
-        int l1 = peep_start(1);
-        int l2 = peep_start(2);
-        int l3 = peep_start(3);
-        int l4 = peep_start(4);
-        int l5 = peep_start(5);
+        i64 l1 = peep_start(1);
+        i64 l2 = peep_start(2);
+        i64 l3 = peep_start(3);
+        i64 l4 = peep_start(4);
+        i64 l5 = peep_start(5);
         if l5 >= 0 && peep_is(l1, "mov x1, x0") && peep_is(l3, "ldr x0, [x3, #0]") && peep_is(l4, "mov x1, x0") && peep_has(l5, "add x3, x2") {
-            int bch = peep_buf[l5 + 10];
+            i64 bch = peep_buf[l5 + 10];
             bool opok = peep_has(l2, "add x0, x0, x1") || peep_has(l2, "sub x0, x0, x1") || peep_has(l2, "mul x0, x0, x1") || peep_has(l2, "and x0, x0, x1") || peep_has(l2, "orr x0, x0, x1") || peep_has(l2, "eor x0, x0, x1") || peep_has(l2, "lsl x0, x0, x1") || peep_has(l2, "lsr x0, x0, x1") || peep_has(l2, "asr x0, x0, x1");
             if opok && (bch == '8' || bch == '9') && peep_buf[l5 + 11] == ',' && peep_buf[l5 + 13] == '#' {
-                int e5 = peep_end(l5);
-                int n = peep_number(l5 + 14, e5);
+                i64 e5 = peep_end(l5);
+                i64 n = peep_number(l5 + 14, e5);
                 if n >= 0 && n < 4096 && n % 8 == 0 && peep_end(l2) - l2 == 14 {
                     // the arithmetic line is copied, the others are written again
                     char oper[16];
-                    int k = 0;
+                    i64 k = 0;
                     while k < 14 {
                         oper[k] = peep_buf[l2 + k];
                         k += 1;
@@ -452,14 +452,14 @@ bool peep_try() {
     }
     // add x3, xB, #N / mov x1, x0 / str x1, [x3, #0]   ->   str x0, [xB, #N]   (also strb, strw)
     if peep_has(l0, "str x1, [x3, #0]") || peep_has(l0, "strb x1, [x3, #0]") || peep_has(l0, "strw x1, [x3, #0]") {
-        int l1 = peep_start(1);
-        int l2 = peep_start(2);
+        i64 l1 = peep_start(1);
+        i64 l2 = peep_start(2);
         if l2 >= 0 && peep_is(l1, "mov x1, x0") && peep_has(l2, "add x3, x2") {
-            int bch = peep_buf[l2 + 10];
+            i64 bch = peep_buf[l2 + 10];
             if (bch == '8' || bch == '9') && peep_buf[l2 + 11] == ',' && peep_buf[l2 + 12] == ' ' && peep_buf[l2 + 13] == '#' {
-                int e2 = peep_end(l2);
-                int n = peep_number(l2 + 14, e2);
-                int scale = 8;
+                i64 e2 = peep_end(l2);
+                i64 n = peep_number(l2 + 14, e2);
+                i64 scale = 8;
                 if peep_has(l0, "strb") { scale = 1; }
                 if peep_has(l0, "strw") { scale = 4; }
                 if n >= 0 && n < 4096 && n % scale == 0 {
@@ -471,7 +471,7 @@ bool peep_try() {
                     if scale == 1 { str_copy(@op, "strb", 8); }
                     if scale == 4 { str_copy(@op, "strw", 8); }
                     peep_len = l2;
-                    int z = 0;
+                    i64 z = 0;
                     while op[z] != 0 {
                         peep_buf[peep_len] = op[z];
                         peep_len += 1;
@@ -501,13 +501,13 @@ bool peep_try() {
     }
     // mov x1, x0 / mov x0, x1N / OP x0, x0, x1   ->   OP x0, x1N, x0   (the left operand waited in x1N)
     if peep_has(l0, "add x0, x0, x1") || peep_has(l0, "sub x0, x0, x1") || peep_has(l0, "mul x0, x0, x1") || peep_has(l0, "and x0, x0, x1") || peep_has(l0, "orr x0, x0, x1") || peep_has(l0, "eor x0, x0, x1") || peep_has(l0, "cmp x0, x1") {
-        int e0 = peep_end(l0);
+        i64 e0 = peep_end(l0);
         if (peep_has(l0, "cmp x0, x1") && e0 - l0 == 10) || e0 - l0 == 14 {
-            int l1 = peep_start(1);
-            int l2 = peep_start(2);
+            i64 l1 = peep_start(1);
+            i64 l2 = peep_start(2);
             if l2 >= 0 && peep_is(l2, "mov x1, x0") && peep_has(l1, "mov x0, x1") {
-                int e1 = peep_end(l1);
-                int rn = peep_number(l1 + 9, e1);
+                i64 e1 = peep_end(l1);
+                i64 rn = peep_number(l1 + 9, e1);
                 if rn >= 10 && rn <= 14 {
                     bool is_cmp = peep_has(l0, "cmp x0, x1");
                     char op[4];
@@ -544,22 +544,22 @@ bool peep_try() {
     }
     // a comparison used as a condition
     if peep_has(l0, "b.eq ") || peep_has(l0, "b.ne ") {
-        int l1 = peep_start(1);
-        int l2 = peep_start(2);
-        int l3 = peep_start(3);
-        int l4 = peep_start(4);
-        int l5 = peep_start(5);
-        int l6 = peep_start(6);
+        i64 l1 = peep_start(1);
+        i64 l2 = peep_start(2);
+        i64 l3 = peep_start(3);
+        i64 l4 = peep_start(4);
+        i64 l5 = peep_start(5);
+        i64 l6 = peep_start(6);
         if l6 >= 0 && peep_is(l1, "cmp x0, 0") && peep_is_label(l2) && peep_is(l3, "mov x0, 0") && peep_has(l4, "b.") && peep_is(l5, "mov x0, 1") && peep_has(l6, "cmp x0, ") {
             // the label of l2 must be the target of l4
-            int e2 = peep_end(l2);
-            int e4 = peep_end(l4);
-            int p4 = l4 + 2;
+            i64 e2 = peep_end(l2);
+            i64 e4 = peep_end(l4);
+            i64 p4 = l4 + 2;
             while peep_buf[p4] != ' ' { p4 += 1; }
             // l4 = "b.COND LABEL"
             if e4 - (p4 + 1) == e2 - l2 - 1 {
                 bool same = true;
-                int i = 0;
+                i64 i = 0;
                 while i < e2 - l2 - 1 {
                     if peep_buf[l2 + i] != peep_buf[p4 + 1 + i] { same = false; }
                     i += 1;
@@ -580,10 +580,10 @@ bool peep_try() {
                         str_copy(@use, @cc, 4);
                     }
                     // the target of the old branch: the text after "b.xx "
-                    int tp = l0 + 5;
-                    int te = peep_end(l0);
+                    i64 tp = l0 + 5;
+                    i64 te = peep_end(l0);
                     char tgt[64];
-                    int tl = 0;
+                    i64 tl = 0;
                     while tp < te && tl < 62 {
                         tgt[tl] = peep_buf[tp];
                         tl += 1;
@@ -591,7 +591,7 @@ bool peep_try() {
                     }
                     tgt[tl] = 0;
                     // cut the lines l5 .. l0 (everything after the cmp line l6) and write the new branch
-                    int e6 = peep_end(l6);
+                    i64 e6 = peep_end(l6);
                     peep_len = e6 + 1;
                     peep_buf[peep_len] = 'b';
                     peep_buf[peep_len + 1] = '.';
@@ -599,7 +599,7 @@ bool peep_try() {
                     peep_buf[peep_len + 3] = use[1];
                     peep_buf[peep_len + 4] = ' ';
                     peep_len += 5;
-                    int z = 0;
+                    i64 z = 0;
                     while tgt[z] != 0 {
                         peep_buf[peep_len] = tgt[z];
                         peep_len += 1;
@@ -618,13 +618,13 @@ bool peep_try() {
 // the whole text of out_buf goes through the rules
 void peep_run() {
     peep_len = 0;
-    int i = 0;
+    i64 i = 0;
     while i < out_len {
         // copy one line
-        int j = i;
+        i64 j = i;
         while j < out_len && out_buf[j] != 10 { j += 1; }
         if j >= out_len { j = out_len - 1; }
-        int k = i;
+        i64 k = i;
         while k <= j {
             peep_buf[peep_len] = out_buf[k];
             peep_len += 1;
@@ -632,10 +632,10 @@ void peep_run() {
         }
         i = j + 1;
         peep_next = i;
-        int guard = 0;
+        i64 guard = 0;
         while peep_try() && guard < 16 { guard += 1; }
     }
-    int t = 0;
+    i64 t = 0;
     while t < peep_len {
         out_buf[t] = peep_buf[t];
         t += 1;
@@ -648,26 +648,26 @@ void peep_run() {
 //   b Lh / Lb: body / Lh: cmp A, B / b.!cc Lb / Lx:     (the same flow: the test is at the bottom, one jump less per turn).
 // Only the plain form is changed: the header is exactly two lines (cmp, b.cc to the exit) and the loop ends with  b Lh  right in front
 // of the exit label. Other jumps to Lh (a `continue`) land on the test at the bottom, which does the same as the header did.
-int rot_lpos[262144];        // the start of the line "L<n>:" (-1: none)
-int rot_lsemi[262144];       // the number of ';' lines before it
-int rot_hdr[262144];          // candidate + 1 for a header label
-int rot_cb[32768];           // the start of the line  b Lh
-int rot_ch[32768];           // Lh
-int rot_cx[32768];           // Lx
-int rot_cs[32768];           // the ';' lines before the jump
-int rot_cn[32768];           // the label number made for the body
-int rot_c1[32768];           // the start of the cmp line of the header
-int rot_c2[32768];           // the start of the  b.cc  line of the header
-int rot_cnt;
+i64 rot_lpos[262144];        // the start of the line "L<n>:" (-1: none)
+i64 rot_lsemi[262144];       // the number of ';' lines before it
+i64 rot_hdr[262144];          // candidate + 1 for a header label
+i64 rot_cb[32768];           // the start of the line  b Lh
+i64 rot_ch[32768];           // Lh
+i64 rot_cx[32768];           // Lx
+i64 rot_cs[32768];           // the ';' lines before the jump
+i64 rot_cn[32768];           // the label number made for the body
+i64 rot_c1[32768];           // the start of the cmp line of the header
+i64 rot_c2[32768];           // the start of the  b.cc  line of the header
+i64 rot_cnt;
 
 // the number in "L<digits>" at p (up to the end e, or a ':' ), -1 if the text is not that
-int rot_label_num(int p, int e) {
+i64 rot_label_num(i64 p, i64 e) {
     if out_buf[p] != 'L' { return 0 - 1; }
-    int n = 0;
-    int k = p + 1;
+    i64 n = 0;
+    i64 k = p + 1;
     if k >= e { return 0 - 1; }
     while k < e {
-        int c = out_buf[k];
+        i64 c = out_buf[k];
         if c < '0' || c > '9' { return 0 - 1; }
         n = n * 10 + (c - '0');
         k += 1;
@@ -677,27 +677,27 @@ int rot_label_num(int p, int e) {
 
 void rot_run() {
     if x_target == 32 { return; }
-    int total = 0;
-    int i = 0;
-    int maxl = 0;
+    i64 total = 0;
+    i64 i = 0;
+    i64 maxl = 0;
     rot_cnt = 0;
     for k in 0..262144 { rot_lpos[k] = 0 - 1; rot_hdr[k] = 0; }
-    int semis = 0;
+    i64 semis = 0;
     // pass 1: the labels and the candidates ("b Lh" followed by a label line)
     while i < out_len {
-        int en = rg_end(i);
+        i64 en = rg_end(i);
         if out_buf[i] == ';' { semis += 1; }
         if out_buf[i] == 'L' && en > i + 1 && out_buf[en - 1] == ':' {
-            int n = rot_label_num(i, en - 1);
+            i64 n = rot_label_num(i, en - 1);
             if n >= 0 && n < 262144 { rot_lpos[n] = i; rot_lsemi[n] = semis; }
             if n > maxl { maxl = n; }
         } else if out_buf[i] == 'b' && out_buf[i + 1] == ' ' && out_buf[i + 2] == 'L' && rot_cnt < 32768 {
-            int h = rot_label_num(i + 2, en);
-            int nx = en + 1;
+            i64 h = rot_label_num(i + 2, en);
+            i64 nx = en + 1;
             if h >= 0 && nx < out_len && out_buf[nx] == 'L' {
-                int nen = rg_end(nx);
+                i64 nen = rg_end(nx);
                 if out_buf[nen - 1] == ':' {
-                    int x = rot_label_num(nx, nen - 1);
+                    i64 x = rot_label_num(nx, nen - 1);
                     if x >= 0 {
                         rot_cb[rot_cnt] = i;
                         rot_ch[rot_cnt] = h;
@@ -714,20 +714,20 @@ void rot_run() {
     char cond[8];
     char inv[8];
     for c in 0..rot_cnt {
-        int h = rot_ch[c];
+        i64 h = rot_ch[c];
         if h >= 262144 || rot_lpos[h] < 0 || rot_lpos[h] >= rot_cb[c] || rot_lsemi[h] != rot_cs[c] || rot_hdr[h] != 0 { rot_c1[c] = 0 - 1; continue; }
-        int p = rot_lpos[h];
-        int l1 = rg_end(p) + 1;
+        i64 p = rot_lpos[h];
+        i64 l1 = rg_end(p) + 1;
         if !rg_has(l1, "cmp ") { rot_c1[c] = 0 - 1; continue; }
-        int l2 = rg_end(l1) + 1;
+        i64 l2 = rg_end(l1) + 1;
         if !rg_has(l2, "b.") { rot_c1[c] = 0 - 1; continue; }
-        int e2 = rg_end(l2);
-        int k = l2 + 2;
-        int cn = 0;
+        i64 e2 = rg_end(l2);
+        i64 k = l2 + 2;
+        i64 cn = 0;
         while k < e2 && out_buf[k] != ' ' && cn < 6 { cond[cn] = out_buf[k]; cn += 1; k += 1; }
         cond[cn] = 0;
         if k >= e2 || out_buf[k] != ' ' || out_buf[k + 1] != 'L' { rot_c1[c] = 0 - 1; continue; }
-        int target = rot_label_num(k + 1, e2);
+        i64 target = rot_label_num(k + 1, e2);
         if target != rot_cx[c] || !peep_inverse(@cond, @inv) { rot_c1[c] = 0 - 1; continue; }
         rot_c1[c] = l1;
         rot_c2[c] = l2;
@@ -740,26 +740,26 @@ void rot_run() {
     regs_len = 0;
     i = 0;
     while i < out_len {
-        int en = rg_end(i);
+        i64 en = rg_end(i);
         bool done = false;
         if out_buf[i] == 'L' && en > i + 1 && out_buf[en - 1] == ':' {
-            int n = rot_label_num(i, en - 1);
+            i64 n = rot_label_num(i, en - 1);
             if n >= 0 && n < 262144 && rot_hdr[n] != 0 && rot_lpos[n] == i {
-                int c = rot_hdr[n] - 1;
+                i64 c = rot_hdr[n] - 1;
                 rg_text("b L"); rg_int(n); rg_put(10);
                 rg_text("L"); rg_int(rot_cn[c]); rg_text(":"); rg_put(10);
                 i = rg_end(rot_c2[c]) + 1;                           // the label, the cmp and the branch of the header are not copied here
                 done = true;
             }
         } else if out_buf[i] == 'b' && out_buf[i + 1] == ' ' && out_buf[i + 2] == 'L' {
-            int h = rot_label_num(i + 2, en);
+            i64 h = rot_label_num(i + 2, en);
             if h >= 0 && h < 262144 && rot_hdr[h] != 0 && rot_cb[rot_hdr[h] - 1] == i {
-                int c = rot_hdr[h] - 1;
+                i64 c = rot_hdr[h] - 1;
                 rg_text("L"); rg_int(h); rg_text(":"); rg_put(10);
                 rg_copy(rot_c1[c], rg_end(rot_c1[c]));               // the test again: cmp A, B
-                int e2 = rg_end(rot_c2[c]);
-                int k = rot_c2[c] + 2;
-                int cn = 0;
+                i64 e2 = rg_end(rot_c2[c]);
+                i64 k = rot_c2[c] + 2;
+                i64 cn = 0;
                 while k < e2 && out_buf[k] != ' ' && cn < 6 { cond[cn] = out_buf[k]; cn += 1; k += 1; }
                 cond[cn] = 0;
                 peep_inverse(@cond, @inv);
@@ -773,7 +773,7 @@ void rot_run() {
             i = en + 1;
         }
     }
-    int t = 0;
+    i64 t = 0;
     while t < regs_len {
         out_buf[t] = regs_buf[t];
         t += 1;

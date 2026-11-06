@@ -24,7 +24,7 @@ double disk_light(double r, double a, double t) {
 }
 
 // a colour for the heat l (0..1) of the gas; shift > 0 where it comes towards us (bluer), < 0 where it goes away (redder)
-int gas_colour(double l, double shift) {
+i64 gas_colour(double l, double shift) {
     double r = 0.0;
     double g = 0.0;
     double b = 0.0;
@@ -43,11 +43,11 @@ int gas_colour(double l, double shift) {
     r = r - shift * 70.0;
     g = g + shift * 25.0;
     b = b + shift * 150.0;
-    return Screen::rgb((int)r, (int)g, (int)b);
+    return Screen::rgb((i64)r, (i64)g, (i64)b);
 }
 
 // one ray from the eye (ex, ey, ez) in the direction (dx, dy, dz): its colour
-int trace(double ex, double ey, double ez, double dx, double dy, double dz, double t, double ring_w) {
+i64 trace(double ex, double ey, double ez, double dx, double dy, double dz, double t, double ring_w) {
     double px = ex;
     double py = ey;
     double pz = ez;
@@ -72,20 +72,20 @@ int trace(double ex, double ey, double ez, double dx, double dy, double dz, doub
             double rr = Math::sqrt(h2);
             double off = (rr - 2.62) / ring_w;                 // the ring is as thin as the picture can show
             double ring = Math::exp(0.0 - off * off);
-            int base = 0;
+            i64 base = 0;
             if best > 0.0 { base = gas_colour(best, best_shift); }
-            int cr = (base >> 16) & 255;
-            int cg = (base >> 8) & 255;
-            int cb = base & 255;
-            cr = cr + (int)(ring * 90.0);
-            cg = cg + (int)(ring * 170.0);
-            cb = cb + (int)(ring * 255.0);
+            i64 cr = (base >> 16) & 255;
+            i64 cg = (base >> 8) & 255;
+            i64 cb = base & 255;
+            cr = cr + (i64)(ring * 90.0);
+            cg = cg + (i64)(ring * 170.0);
+            cb = cb + (i64)(ring * 255.0);
             if best == 0.0 {
                 // a star in that direction, or dark space
-                int i = (int)((vx + 2.0) * 90.0);
-                int j = (int)((vy + 2.0) * 90.0);
-                int k = (int)((vz + 2.0) * 90.0);
-                int hh = (i * 73856093 xor j * 19349663 xor k * 83492791) & 65535;
+                i64 i = (i64)((vx + 2.0) * 90.0);
+                i64 j = (i64)((vy + 2.0) * 90.0);
+                i64 k = (i64)((vz + 2.0) * 90.0);
+                i64 hh = (i * 73856093 xor j * 19349663 xor k * 83492791) & 65535;
                 if hh % 700 == 0 { cr = cr + 255; cg = cg + 255; cb = cb + 255; }
                 else if hh % 260 == 0 { cr = cr + 90; cg = cg + 100; cb = cb + 140; }
             }
@@ -125,7 +125,7 @@ int trace(double ex, double ey, double ez, double dx, double dy, double dz, doub
 }
 
 void main() {
-    int frames = 0;                                           // 0: until Ctrl-C or Enter
+    i64 frames = 0;                                           // 0: until Ctrl-C or Enter
     String[] args = Env::args();
     if args.len > 1 {
         switch Num::parse_int(args[1]) {
@@ -136,13 +136,13 @@ void main() {
             }
         }
     }
-    int w = Math::min_int(Term::cols(), 120);
-    int h = Math::min_int((Term::rows() - 1) * 2, 80);
+    i64 w = Math::min_int(Term::cols(), 120);
+    i64 h = Math::min_int((Term::rows() - 1) * 2, 80);
     Screen s = Screen::make(w, h);
     s.begin();
-    int side = Math::min_int(w, s.h);
+    i64 side = Math::min_int(w, s.h);
     double ring_w = Math::max(0.07, 15.0 * 1.4 / (double)side * 0.55);    // the size of a dot, in the units of the hole's radius
-    int frame = 0;
+    i64 frame = 0;
     while frames == 0 || frame < frames {
         double t = (double)frame * 0.06;
         mat3 look = mat3::rotate_x(0.30 + 0.12 * Math::sin(t * 0.35));       // the eye moves up and down slowly

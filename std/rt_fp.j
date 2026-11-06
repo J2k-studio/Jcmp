@@ -5,25 +5,25 @@
 // It is written out at the end of the program, before the standard error text of a panic / uncaught exception / crash, before a new process
 // (fork / execve) and before Sys::write.
 void __flush() {
-    int^ g = (int^)__gl();
-    int n = g[110];
+    i64^ g = (i64^)__gl();
+    i64 n = g[110];
     g[110] = 0;
-    int off = 0;
+    i64 off = 0;
     while off < n {
-        int r = syscall(64, 1, (char^)(__gl() + 896 + off), n - off);
+        i64 r = syscall(64, 1, (char^)(__gl() + 896 + off), n - off);
         if r <= 0 { break; }
         off += r;
     }
 }
 
 // the same as write(fd, p, n) for the program's output
-void __wr(int fd, char^ p, int n) {
+void __wr(i64 fd, char^ p, i64 n) {
     if fd != 1 {
         syscall(64, fd, p, n);
         return;
     }
-    int^ g = (int^)__gl();
-    int mode = g[111];
+    i64^ g = (i64^)__gl();
+    i64 mode = g[111];
     if mode == 0 {
         char t[64];
         mode = 1;
@@ -31,9 +31,9 @@ void __wr(int fd, char^ p, int n) {
         g[111] = mode;
     }
     if mode == 2 {
-        int off = 0;
+        i64 off = 0;
         while off < n {
-            int r = syscall(64, 1, p + off, n - off);
+            i64 r = syscall(64, 1, p + off, n - off);
             if r <= 0 { break; }
             off += r;
         }
@@ -41,9 +41,9 @@ void __wr(int fd, char^ p, int n) {
     }
     if g[110] + n > 16384 { __flush(); }
     if n >= 16384 {
-        int off2 = 0;
+        i64 off2 = 0;
         while off2 < n {
-            int r2 = syscall(64, 1, p + off2, n - off2);
+            i64 r2 = syscall(64, 1, p + off2, n - off2);
             if r2 <= 0 { break; }
             off2 += r2;
         }
@@ -57,12 +57,12 @@ void __wr(int fd, char^ p, int n) {
 // a thread is made: from now on every write goes straight out (no lock around the buffer)
 void __out_unbuffer() {
     __flush();
-    int^ g = (int^)__gl();
+    i64^ g = (i64^)__gl();
     g[111] = 2;
 }
 
 // jout << a bool: true or false
-void __print_bool(int v) {
+void __print_bool(i64 v) {
     if v != 0 {
         __wr(__out_fd(), "true", 4);
     } else {
@@ -71,17 +71,17 @@ void __print_bool(int v) {
 }
 
 // jout << a pointer or an address: 0x and the digits in hex (0x0 for null)
-void __print_ptr(int v) {
+void __print_ptr(i64 v) {
     char buf[24];
-    int at = 22;
+    i64 at = 22;
     if v == 0 {
         buf[at] = '0';
         at -= 1;
     }
-    int x = v;
-    int k = 0;
+    i64 x = v;
+    i64 k = 0;
     while k < 16 && x != 0 {
-        int d = x & 15;
+        i64 d = x & 15;
         if d < 10 { buf[at] = (char)(48 + d); } else { buf[at] = (char)(87 + d); }
         at -= 1;
         x = (x >> 4) & 1152921504606846975;
@@ -95,18 +95,18 @@ void __print_ptr(int v) {
 }
 
 // the file that jout writes to: 1, or 2 inside a statement with jerr (the word at 864 of the global area, 0 or 1, plus 1)
-int __out_fd() {
-    int^ gout = (int^)__gl();
+i64 __out_fd() {
+    i64^ gout = (i64^)__gl();
     return gout[108] + 1;
 }
 
 struct __Fp {
-    static void huge(int bits) {
+    static void huge(i64 bits) {
         double fl[1];
-        int^ fb = (int^)@fl[0];
+        i64^ fb = (i64^)@fl[0];
         fb[0] = bits;
         double d = fl[0];
-        int e10 = 0;
+        i64 e10 = 0;
         while d >= 1.0e23 {
             d = d / 1.0e22;
             e10 += 22;
@@ -115,18 +115,18 @@ struct __Fp {
             d = d / 10.0;
             e10 += 1;
         }
-        int m = (int)(d * 1000000.0 + 0.5);
+        i64 m = (i64)(d * 1000000.0 + 0.5);
         if m >= 10000000 {
             m = m / 10;
             e10 += 1;
         }
         char buf[32];
-        int n = 0;
+        i64 n = 0;
         buf[n] = (char)(48 + m / 1000000);
         n += 1;
         buf[n] = '.';
         n += 1;
-        int div = 100000;
+        i64 div = 100000;
         while div > 0 {
             buf[n] = (char)(48 + m / div % 10);
             n += 1;

@@ -3,7 +3,7 @@
 // Use:    jcmp1 input.jk -o program
 // the version of the compiler (also in the file VERSION; release.sh checks that they agree)
 #allow syscall                         // the compiler is the layer under Sys: it calls the system by number on purpose
-#define JCMP_VERSION "1.2.22.0"
+#define JCMP_VERSION "1.2.23.0"
 
 #import "jc_base"
 #import "jc_asm"
@@ -35,7 +35,7 @@ void reset_state(char^ in_path) {
     ft_count = 0;
     out_len = 0;
     gcount = 0;
-    int gz = 0;
+    i64 gz = 0;
     while gz < 65536 { gt_tab[gz] = 0; gz += 1; }          // the hash table of the globals goes with gcount
     gl_bytes = 17280;           // 864: the file of cout, 872: the divide flag, 880: bytes in the output buffer, 888: its mode, 896: the buffer (16 KB: the globals that follow are within reach of one load / store, ldr x, [x28, #N] with N below 32 KB)                      // slot 0: initial sp; 8..71: arguments 9..16 of a call; 72..863: exceptions; 864: the file of cout/cerr minus 1 (0: the standard output); 872: ARM32: 1 when the CPU has udiv / sdiv
     ginit_count = 0;
@@ -67,7 +67,7 @@ void reset_state(char^ in_path) {
 void tm_stage(char^ name) {
     if prog_on == 1 { prog_stage(name); }
     if x_time == 0 { return; }
-    int now = tm_now();
+    i64 now = tm_now();
     if tm_last != 0 {
         write_err("  ");
         write_err(name);
@@ -118,9 +118,9 @@ void help() {
 // a long option written with one or two dashes: -version  or  --version
 bool is_opt(char^ a, char^ name) {
     if a[0] != '-' { return false; }
-    int k = 1;
+    i64 k = 1;
     if a[1] == '-' { k = 2; }
-    int i = 0;
+    i64 i = 0;
     while name[i] != 0 {
         if a[k + i] != name[i] { return false; }
         i += 1;
@@ -132,23 +132,23 @@ char^ x_pre;
 char^ x_cachestat;
 char^ x_cachedir;
 char cache_default[300];
-int cache_auto;
-int x_nocache;
+i64 cache_auto;
+i64 x_nocache;
 
 // "address name" for every label of the program that was just assembled (the code starts at 0x4000B0)
 char map_buf[4000000];
 
 void write_label_map(char^ path) {
-    int cap = 4000000;
+    i64 cap = 4000000;
     char^ buf = @map_buf;
-    int n = 0;
-    int sl = 0;
+    i64 n = 0;
+    i64 sl = 0;
     while sl < as_label_count && n < cap - 200 {
         if as_laddr[sl] >= 0 {
-            int a = 4194480 + as_laddr[sl];
-            int k = 0;
+            i64 a = 4194480 + as_laddr[sl];
+            i64 k = 0;
             while k < 8 {
-                int nib = (a >> (28 - k * 4)) & 15;
+                i64 nib = (a >> (28 - k * 4)) & 15;
                 if nib < 10 { buf[n] = '0' + nib; } else { buf[n] = 'a' + nib - 10; }
                 n += 1;
                 k += 1;
@@ -171,14 +171,14 @@ void write_label_map(char^ path) {
 
 // -show NAME: the lines of the function NAME in the final assembler text, then the number of instructions (lines that are not labels, directives or comments)
 void show_function(char^ name) {
-    int nl = str_len(name);
-    int p = 0;
-    int start = 0 - 1;
+    i64 nl = str_len(name);
+    i64 p = 0;
+    i64 start = 0 - 1;
     while p < out_len {
-        int e = p;
+        i64 e = p;
         while e < out_len && out_buf[e] != 10 { e += 1; }
         if e - p == nl + 1 && out_buf[e - 1] == ':' {
-            int k = 0;
+            i64 k = 0;
             while k < nl && out_buf[p + k] == name[k] { k += 1; }
             if k == nl {
                 start = p;
@@ -193,11 +193,11 @@ void show_function(char^ name) {
         write_err(" in the program (a function that nobody calls is not made; on ARM32 there is no text)\n");
         syscall(93, 1);
     }
-    int count = 0;
+    i64 count = 0;
     p = start;
     bool first = true;
     while p < out_len {
-        int e2 = p;
+        i64 e2 = p;
         while e2 < out_len && out_buf[e2] != 10 { e2 += 1; }
         bool label = out_buf[e2 - 1] == ':';
         bool localab = label && out_buf[p] == 'L' && out_buf[p + 1] >= '0' && out_buf[p + 1] <= '9';
@@ -212,14 +212,14 @@ void show_function(char^ name) {
         p = e2 + 1;
     }
     char num[24];
-    int nn = 0;
-    int cv = count;
+    i64 nn = 0;
+    i64 cv = count;
     if cv == 0 {
         num[0] = '0';
         nn = 1;
     }
     char rv[24];
-    int rk = 0;
+    i64 rk = 0;
     while cv > 0 {
         rv[rk] = '0' + cv % 10;
         cv = cv / 10;
@@ -237,15 +237,15 @@ void show_function(char^ name) {
 }
 
 // the number of instructions of the function NAME in the final assembler text (-1: it is not there: inlined everywhere, or never called)
-int count_instructions(char^ name) {
-    int nl = str_len(name);
-    int p = 0;
-    int start = 0 - 1;
+i64 count_instructions(char^ name) {
+    i64 nl = str_len(name);
+    i64 p = 0;
+    i64 start = 0 - 1;
     while p < out_len {
-        int e = p;
+        i64 e = p;
         while e < out_len && out_buf[e] != 10 { e += 1; }
         if e - p == nl + 1 && out_buf[e - 1] == ':' {
-            int k = 0;
+            i64 k = 0;
             while k < nl && out_buf[p + k] == name[k] { k += 1; }
             if k == nl {
                 start = p;
@@ -255,11 +255,11 @@ int count_instructions(char^ name) {
         p = e + 1;
     }
     if start < 0 { return 0 - 1; }
-    int count = 0;
+    i64 count = 0;
     p = start;
     bool first = true;
     while p < out_len {
-        int e2 = p;
+        i64 e2 = p;
         while e2 < out_len && out_buf[e2] != 10 { e2 += 1; }
         bool label = out_buf[e2 - 1] == ':';
         bool localab = label && out_buf[p] == 'L' && out_buf[p + 1] >= '0' && out_buf[p + 1] <= '9';
@@ -273,19 +273,19 @@ int count_instructions(char^ name) {
 
 // #expect instructions <= N : every function that has a limit is looked at (ARM64: the text; ARM32: the code between two functions)
 void check_expectations() {
-    int f = 0;
+    i64 f = 0;
     while f < fcount {
         if fexp_n[f] > 0 {
-            int got = 0 - 1;
+            i64 got = 0 - 1;
             if x_target == 32 { got = a32_instr_count(@fname + f * 64); } else { got = count_instructions(@fname + f * 64); }
             if got > fexp_n[f] {
                 write_err(@fexp_file + f * 128);
                 write_err(":");
                 char nb[24];
-                int nn = 0;
-                int lv = fexp_line[f];
+                i64 nn = 0;
+                i64 lv = fexp_line[f];
                 char rv[24];
-                int rk = 0;
+                i64 rk = 0;
                 if lv == 0 { nb[0] = '0'; nn = 1; }
                 while lv > 0 { rv[rk] = '0' + lv % 10; lv = lv / 10; rk += 1; }
                 while rk > 0 { rk -= 1; nb[nn] = rv[rk]; nn += 1; }
@@ -295,9 +295,9 @@ void check_expectations() {
                 write_err(@fname + f * 64);
                 write_err("' is made of ");
                 char gb[24];
-                int gn = 0;
-                int gv = got;
-                int gk = 0;
+                i64 gn = 0;
+                i64 gv = got;
+                i64 gk = 0;
                 if gv == 0 { gb[0] = '0'; gn = 1; }
                 while gv > 0 { rv[gk] = '0' + gv % 10; gv = gv / 10; gk += 1; }
                 while gk > 0 { gk -= 1; gb[gn] = rv[gk]; gn += 1; }
@@ -305,9 +305,9 @@ void check_expectations() {
                 write_err(@gb);
                 write_err(" instructions, but  #expect  allows ");
                 char lb[24];
-                int ln = 0;
-                int lw = fexp_n[f];
-                int lk = 0;
+                i64 ln = 0;
+                i64 lw = fexp_n[f];
+                i64 lk = 0;
                 while lw > 0 { rv[lk] = '0' + lw % 10; lw = lw / 10; lk += 1; }
                 while lk > 0 { lk -= 1; lb[ln] = rv[lk]; ln += 1; }
                 lb[ln] = 0;
@@ -325,7 +325,7 @@ void main() {
     char^ in_path = null;
     char^ out_elf = null;
     char^ out_asm = null;
-    int ai = 1;
+    i64 ai = 1;
     if argc() >= 2 && str_eq(arg(1), "fmt") { syscall(93, fmt_main(2)); }
     if argc() >= 2 && str_eq(arg(1), "migrate") { syscall(93, migrate_main(2)); }
     char termios[64];
@@ -351,15 +351,15 @@ void main() {
             // the mascot (not in -help); an optional number after it: how many times faster than real time (default 1800)
             // pixels with colour by default (ASCII if the terminal has no 24-bit colour); "ascii": always characters; "pxg": pixels in white, grey and black
             lg_px = 1;
-            int lg_speed = 0;
-            int lg_arg = 1;
+            i64 lg_speed = 0;
+            i64 lg_arg = 1;
             while lg_arg <= 2 && ai + lg_arg < argc() {
                 char^ sp = arg(ai + lg_arg);
                 if str_eq(sp, "px") { lg_px = 1; }
                 else if str_eq(sp, "ascii") { lg_px = 0; }
                 else if str_eq(sp, "pxg") { lg_px = 2; }
                 else {
-                    int sk = 0;
+                    i64 sk = 0;
                     while sp[sk] >= '0' && sp[sk] <= '9' && sk < 8 {
                         lg_speed = lg_speed * 10 + (sp[sk] - '0');
                         sk += 1;
@@ -408,8 +408,8 @@ void main() {
         } else if str_eq(a, "-xdirect") {
             ai += 1;
             char^ dxv = arg(ai);
-            int dxk = 0;
-            int dxn = 0;
+            i64 dxk = 0;
+            i64 dxn = 0;
             while dxv[dxk] >= '0' && dxv[dxk] <= '9' {
                 dxn = dxn * 10 + (dxv[dxk] - '0');
                 dxk += 1;
@@ -441,8 +441,8 @@ void main() {
         } else if str_eq(a, "-irdbg") {
             ai += 1;
             char^ dv = arg(ai);
-            int dk = 0;
-            int dn = 0;
+            i64 dk = 0;
+            i64 dn = 0;
             while dv[dk] >= '0' && dv[dk] <= '9' {
                 dn = dn * 10 + (dv[dk] - '0');
                 dk += 1;
@@ -451,8 +451,8 @@ void main() {
         } else if str_eq(a, "-irclr") {
             ai += 1;
             char^ cv = arg(ai);
-            int ck = 0;
-            int cn = 0;
+            i64 ck = 0;
+            i64 cn = 0;
             while cv[ck] >= '0' && cv[ck] <= '9' {
                 cn = cn * 10 + (cv[ck] - '0');
                 ck += 1;
@@ -473,7 +473,7 @@ void main() {
             ai += 1;
             ir_max = 0;
             char^ nv = arg(ai);
-            int nk = 0;
+            i64 nk = 0;
             while nv[nk] >= '0' && nv[nk] <= '9' {
                 ir_max = ir_max * 10 + (nv[nk] - '0');
                 nk += 1;
@@ -482,7 +482,7 @@ void main() {
             ai += 1;
             ir_min = 0;
             char^ nv2 = arg(ai);
-            int nk2 = 0;
+            i64 nk2 = 0;
             while nv2[nk2] >= '0' && nv2[nk2] <= '9' {
                 ir_min = ir_min * 10 + (nv2[nk2] - '0');
                 nk2 += 1;
@@ -494,8 +494,8 @@ void main() {
         } else if str_eq(a, "-rotmax") {
             ai += 1;
             char^ rv = arg(ai);
-            int rk = 0;
-            int rn = 0;
+            i64 rk = 0;
+            i64 rn = 0;
             while rv[rk] >= '0' && rv[rk] <= '9' {
                 rn = rn * 10 + (rv[rk] - '0');
                 rk += 1;
@@ -582,7 +582,7 @@ void main() {
             ai += 1;
             x_cutmax = 0;
             char^ cv2 = arg(ai);
-            int cp2 = 0;
+            i64 cp2 = 0;
             while cv2[cp2] >= '0' && cv2[cp2] <= '9' { x_cutmax = x_cutmax * 10 + (cv2[cp2] - '0'); cp2 += 1; }
             char^ nx2 = arg(ai + 1);
             if ai + 1 < argc() && nx2[0] >= '0' && nx2[0] <= '9' {
@@ -613,14 +613,14 @@ void main() {
             if ai >= argc() { write_err("jcmp: -j needs a number (the processes that share the work; 1 = one)\n"); syscall(93, 1); }
             char^ jn = arg(ai);
             par_jobs = 0;
-            int jd = 0;
+            i64 jd = 0;
             while jn[jd] >= '0' && jn[jd] <= '9' { par_jobs = par_jobs * 10 + (jn[jd] - '0'); jd += 1; }
             if par_jobs < 1 { par_jobs = 1; }
         } else if str_eq(a, "-progress") {
             ai += 1;
             if ai >= argc() { write_err("jcmp: -progress needs the name of a file (it gets the percent of the compile)\n"); syscall(93, 1); }
             char^ pg = arg(ai);
-            int pgi = 0;
+            i64 pgi = 0;
             while pg[pgi] != 0 && pgi < 500 { prog_path[pgi] = pg[pgi]; pgi += 1; }
             prog_path[pgi] = 0;
             prog_on = 1;
@@ -649,7 +649,7 @@ void main() {
             in_path = a;
         } else if out_asm == null && out_elf == null {
             // a second name: assembler text if it ends in .jasm (the old form), else the program
-            int al = str_len(a);
+            i64 al = str_len(a);
             if al > 5 && a[al - 5] == '.' && a[al - 4] == 'j' && a[al - 3] == 'a' && a[al - 2] == 's' && a[al - 1] == 'm' {
                 out_asm = a;
             } else {
@@ -684,13 +684,13 @@ void main() {
     char derived[512];
     char base[256];
     // the name of the program from the source: x.jk / x.j -> x
-    int last = 0;
-    int bk = 0;
+    i64 last = 0;
+    i64 bk = 0;
     while in_path[bk] != 0 {
         if in_path[bk] == '/' { last = bk + 1; }
         bk += 1;
     }
-    int bn = 0;
+    i64 bn = 0;
     bk = last;
     while in_path[bk] != 0 && bn < 250 {
         base[bn] = in_path[bk];
@@ -714,10 +714,10 @@ void main() {
         out_elf = @base;
     } else if out_elf != null {
         // -o folder/ or -o an existing folder: the program gets the name of the source inside it
-        int ol = str_len(out_elf);
+        i64 ol = str_len(out_elf);
         bool is_dir = ol > 0 && out_elf[ol - 1] == '/';
         if !is_dir {
-            int st[18];
+            i64 st[18];
             if syscall(79, -100, out_elf, @st, 0) == 0 && (st[2] & 4294967295 & 61440) == 16384 { is_dir = true; }
         }
         if is_dir {
@@ -726,7 +726,7 @@ void main() {
                 syscall(93, 1);
             }
             str_copy(@derived, out_elf, 250);
-            int dl = str_len(@derived);
+            i64 dl = str_len(@derived);
             if dl > 0 && derived[dl - 1] != '/' {
                 derived[dl] = '/';
                 derived[dl + 1] = 0;
@@ -819,14 +819,14 @@ void main() {
     }
     if out_elf != null {
         // the assembler is part of jcmp: the text goes straight to it
-        int k = 0;
+        i64 k = 0;
         while k < out_len {
             as_src[k] = out_buf[k];
             k += 1;
         }
         if x_badasm == 1 {
             char bad[24] = "\nfrobnicate x1, x2\n";
-            int bk = 0;
+            i64 bk = 0;
             while bad[bk] != 0 {
                 as_src[out_len] = bad[bk];
                 out_len += 1;

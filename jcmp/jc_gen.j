@@ -15,64 +15,64 @@
 // A generic must be written before its first use. The tables are rebuilt in every pass.
 
 char lam_buf[262144];
-int lam_used;
-int lam_off[512];
-int lam_len[512];
-int lam_line[512];
+i64 lam_used;
+i64 lam_off[512];
+i64 lam_len[512];
+i64 lam_line[512];
 char lam_file[65536];        // 512 x 128
-int lam_count;
-int lam_done;
-int lam_warned;
+i64 lam_count;
+i64 lam_done;
+i64 lam_warned;
 // data enums (enum class E { A(int x), B, ... }): rewritten as a struct with a tag, see gen_data_enum
 char dv_name[4096];          // 64 x 64
-int dv_count;
-int dv_first[64];            // first variant of each
-int dv_nvar[64];
+i64 dv_count;
+i64 dv_first[64];            // first variant of each
+i64 dv_nvar[64];
 char dvv_name[65536];        // 1024 x 64: variant names
-int dvv_nparam[1024];
-int dvv_pfirst[1024];
+i64 dvv_nparam[1024];
+i64 dvv_pfirst[1024];
 char dvp_field[262144];      // 4096 x 64: the field of the struct that holds each parameter
 char dvp_pname[262144];      // 4096 x 64: the name the parameter was given
-int dvv_count;
-int dvp_count;
-int dvp_isarr[4096];         // 1: the member is an array (T[])
-int dvp_owns[4096];          // 1: that member holds something that frees itself
+i64 dvv_count;
+i64 dvp_count;
+i64 dvp_isarr[4096];         // 1: the member is an array (T[])
+i64 dvp_owns[4096];          // 1: that member holds something that frees itself
 char de_buf[262144];
-int de_len;
+i64 de_len;
 
 char tpl_text[1048576];      // the texts of the generic declarations
-int tpl_used;
+i64 tpl_used;
 char tpl_name[4096];         // 64 x 64
 char tpl_par[32768];         // 64 templates x 8 parameters x 64
-int tpl_np[64];
-int tpl_off[64];
-int tpl_len[64];
-int tpl_line[64];
+i64 tpl_np[64];
+i64 tpl_off[64];
+i64 tpl_len[64];
+i64 tpl_line[64];
 char tpl_file[8192];         // 64 x 128
-int tpl_count;
+i64 tpl_count;
 
 char ins_key[65536];         // 256 x 256: Name<arg,arg>
 char ins_name[16384];        // 256 x 64: the name of the instance
-int ins_state[256];          // 0 entered, 1 compiled
-int ins_ti[256];
+i64 ins_state[256];          // 0 entered, 1 compiled
+i64 ins_ti[256];
 char ins_args[65536];        // 256 x 256
-int ins_count;
+i64 ins_count;
 
 char gen_buf[524288];        // the text of the instance being made
 
 // the lexer state saved while an instance is parsed (one slot per level)
-int gs_kind[16];
-int gs_num[16];
-int gs_float[16];
-int gs_mant[16];
-int gs_exp[16];
-int gs_char[16];
-int gs_strlen[16];
-int gs_line[16];
-int gs_col[16];
-int gs_base[16];
-int gs_ls[16];
-int gs_mt[16];
+i64 gs_kind[16];
+i64 gs_num[16];
+i64 gs_float[16];
+i64 gs_mant[16];
+i64 gs_exp[16];
+i64 gs_char[16];
+i64 gs_strlen[16];
+i64 gs_line[16];
+i64 gs_col[16];
+i64 gs_base[16];
+i64 gs_ls[16];
+i64 gs_mt[16];
 char gs_text[4096];          // 16 x 256
 char gs_str[16384];          // 16 x 1024
 
@@ -91,8 +91,8 @@ void gen_reset() {
     ins_count = 0;
 }
 
-int gen_find_tpl(char^ name) {
-    int i = 0;
+i64 gen_find_tpl(char^ name) {
+    i64 i = 0;
     while i < tpl_count {
         if str_eq(@tpl_name + i * 64, name) { return i; }
         i += 1;
@@ -104,10 +104,10 @@ int gen_find_tpl(char^ name) {
 // b[0..n) is source text; these never produce tokens
 
 // a string, a character literal or a comment starts at b[i]: the index after it; otherwise i
-int gen_skip_lit(char^ b, int i, int n) {
-    int c = b[i];
+i64 gen_skip_lit(char^ b, i64 i, i64 n) {
+    i64 c = b[i];
     if c == 34 {
-        int raw = 0;
+        i64 raw = 0;
         if i > 0 && b[i - 1] == 'r' {
             raw = 1;
             if i > 1 && is_alnum(b[i - 2]) { raw = 0; }
@@ -139,24 +139,24 @@ int gen_skip_lit(char^ b, int i, int n) {
     return i;
 }
 
-int gen_blanks(char^ b, int i, int n) {
+i64 gen_blanks(char^ b, i64 i, i64 n) {
     while i < n && is_space(b[i]) { i += 1; }
     return i;
 }
 
 // the end of the item that starts at b[i]: after its `;`, or after the `}` that closes its
 // block (a block after `=` is an initializer: the item goes on to the `;`)
-int gen_item_end(char^ b, int i, int n) {
-    int par = 0;
-    int brace = 0;
-    int init = 0;
-    int last = 0;
+i64 gen_item_end(char^ b, i64 i, i64 n) {
+    i64 par = 0;
+    i64 brace = 0;
+    i64 init = 0;
+    i64 last = 0;
     while i < n {
-        int j = gen_skip_lit(b, i, n);
+        i64 j = gen_skip_lit(b, i, n);
         if j != i {
             i = j;
         } else {
-            int c = b[i];
+            i64 c = b[i];
             if c == '(' || c == '[' {
                 par += 1;
             } else if c == ')' || c == ']' {
@@ -179,11 +179,11 @@ int gen_item_end(char^ b, int i, int n) {
 
 // b[i] is the `<` of `Name<args>`: copies the arguments, without blanks, to dst
 // ("int,List<int>") and returns the index after the closing `>`; -1 if it does not close
-int gen_args(char^ b, int i, int n, char^ dst) {
-    int depth = 0;
-    int o = 0;
+i64 gen_args(char^ b, i64 i, i64 n, char^ dst) {
+    i64 depth = 0;
+    i64 o = 0;
     while i < n {
-        int c = b[i];
+        i64 c = b[i];
         if c == '<' {
             depth += 1;
             if depth > 1 { dst[o] = c; o += 1; }
@@ -208,8 +208,8 @@ int gen_args(char^ b, int i, int n, char^ dst) {
 }
 
 // copy the identifier at b[i] into word (63 at most); returns its end
-int gen_word(char^ b, int i, int n, char^ word) {
-    int k = 0;
+i64 gen_word(char^ b, i64 i, i64 n, char^ word) {
+    i64 k = 0;
     while i < n && is_alnum(b[i]) {
         if k < 63 { word[k] = b[i]; k += 1; }
         i += 1;
@@ -221,13 +221,13 @@ int gen_word(char^ b, int i, int n, char^ word) {
 // ----------------------------------------------------------------- the instances
 
 // arg k of a list "a,b<c,d>,e" (depth-aware); returns false if there is no such argument
-bool gen_arg(char^ args, int k, char^ dst) {
-    int i = 0;
-    int depth = 0;
-    int cur = 0;
-    int o = 0;
+bool gen_arg(char^ args, i64 k, char^ dst) {
+    i64 i = 0;
+    i64 depth = 0;
+    i64 cur = 0;
+    i64 o = 0;
     while true {
-        int c = args[i];
+        i64 c = args[i];
         if c == 0 || (c == ',' && depth == 0) {
             if cur == k {
                 dst[o] = 0;
@@ -249,10 +249,10 @@ bool gen_arg(char^ args, int k, char^ dst) {
     return false;
 }
 
-int gen_arg_count(char^ args) {
-    int n = 1;
-    int depth = 0;
-    int i = 0;
+i64 gen_arg_count(char^ args) {
+    i64 n = 1;
+    i64 depth = 0;
+    i64 i = 0;
     if args[0] == 0 { return 0; }
     while args[i] != 0 {
         if args[i] == '<' { depth += 1; }
@@ -263,8 +263,8 @@ int gen_arg_count(char^ args) {
     return n;
 }
 
-int gen_find_ins(char^ key) {
-    int i = 0;
+i64 gen_find_ins(char^ key) {
+    i64 i = 0;
     while i < ins_count {
         if str_eq(@ins_key + i * 256, key) { return i; }
         i += 1;
@@ -274,15 +274,15 @@ int gen_find_ins(char^ key) {
 
 // the name of an instance: Name__ + the arguments with ^ [ ] < > , turned into letters
 void gen_mangle(char^ dst, char^ name, char^ args) {
-    int o = 0;
-    int i = 0;
+    i64 o = 0;
+    i64 i = 0;
     while name[i] != 0 && o < 40 { dst[o] = name[i]; o += 1; i += 1; }
     dst[o] = '_';
     dst[o + 1] = '_';
     o += 2;
     i = 0;
     while args[i] != 0 {
-        int c = args[i];
+        i64 c = args[i];
         if is_alnum(c) {
             dst[o] = c;
             o += 1;
@@ -305,16 +305,16 @@ void gen_mangle(char^ dst, char^ name, char^ args) {
     dst[o] = 0;
 }
 
-int gen_len;
+i64 gen_len;
 
-void gen_put(int c) {
+void gen_put(i64 c) {
     if gen_len >= 524280 { die("generic instance too large"); }
     gen_buf[gen_len] = c;
     gen_len += 1;
 }
 
 void gen_put_str(char^ s) {
-    int i = 0;
+    i64 i = 0;
     while s[i] != 0 {
         gen_put(s[i]);
         i += 1;
@@ -322,38 +322,38 @@ void gen_put_str(char^ s) {
 }
 
 // make the text of instance `ins` of template `ti` in gen_buf
-void gen_build(int ti, int ins, char^ args) {
+void gen_build(i64 ti, i64 ins, char^ args) {
     char argv[256];
     char word[64];
     char skip[256];
     char^ t = @tpl_text + tpl_off[ti];
-    int n = tpl_len[ti];
-    int i = 0;
-    int head = 0;
+    i64 n = tpl_len[ti];
+    i64 i = 0;
+    i64 head = 0;
     gen_len = 0;
     while i < n {
-        int j = gen_skip_lit(t, i, n);
+        i64 j = gen_skip_lit(t, i, n);
         if j != i {
             while i < j && i < n {
                 gen_put(t[i]);
                 i += 1;
             }
         } else if is_letter(t[i]) {
-            int k = gen_word(t, i, n, @word);
-            int pi = 0 - 1;
-            int q = 0;
+            i64 k = gen_word(t, i, n, @word);
+            i64 pi = 0 - 1;
+            i64 q = 0;
             while q < tpl_np[ti] {
                 if str_eq(@tpl_par + (ti * 8 + q) * 64, @word) { pi = q; }
                 q += 1;
             }
-            int nx = gen_blanks(t, k, n);
+            i64 nx = gen_blanks(t, k, n);
             if head == 0 && str_eq(@word, @tpl_name + ti * 64) && nx < n && t[nx] == '<' {
                 head = 1;
                 gen_put_str(@ins_name + ins * 64);
-                int e = gen_args(t, nx, n, @skip);
+                i64 e = gen_args(t, nx, n, @skip);
                 if e < 0 { die("a generic declaration: > expected"); }
                 // keep the blanks and new lines of the skipped part (line numbers stay right)
-                int z = k;
+                i64 z = k;
                 while z < e {
                     if t[z] == 10 { gen_put(10); }
                     z += 1;
@@ -381,7 +381,7 @@ void gen_build(int ti, int ins, char^ args) {
     gen_buf[gen_len] = 0;
 }
 
-void gen_save(int d) {
+void gen_save(i64 d) {
     gs_kind[d] = tok_kind;
     gs_num[d] = tok_num;
     gs_float[d] = tok_float;
@@ -395,14 +395,14 @@ void gen_save(int d) {
     gs_ls[d] = err_ls;
     gs_mt[d] = mt_pending;
     str_copy(@gs_text + d * 256, @tok_text, 256);
-    int i = 0;
+    i64 i = 0;
     while i <= tok_str_len && i < 1023 {
         gs_str[d * 1024 + i] = tok_str[i];
         i += 1;
     }
 }
 
-void gen_restore(int d) {
+void gen_restore(i64 d) {
     tok_kind = gs_kind[d];
     tok_num = gs_num[d];
     tok_float = gs_float[d];
@@ -416,7 +416,7 @@ void gen_restore(int d) {
     err_ls = gs_ls[d];
     mt_pending = gs_mt[d];
     str_copy(@tok_text, @gs_text + d * 256, 256);
-    int i = 0;
+    i64 i = 0;
     while i <= tok_str_len && i < 1023 {
         tok_str[i] = gs_str[d * 1024 + i];
         i += 1;
@@ -425,7 +425,7 @@ void gen_restore(int d) {
 
 // the instance of template ti with these arguments ("int,List<int>"): its index; a new one is only
 // entered in the table (ins_state 0: not compiled yet)
-int gen_register(int ti, char^ args) {
+i64 gen_register(i64 ti, char^ args) {
     char key[256];
     char nm[64];
     key[0] = 0;
@@ -433,13 +433,13 @@ int gen_register(int ti, char^ args) {
     append_text(@key, "<");
     append_text(@key, args);
     append_text(@key, ">");
-    int f = gen_find_ins(@key);
+    i64 f = gen_find_ins(@key);
     if f >= 0 { return f; }
     if gen_arg_count(args) != tpl_np[ti] {
         die_name("wrong number of generic arguments for", @tpl_name + ti * 64);
     }
     if ins_count >= 256 { die("too many generic instances"); }
-    int ins = ins_count;
+    i64 ins = ins_count;
     ins_count += 1;
     ins_state[ins] = 0;
     ins_ti[ins] = ti;
@@ -447,17 +447,17 @@ int gen_register(int ti, char^ args) {
     str_copy(@ins_key + ins * 256, @key, 256);
     gen_mangle(@nm, @tpl_name + ti * 64, args);
     // a name that is too long or already taken by another instance: number it
-    int taken = 0;
-    int q = 0;
+    i64 taken = 0;
+    i64 q = 0;
     while q < ins {
         if str_eq(@ins_name + q * 64, @nm) { taken = 1; }
         q += 1;
     }
     if taken == 1 || str_len(@nm) >= 56 {
         nm[0] = 0;
-        int tl = str_len(@tpl_name + ti * 64);
+        i64 tl = str_len(@tpl_name + ti * 64);
         if tl > 40 { tl = 40; }
-        int w = 0;
+        i64 w = 0;
         while w < tl { nm[w] = tpl_name[ti * 64 + w]; w += 1; }
         nm[tl] = 0;
         append_text(@nm, "__g");
@@ -468,11 +468,11 @@ int gen_register(int ti, char^ args) {
 }
 
 // compile instance `ins`: its text is read as items, here (at top level)
-void gen_compile(int ins) {
-    int ti = ins_ti[ins];
+void gen_compile(i64 ins) {
+    i64 ti = ins_ti[ins];
     ins_state[ins] = 1;
     gen_build(ti, ins, @ins_args + ins * 256);
-    int d = lx_depth;
+    i64 d = lx_depth;
     gen_save(d);
     push_text(@gen_buf, gen_len, @tpl_file + ti * 128, tpl_line[ti]);
     next();
@@ -482,15 +482,15 @@ void gen_compile(int ins) {
 }
 
 // the instance, made and compiled now if it does not exist yet (the use is Name<args> in the text)
-int gen_instance(int ti, char^ args) {
-    int ins = gen_register(ti, args);
+i64 gen_instance(i64 ti, char^ args) {
+    i64 ins = gen_register(ti, args);
     if ins_state[ins] == 0 { gen_compile(ins); }
     return ins;
 }
 
 // the instances that a call without <...> asked for (see gen_infer_call) are compiled after the item
 void gen_pending() {
-    int i = 0;
+    i64 i = 0;
     while i < ins_count {
         if ins_state[i] == 0 { gen_compile(i); }
         i += 1;
@@ -500,44 +500,44 @@ void gen_pending() {
 // ------------------------------------------------------------------ the items
 
 // the item starting at b[s] is a generic declaration? registers it and returns its end; else -1
-int gen_declaration(char^ b, int s, int n, int line) {
-    int i = s;
+i64 gen_declaration(char^ b, i64 s, i64 n, i64 line) {
+    i64 i = s;
     char name[64];
-    int open = 0 - 1;
-    int is_struct = 0;
+    i64 open = 0 - 1;
+    i64 is_struct = 0;
     char word[64];
-    int w = gen_word(b, i, n, @word);
+    i64 w = gen_word(b, i, n, @word);
     if str_eq(@word, "struct") && w < n {
         is_struct = 1;
-        int a = gen_blanks(b, w, n);
-        int e = gen_word(b, a, n, @name);
-        int nx = gen_blanks(b, e, n);
+        i64 a = gen_blanks(b, w, n);
+        i64 e = gen_word(b, a, n, @name);
+        i64 nx = gen_blanks(b, e, n);
         if e > a && nx < n && b[nx] == '<' { open = nx; }
     } else if str_eq(@word, "enum") && w < n {
         // enum class Name<T> { ... }
         is_struct = 1;
-        int a1 = gen_blanks(b, w, n);
-        int e1 = gen_word(b, a1, n, @word);
+        i64 a1 = gen_blanks(b, w, n);
+        i64 e1 = gen_word(b, a1, n, @word);
         if str_eq(@word, "class") {
-            int a2 = gen_blanks(b, e1, n);
-            int e2 = gen_word(b, a2, n, @name);
-            int nx2 = gen_blanks(b, e2, n);
+            i64 a2 = gen_blanks(b, e1, n);
+            i64 e2 = gen_word(b, a2, n, @name);
+            i64 nx2 = gen_blanks(b, e2, n);
             if e2 > a2 && nx2 < n && b[nx2] == '<' { open = nx2; }
         }
     } else {
         // the first ( = ; { of the head: a function if it is a ( with a > in front of it
         while i < n {
-            int j = gen_skip_lit(b, i, n);
+            i64 j = gen_skip_lit(b, i, n);
             if j != i {
                 i = j;
             } else {
-                int c = b[i];
+                i64 c = b[i];
                 if c == '=' || c == ';' || c == '{' { return 0 - 1; }
                 if c == '(' {
-                    int k = i - 1;
+                    i64 k = i - 1;
                     while k > s && is_space(b[k]) { k -= 1; }
                     if b[k] != '>' { return 0 - 1; }
-                    int depth = 0;
+                    i64 depth = 0;
                     while k > s {
                         if b[k] == '>' { depth += 1; }
                         if b[k] == '<' {
@@ -550,10 +550,10 @@ int gen_declaration(char^ b, int s, int n, int line) {
                     open = k;
                     k -= 1;
                     while k > s && is_space(b[k]) { k -= 1; }
-                    int e2 = k + 1;
+                    i64 e2 = k + 1;
                     while k >= s && is_alnum(b[k]) { k -= 1; }
                     if e2 - (k + 1) < 1 || e2 - (k + 1) > 62 { return 0 - 1; }
-                    int z = 0;
+                    i64 z = 0;
                     while z < e2 - (k + 1) { name[z] = b[k + 1 + z]; z += 1; }
                     name[z] = 0;
                     break;
@@ -564,20 +564,20 @@ int gen_declaration(char^ b, int s, int n, int line) {
     }
     if open < 0 { return 0 - 1; }
     if tpl_count >= 64 { die("too many generic declarations"); }
-    int ti = tpl_count;
+    i64 ti = tpl_count;
     str_copy(@tpl_name + ti * 64, @name, 64);
     // the parameter names between < and >
     char plist[256];
-    int pe = gen_args(b, open, n, @plist);
+    i64 pe = gen_args(b, open, n, @plist);
     if pe < 0 { die("a generic declaration: > expected"); }
-    int np = gen_arg_count(@plist);
+    i64 np = gen_arg_count(@plist);
     if np < 1 || np > 8 { die("a generic declaration needs 1 to 8 parameters"); }
     char one[256];
-    int pk = 0;
+    i64 pk = 0;
     while pk < np {
         gen_arg(@plist, pk, @one);
-        int ok = 1;
-        int oi = 0;
+        i64 ok = 1;
+        i64 oi = 0;
         while one[oi] != 0 {
             if !is_alnum(one[oi]) { ok = 0; }
             oi += 1;
@@ -586,12 +586,12 @@ int gen_declaration(char^ b, int s, int n, int line) {
         str_copy(@tpl_par + (ti * 8 + pk) * 64, @one, 64);
         pk += 1;
     }
-    int end = gen_item_end(b, s, n);
-    int e3 = gen_blanks(b, end, n);
+    i64 end = gen_item_end(b, s, n);
+    i64 e3 = gen_blanks(b, end, n);
     if is_struct == 1 && e3 < n && b[e3] == ';' { end = e3 + 1; }
-    int len = end - s;
+    i64 len = end - s;
     if tpl_used + len + 1 >= 1048576 { die("generic declarations too large"); }
-    int x = 0;
+    i64 x = 0;
     while x < len {
         tpl_text[tpl_used + x] = b[s + x];
         x += 1;
@@ -613,11 +613,11 @@ void gen_item() {
     if err_base != cur_base { return; }
     if tok_is("import") || tok_is("using") { return; }
     char^ b = @src_bufs + cur_base;
-    int s = err_ls + err_col - 1;
-    int n = cur_len;
-    int line = err_line;
-    int ls = err_ls;
-    int end = gen_declaration(b, s, n, line);
+    i64 s = err_ls + err_col - 1;
+    i64 n = cur_len;
+    i64 line = err_line;
+    i64 ls = err_ls;
+    i64 end = gen_declaration(b, s, n, line);
     if end >= 0 {
         // a generic declaration: keep the text, skip it
         while cur_base + cur_pos < cur_base + end && cur_pos < cur_len { adv(); }
@@ -626,7 +626,7 @@ void gen_item() {
         return;
     }
     if tok_is("enum") {
-        int de = gen_data_enum(b, s, n, line);
+        i64 de = gen_data_enum(b, s, n, line);
         if de >= 0 {
             // a data enum: its struct was compiled; skip the text of the enum
             while cur_pos < de && cur_pos < cur_len { adv(); }
@@ -637,30 +637,30 @@ void gen_item() {
     }
     if tpl_count == 0 { return; }
     // look for uses of a generic in the text of this item
-    int e = gen_item_end(b, s, n);
-    int i = s;
+    i64 e = gen_item_end(b, s, n);
+    i64 i = s;
     char word[64];
     char args[256];
-    int made = 0;
-    int keep_line = err_line;
-    int keep_col = err_col;
-    int keep_ls = err_ls;
+    i64 made = 0;
+    i64 keep_line = err_line;
+    i64 keep_col = err_col;
+    i64 keep_ls = err_ls;
     while i < e {
-        int j = gen_skip_lit(b, i, n);
+        i64 j = gen_skip_lit(b, i, n);
         if j != i {
             i = j;
         } else if is_letter(b[i]) {
-            int k = gen_word(b, i, n, @word);
-            int ti = gen_find_tpl(@word);
+            i64 k = gen_word(b, i, n, @word);
+            i64 ti = gen_find_tpl(@word);
             if ti >= 0 {
-                int nx = gen_blanks(b, k, n);
+                i64 nx = gen_blanks(b, k, n);
                 if nx < n && b[nx] == '<' {
-                    int ae = gen_args(b, nx, n, @args);
+                    i64 ae = gen_args(b, nx, n, @args);
                     if ae > 0 {
                         // an error inside the instance is reported at the place of the use
-                        int ln = line;
-                        int lsx = ls;
-                        int z = s;
+                        i64 ln = line;
+                        i64 lsx = ls;
+                        i64 z = s;
                         while z < i {
                             if b[z] == 10 { ln += 1; lsx = z + 1; }
                             z += 1;
@@ -697,21 +697,21 @@ void gen_item() {
 // then the token becomes the name of the instance and the text up to the > is consumed
 void gen_use() {
     if tpl_count == 0 { return; }
-    int ti = gen_find_tpl(@tok_text);
+    i64 ti = gen_find_tpl(@tok_text);
     if ti < 0 { return; }
     char^ b = @src_bufs + cur_base;
-    int nx = gen_blanks(b, cur_pos, cur_len);
+    i64 nx = gen_blanks(b, cur_pos, cur_len);
     if nx >= cur_len || b[nx] != '<' { return; }
     char args[256];
     char key[256];
-    int ae = gen_args(b, nx, cur_len, @args);
+    i64 ae = gen_args(b, nx, cur_len, @args);
     if ae < 0 { return; }
     key[0] = 0;
     append_text(@key, @tok_text);
     append_text(@key, "<");
     append_text(@key, @args);
     append_text(@key, ">");
-    int f = gen_find_ins(@key);
+    i64 f = gen_find_ins(@key);
     if f < 0 { return; }
     while cur_pos < ae { adv(); }
     str_copy(@tok_text, @ins_name + f * 64, 256);
@@ -728,14 +728,14 @@ void gen_use() {
 // or ")" and "->"
 bool lambda_ahead() {
     char^ b = @src_bufs + cur_base;
-    int n = cur_len;
-    int i = gen_blanks(b, cur_pos, n);
+    i64 n = cur_len;
+    i64 i = gen_blanks(b, cur_pos, n);
     if i < n && b[i] == ')' {
         i = gen_blanks(b, i + 1, n);
         return i + 1 < n && b[i] == '-' && b[i + 1] == '>';
     }
     char word[64];
-    int e = gen_word(b, i, n, @word);
+    i64 e = gen_word(b, i, n, @word);
     if e == i { return false; }
     bool is_ty = str_eq(@word, "int") || str_eq(@word, "char") || str_eq(@word, "bool") || str_eq(@word, "i8") || str_eq(@word, "i32");
     if str_eq(@word, "u8") || str_eq(@word, "u32") || str_eq(@word, "u64") || str_eq(@word, "float") || str_eq(@word, "double") { is_ty = true; }
@@ -748,18 +748,18 @@ bool lambda_ahead() {
     return i < n && is_letter(b[i]);
 }
 
-int lam_ptmp[16];
+i64 lam_ptmp[16];
 
 // the common end of a lambda: the raw text of the return type [r_start, r_end), of the parameters [p_start, p_end)
 // and of the body [b_start, b_end) become a function; the expression is its address
-void lam_finish(int r_tid, int pn, int r_start, int r_end, int p_start, int p_end, int b_start, int b_end, int line) {
+void lam_finish(i64 r_tid, i64 pn, i64 r_start, i64 r_end, i64 p_start, i64 p_end, i64 b_start, i64 b_end, i64 line) {
     char^ b = @src_bufs + cur_base;
     char name[64];
     str_copy(@name, "__lambda_", 64);
     append_int(@name, lam_seq);
     lam_seq += 1;
-    int o = lam_used;
-    int x = r_start;
+    i64 o = lam_used;
+    i64 x = r_start;
     while x < r_end {
         lam_buf[o] = b[x];
         o += 1;
@@ -802,12 +802,12 @@ void lam_finish(int r_tid, int pn, int r_start, int r_end, int p_start, int p_en
     // the lexer goes on after the body
     while cur_pos < b_end && cur_pos < cur_len { adv(); }
     next();
-    int k = 0;
+    i64 k = 0;
     while k < pn {
         sg_tmp[k] = lam_ptmp[k];
         k += 1;
     }
-    int sg = sig_intern(r_tid, pn);
+    i64 sg = sig_intern(r_tid, pn);
     note_call(@name);
     emit_str("adr x0, ");
     emit_line(@name);
@@ -818,12 +818,12 @@ void lam_finish(int r_tid, int pn, int r_start, int r_end, int p_start, int p_en
 }
 
 // the parameters of a lambda: the token after "(" is current; leaves ")" as the current token
-int lam_params() {
-    int pn = 0;
+i64 lam_params() {
+    i64 pn = 0;
     if !tok_is(")") {
         while true {
             parse_type();
-            int pt = ty_tid;
+            i64 pt = ty_tid;
             if ty_ptr != 0 { pt = 0; }
             if ty_void == 1 && ty_ptr == 0 { die_help("a parameter type cannot be void", "void is only for functions that give no value; use int, double, ... for a parameter"); }
             if tok_kind != T_IDENT { die_help("a parameter name was expected", "write the type and then the name: int count (the words in and out are reserved for register blocks: do not use them as names)"); }
@@ -851,22 +851,22 @@ void gen_lambda() {
         warn("write a lambda like a function: int(int a, int b) { return a + b; } (the form with -> will be removed)", "deprecated");
     }
     char^ b = @src_bufs + cur_base;
-    int p_start = cur_pos;               // just after the "("
-    int line = err_line;
+    i64 p_start = cur_pos;               // just after the "("
+    i64 line = err_line;
     next();
-    int pn = lam_params();
-    int p_end = err_ls + err_col - 1;
+    i64 pn = lam_params();
+    i64 p_end = err_ls + err_col - 1;
     next();
     if !tok_is("->") { die("-> expected: (parameters) -> type { body }"); }
-    int r_start = cur_pos;
+    i64 r_start = cur_pos;
     next();
     parse_type();
-    int r_tid = ty_tid;
+    i64 r_tid = ty_tid;
     if ty_ptr != 0 { r_tid = 0; }
     if ty_void == 1 && ty_ptr == 0 { r_tid = 98; }
     if !tok_is("{") { die("{ expected: the body of the lambda"); }
-    int r_end = err_ls + err_col - 1;
-    int b_end = gen_item_end(b, r_end, cur_len);
+    i64 r_end = err_ls + err_col - 1;
+    i64 b_end = gen_item_end(b, r_end, cur_len);
     lam_finish(r_tid, pn, r_start, r_end, p_start, p_end, r_end, b_end, line);
 }
 
@@ -874,8 +874,8 @@ void gen_lambda() {
 bool lambda_fn_ahead() {
     if !at_type() { return false; }
     char^ b = @src_bufs + cur_base;
-    int n = cur_len;
-    int i = gen_blanks(b, cur_pos, n);
+    i64 n = cur_len;
+    i64 i = gen_blanks(b, cur_pos, n);
     while i < n && b[i] == '^' { i = gen_blanks(b, i + 1, n); }
     return i < n && b[i] == '(';
 }
@@ -885,34 +885,34 @@ void gen_lambda_fn() {
     if err_base != cur_base { die("a lambda cannot be written inside a #define"); }
     if lam_count >= 500 { die("too many lambdas in one program"); }
     char^ b = @src_bufs + cur_base;
-    int r_start = err_ls + err_col - 1;
-    int line = err_line;
-    int sv_fn = parse_fn_type_ok;
+    i64 r_start = err_ls + err_col - 1;
+    i64 line = err_line;
+    i64 sv_fn = parse_fn_type_ok;
     parse_fn_type_ok = 0;                // the "(" after the type starts the parameters, not a function pointer type
     parse_type();
     parse_fn_type_ok = sv_fn;
-    int r_tid = ty_tid;
+    i64 r_tid = ty_tid;
     if ty_ptr != 0 { r_tid = 0; }
     if ty_void == 1 && ty_ptr == 0 { r_tid = 98; }
-    int r_end = err_ls + err_col - 1;
+    i64 r_end = err_ls + err_col - 1;
     if !tok_is("(") { die("( expected: the parameters of the lambda"); }
-    int p_start = cur_pos;
+    i64 p_start = cur_pos;
     next();
-    int pn = lam_params();
-    int p_end = err_ls + err_col - 1;
+    i64 pn = lam_params();
+    i64 p_end = err_ls + err_col - 1;
     next();
     if !tok_is("{") { die("{ expected: the body of the lambda"); }
-    int b_start = err_ls + err_col - 1;
-    int b_end = gen_item_end(b, b_start, cur_len);
+    i64 b_start = err_ls + err_col - 1;
+    i64 b_end = gen_item_end(b, b_start, cur_len);
     lam_finish(r_tid, pn, r_start, r_end, p_start, p_end, b_start, b_end, line);
 }
 
 // compile the lambdas that were written since the last call
 void gen_lambdas() {
     while lam_done < lam_count {
-        int i = lam_done;
+        i64 i = lam_done;
         lam_done += 1;
-        int d = lx_depth;
+        i64 d = lx_depth;
         gen_save(d);
         push_text(@lam_buf + lam_off[i], lam_len[i], @lam_file + i * 128, lam_line[i]);
         next();
@@ -930,25 +930,25 @@ void gen_lambdas() {
 // int), a decimal number is a double. A type that does not fit is an error; so is a T that no parameter shows
 // (write Name<T>(...)). Struct generics are always written with <>.
 
-int ia_n;
-int ia_s[16];
-int ia_e[16];
-int ia_class[16];            // 0 a type (in ia_text), 1 a whole number, 2 a decimal number
+i64 ia_n;
+i64 ia_s[16];
+i64 ia_e[16];
+i64 ia_class[16];            // 0 a type (in ia_text), 1 a whole number, 2 a decimal number
 char ia_text[2048];          // 16 x 128
-int tp_n;
-int tp_mode[16];             // 0 T  1 T^  2 T[]  3 T name[]  -1 something else
-int tp_q[16];                // which template parameter
+i64 tp_n;
+i64 tp_mode[16];             // 0 T  1 T^  2 T[]  3 T name[]  -1 something else
+i64 tp_q[16];                // which template parameter
 char bd_text[1024];          // 8 x 128: what each template parameter is bound to
-int bd_n[8];
-int bd_w[8];
-int bd_d[8];
+i64 bd_n[8];
+i64 bd_w[8];
+i64 bd_d[8];
 
 bool gen_is_template(char^ name) {
     return gen_find_tpl(name) >= 0;
 }
 
 // the name of a type from a width code and a type id (false if it has none)
-bool code_text(int code, int tid, char^ out) {
+bool code_text(i64 code, i64 tid, char^ out) {
     out[0] = 0;
     if tid < 0 { return false; }
     if tid >= 3 && tid <= 66 {
@@ -977,7 +977,7 @@ bool code_text(int code, int tid, char^ out) {
 }
 
 // what a pointer with this pointee code points at
-bool pointee_text(int p, char^ out) {
+bool pointee_text(i64 p, char^ out) {
     out[0] = 0;
     if p == 10 { return false; }
     if p >= 400 {
@@ -993,7 +993,7 @@ bool var_type_text(char^ out) {
     char tmp[128];
     out[0] = 0;
     if v_kind == 3 {
-        int info = v_dyn;
+        i64 info = v_dyn;
         if is_str_dyn(info) { str_copy(out, "String", 128); return true; }
         if is_strarr_dyn(info) { str_copy(out, "String[]", 128); return true; }
         if dyn_ptr(info) != 0 {
@@ -1023,28 +1023,28 @@ bool var_type_text(char^ out) {
 }
 
 // argument number idx is b[s..e): a number, a char, a text, true/false, a variable or @variable?
-bool classify_arg(char^ b, int s, int e, int idx) {
+bool classify_arg(char^ b, i64 s, i64 e, i64 idx) {
     char^ out = @ia_text + idx * 128;
     out[0] = 0;
     ia_class[idx] = 0;
     s = gen_blanks(b, s, e);
     while e > s && is_space(b[e - 1]) { e -= 1; }
     if s >= e { return false; }
-    int c = b[s];
+    i64 c = b[s];
     // an arithmetic expression: the type comes from its operands (the last operator outside brackets)
-    int depth = 0;
-    int opat = 0 - 1;
-    int q = s;
+    i64 depth = 0;
+    i64 opat = 0 - 1;
+    i64 q = s;
     while q < e {
-        int lj = gen_skip_lit(b, q, e);
+        i64 lj = gen_skip_lit(b, q, e);
         if lj != q { q = lj; continue; }
-        int ch = b[q];
+        i64 ch = b[q];
         if ch == '(' || ch == '[' { depth += 1; }
         else if ch == ')' || ch == ']' { depth -= 1; }
         else if depth == 0 && q > s && (ch == '+' || ch == '-' || ch == '*' || ch == '/' || ch == '%') {
-            int pv = q - 1;
+            i64 pv = q - 1;
             while pv > s && is_space(b[pv]) { pv -= 1; }
-            int pc = b[pv];
+            i64 pc = b[pv];
             bool expo = (pc == 'e' || pc == 'E') && pv > s && is_digit(b[pv - 1]) && is_digit(b[s]);
             if !expo && pc != '+' && pc != '-' && pc != '*' && pc != '/' && pc != '%' && pc != '(' { opat = q; }
         }
@@ -1053,7 +1053,7 @@ bool classify_arg(char^ b, int s, int e, int idx) {
     if opat > s {
         if !classify_arg(b, s, opat, idx) { return false; }
         if ia_class[idx] == 0 { return true; }
-        int lc = ia_class[idx];
+        i64 lc = ia_class[idx];
         if !classify_arg(b, opat + 1, e, idx) { return false; }
         if ia_class[idx] != 0 { if lc > ia_class[idx] { ia_class[idx] = lc; } }
         return true;
@@ -1061,13 +1061,13 @@ bool classify_arg(char^ b, int s, int e, int idx) {
     if is_letter(c) && b[e - 1] == ')' {
         // a call of a generic function: its type is the type of its first argument
         char cw[64];
-        int cwe = gen_word(b, s, e, @cw);
-        int cn = gen_blanks(b, cwe, e);
+        i64 cwe = gen_word(b, s, e, @cw);
+        i64 cn = gen_blanks(b, cwe, e);
         if cn < e && b[cn] == '(' && gen_find_tpl(@cw) >= 0 {
-            int ae = cn + 1;
-            int d2 = 0;
+            i64 ae = cn + 1;
+            i64 d2 = 0;
             while ae < e - 1 {
-                int lj2 = gen_skip_lit(b, ae, e);
+                i64 lj2 = gen_skip_lit(b, ae, e);
                 if lj2 != ae { ae = lj2; continue; }
                 if b[ae] == '(' || b[ae] == '[' { d2 += 1; }
                 else if b[ae] == ')' || b[ae] == ']' { d2 -= 1; }
@@ -1081,9 +1081,9 @@ bool classify_arg(char^ b, int s, int e, int idx) {
         return classify_arg(b, s + 1, e - 1, idx);
     }
     if is_digit(c) || (c == '-' && s + 1 < e && is_digit(b[s + 1])) {
-        int k = s;
+        i64 k = s;
         if c == '-' { k += 1; }
-        int dec = 0;
+        i64 dec = 0;
         if b[k] == '0' && k + 1 < e && (b[k + 1] == 'x' || b[k + 1] == 'X' || b[k + 1] == 'b' || b[k + 1] == 'B') {
             k += 2;
             while k < e && is_alnum(b[k]) { k += 1; }
@@ -1115,13 +1115,13 @@ bool classify_arg(char^ b, int s, int e, int idx) {
         str_copy(out, "char", 128);
         return true;
     }
-    int at = 0;
+    i64 at = 0;
     if c == '@' {
         at = 1;
         s = gen_blanks(b, s + 1, e);
     }
     char word[64];
-    int we = gen_word(b, s, e, @word);
+    i64 we = gen_word(b, s, e, @word);
     if we == s || we != e || !is_letter(b[s]) { return false; }
     if at == 0 && (str_eq(@word, "true") || str_eq(@word, "false")) {
         str_copy(out, "bool", 128);
@@ -1130,7 +1130,7 @@ bool classify_arg(char^ b, int s, int e, int idx) {
     if !lookup_var(@word) { return false; }
     if !var_type_text(out) { return false; }
     if at == 1 {
-        int ol = str_len(out);
+        i64 ol = str_len(out);
         if ol > 2 && out[ol - 1] == ']' && out[ol - 2] == '[' {
             out[ol - 2] = 0;                 // @array points at its first element
         }
@@ -1140,22 +1140,22 @@ bool classify_arg(char^ b, int s, int e, int idx) {
 }
 
 // the types of the parameters of template ti (how each one uses a template parameter)
-void template_params(int ti) {
+void template_params(i64 ti) {
     char^ t = @tpl_text + tpl_off[ti];
-    int n = tpl_len[ti];
+    i64 n = tpl_len[ti];
     char skip[256];
     char tmp[256];
     char word[64];
     tp_n = 0;
-    int i = 0;
-    int pos = 0 - 1;
+    i64 i = 0;
+    i64 pos = 0 - 1;
     while i < n {
-        int j = gen_skip_lit(t, i, n);
+        i64 j = gen_skip_lit(t, i, n);
         if j != i {
             i = j;
         } else if is_letter(t[i]) {
-            int k = gen_word(t, i, n, @word);
-            int nx = gen_blanks(t, k, n);
+            i64 k = gen_word(t, i, n, @word);
+            i64 nx = gen_blanks(t, k, n);
             if str_eq(@word, @tpl_name + ti * 64) && nx < n && t[nx] == '<' {
                 pos = nx;
                 break;
@@ -1166,16 +1166,16 @@ void template_params(int ti) {
         }
     }
     if pos < 0 { return; }
-    int e = gen_args(t, pos, n, @skip);
+    i64 e = gen_args(t, pos, n, @skip);
     if e < 0 { return; }
     e = gen_blanks(t, e, n);
     if e >= n || t[e] != '(' { return; }
     e += 1;
-    int ps = e;
-    int depth = 0;
+    i64 ps = e;
+    i64 depth = 0;
     while e < n {
-        int c = t[e];
-        int j = gen_skip_lit(t, e, n);
+        i64 c = t[e];
+        i64 j = gen_skip_lit(t, e, n);
         if j != e {
             e = j;
         } else {
@@ -1185,9 +1185,9 @@ void template_params(int ti) {
             if c == ',' && depth == 0 { last = true; }
             if last {
                 // the parameter is t[ps..e)
-                int pe = e;
+                i64 pe = e;
                 while pe > ps && is_space(t[pe - 1]) { pe -= 1; }
-                int ws = ps;
+                i64 ws = ps;
                 while ws < pe && is_space(t[ws]) { ws += 1; }
                 if ws >= pe {
                     if c == ')' { return; }       // no parameters
@@ -1195,18 +1195,18 @@ void template_params(int ti) {
                     e += 1;
                     continue;
                 }
-                int arr = 0;
+                i64 arr = 0;
                 if pe > ps && t[pe - 1] == ']' {
                     arr = 1;
                     while pe > ps && t[pe - 1] != '[' { pe -= 1; }
                     pe -= 1;
                     while pe > ps && is_space(t[pe - 1]) { pe -= 1; }
                 }
-                int nb = pe;
+                i64 nb = pe;
                 while nb > ps && is_alnum(t[nb - 1]) { nb -= 1; }
                 // the type is t[ps..nb) without blanks
-                int tn = 0;
-                int x = ps;
+                i64 tn = 0;
+                i64 x = ps;
                 while x < nb && tn < 250 {
                     if !is_space(t[x]) { tmp[tn] = t[x]; tn += 1; }
                     x += 1;
@@ -1215,11 +1215,11 @@ void template_params(int ti) {
                 if tp_n < 16 {
                     tp_mode[tp_n] = 0 - 1;
                     tp_q[tp_n] = 0;
-                    int q = 0;
+                    i64 q = 0;
                     while q < tpl_np[ti] {
                         char^ pn = @tpl_par + (ti * 8 + q) * 64;
-                        int pl = str_len(pn);
-                        int m = 0 - 1;
+                        i64 pl = str_len(pn);
+                        i64 m = 0 - 1;
                         if str_eq(@tmp, pn) {
                             m = 0;
                             if arr == 1 { m = 3; }
@@ -1244,8 +1244,8 @@ void template_params(int ti) {
     }
 }
 
-bool str_eq_n(char^ a, char^ b, int n) {
-    int i = 0;
+bool str_eq_n(char^ a, char^ b, i64 n) {
+    i64 i = 0;
     while i < n {
         if a[i] != b[i] { return false; }
         i += 1;
@@ -1257,7 +1257,7 @@ bool is_integer_type(char^ t) {
     return str_eq(t, "int") || str_eq(t, "i8") || str_eq(t, "i32") || str_eq(t, "u8") || str_eq(t, "u32") || str_eq(t, "u64");
 }
 
-void bind_param(int ti, int q, char^ text) {
+void bind_param(i64 ti, i64 q, char^ text) {
     char^ cur = @bd_text + q * 128;
     if bd_n[q] == 0 {
         str_copy(cur, text, 128);
@@ -1280,22 +1280,22 @@ void bind_param(int ti, int q, char^ text) {
 
 // Name(args): the instance is entered and queued; id_name becomes its name. The current token is "(".
 void gen_infer_call() {
-    int ti = gen_find_tpl(@id_name);
+    i64 ti = gen_find_tpl(@id_name);
     if err_base != cur_base { die("a call of a generic without <...> cannot be inside a #define"); }
     char^ b = @src_bufs + cur_base;
-    int n = cur_len;
+    i64 n = cur_len;
     // the arguments: b[i..) up to the matching )
     ia_n = 0;
-    int i = gen_blanks(b, cur_pos, n);
+    i64 i = gen_blanks(b, cur_pos, n);
     if i < n && b[i] != ')' {
-        int depth = 0;
-        int s = i;
+        i64 depth = 0;
+        i64 s = i;
         while i < n {
-            int j = gen_skip_lit(b, i, n);
+            i64 j = gen_skip_lit(b, i, n);
             if j != i {
                 i = j;
             } else {
-                int c = b[i];
+                i64 c = b[i];
                 if c == '(' || c == '[' || c == '{' { depth += 1; }
                 bool end = false;
                 if (c == ')' || c == ']' || c == '}') {
@@ -1317,14 +1317,14 @@ void gen_infer_call() {
     template_params(ti);
     char^ name = @tpl_name + ti * 64;
     if ia_n != tp_n { die_name("wrong number of arguments for the generic", name); }
-    int q = 0;
+    i64 q = 0;
     while q < 8 {
         bd_n[q] = 0;
         bd_w[q] = 0;
         bd_d[q] = 0;
         q += 1;
     }
-    int a = 0;
+    i64 a = 0;
     while a < ia_n {
         if tp_mode[a] >= 0 && !classify_arg(b, ia_s[a], ia_e[a], a) {
             char m[300];
@@ -1335,8 +1335,8 @@ void gen_infer_call() {
             append_text(@m, "<type>(...)");
             die(@m);
         }
-        int mode = tp_mode[a];
-        int pq = tp_q[a];
+        i64 mode = tp_mode[a];
+        i64 pq = tp_q[a];
         if mode >= 0 {
             char^ at = @ia_text + a * 128;
             if ia_class[a] == 1 && mode == 0 {
@@ -1350,7 +1350,7 @@ void gen_infer_call() {
             } else {
                 char tt[128];
                 str_copy(@tt, at, 128);
-                int tl = str_len(@tt);
+                i64 tl = str_len(@tt);
                 if mode == 1 {
                     if tl < 2 || tt[tl - 1] != '^' { die_name("this argument must be a pointer", name); }
                     tt[tl - 1] = 0;
@@ -1393,7 +1393,7 @@ void gen_infer_call() {
         append_text(@args, @bd_text + q * 128);
         q += 1;
     }
-    int ins = gen_register(ti, @args);
+    i64 ins = gen_register(ti, @args);
     str_copy(@id_name, @ins_name + ins * 64, 256);
 }
 
@@ -1404,29 +1404,29 @@ void gen_infer_call() {
 //                  static Shape Circle(double r) { Shape s; s.__tag = 0; s.Circle_r = r; return s; } ...  methods }
 // so a value is a struct (copy, pass, return, fields of other structs, arrays all work); `switch` knows the tags.
 
-void de_put(int c) {
+void de_put(i64 c) {
     if de_len >= 262000 { die("the enum is too large"); }
     de_buf[de_len] = c;
     de_len += 1;
 }
 
 void de_str(char^ t) {
-    int i = 0;
+    i64 i = 0;
     while t[i] != 0 {
         de_put(t[i]);
         i += 1;
     }
 }
 
-void de_range(char^ b, int s, int e) {
+void de_range(char^ b, i64 s, i64 e) {
     while s < e {
         de_put(b[s]);
         s += 1;
     }
 }
 
-int dv_find(char^ name) {
-    int i = 0;
+i64 dv_find(char^ name) {
+    i64 i = 0;
     while i < dv_count {
         if str_eq(@dv_name + i * 64, name) { return i; }
         i += 1;
@@ -1435,8 +1435,8 @@ int dv_find(char^ name) {
 }
 
 // the variant `name` of data enum d: its global index, or -1
-int dv_variant(int d, char^ name) {
-    int v = 0;
+i64 dv_variant(i64 d, char^ name) {
+    i64 v = 0;
     while v < dv_nvar[d] {
         if str_eq(@dvv_name + (dv_first[d] + v) * 64, name) { return dv_first[d] + v; }
         v += 1;
@@ -1445,16 +1445,16 @@ int dv_variant(int d, char^ name) {
 }
 
 // b[s..e) split at the commas that are not inside ( ) [ ] < >: the start and end of piece k, or false
-bool de_piece(char^ b, int s, int e, int k, int^ ps, int^ pe) {
-    int depth = 0;
-    int cur = 0;
-    int start = s;
-    int i = s;
+bool de_piece(char^ b, i64 s, i64 e, i64 k, i64^ ps, i64^ pe) {
+    i64 depth = 0;
+    i64 cur = 0;
+    i64 start = s;
+    i64 i = s;
     while i <= e {
-        int c = 0;
+        i64 c = 0;
         if i < e { c = b[i]; }
         if i < e {
-            int j = gen_skip_lit(b, i, e);
+            i64 j = gen_skip_lit(b, i, e);
             if j != i {
                 i = j;
                 continue;
@@ -1478,33 +1478,33 @@ bool de_piece(char^ b, int s, int e, int k, int^ ps, int^ pe) {
 
 // the item at b[s] is `enum class Name { ... }`: with a member that has parameters it is a data enum: the struct text is
 // compiled here and the end of the item is returned; else -1
-int gen_data_enum(char^ b, int s, int n, int line) {
+i64 gen_data_enum(char^ b, i64 s, i64 n, i64 line) {
     char word[64];
     char en_name[64];
-    int i = gen_word(b, s, n, @word);
+    i64 i = gen_word(b, s, n, @word);
     i = gen_blanks(b, i, n);
-    int w = gen_word(b, i, n, @word);
+    i64 w = gen_word(b, i, n, @word);
     if !str_eq(@word, "class") { return 0 - 1; }
     i = gen_blanks(b, w, n);
     w = gen_word(b, i, n, @en_name);
     if w == i { return 0 - 1; }
     i = gen_blanks(b, w, n);
     if i >= n || b[i] != '{' { return 0 - 1; }
-    int body = i + 1;
-    int end = gen_item_end(b, s, n);
-    int close = end - 1;
+    i64 body = i + 1;
+    i64 end = gen_item_end(b, s, n);
+    i64 close = end - 1;
     // the members: name, and the text between ( ) if there is one
-    int m_n = 0;
-    int m_ps[64];
-    int m_pe[64];
+    i64 m_n = 0;
+    i64 m_ps[64];
+    i64 m_pe[64];
     char m_name[4096];
-    int any = 0;
-    int has_eq = 0;
-    int methods = close;
-    int q = body;
+    i64 any = 0;
+    i64 has_eq = 0;
+    i64 methods = close;
+    i64 q = body;
     while q < close {
         q = gen_blanks(b, q, close);
-        int sk = gen_skip_lit(b, q, close);
+        i64 sk = gen_skip_lit(b, q, close);
         if sk != q {
             q = sk;
             continue;
@@ -1516,15 +1516,15 @@ int gen_data_enum(char^ b, int s, int n, int line) {
         }
         if !is_letter(b[q]) { die_help("an enum member name was expected", "write the names of the members: enum class Color { Red, Green }"); }
         if m_n >= 64 { die("too many members in a data enum"); }
-        int we = gen_word(b, q, close, @m_name + m_n * 64);
+        i64 we = gen_word(b, q, close, @m_name + m_n * 64);
         m_ps[m_n] = 0 - 1;
         m_pe[m_n] = 0 - 1;
         q = gen_blanks(b, we, close);
         if q < close && b[q] == '(' {
-            int depth = 1;
-            int r = q + 1;
+            i64 depth = 1;
+            i64 r = q + 1;
             while r < close && depth > 0 {
-                int sk2 = gen_skip_lit(b, r, close);
+                i64 sk2 = gen_skip_lit(b, r, close);
                 if sk2 != r {
                     r = sk2;
                 } else {
@@ -1548,29 +1548,29 @@ int gen_data_enum(char^ b, int s, int n, int line) {
     if has_eq == 1 { die("a member of a data enum cannot be given a number"); }
     // register
     if dv_count >= 64 { die("too many data enums"); }
-    int d = dv_count;
+    i64 d = dv_count;
     dv_count += 1;
     str_copy(@dv_name + d * 64, @en_name, 64);
     dv_first[d] = dvv_count;
     dv_nvar[d] = m_n;
-    int dvp_first_of_enum = dvp_count;
+    i64 dvp_first_of_enum = dvp_count;
     // the struct
     de_len = 0;
     de_str("struct ");
     de_str(@en_name);
     de_str(" {\n    int __tag;\n");
-    int v = 0;
+    i64 v = 0;
     while v < m_n {
-        int gv = dvv_count;
+        i64 gv = dvv_count;
         if gv >= 1024 { die("too many data enum members"); }
         dvv_count += 1;
         str_copy(@dvv_name + gv * 64, @m_name + v * 64, 64);
         dvv_pfirst[gv] = dvp_count;
         dvv_nparam[gv] = 0;
         if m_ps[v] >= 0 {
-            int k = 0;
-            int ps = 0;
-            int pe = 0;
+            i64 k = 0;
+            i64 ps = 0;
+            i64 pe = 0;
             while de_piece(b, m_ps[v], m_pe[v], k, @ps, @pe) {
                 // the piece is "TYPE NAME"
                 ps = gen_blanks(b, ps, pe);
@@ -1579,15 +1579,15 @@ int gen_data_enum(char^ b, int s, int n, int line) {
                     k += 1;
                     continue;
                 }
-                int nb = pe;
+                i64 nb = pe;
                 while nb > ps && is_alnum(b[nb - 1]) { nb -= 1; }
                 if nb == pe || nb == ps { die("a parameter of an enum member is written: type name"); }
                 if dvp_count >= 4096 { die("too many enum parameters"); }
-                int px = dvp_count;
+                i64 px = dvp_count;
                 dvp_count += 1;
                 dvv_nparam[gv] += 1;
                 // the name the parameter was given, and the field that holds it
-                int z = 0;
+                i64 z = 0;
                 while nb + z < pe && z < 62 {
                     dvp_pname[px * 64 + z] = b[nb + z];
                     z += 1;
@@ -1602,7 +1602,7 @@ int gen_data_enum(char^ b, int s, int n, int line) {
                 de_str(";\n");
                 dvp_owns[px] = de_type_owns(b, ps, nb);
                 dvp_isarr[px] = 0;
-                int te = nb;
+                i64 te = nb;
                 while te > ps && is_space(b[te - 1]) { te -= 1; }
                 if te - ps >= 2 && b[te - 1] == ']' && b[te - 2] == '[' { dvp_isarr[px] = 1; }
                 k += 1;
@@ -1613,7 +1613,7 @@ int gen_data_enum(char^ b, int s, int n, int line) {
     // one constructor per member
     v = 0;
     while v < m_n {
-        int gv2 = dv_first[d] + v;
+        i64 gv2 = dv_first[d] + v;
         de_str("    static ");
         de_str(@en_name);
         de_put(' ');
@@ -1625,9 +1625,9 @@ int gen_data_enum(char^ b, int s, int n, int line) {
         de_str(" __r; __r.__tag = ");
         append_int_to_de(v);
         de_put(';');
-        int pk = 0;
+        i64 pk = 0;
         while pk < dvv_nparam[gv2] {
-            int px2 = dvv_pfirst[gv2] + pk;
+            i64 px2 = dvv_pfirst[gv2] + pk;
             de_str(" __r.");
             de_str(@dvp_field + px2 * 64);
             de_str(" = ");
@@ -1640,8 +1640,8 @@ int gen_data_enum(char^ b, int s, int n, int line) {
         v += 1;
     }
     // a member that holds something that frees itself (a String, an array, a struct with free(self)): the enum frees it
-    int owns_any = 0;
-    int pxx = dvp_first_of_enum;
+    i64 owns_any = 0;
+    i64 pxx = dvp_first_of_enum;
     while pxx < dvp_count {
         if dvp_owns[pxx] == 1 { owns_any = 1; }
         pxx += 1;
@@ -1650,10 +1650,10 @@ int gen_data_enum(char^ b, int s, int n, int line) {
         de_str("    void free(self) {\n");
         v = 0;
         while v < m_n {
-            int gv3 = dv_first[d] + v;
-            int pk3 = 0;
+            i64 gv3 = dv_first[d] + v;
+            i64 pk3 = 0;
             while pk3 < dvv_nparam[gv3] {
-                int px3 = dvv_pfirst[gv3] + pk3;
+                i64 px3 = dvv_pfirst[gv3] + pk3;
                 if dvp_owns[px3] == 1 {
                     de_str("        if self.__tag == ");
                     append_int_to_de(v);
@@ -1672,19 +1672,19 @@ int gen_data_enum(char^ b, int s, int n, int line) {
     de_str("\n}\n");
     de_put(0);
     de_len -= 1;
-    int dd = lx_depth;
+    i64 dd = lx_depth;
     gen_save(dd);
     push_text(@de_buf, de_len, @err_file, line);
     next();
     while tok_kind != T_EOF { parse_one_item(); }
     pop_file();
     gen_restore(dd);
-    int tail = gen_blanks(b, end, n);
+    i64 tail = gen_blanks(b, end, n);
     if tail < n && b[tail] == ';' { end = tail + 1; }
     return end;
 }
 
-void append_int_to_de(int v) {
+void append_int_to_de(i64 v) {
     char t[24];
     t[0] = 0;
     append_int(@t, v);
@@ -1693,10 +1693,10 @@ void append_int_to_de(int v) {
 
 // Shape::Empty without ( ): is it a member of data enum `enum_name` with no parameters? (sc_full is Enum__Member)
 bool gen_bare_variant(char^ enum_name, char^ sc_full) {
-    int d = dv_find(enum_name);
+    i64 d = dv_find(enum_name);
     if d < 0 { return false; }
-    int hit = 0 - 1;
-    int v = 0;
+    i64 hit = 0 - 1;
+    i64 v = 0;
     while v < dv_nvar[d] {
         char full[160];
         str_copy(@full, enum_name, 64);
@@ -1710,48 +1710,48 @@ bool gen_bare_variant(char^ enum_name, char^ sc_full) {
 }
 
 // accessors for jc_stmt (it is read before this file, so it cannot name these tables)
-int dv_count_of() { return dv_count; }
-int dv_nvar_of(int d) { return dv_nvar[d]; }
-char^ dv_name_of(int d) { return @dv_name + d * 64; }
-int dv_first_of(int d) { return dv_first[d]; }
-char^ dv_vname(int g) { return @dvv_name + g * 64; }
-int dv_nparam_of(int g) { return dvv_nparam[g]; }
-char^ dv_pfield(int g, int k) { return @dvp_field + (dvv_pfirst[g] + k) * 64; }
+i64 dv_count_of() { return dv_count; }
+i64 dv_nvar_of(i64 d) { return dv_nvar[d]; }
+char^ dv_name_of(i64 d) { return @dv_name + d * 64; }
+i64 dv_first_of(i64 d) { return dv_first[d]; }
+char^ dv_vname(i64 g) { return @dvv_name + g * 64; }
+i64 dv_nparam_of(i64 g) { return dvv_nparam[g]; }
+char^ dv_pfield(i64 g, i64 k) { return @dvp_field + (dvv_pfirst[g] + k) * 64; }
 
 // a case label of a switch on data enum d is written with the name of the enum, or (a generic enum) the name without its types
-bool dv_label_ok(int d, char^ text) {
+bool dv_label_ok(i64 d, char^ text) {
     char^ nm = @dv_name + d * 64;
     if str_eq(nm, text) { return true; }
-    int i = 0;
+    i64 i = 0;
     while text[i] != 0 && nm[i] == text[i] { i += 1; }
     return text[i] == 0 && nm[i] == '_' && nm[i + 1] == '_';
 }
 
 // does the type written in b[s..e) own memory (String, an array, a struct that has free(self))?
-int de_type_owns(char^ b, int s, int e) {
+i64 de_type_owns(char^ b, i64 s, i64 e) {
     s = gen_blanks(b, s, e);
     while e > s && is_space(b[e - 1]) { e -= 1; }
     if e - s >= 2 && b[e - 1] == ']' && b[e - 2] == '[' { return 1; }
     char word[64];
-    int w = gen_word(b, s, e, @word);
+    i64 w = gen_word(b, s, e, @word);
     if w != e { return 0; }                 // a pointer, a generic type, ...
     if str_eq(@word, "String") { return 1; }
-    int sd = find_struct(@word);
+    i64 sd = find_struct(@word);
     if sd >= 0 && struct_has_free(sd) { return 1; }
     return 0;
 }
 
 // does the text b[s..e) (the methods of an enum) define a method free?
-bool de_has_free(char^ b, int s, int e) {
-    int i = s;
+bool de_has_free(char^ b, i64 s, i64 e) {
+    i64 i = s;
     char word[64];
     while i < e {
-        int j = gen_skip_lit(b, i, e);
+        i64 j = gen_skip_lit(b, i, e);
         if j != i {
             i = j;
         } else if is_letter(b[i]) {
-            int k = gen_word(b, i, e, @word);
-            int nx = gen_blanks(b, k, e);
+            i64 k = gen_word(b, i, e, @word);
+            i64 nx = gen_blanks(b, k, e);
             if str_eq(@word, "free") && nx < e && b[nx] == '(' { return true; }
             i = k;
         } else {
@@ -1768,9 +1768,9 @@ bool de_has_free(char^ b, int s, int e) {
 // must return a Result with the same E / an Option). Everything the function owns is freed on the way.
 void gen_try_op() {
     if ex_ty < 100 { die_help("? needs a Result or an Option in front of it", "J2K has no  a ? b : c  : write an if statement (or min / max / abs for a number); ? after a call passes on an error of a Result or an Option"); }
-    int ssrc = ex_ty - 100;
-    int dsrc = dv_find(@sname + ssrc * 64);
-    int family = 0;
+    i64 ssrc = ex_ty - 100;
+    i64 dsrc = dv_find(@sname + ssrc * 64);
+    i64 family = 0;
     if dsrc >= 0 {
         if str_eq_n(@dv_name + dsrc * 64, "Result__", 8) { family = 1; }
         if str_eq_n(@dv_name + dsrc * 64, "Option__", 8) { family = 2; }
@@ -1778,8 +1778,8 @@ void gen_try_op() {
     if family == 0 { die_help("? needs a Result or an Option in front of it", "J2K has no  a ? b : c  : write an if statement; ? after a call passes on an error of a Result or an Option"); }
     if last_call_struct == 0 { die("? is used on the result of a call (a variable that holds a Result is looked at with switch)"); }
     if cur_ret_tid < 100 { die("? can only be used in a function that returns a Result or an Option"); }
-    int sdst = cur_ret_tid - 100;
-    int ddst = dv_find(@sname + sdst * 64);
+    i64 sdst = cur_ret_tid - 100;
+    i64 ddst = dv_find(@sname + sdst * 64);
     bool same = false;
     if ddst >= 0 {
         if family == 1 && str_eq_n(@dv_name + ddst * 64, "Result__", 8) { same = true; }
@@ -1787,14 +1787,14 @@ void gen_try_op() {
     }
     if !same { die("? can only be used in a function that returns the same kind (a Result with ?, an Option with ?)"); }
     fn_returns = 1;
-    int gok = dv_first[dsrc];             // member 0: Ok / Some
-    int gbad = dv_first[dsrc] + 1;        // member 1: Err / None
+    i64 gok = dv_first[dsrc];             // member 0: Ok / Some
+    i64 gbad = dv_first[dsrc] + 1;        // member 1: Err / None
     // the value is in a temporary; keep its address
     ty_tid = 0;
     add_local("..try", 0, 8, 8, 0);
-    int slot = loff[lcount - 1];
+    i64 slot = loff[lcount - 1];
     ins_mem("str", "x0", "x29", slot);
-    int lok = new_label();
+    i64 lok = new_label();
     emit_line("ldr x1, [x0, #0]");
     emit_line("cmp x1, 0");
     jump_if("eq", lok);
@@ -1804,13 +1804,13 @@ void gen_try_op() {
     emit_line("mov x1, 1");
     emit_line("str x1, [x3, #0]");
     if family == 1 {
-        int fsrc = dv_find_field(ssrc, dv_pfield(gbad, 0));
-        int fdst = dv_find_field(sdst, dv_pfield(dv_first[ddst] + 1, 0));
+        i64 fsrc = dv_find_field(ssrc, dv_pfield(gbad, 0));
+        i64 fdst = dv_find_field(sdst, dv_pfield(dv_first[ddst] + 1, 0));
         if fsrc < 0 || fdst < 0 { die("internal: the error of a Result has no field"); }
-        int fsize = size_of(fldcode[fsrc]);
+        i64 fsize = size_of(fldcode[fsrc]);
         if fldcode[fsrc] >= 16 && fldptr[fsrc] == 0 { fsize = ssize[fldcode[fsrc] - 16]; }
         if fldkind[fsrc] == 3 || fldptr[fsrc] != 0 { fsize = 8; }
-        int fsize2 = size_of(fldcode[fdst]);
+        i64 fsize2 = size_of(fldcode[fdst]);
         if fldcode[fdst] >= 16 && fldptr[fdst] == 0 { fsize2 = ssize[fldcode[fdst] - 16]; }
         if fldkind[fdst] == 3 || fldptr[fdst] != 0 { fsize2 = 8; }
         if (fsize != fsize2 || fldcode[fsrc] != fldcode[fdst]) && pass_no >= 2 {
@@ -1824,7 +1824,7 @@ void gen_try_op() {
         // the error moved out of the value: it is empty there (the value is freed with everything else)
         ins_mem("ldr", "x0", "x29", slot);
         emit_line("mov x1, 0");
-        int zq = 0;
+        i64 zq = 0;
         while zq < (fsize + 7) / 8 * 8 {
             ins_mem("str", "x1", "x0", fldoff[fsrc] + zq);
             zq += 8;
@@ -1836,7 +1836,7 @@ void gen_try_op() {
     jump(ret_label);
     place_label(lok);
     // the content
-    int fok = dv_find_field(ssrc, dv_pfield(gok, 0));
+    i64 fok = dv_find_field(ssrc, dv_pfield(gok, 0));
     if fok < 0 { die("internal: the content of a Result has no field"); }
     ins_mem("ldr", "x0", "x29", slot);
     if fldoff[fok] != 0 { ins_n("add x0, x0, #", fldoff[fok]); }
@@ -1862,16 +1862,16 @@ void gen_try_op() {
         ex_ty = 100 + fldcode[fok] - 16;
         if struct_has_free(fldcode[fok] - 16) {
             // an owning content moves into a temporary of its own
-            int csz = ssize[fldcode[fok] - 16];
+            i64 csz = ssize[fldcode[fok] - 16];
             ty_tid = 0;
             add_local("..moved", 0, fldcode[fok], csz, 0);
-            int tmp_at = loff[lcount - 1];
+            i64 tmp_at = loff[lcount - 1];
             ins_n("add x3, x29, #", tmp_at);
             ins_n("mov x2, ", csz);
             emit_line("bl j2k_copy");
             ins_mem("ldr", "x0", "x29", slot);
             emit_line("mov x1, 0");
-            int zc = 0;
+            i64 zc = 0;
             while zc < csz {
                 ins_mem("str", "x1", "x0", fldoff[fok] + zc);
                 zc += 8;
@@ -1895,8 +1895,8 @@ void gen_try_op() {
 }
 
 // the field of struct s with this name, or -1
-int dv_find_field(int s, char^ name) {
-    int fk = sfirst[s];
+i64 dv_find_field(i64 s, char^ name) {
+    i64 fk = sfirst[s];
     while fk < sfirst[s] + snf[s] {
         if str_eq(@fldname + fk * 64, name) { return fk; }
         fk += 1;
@@ -1905,13 +1905,13 @@ int dv_find_field(int s, char^ name) {
 }
 
 char dv_un[2048];            // 32 names of 64 written in  using enum Name;
-int dv_unl[32];              // 1: written inside a function
-int dv_un_count;
-void dv_set_using(int d, int local) {
+i64 dv_unl[32];              // 1: written inside a function
+i64 dv_un_count;
+void dv_set_using(i64 d, i64 local) {
     if dv_un_count >= 32 { die("too many using enum lines for data enums"); }
     str_copy(@dv_un + dv_un_count * 64, @dv_name + d * 64, 64);
     // a generic enum is named without its types
-    int k = 0;
+    i64 k = 0;
     while dv_un[dv_un_count * 64 + k] != 0 {
         if dv_un[dv_un_count * 64 + k] == '_' && dv_un[dv_un_count * 64 + k + 1] == '_' {
             dv_un[dv_un_count * 64 + k] = 0;
@@ -1922,8 +1922,8 @@ void dv_set_using(int d, int local) {
     dv_unl[dv_un_count] = local;
     dv_un_count += 1;
 }
-bool dv_using(int d) {
-    int i = 0;
+bool dv_using(i64 d) {
+    i64 i = 0;
     while i < dv_un_count {
         if dv_label_ok(d, @dv_un + i * 64) { return true; }
         i += 1;
@@ -1931,8 +1931,8 @@ bool dv_using(int d) {
     return false;
 }
 void dv_clear_local() {
-    int w = 0;
-    int i = 0;
+    i64 w = 0;
+    i64 i = 0;
     while i < dv_un_count {
         if dv_unl[i] == 0 {
             str_copy(@dv_un + w * 64, @dv_un + i * 64, 64);
@@ -1947,8 +1947,8 @@ void dv_clear_all() {
     dv_un_count = 0;
 }
 // the data enum named like this (the name as written, or a generic enum's name without its types), or -1
-int dv_find_enum(char^ name) {
-    int i = 0;
+i64 dv_find_enum(char^ name) {
+    i64 i = 0;
     while i < dv_count {
         if dv_label_ok(i, name) { return i; }
         i += 1;

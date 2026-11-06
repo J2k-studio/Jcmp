@@ -231,3 +231,28 @@ Other switches that help with speed work: `-irdbg 4194304` (why the vectoriser g
 - The thresholds in `std/neuron.j` (read from the file): `Tensor32::matmul` runs on one thread below 2,500,000 multiply-adds (a 2-row kernel when `n` is a multiple of 4, else the plain loop). At or above that it packs the numbers and uses four threads, unless the product has fewer than 16 rows. `Tensor::matmul_fast` uses the plain loop below 32,768 multiply-adds.
 - The file comment says that the threads give about 3.5 times the one-core speed (`bench/dot.jk`). That is the file author's measurement; it is not measured on this page.
 - Threads and vectors work together: the threaded kernels use the same `f32x4` code.
+
+## Speed against C (1.2.22.0)
+
+Best of six runs on a phone (milliseconds; J2K against gcc -O2 compiled from the same program, `tools/bench/run.sh`):
+
+| program | J2K | gcc -O2 | J2K / gcc |
+|---|---|---|---|
+| fib | 65 | 67 | 1.0 |
+| loop | 268 | 213 | 1.3 |
+| sieve | 52 | 69 | 0.8 |
+| matmul | 22 | 28 | 0.8 |
+| mandel | 34 | 36 | 0.9 |
+| gcd | 269 | 271 | 1.0 |
+| nbody | 128 | 124 | 1.0 |
+| qsort | 117 | 128 | 0.9 |
+| vec3 | 40 | 43 | 0.9 |
+| sha256 | 68 | 72 | 0.9 |
+| hashmap | 104 | 85 | 1.2 |
+| strings | 70 | 58 | 1.2 |
+| arrays | 123 | 114 | 1.1 |
+| widths | 90 | 76 | 1.2 |
+| heapmm (`double[]` matrix product) | 45 | 70 | 0.6 |
+| game (3000 entities, collisions) | 54 | 47 | 1.1 |
+
+The timings of a phone vary by a factor of two between runs; compare the ratios, not single numbers. `loop` is slower because gcc narrows the 64-bit sum to 32 bits and uses NEON for it; today `int` is 64 bits.

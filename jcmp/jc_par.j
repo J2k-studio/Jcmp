@@ -7,30 +7,30 @@
 // ---- the progress of a compile (jcmp -progress FILE): the file holds one line  PERCENT STAGE CORES  (CORES: the percent of each process, or -), made again at
 // every stage and, in the long passes, every few functions; makej shows it as  [||||||||    ] 62%
 char prog_path[512];
-int prog_on;
-int prog_total;              // the functions of the pass that runs
-int prog_base;
-int prog_span;
-int prog_child_done;         // in a child: the functions it has done
+i64 prog_on;
+i64 prog_total;              // the functions of the pass that runs
+i64 prog_base;
+i64 prog_span;
+i64 prog_child_done;         // in a child: the functions it has done
 char^ prog_ptr;              // in a child: where it writes that number (the shared piece)
-int prog_last_ms;
+i64 prog_last_ms;
 
-void prog_write(int pct, char^ stage, char^ cores) {
+void prog_write(i64 pct, char^ stage, char^ cores) {
     if prog_on == 0 { return; }
-    int fd = syscall(56, -100, @prog_path, 577, 420);
+    i64 fd = syscall(56, -100, @prog_path, 577, 420);
     if fd < 0 { return; }
     char b[300];
-    int n = 0;
+    i64 n = 0;
     char dg[16];
-    int dn = 0;
-    int x = pct;
+    i64 dn = 0;
+    i64 x = pct;
     if x < 0 { x = 0; }
     if x > 100 { x = 100; }
     if x == 0 { dg[0] = '0'; dn = 1; }
     while x > 0 { dg[dn] = '0' + x % 10; dn += 1; x = x / 10; }
     while dn > 0 { dn -= 1; b[n] = dg[dn]; n += 1; }
     b[n] = ' '; n += 1;
-    int i = 0;
+    i64 i = 0;
     while stage[i] != 0 && n < 100 { b[n] = stage[i]; n += 1; i += 1; }
     b[n] = ' '; n += 1;
     i = 0;
@@ -55,27 +55,27 @@ void prog_stage(char^ name) {
     else if str_eq(name, "assembler") { prog_write(100, "done", ""); }
 }
 
-int par_count_functions() {
-    int c = 0;
-    int i = 0;
+i64 par_count_functions() {
+    i64 c = 0;
+    i64 i = 0;
     while i < out_len {
-        int en = rg_end(i);
+        i64 en = rg_end(i);
         if rg_is_func(i) { c += 1; }
         i = en + 1;
     }
     return c;
 }
 
-int par_cores() {
+i64 par_cores() {
     char mask[128];
-    int k = 0;
+    i64 k = 0;
     while k < 128 { mask[k] = 0; k += 1; }
-    int got = syscall(123, 0, 128, @mask, 0, 0);                  // sched_getaffinity: the cores this process may use
-    int total = 0;
+    i64 got = syscall(123, 0, 128, @mask, 0, 0);                  // sched_getaffinity: the cores this process may use
+    i64 total = 0;
     if got > 0 {
-        int i = 0;
+        i64 i = 0;
         while i < got {
-            int b = mask[i] & 255;
+            i64 b = mask[i] & 255;
             while b != 0 { total += b & 1; b = b >> 1; }
             i += 1;
         }
@@ -85,10 +85,10 @@ int par_cores() {
 }
 
 // how many processes for a pass over the text of out_buf
-int par_decide() {
+i64 par_decide() {
     if par_jobs == 1 || x_target == 32 || ir_mode != 2 || par_n != 0 { return 1; }
     if out_len < 600000 { return 1; }                       // a small program is faster on one core
-    int n = par_jobs;
+    i64 n = par_jobs;
     if n <= 0 { n = par_cores(); }
     if n > 8 { n = 8; }
     return n;
@@ -104,7 +104,7 @@ void par_close_open() {
 // the function that is at the top level now: true if this child must leave it as it is
 bool par_skip_function() {
     par_close_open();
-    int f = par_fidx;
+    i64 f = par_fidx;
     if f >= 65535 { f = 65534; }
     par_fs[f] = regs_len;
     par_open = f;
@@ -127,20 +127,20 @@ char^ prog_stage_name() {
 }
 
 // read and write numbers in the shared piece (8 bytes, little endian)
-int par_get(char^ m, int at) {
-    int v = 0;
-    int k = 0;
+i64 par_get(char^ m, i64 at) {
+    i64 v = 0;
+    i64 k = 0;
     while k < 8 { v = v | ((m[at + k] & 255) << (8 * k)); k += 1; }
     return v;
 }
-void par_put(char^ m, int at, int v) {
-    int k = 0;
+void par_put(char^ m, i64 at, i64 v) {
+    i64 k = 0;
     while k < 8 { m[at + k] = (char)((v >> (8 * k)) & 255); k += 1; }
 }
 
 // runs one pass ("which": 0 = ir_run_loop, 1 = regs_run_loop) on many processes, or on this one
-void par_pass(int which) {
-    int n = par_decide();
+void par_pass(i64 which) {
+    i64 n = par_decide();
     par_fidx = 0;
     par_open = 0 - 1;
     if which == 0 { prog_base = 23; prog_span = 34; } else { prog_base = 59; prog_span = 37; }
@@ -151,20 +151,20 @@ void par_pass(int which) {
         par_close_open();
         return;
     }
-    int slot = out_len + out_len / 2 + 524288 + 64 + 8 * 2 * 65536;           // the text, then the numbers of the functions
+    i64 slot = out_len + out_len / 2 + 524288 + 64 + 8 * 2 * 65536;           // the text, then the numbers of the functions
     slot = (slot + 4095) / 4096 * 4096;
     char^ shm = (char^)syscall(222, 0, slot * n, 3, 33, -1, 0);                // mmap: shared and anonymous
-    if (int)shm < 0 && (int)shm > -4096 {
+    if (i64)shm < 0 && (i64)shm > -4096 {
         if which == 0 { ir_run_loop(); } else { regs_run_loop(); }
         par_close_open();
         return;
     }
-    int base_label = label_no;
-    int pids[8];
-    int k = 0;
+    i64 base_label = label_no;
+    i64 pids[8];
+    i64 k = 0;
     bool failed = false;
     while k < n {
-        int pid = syscall(220, 17, 0, 0, 0, 0);                                 // fork (clone with SIGCHLD)
+        i64 pid = syscall(220, 17, 0, 0, 0, 0);                                 // fork (clone with SIGCHLD)
         if pid == 0 {
             par_n = n;
             par_k = k;
@@ -178,15 +178,15 @@ void par_pass(int which) {
             par_put(m, 0, out_len);
             par_put(m, 8, label_no - (base_label + (k + 1) * 10000000));      // the number of labels made
             par_put(m, 16, par_fidx);
-            int off = 32;
-            int t = 0;
+            i64 off = 32;
+            i64 t = 0;
             while t < par_fidx && t < 65535 {
                 par_put(m, off + 16 * t, par_fs[t]);
                 par_put(m, off + 16 * t + 8, par_fe[t]);
                 t += 1;
             }
-            int text_at = 32 + 16 * 65536;
-            int c = 0;
+            i64 text_at = 32 + 16 * 65536;
+            i64 c = 0;
             while c < out_len { m[text_at + c] = out_buf[c]; c += 1; }
             syscall(94, 0);                                                    // exit_group
         }
@@ -194,8 +194,8 @@ void par_pass(int which) {
         pids[k] = pid;
         k += 1;
     }
-    int started = k;
-    int status = 0;
+    i64 started = k;
+    i64 status = 0;
     if prog_on == 0 {
         k = 0;
         while k < started {
@@ -205,16 +205,16 @@ void par_pass(int which) {
         }
     } else {
         // wait and show how far every process is
-        int reaped[8];
+        i64 reaped[8];
         k = 0;
         while k < 8 { reaped[k] = 0; k += 1; }
-        int alive = started;
-        int ts[2];
+        i64 alive = started;
+        i64 ts[2];
         while alive > 0 {
             k = 0;
             while k < started {
                 if reaped[k] == 0 {
-                    int r = syscall(260, pids[k], @status, 1, 0);                // wait4 with WNOHANG
+                    i64 r = syscall(260, pids[k], @status, 1, 0);                // wait4 with WNOHANG
                     if r == pids[k] {
                         reaped[k] = 1;
                         alive -= 1;
@@ -225,13 +225,13 @@ void par_pass(int which) {
             }
             // the numbers of the cores
             char cs[96];
-            int cn = 0;
-            int sum = 0;
+            i64 cn = 0;
+            i64 sum = 0;
             k = 0;
             while k < started {
-                int done = par_get(shm + slot * k, 24);
-                int expect = prog_total / n + 1;
-                int cp = done * 100 / expect;
+                i64 done = par_get(shm + slot * k, 24);
+                i64 expect = prog_total / n + 1;
+                i64 cp = done * 100 / expect;
                 if reaped[k] == 1 { cp = 100; }
                 if cp > 100 { cp = 100; }
                 sum += cp;
@@ -259,7 +259,7 @@ void par_pass(int which) {
         return;
     }
     // the same number of functions in every child?
-    int nf = par_get(shm, 16);
+    i64 nf = par_get(shm, 16);
     k = 1;
     while k < n {
         if par_get(shm + slot * k, 16) != nf { failed = true; }
@@ -275,8 +275,8 @@ void par_pass(int which) {
         return;
     }
     // the new labels: child k gets the numbers base_label + 1 + (the labels of the children before it)
-    int shift[8];
-    int acc = 0;
+    i64 shift[8];
+    i64 acc = 0;
     k = 0;
     while k < n {
         shift[k] = acc;
@@ -284,26 +284,26 @@ void par_pass(int which) {
         k += 1;
     }
     // put the text together in regs_buf: the gaps from child 0, the functions from child f % n
-    int text_at = 32 + 16 * 65536;
-    int w = 0;
-    int pos0 = 0;
-    int f = 0;
+    i64 text_at = 32 + 16 * 65536;
+    i64 w = 0;
+    i64 pos0 = 0;
+    i64 f = 0;
     while f <= nf {
         // the gap before function f (or the rest after the last one) comes from child 0
         char^ m0 = shm;
-        int gap_to = par_get(m0, 0);
+        i64 gap_to = par_get(m0, 0);
         if f < nf { gap_to = par_get(m0, 32 + 16 * f); }
         w = par_copy(@regs_buf, w, m0 + text_at, pos0, gap_to, base_label, @shift);
         if f == nf { break; }
-        int owner = f % n;
+        i64 owner = f % n;
         char^ mo = shm + slot * owner;
-        int fs = par_get(mo, 32 + 16 * f);
-        int fe = par_get(mo, 32 + 16 * f + 8);
+        i64 fs = par_get(mo, 32 + 16 * f);
+        i64 fe = par_get(mo, 32 + 16 * f + 8);
         w = par_copy(@regs_buf, w, mo + text_at, fs, fe, base_label, @shift);
         pos0 = par_get(m0, 32 + 16 * f + 8);
         f += 1;
     }
-    int t = 0;
+    i64 t = 0;
     while t < w { out_buf[t] = regs_buf[t]; t += 1; }
     out_len = w;
     label_no = base_label + acc;
@@ -311,25 +311,25 @@ void par_pass(int which) {
 }
 
 // copy src[from, to) to dst at w; a label made by a child (a number from base + 10000000 on) gets its short number
-int par_copy(char^ dst, int w, char^ src, int from, int to, int base_label, int^ shift) {
-    int i = from;
+i64 par_copy(char^ dst, i64 w, char^ src, i64 from, i64 to, i64 base_label, i64^ shift) {
+    i64 i = from;
     while i < to {
-        int c = src[i];
+        i64 c = src[i];
         bool start = i == from || src[i - 1] == ' ' || src[i - 1] == 10 || src[i - 1] == ',';
         if c == 'L' && start && i + 1 < to && src[i + 1] >= '0' && src[i + 1] <= '9' {
-            int j = i + 1;
-            int v = 0;
+            i64 j = i + 1;
+            i64 v = 0;
             while j < to && src[j] >= '0' && src[j] <= '9' && j - i < 12 { v = v * 10 + (src[j] - '0'); j += 1; }
             if v >= base_label + 10000000 {
-                int rel = v - base_label;
-                int kk = rel / 10000000 - 1;
-                int cc = rel % 10000000;
-                int nv = base_label + shift[kk] + cc;
+                i64 rel = v - base_label;
+                i64 kk = rel / 10000000 - 1;
+                i64 cc = rel % 10000000;
+                i64 nv = base_label + shift[kk] + cc;
                 dst[w] = 'L';
                 w += 1;
                 char dg[16];
-                int dn = 0;
-                int x = nv;
+                i64 dn = 0;
+                i64 x = nv;
                 if x == 0 { dg[0] = '0'; dn = 1; }
                 while x > 0 { dg[dn] = '0' + x % 10; dn += 1; x = x / 10; }
                 while dn > 0 { dn -= 1; dst[w] = dg[dn]; w += 1; }

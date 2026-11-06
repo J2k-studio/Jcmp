@@ -5,7 +5,7 @@ using stdlib::mem;
 using stdlib::str;
 
 struct Node {
-    int value;
+    i64 value;
     Node^ next;
 }
 
@@ -18,9 +18,9 @@ void main() {
         head = n;
     }
     char text[64];
-    int len = 0;
+    i64 len = 0;
     Node^ p = head;
-    while (int)p != 0 {
+    while (i64)p != 0 {
         char num[24];
         from_int(@num, 24, p^.value);
         if len > 0 { append(@text, 64, " -> "); } else { text[0] = 0; }
