@@ -1670,6 +1670,8 @@ i64 gl_hastmp[AT_MAX];           // for an if / while: its condition makes new S
 i64 gl_depth;                    // the cells in use below the frame pointer
 i64 gl_off[1024];                // the unique number of a local -> its offset in the frame
 i64 gl_nslot;                    // the next offset to give
+i64 gl_unr[AT_MAX];              // for loops over constants (for i in 0..3): the number of turns when the loop is unrolled completely, 0: not (-irdbg 1099511627776)
+i64 wr_cnt;                      // the size of a loop body (nodes), counted by wr_scan
 i64 gl_wrc[AT_MAX];              // for loops: the constant c of a wrapping counter (i % c kept as r += 1; if r >= c { r = 0 }), 0: none
 i64 gl_wrs[AT_MAX];              // ... and the offset of its slot
 i64 gl_wr_vi[16];                // the loops being lowered that have one: the local of the counter, c, the slot
@@ -3609,6 +3611,7 @@ void wr_chain(i64 s) {
 
 void wr_scan(i64 n) {
     if n == 0 || !wr_ok { return; }
+    wr_cnt += 1;
     i64 k = at_kind[n];
     if k == AK_NUM || k == AK_FNUM || k == AK_GVAR || k == AK_VAR || k == AK_BREAK || k == AK_CONT { return; }
     if k == AK_BIN {
@@ -3663,6 +3666,32 @@ i64 gl_wr_find(i64 a, i64 b) {
 }
 
 void gl_for(i64 n) {
+        if gl_unr[n] > 0 {
+            i64 uiv = gl_off[at_val[n]];
+            i64 ust = at_val[at_a[n]];
+            i64 uend = gl_label();
+            i64 ut = 0;
+            while ut < gl_unr[n] {
+                gl_ensure();
+                ir_add(IR_CONST, 1, 0, 0, 0, ust + ut);
+                gl_store(30, uiv, 1);
+                i64 unx = gl_label();
+                if gl_loops >= 32 { gl_failx(8); return; }
+                gl_brk[gl_loops] = uend;
+                gl_cnt[gl_loops] = unx;
+                gl_looptry[gl_loops] = gl_trydepth;
+                gl_loops += 1;
+                gl_stmt(at_c[n]);
+                gl_loops -= 1;
+                gl_place(unx);
+                ut += 1;
+            }
+            gl_ensure();
+            ir_add(IR_CONST, 1, 0, 0, 0, ust + gl_unr[n]);
+            gl_store(30, uiv, 1);
+            gl_place(uend);
+            return;
+        }
         i64 iv = gl_off[at_val[n]];
         i64 bv = gl_bsl[n];
         i64 wc = gl_wrc[n];
@@ -5297,6 +5326,18 @@ void gl_slots(i64 n) {
         gl_bsl[n] = gl_nslot;
         gl_hint_add(gl_nslot);
         gl_nslot += 8;
+        gl_unr[n] = 0;
+        if (ir_opt & 1099511627776) == 0 && at_b[n] != 0 && at_kind[at_a[n]] == AK_NUM && at_kind[at_b[n]] == AK_NUM {
+            // a loop over constants with a few turns and a small body that leaves the counter alone: written out once for each turn
+            i64 utr = at_val[at_b[n]] - at_val[at_a[n]];
+            if utr >= 1 && utr <= 8 {
+                wr_vi = at_val[n];
+                wr_ok = true;
+                wr_cnt = 0;
+                wr_scan(at_c[n]);
+                if wr_ok && wr_cnt <= 80 { gl_unr[n] = utr; }
+            }
+        }
         gl_wrc[n] = 0;
         if (ir_opt & 140737488355328) == 0 && at_b[n] != 0 && at_kind[at_a[n]] == AK_NUM && at_val[at_a[n]] >= 0 {
             wr_c = 0;

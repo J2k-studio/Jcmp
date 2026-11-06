@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.26.0 (2026-11-06)
+* **Added (speed, games):** a `for` loop over constants with 1 to 8 turns and a small body that leaves the counter alone (`for dy in 0..3`) is written out once for each turn, so the offsets of the body become constants (`-irdbg 1099511627776` turns it off). A tile-map neighbour scan (3 x 3 inside two loops): 127 -> 86 ms (gcc -O2: 35). Test t614 (compared with a Python reference and with the switch off).
+* **Added (bench):** `particles` (array of structs with float fields), `tilemap` (grid scan with `if` in nested loops) and `soa` (struct of arrays) with C twins: the game-like loops show the gaps that the old table did not (`particles` 2.0 times gcc, `tilemap` 2.5 times, `soa` 0.6 times); `gate.sh` lists the first two as known exceptions.
+* **Fixed:** none in this release.
+
 ## 1.2.25.0 (2026-11-06)
 * **Added (speed, games):** the words of a small struct (8 or 16 bytes, `vec2`, `vec3` of two or three fields) live in registers when every use is a plain 8-byte load or store (`-irdbg 274877906944` turns it off); callees of up to 30 instructions are inlined (it was 8; the assembler needed more labels for that: 131072 instead of 32768, see Fixed). The game benchmark: 58 -> 50 ms (gcc -O2: 47), `int` game 54 -> 50 (44), a float vec2 loop 10 -> 8. Test t613.
 * **Fixed:** the assembler failed on a big program with `.quad j2k_fs828`: its label table held 32768 labels, now 131072. An inlined callee that takes the address of a function (`op = add`) kept the name of the old function in the program (`IR_ADDR_FUNC`).
