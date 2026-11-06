@@ -70,7 +70,8 @@ struct Channel<T> {
     }
 
     T try_receive(self, bool^ got) {
-        T zero = (T)0;
+        T zero;
+        Mem::set(@zero, 0, sizeof(T));
         int^ w = @self.state[0];
         while __cas(w, 0, 1) != 0 { Thread::yield(); }
         if self.head[0] < self.items.len {
@@ -86,7 +87,8 @@ struct Channel<T> {
     }
 
     T receive(self) {
-        T zero = (T)0;
+        T zero;
+        Mem::set(@zero, 0, sizeof(T));
         while true {
             bool got = false;
             T v = self.try_receive(@got);

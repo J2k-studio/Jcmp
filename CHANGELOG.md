@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.20.0 (2026-11-06)
+* **Fixed:** `Channel<T>::receive` / `try_receive` on a closed empty channel with a struct `T` crashed (1.2.19.0 used the cast `(T)0`, which copies from address 0 for a struct); the value is now all zero bytes. Test t600. The cast itself is noted in `docs/open-questions.md`.
+* **Added (speed):** strength reduction also recognises element addresses that value numbering keeps in a frame cell (`-irdbg 1152921504606846976` turns it off); the per-turn `mul` is gone from such inner loops. Test t601.
+* **Added (bench):** `tools/bench/game.jk` / `game.c` (3000 vec2 entities, update and neighbour collision; 65 ms against gcc 47 ms); `run.sh` does not compare the exit code of the float programs nbody and mandel (fma contraction changes the rounding).
+
 ## 1.2.19.0 (2026-11-06)
 * **Added (speed):** the clean-up of dead cells and temporaries and the scalar replacement of struct locals now repeat until nothing changes (at most 4 rounds; `-irdbg 2199023255552` turns it off). Before, a struct local (`vec3 p`) stayed in the frame because the chain of address computations needed several rounds; `vec3` runs in 40 ms instead of 54 (gcc -O2: 46). Test t591.
 * **Fixed:** `Channel<T>::receive` / `try_receive` on a closed empty channel returned an uninitialised `T` (now `(T)0`; a struct `T` still gives unspecified field values).

@@ -7829,6 +7829,13 @@ int ss_off[IR_MAXV];
 int ss_stampv[IR_MAXV];
 int ss_prodv[IR_MAXV];           // kind 5: the instruction that made it (-1: not a producer that is changed)
 int ss_stamp;
+int ss_ce_cell[8];               // cells (frame offsets) that the entry block of the loop fills once with an address `base + f * i + c`
+int ss_ce_f[8];
+int ss_ce_base[8];
+int ss_ce_off[8];
+int ss_nce;
+int ss_chb[16];                  // the blocks that every turn of the loop runs through first, in order (the header jumps into the first; each ends in a
+int ss_chn;                      // test that leaves the loop or a jump): a cell filled in one of them is filled before every later use in the turn
 int ss_lst[16384];               // slots written in the loop
 int ss_total;                    // all functions
 int ss_nb0;                      // the blocks the function had before the loops were changed
@@ -8000,6 +8007,35 @@ bool ss_cellinv(int off) {
     return true;
 }
 
+// how many stores of the loop touch the cell off (the same test as ss_cellinv)
+int ss_cellwrites(int off) {
+    int n = 0;
+    int i = 0;
+    while i < ss_nwo {
+        if ss_wo[i] < off + 8 && off < ss_wo[i] + 16 { n += 1; }
+        i += 1;
+    }
+    return n;
+}
+
+bool ss_inchain(int b) {
+    int i = 0;
+    while i < ss_chn {
+        if ss_chb[i] == b { return true; }
+        i += 1;
+    }
+    return false;
+}
+
+int ss_cefind(int off) {
+    int i = 0;
+    while i < ss_nce {
+        if ss_ce_cell[i] == off { return i; }
+        i += 1;
+    }
+    return 0 - 1;
+}
+
 int ss_key6(int e) {
     int u = 0;
     while u < ss_nk {
@@ -8072,6 +8108,18 @@ void ss_block(int b, int islot) {
             j += 1;
             continue;
         }
+        // the entry block of the loop keeps an address in a frame cell (value numbering shares it with the other blocks): the loads of the
+        // cell in the blocks after it are the same address (-irdbg 1152921504606846976 switches this off)
+        if op == IR_STORE && ir_a[j] == 30 && ir_k[j] < 0 && ir_w[j] == 8 && ir_bi[j] == 0 && ss_inchain(b) && ss_inner == 1 && ss_noinv == 0 && ss_nce < 8 && (ir_opt & 1152921504606846976) == 0 {
+            int sv = ir_b[j];
+            if ss_get(sv) == 5 && ss_prodv[sv] >= 0 && ss_cellwrites(ir_k[j]) == 1 && ss_cefind(ir_k[j]) < 0 {
+                ss_ce_cell[ss_nce] = ir_k[j];
+                ss_ce_f[ss_nce] = ss_f[sv];
+                ss_ce_base[ss_nce] = ss_base[sv];
+                ss_ce_off[ss_nce] = ss_off[sv];
+                ss_nce += 1;
+            }
+        }
         // a use of a changed address: the instruction that made it needs the pointer
         if (op == IR_LOAD || op == IR_STORE) && ir_a[j] > 0 && (ss_get(ir_a[j]) == 5 || ss_get(ir_a[j]) == 6) && ss_prodv[ir_a[j]] >= 0 && ss_np < SS_MAXP {
             int pr = ss_prodv[ir_a[j]];
@@ -8100,7 +8148,9 @@ void ss_block(int b, int islot) {
         int a = ir_a[j];
         int ka = ss_get(a);
         if op == IR_LOAD && ir_w[j] == 8 && a == 30 && ir_k[j] < 0 {
-            if ss_inner == 1 && ss_cellinv(ir_k[j]) { nk = 9; no = ir_k[j]; }
+            int ce = ss_cefind(ir_k[j]);
+            if ce >= 0 { nk = 5; nf = ss_ce_f[ce]; nb = ss_ce_base[ce]; no = ss_ce_off[ce]; }
+            else if ss_inner == 1 && ss_cellinv(ir_k[j]) { nk = 9; no = ir_k[j]; }
         } else if op == IR_LOAD && ir_w[j] == 8 && a == 30 {
             int sl = vn_slot(j);
             if sl == islot { nk = 1; nf = 1; }
@@ -8219,10 +8269,35 @@ bool ss_loop(int q) {
     }
     ss_nk = 0;
     ss_np = 0;
+    ss_nce = 0;
+    ss_chn = 0;
+    {
+        int cb = h;
+        bool go = true;
+        while go && ss_chn < 16 {
+            int ht = ir_be[cb] - 1;
+            int nx = 0 - 1;
+            if ir_op[ht] == IR_JMP { nx = ir_t1[ht]; }
+            else if ir_op[ht] == IR_BR || ir_op[ht] == IR_FBR {
+                int e1 = ir_t1[ht];
+                int e2 = ir_t2[ht];
+                bool in1 = e1 >= 0 && e1 < ss_nb0 && op_po[e1] >= 0 && op_mark[e1] == stamp && e1 != h;
+                bool in2 = e2 >= 0 && e2 < ss_nb0 && op_po[e2] >= 0 && op_mark[e2] == stamp && e2 != h;
+                if in1 && !in2 { nx = e1; }
+                else if in2 && !in1 { nx = e2; }
+            }
+            if nx < 0 || nx >= ss_nb0 || op_po[nx] < 0 || op_mark[nx] != stamp || nx == h || ss_inchain(nx) { go = false; }
+            else { ss_chb[ss_chn] = nx; ss_chn += 1; cb = nx; }
+        }
+    }
     b = 0;
     int nb0 = ss_nb0;
+    {
+        int ci = 0;
+        while ci < ss_chn { ss_block(ss_chb[ci], islot); ci += 1; }
+    }
     while b < nb0 {
-        if op_po[b] >= 0 && op_mark[b] == stamp && b != h { ss_block(b, islot); }
+        if op_po[b] >= 0 && op_mark[b] == stamp && b != h && !ss_inchain(b) { ss_block(b, islot); }
         b += 1;
     }
     // memory cells that move on cost a load and a store for each turn: many pointers with a stride from a slot do not pay (the loop of a
