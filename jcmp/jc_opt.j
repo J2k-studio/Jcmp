@@ -1357,6 +1357,7 @@ void vn_hints() {
             p += 1;
             i64 flag = 0;
             while p < n && lf_hint_text[p] >= '0' && lf_hint_text[p] <= '9' { flag = flag * 10 + (lf_hint_text[p] - '0'); p += 1; }
+            if flag == 2 { flag = 1; }                      // a 32-bit number in an 8-byte slot is as plain as a 64-bit one here
             if size == 8 && flag == 1 && off % 8 == 0 && off / 8 < 8192 && op_plain[off / 8] == 0 { op_plain[off / 8] = 1; }
             else if off / 8 < 8192 {
                 // any other entry that covers the slot makes it not plain
@@ -5918,6 +5919,8 @@ bool vz_scan(i64 q, i64 islot, i64 incl, i64 inch, bool emit) {
                     i64 zs = vn_slot(zj);
                     if zs >= 0 {
                         if ir_op[zj] == IR_LOAD { vz_sl_ld[zs] += 1; } else { vz_sl_st[zs] += 1; }
+                    } else if ir_op[zj] == IR_LOAD && ir_w[zj] == 0 - 4 && ir_bi[zj] == 0 && ir_k[zj] >= 0 && ir_k[zj] % 8 == 0 && ir_k[zj] / 8 < 8192 && op_plain[ir_k[zj] / 8] == 1 {
+                        vz_sl_ld[ir_k[zj] / 8] += 1;            // a 32-bit accumulator is read with ldrsw
                     }
                 }
                 zj += 1;
@@ -5991,6 +5994,27 @@ bool vz_scan(i64 q, i64 islot, i64 incl, i64 inch, bool emit) {
                     j2 += 1;
                     continue;
                 }
+            }
+            if op == IR_LOAD && ir_a[j2] == 30 && ir_w[j2] == 0 - 4 && ir_bi[j2] == 0 && vz_w == 4 && (ir_opt & 68719476736) == 0 && ir_k[j2] >= 0 && ir_k[j2] % 8 == 0 && ir_k[j2] / 8 < 8192 && op_plain[ir_k[j2] / 8] == 1 && ir_k[j2] / 8 != islot && vz_sl_st[ir_k[j2] / 8] > 0 {
+                // a 32-bit accumulator (s += a[i], s += a[i] * b[i], with the wrap-around at 32 bits): partial sums in the four lanes
+                i64 s4 = ir_k[j2] / 8;
+                if vz_sl_st[s4] != 1 || vz_sl_ld[s4] != 1 || (vz_nacc2 >= 8 && !emit) { return vz_fail(5374); }
+                i64 ai4 = 0;
+                while ai4 < vz_nacc2 && vz_acc_slot[ai4] != s4 { ai4 += 1; }
+                if ai4 >= vz_nacc2 {
+                    if emit { return vz_fail(5378); }
+                    vz_acc_slot[ai4] = s4;
+                    vz_acc_q[ai4 * 4] = 0;
+                    vz_acc_q[ai4 * 4 + 1] = 0;
+                    vz_acc_q[ai4 * 4 + 2] = 0;
+                    vz_acc_q[ai4 * 4 + 3] = 0;
+                    vz_nacc2 += 1;
+                }
+                vz_kind[d] = VZ_ACCV;
+                vz_lslot[d] = s4;
+                vz_vec[d] = vz_acc_q[ai4 * 4 + vz_shift / 16];
+                j2 += 1;
+                continue;
             }
             if op == IR_LOAD && ir_a[j2] == 30 && ir_w[j2] != 8 {
                 // a float or a 32-bit number kept in a slot, that the loop does not write: it does not change
@@ -6100,6 +6124,11 @@ bool vz_scan(i64 q, i64 islot, i64 incl, i64 inch, bool emit) {
                 vz_kind[d] = VZ_IDX8;
                 vz_dyn[d] = shdyn;
                 vz_off[d] = shoff;
+            } else if op == IR_EXT && ir_k[j2] == 32 && ir_w[j2] == 1 && vz_w == 4 && vz_kind[ir_a[j2]] == VZ_ACCN {
+                // the sign extension of the new value of a 32-bit accumulator: the lanes are 32 bits already
+                vz_kind[d] = VZ_ACCN;
+                vz_vec[d] = vz_vec[ir_a[j2]];
+                vz_lslot[d] = vz_lslot[ir_a[j2]];
             } else if (op == IR_ADD || op == IR_SUB) && ir_bi[j2] == 0 && (vz_kind[ir_a[j2]] == VZ_ACCV || (op == IR_ADD && vz_kind[ir_b[j2]] == VZ_ACCV)) {
                 i64 ra5 = ir_a[j2];
                 i64 rx = ir_b[j2];
@@ -6114,12 +6143,12 @@ bool vz_scan(i64 q, i64 islot, i64 incl, i64 inch, bool emit) {
                     else {
                         qx = ir_vreg(2);
                         i64 dupx = ir_add(IR_VDUP, qx, rx, 0, 0, 0);
-                        ir_w[dupx] = 1;
+                        ir_w[dupx] = vz_arr();
                     }
                     i64 aq = vz_vec[ra5];
                     i64 ve5 = ir_add(IR_VOP, aq, aq, qx, 0, 4);
                     if op == IR_SUB { ir_k[ve5] = 5; }
-                    ir_w[ve5] = 1;
+                    ir_w[ve5] = vz_arr();
                     vz_vec[d] = aq;
                 }
                 vz_kind[d] = VZ_ACCN;
@@ -7088,7 +7117,21 @@ bool vz_make(i64 q, i64 l) {
             ir_k[lo] = vz_slot_off(vz_acc_slot[au2]);
             i64 run = ov;
             i64 xch = 0;
-            while xch < nchunks {
+            while xch < nchunks && vz_w == 4 {
+                // four 32-bit lanes (zero-extended, added in 64 bits: the low 32 bits are the sum modulo 2^32)
+                i64 ln = 0;
+                while ln < 4 {
+                    i64 l4 = ir_vreg(0);
+                    i64 e4 = ir_add(IR_VLANE, l4, vz_acc_q[au2 * 4 + xch], 0, 0, ln * 4);
+                    ir_w[e4] = 4;
+                    i64 s4r = ir_vreg(0);
+                    ir_add(IR_ADD, s4r, run, l4, 0, 0);
+                    run = s4r;
+                    ln += 1;
+                }
+                xch += 1;
+            }
+            while xch < nchunks && vz_w != 4 {
                 i64 l0 = ir_vreg(0);
                 i64 e0 = ir_add(IR_VLANE, l0, vz_acc_q[au2 * 4 + xch], 0, 0, 0);
                 ir_w[e0] = 8;
@@ -7101,6 +7144,12 @@ bool vz_make(i64 q, i64 l) {
                 ir_add(IR_ADD, s2, s1, l1, 0, 0);
                 run = s2;
                 xch += 1;
+            }
+            if vz_w == 4 {
+                i64 rx4 = ir_vreg(0);
+                i64 ex4 = ir_add(IR_EXT, rx4, run, 0, 0, 32);
+                ir_w[ex4] = 1;
+                run = rx4;
             }
             i64 so = ir_add(IR_STORE, 0, 30, run, 0, 0);
             ir_w[so] = 8;

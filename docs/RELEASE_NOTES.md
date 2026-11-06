@@ -1,6 +1,8 @@
-# J2K / Jcmp 1.2.23.0
+# J2K / Jcmp 1.2.24.0
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
+
+**1.2.24.0:** 32-bit `int` locals in registers, NEON for 32-bit reductions (`int` arrays 5 times faster).
 
 **1.2.23.0 (breaking):** `int` is 32 bits, `i64` is 64 bits; `python3 tools/int2i64.py` converts a program; see docs/MIGRATION.md.
 

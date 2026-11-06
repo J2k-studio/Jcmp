@@ -945,6 +945,7 @@ void add_local(char^ name, i64 kind, i64 elem, i64 bytes, i64 ptr) {
     lfl32[lcount] = 0;
     if kind == 0 && elem == 6 && ty_tid == 90 && ptr == 0 && hint_flag == 1 { lfl32[lcount] = 1; }
     lpin[lcount] = 0;
+    if hint_flag == 1 && elem == 4 && ptr == 0 && next_pin == 0 { hint_flag = 2; }       // 2: a 32-bit whole number in an 8-byte slot (always read with ldrsw, jc_regs.j rg_slot_use)
     if next_pin > 0 {
         // a pinned variable: the flag of the hint line is 100 + the register (the register pass puts it there)
         if hint_flag == 1 {

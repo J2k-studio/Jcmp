@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.24.0 (2026-11-06)
+* **Added (speed, 32-bit `int`):** a scalar `int` local lives in a register (`-irdbg 34359738368` turns it off; before, every `int` local stayed in memory because the register pass refused slots read with `ldrsw`); 32-bit reductions (`s += a[i]`, `s += a[i] * b[i]`, `s -= b[i]`) use four NEON lanes with wrap-around at 32 bits (`-irdbg 68719476736`); the variables of a vector loop weigh more in the register pass so a vector loop inlined into `main` keeps its pointer and counter in registers (`-irdbg 137438953472`). Tests t610, t611, t612.
+* Measured (ms, best of 6, `int` programs against gcc -O2 `int`): loop 735 -> 271 (198), sieve 97 -> 59 (71), gcd 504 -> 296 (272), qsort 184 -> 172 (134), arrays 445 -> 90 (73), fib 80 -> 80 (68); every benchmark of `tools/bench` is within 1.4 times gcc -O2.
+* **Fixed:** none in this release.
+
 ## 1.2.23.0 (2026-11-06)
 * **Changed (breaking):** `int` is a 32-bit integer; `i32` is another name of it; `i64` is the 64-bit integer. `int + int` wraps at 32 bits. A program that needs 64 bits keeps its meaning when `int` is written `i64`: `python3 tools/int2i64.py FILE...` does it (not in comments or text); see `docs/MIGRATION.md`. The compiler, the standard library, the libraries (`Jcmp-libs`) and the tests are written with `i64` where they mean 64 bits. Test t609.
 * **Added:** `i64` as a type name (it was only a name in the design); `-showlib` shows a library as it is written.

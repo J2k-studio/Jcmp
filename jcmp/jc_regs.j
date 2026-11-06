@@ -39,6 +39,9 @@ i64 rg_callpre[65538];         // rg_callpre[i]: the calls (that come back) in t
 i64 rg_elide;                // 1: the frame of the function is not needed (no stack slot is left)
 i64 rg_mask;                 // the registers x0 .. x30 that the text of the function mentions
 i64 al_to = 32;              // every function starts at a multiple of this many bytes (0: no padding)
+i64 rg_novecw;               // -irdbg 137438953472: the variables of a vector loop weigh as much as the others
+i64 rg_i32_off;              // -irdbg 34359738368: 32-bit variables stay in the frame
+i64 rg_w32[8192];            // 1: the slot holds a 32-bit number (hint flag 2): its register always holds the sign-extended value
 i64 rg_pin[8192];            // the register (18, 19 .. 25) a slot is pinned to, or 0 (int n @ x19)
 i64 rg_slotreg[8192];        // the register number (19..25) of a slot, or 0
 i64 rg_slotd[8192];          // the double register number (8..15) of a slot, or 0
@@ -156,12 +159,28 @@ bool rg_fmov_back(i64 i, i64 r) {
     return false;
 }
 
+// the line st is "sxtw x<r>, x<s>" (the register r now holds a sign-extended 32-bit value)
+bool rg_sxtw_self(i64 st, i64 r) {
+    return rg_has(st, "sxtw x") && rg_writes_x(st, r);
+}
+
 i64 rg_isd;                  // 1: the use at the line is ldr dK / str dK (a double, written by the lowering of the IR)
 
+i64 rg_isw;                  // 1: the use is ldrsw xR / strw xR (a 32-bit access of the slot)
 i64 rg_slot_use(i64 st) {
     i64 i = st;
     rg_isd = 0;
-    if rg_has(st, "ldr x") {
+    rg_isw = 0;
+    i64 skip = 5;
+    if rg_has(st, "ldrsw x") {
+        rg_isload = 1;
+        rg_isw = 1;
+        skip = 7;
+    } else if rg_has(st, "strw x") {
+        rg_isload = 0;
+        rg_isw = 1;
+        skip = 6;
+    } else if rg_has(st, "ldr x") {
         rg_isload = 1;
     } else if rg_has(st, "str x") {
         rg_isload = 0;
@@ -174,7 +193,7 @@ i64 rg_slot_use(i64 st) {
     } else {
         return 0 - 1;
     }
-    i = st + 5;
+    i = st + skip;
     if out_buf[i] < '0' || out_buf[i] > '9' { return 0 - 1; }
     rg_reg = rg_num(i);
     i = rg_next;
@@ -722,6 +741,7 @@ void rg_function(i64 is_main) {
         rg_state[s] = 0;
         rg_wt[s] = 0;
         rg_pin[s] = 0;
+        rg_w32[s] = 0;
         rg_slotreg[s] = 0;
         rg_slotd[s] = 0;
         rg_fl[s] = 0;
@@ -757,10 +777,13 @@ void rg_function(i64 is_main) {
                     i64 w = w0;
                     i64 pinv = 0;
                     if flag >= 100 { pinv = flag - 100; flag = 1; }
+                    i64 is32 = 0;
+                    if flag == 2 && rg_i32_off == 0 { is32 = 1; flag = 1; }
                     while w <= w1 && w < 8192 {
                         if flag == 1 && size == 8 && off % 8 == 0 && rg_state[w] != 2 {
                             rg_state[w] = 1;
                             rg_pin[w] = pinv;
+                            if is32 == 1 { rg_w32[w] = 1; }
                         } else {
                             rg_state[w] = 2;
                         }
@@ -833,9 +856,18 @@ void rg_function(i64 is_main) {
     bl0 = 0;
     while bl0 < rg_nlab {
         if rg_bmax[bl0] >= 0 {
+            // a loop that has NEON loads or stores (a vector loop) is the hot one: its variables count more (-irdbg 137438953472: not)
+            i64 vb0 = 1;
+            if rg_novecw == 0 {
+                i64 vq = rg_labl[bl0];
+                while vq <= rg_bmax[bl0] && vb0 == 1 {
+                    if rg_has(rg_ls[vq], "ldr q") { vb0 = 5; }
+                    vq += 1;
+                }
+            }
             i64 jb = rg_labl[bl0];
             while jb <= rg_bmax[bl0] {
-                rg_dep[jb] += 1;
+                rg_dep[jb] += vb0;
                 jb += 1;
             }
         }
@@ -850,12 +882,13 @@ void rg_function(i64 is_main) {
             i64 n = rg_slot_use(st);
             if n >= 0 {
                 if n % 8 == 0 && n / 8 < 8192 {
+                    if rg_isw == 1 && rg_w32[n / 8] == 0 { rg_state[n / 8] = 2; }
                     rg_tot[n / 8] += 1;
                     if rg_isd == 1 { rg_fl[n / 8] += 1; }
                     else if rg_isload == 1 && rg_fmov_ahead(i, rg_reg) { rg_fl[n / 8] += 1; }
                     else if rg_isload == 0 && rg_fmov_back(i, rg_reg) { rg_fl[n / 8] += 1; }
                     i64 d = rg_dep[i];
-                    if d > 8 { d = 8; }                  // a deep nest counts more than a shallow one (the jumps back from cold code make the depth too big everywhere, by the same amount)
+                    if d > 12 { d = 12; }                // a deep nest counts more than a shallow one (the jumps back from cold code make the depth too big everywhere, by the same amount)
                     i64 wgt = 1;
                     while d > 0 {
                         wgt = wgt * 8;
@@ -1038,6 +1071,14 @@ void rg_function(i64 is_main) {
                             rg_int(r);
                         }
                     }
+                } else if rg_slotreg[n / 8] != 0 && rg_w32[n / 8] == 1 && load == 0 {
+                    // a store into a 32-bit variable: the register keeps the sign-extended value (no sxtw when the line before made it)
+                    i64 k = rg_slotreg[n / 8];
+                    bool ext = i > 0 && rg_sxtw_self(rg_ls[i - 1], r);
+                    if ext { rg_text("mov x"); } else { rg_text("sxtw x"); }
+                    rg_int(k);
+                    rg_text(", x");
+                    rg_int(r);
                 } else if rg_slotreg[n / 8] != 0 {
                     i64 k = rg_slotreg[n / 8];
                     rg_text("mov x");

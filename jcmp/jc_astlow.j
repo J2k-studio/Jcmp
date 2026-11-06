@@ -5261,7 +5261,7 @@ void gl_slots(i64 n) {
                 gl_nslot += 8;
             }
         } else {
-            gl_hint_add(gl_nslot);
+            if at_ty[n] == 4 { gl_hint_add2(gl_nslot, 8, 2); } else { gl_hint_add(gl_nslot); }      // 2: a 32-bit number (jc_expr.j add_local)
             gl_nslot += 8;
         }
         // a variable that owns memory has a record of the cleanup chain after it (32 bytes, not in the hint line)
