@@ -3008,7 +3008,7 @@ i64 is_vc[IS_MAXV];
 
 i64 inl_done;                    // how many calls were replaced by their bodies (all functions)
 i64 inl_maxsize = 60;
-i64 inl_tiny = 8;                // a callee this small is inlined everywhere, a bigger one only inside loops            // the biggest callee (instructions that do something)
+i64 inl_tiny = 30;               // a callee this small is inlined everywhere, a bigger one only inside loops            // the biggest callee (instructions that do something)
 
 i64 is_ht[4096];                 // the kept functions by name: the index + 1 (open addressing); is_ht_n says how many are in it
 i64 is_ht_n;
@@ -3274,8 +3274,8 @@ bool in_inline(i64 b, i64 c, i64 f) {
             i64 t2 = is_t2[ci];
             if op == IR_JMP || op == IR_BR || op == IR_FBR { t1 = t1 + base; }
             if op == IR_BR || op == IR_FBR { t2 = t2 + base; }
-            if op == IR_CALL {
-                k = ir_name_index(@is_names + (is_n0[f] + k) * 64);
+            if op == IR_CALL || op == IR_ADDR_FUNC {
+                k = ir_name_index(@is_names + (is_n0[f] + k) * 64);          // the address of a function names it too (an inlined callee that uses `op = add`)
             }
             i64 j2 = in_put(op, in_v(d), in_v(a), bb, is_bi[ci], k, is_w[ci], t1, t2);
             if is_ac[ci] > 0 {

@@ -40,6 +40,7 @@ i64 rg_elide;                // 1: the frame of the function is not needed (no s
 i64 rg_mask;                 // the registers x0 .. x30 that the text of the function mentions
 i64 al_to = 32;              // every function starts at a multiple of this many bytes (0: no padding)
 i64 rg_novecw;               // -irdbg 137438953472: the variables of a vector loop weigh as much as the others
+i64 rg_nostruct;             // -irdbg 274877906944: the words of small structs stay in the frame
 i64 rg_i32_off;              // -irdbg 34359738368: 32-bit variables stay in the frame
 i64 rg_w32[8192];            // 1: the slot holds a 32-bit number (hint flag 2): its register always holds the sign-extended value
 i64 rg_pin[8192];            // the register (18, 19 .. 25) a slot is pinned to, or 0 (int n @ x19)
@@ -779,8 +780,11 @@ void rg_function(i64 is_main) {
                     if flag >= 100 { pinv = flag - 100; flag = 1; }
                     i64 is32 = 0;
                     if flag == 2 && rg_i32_off == 0 { is32 = 1; flag = 1; }
+                    // a struct of 8 or 16 bytes (hint flag 0): its words move into registers when every use of them in the text is a plain
+                    // 8-byte load or store (an address taken anywhere makes the words not allowed below); -irdbg 274877906944 switches it off
+                    bool sw = flag == 0 && (size == 8 || size == 16) && off % 8 == 0 && rg_nostruct == 0;
                     while w <= w1 && w < 8192 {
-                        if flag == 1 && size == 8 && off % 8 == 0 && rg_state[w] != 2 {
+                        if (sw || (flag == 1 && size == 8 && off % 8 == 0)) && rg_state[w] != 2 {
                             rg_state[w] = 1;
                             rg_pin[w] = pinv;
                             if is32 == 1 { rg_w32[w] = 1; }

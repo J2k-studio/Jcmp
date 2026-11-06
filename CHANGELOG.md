@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.25.0 (2026-11-06)
+* **Added (speed, games):** the words of a small struct (8 or 16 bytes, `vec2`, `vec3` of two or three fields) live in registers when every use is a plain 8-byte load or store (`-irdbg 274877906944` turns it off); callees of up to 30 instructions are inlined (it was 8; the assembler needed more labels for that: 131072 instead of 32768, see Fixed). The game benchmark: 58 -> 50 ms (gcc -O2: 47), `int` game 54 -> 50 (44), a float vec2 loop 10 -> 8. Test t613.
+* **Fixed:** the assembler failed on a big program with `.quad j2k_fs828`: its label table held 32768 labels, now 131072. An inlined callee that takes the address of a function (`op = add`) kept the name of the old function in the program (`IR_ADDR_FUNC`).
+* All benchmarks of `tools/bench` are within 1.4 times gcc -O2 (`gate.sh`).
+
 ## 1.2.24.0 (2026-11-06)
 * **Added (speed, 32-bit `int`):** a scalar `int` local lives in a register (`-irdbg 34359738368` turns it off; before, every `int` local stayed in memory because the register pass refused slots read with `ldrsw`); 32-bit reductions (`s += a[i]`, `s += a[i] * b[i]`, `s -= b[i]`) use four NEON lanes with wrap-around at 32 bits (`-irdbg 68719476736`); the variables of a vector loop weigh more in the register pass so a vector loop inlined into `main` keeps its pointer and counter in registers (`-irdbg 137438953472`). Tests t610, t611, t612.
 * Measured (ms, best of 6, `int` programs against gcc -O2 `int`): loop 735 -> 271 (198), sieve 97 -> 59 (71), gcd 504 -> 296 (272), qsort 184 -> 172 (134), arrays 445 -> 90 (73), fib 80 -> 80 (68); every benchmark of `tools/bench` is within 1.4 times gcc -O2.

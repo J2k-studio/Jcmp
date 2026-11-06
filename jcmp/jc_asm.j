@@ -14,8 +14,8 @@ char as_code[8388608];          // machine code, 4 bytes per instruction
 i64 as_pos;                     // bytes of code emitted so far (also the address)
 i64 as_pass;                    // 1: collect labels, 2: encode
 
-char as_lnames[2097152];        // label table: 32768 names x 64 bytes
-i64 as_laddr[32768];
+char as_lnames[8388608];        // label table: 131072 names x 64 bytes
+i64 as_laddr[131072];
 i64 as_label_count;
 char as_nbuf[64];               // the label name just read (zero padded)
 
@@ -479,7 +479,7 @@ bool as_name_matches(i64 slot) {
     return true;
 }
 
-i64 as_lhash[65536];             // the labels by name: slot + 1 (open addressing)
+i64 as_lhash[262144];             // the labels by name: slot + 1 (open addressing)
 i64 as_fx_pos[131072];          // the references to labels that are not defined yet: where the word is, its kind, the label, the word, the place in the text
 i64 as_fx_kind[131072];
 i64 as_fx_slot[131072];
@@ -494,7 +494,7 @@ i64 as_name_hash() {
         h = (h * 33 + as_nbuf[i]) & 1073741823;
         i += 1;
     }
-    return h & 65535;
+    return h & 262143;
 }
 
 // the slot of the label whose name is in as_nbuf: made (not defined yet: address -1) when it is new
@@ -503,9 +503,9 @@ i64 as_label_slot() {
     while as_lhash[h] != 0 {
         i64 sl = as_lhash[h] - 1;
         if as_name_matches(sl) { return sl; }
-        h = (h + 1) & 65535;
+        h = (h + 1) & 262143;
     }
-    if as_label_count >= 32768 { as_fail(); }
+    if as_label_count >= 131072 { as_fail(); }
     i64 i = 0;
     while i < 64 {
         as_lnames[as_label_count * 64 + i] = as_nbuf[i];

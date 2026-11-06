@@ -1,6 +1,8 @@
-# J2K / Jcmp 1.2.24.0
+# J2K / Jcmp 1.2.25.0
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
+
+**1.2.25.0:** small structs in registers (vec2/vec3 code faster), bigger inlining, bigger assembler label table.
 
 **1.2.24.0:** 32-bit `int` locals in registers, NEON for 32-bit reductions (`int` arrays 5 times faster).
 
