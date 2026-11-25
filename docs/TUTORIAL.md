@@ -202,7 +202,8 @@ and shows the line with a `^` under the problem.
 
 ## Lesson 2. Numbers and variables
 
-A variable has a type: `int` (whole number, 64 bit), `double` (decimal), `char` (one character), `bool` (true or false).
+A variable has a type: `int` (whole number, 32 bit: up to about 2 thousand million), `double` (decimal), `char` (one byte: a letter of ASCII text), `bool` (true or false).
+For bigger numbers use `i64` (64 bit). The small ones are `i8`, `i16` (8 and 16 bit) and the unsigned `u8`, `u16`, `u32`, `u64`: a number that does not fit is cut to the size of its type when it is stored (an `i16` that gets 35000 holds -30536).
 `jout` prints decimals too. Lines end with `;`.
 
 ```jk
@@ -307,6 +308,7 @@ Output:
 ## Lesson 5. Functions
 
 A function has a result type, a name and parameters. `void` means no result. A function can be written below the place that uses it.
+Two short words start a function: `fn` means that it returns an `int` and `fnv` that it returns nothing (`fn add(int a, int b) { return a + b; }`, `fnv hello() { jout << "hi\n"; }`). The long forms `int add(...)` and `void hello()` work too. A `main` that has a result and no `return` ends with 0 and the compiler warns: write `return 0;`, or `fnv main()`.
 
 ```jk
 #import <stdlib>
@@ -1194,7 +1196,7 @@ hello from a child
 
 ## Lesson 30. Bits and bytes
 
-A whole number is 64 bits. `>>` and `<<` shift them, `&` keeps bits, `xor` flips them. `Bit::` has the work that the CPU does in one instruction:
+An `i64` is 64 bits (an `int` is 32). `>>` and `<<` shift the bits, `&` keeps bits, `xor` flips them. `Bit::` has the work that the CPU does in one instruction:
 `popcount` (how many bits are 1), `clz` / `ctz` (zero bits in front / after), `rotl` / `rotr` (turn the bits round), `bswap` (reverse the 8 bytes).
 
 ```jk
