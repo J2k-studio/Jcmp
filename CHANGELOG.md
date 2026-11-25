@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.33.0 (2026-11-26)
+* **Added (language):** several declarations in one statement (`int a = 1, b = 2;`, also in the head of a `for`: `for int i = 0, n = 5; i < n; i++ { }`; the type belongs to every name; a statement with a `<` in it is not read as a list); `using Math, stdlib;` for `using Math; using stdlib;`. Both work in the tree path and in the text path.
+* **Added (bench and tools):** `tools/bench/nn.*` (the same neural network in J2K, C, Python and Rust, with the lengths and the run times), `tools/bench/a32.sh` (the ARM32 table against clang), `tools/tokcount.py` (the number of tokens of two files).
+* **Fixed:** nothing in the compiler; two older bugs of the text path are recorded as known exceptions of the campaign (t128_std_file exits with 128 and t590_ujam prints a double differently with -noast).
+* **Known (open-questions.md):** the build of the compiler can fail with "the assembler could not read this line" when a function grows past a size that is not known yet (the garbage is in the table of function names; `-nopeep` avoids it; always test a build with J2K_CACHE= as the bootstrap does).
+
 ## 1.2.32.0 (2026-11-25)
 * **Added (speed, games):** a compare of two `float` values is written on the floats (`fcmp s0, s1`) without the two conversions to double, and a `float` read from memory goes straight into an `s` register (`ldr s0, [...]`) instead of `ldrsw` + `fmov` (ARM64 only; `-irdbg 140737488355328` turns both off). The particle benchmark (floats in a struct array) is about 20 % faster; the results are the same, also for NaN.
 * **Changed:** the repositories have new names: the compiler is `J2k-studio/Jexcmp` and the tools are `J2k-studio/Jextool`. The old names still work (GitHub forwards them), so installed compilers keep updating; the links in the README, the documents, `install.sh` and the messages of the compiler use the new names.

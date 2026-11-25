@@ -165,6 +165,26 @@ int add(int a, int b) { return a + b; }
 void main() { jout << add(2, 3) << "\n"; }       // functions may be used before they are written
 ```
 
+### Several declarations in one
+
+The type is written once and belongs to every name: `int a = 1, b = 2, c;`. It works in the head of a `for` too, which is how the end of a loop is worked out once: `for int i = 0, n = 5; i < n; i++ { ... }`. A pointer type applies to every name (`int^ p, q;` makes two pointers). A statement that has a `<` anywhere (`Result<A, B>`, a comparison) is not read as a list: write those declarations one to a line.
+
+```jk
+fn main() {
+    int a = 1, b = 2, c;
+    c = a + b;
+    double x = 1.5, y = x * 2.0;
+    int s = 0;
+    for int i = 0, n = 4; i < n; i++ { s += i; }
+    jout << a << b << c << " " << x << " " << y << " " << s << "\n";
+    return 0;
+}
+```
+
+### `using` with several names
+
+`using Math, stdlib;` is `using Math; using stdlib;`.
+
 ### `fn` and `fnv`
 
 `fn` at the start of a function means that it returns an `int`; `fnv` means that it returns nothing (`void`). The long forms keep working; use whichever reads better.

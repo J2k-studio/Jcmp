@@ -926,7 +926,9 @@ void parse_for() {
     next();                              // "for"
     if loop_depth >= 63 { die("loops nested too deeply"); }
     if at_type() {
+        if decl_commas() { }               // for int i = 0, n = 5; ... : the head holds the declarations one after the other
         parse_local_decl();              // the declaration ends with ';'
+        while at_type() { parse_local_decl(); }
         // the layout:  init; jump to the condition; step; condition (jumps out when false); body; jump to the step.
         // One jump a turn. The condition is read before the step is, so its text is cut out and put back after the step.
         i64 c_start = out_len;
@@ -1426,7 +1428,56 @@ void parse_enum() {
 }
 
 // using enum Name;   |   using ...; (other forms are skipped)
+// using A, B, C;  is  using A; using B; using C;  (docs/syntax-design.md 112). The text of the statement is read as it is written; if there is a
+// comma in it, the current token (using) up to the ; is replaced by the separate statements.
+char ul_out[400];
+bool using_list() {
+    i64 k = 0;
+    i64 parts = 0;
+    i64 depth = 0;
+    char part[100];
+    i64 pn = 0;
+    ul_out[0] = 0;
+    bool comma = false;
+    while true {
+        i64 c = lc(k);
+        if c == 0 || k > 300 { return false; }
+        if c == '(' || c == '<' { depth += 1; }
+        if c == ')' || c == '>' { depth -= 1; }
+        if c == ';' || (c == ',' && depth == 0) {
+            if c == ',' { comma = true; }
+            while pn > 0 && is_space(part[pn - 1]) { pn -= 1; }
+            part[pn] = 0;
+            if pn > 0 {
+                append_text(@ul_out, "using ");
+                append_text(@ul_out, @part);
+                append_text(@ul_out, "; ");
+                parts += 1;
+            }
+            pn = 0;
+            if c == ';' { break; }
+        } else {
+            if !(pn == 0 && is_space(c)) {
+                if pn >= 90 { return false; }
+                part[pn] = c;
+                pn += 1;
+            }
+        }
+        k += 1;
+    }
+    if !comma || parts < 2 { return false; }
+    if str_len(@ul_out) > 380 { die("this using list is too long"); }
+    while !tok_is(";") {
+        if tok_kind == T_EOF { die("a ; was expected at the end of using"); }
+        next();
+    }
+    push_macro(@ul_out);
+    next();
+    return true;
+}
+
 void parse_using() {
+    if using_list() { return; }
     using_line = err_line;
     next();                              // "using"
     if tok_is("gfx") {
@@ -2172,6 +2223,7 @@ void warn_unused(i64 from) {
 }
 
 void parse_local_decl() {
+    if decl_commas() { return; }              // int a = 1, b = 2;  is read as  int a = 1; int b = 2;
     track_unused = 1;
     parse_local_decl_core();
     track_unused = 0;

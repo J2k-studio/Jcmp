@@ -1012,6 +1012,14 @@ bool try_ext(char^ p, i64 n) {
     return false;
 }
 
+// the length of the ending of a source file name b[0..n): .jex 4, .jk 3, .j 2, else 0 (docs/syntax-design.md 112)
+i64 source_ext_len(char^ b, i64 n) {
+    if n > 4 && b[n - 4] == '.' && b[n - 3] == 'j' && b[n - 2] == 'e' && b[n - 1] == 'x' { return 4; }
+    if n > 3 && b[n - 3] == '.' && b[n - 2] == 'j' && b[n - 1] == 'k' { return 3; }
+    if n > 2 && b[n - 2] == '.' && b[n - 1] == 'j' { return 2; }
+    return 0;
+}
+
 bool file_exists(char^ p) {
     i64 fd = syscall(56, -100, p, 0, 0);
     if fd < 0 { return false; }

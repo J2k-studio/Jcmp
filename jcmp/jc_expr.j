@@ -3278,6 +3278,132 @@ void sg_make(i64 kind) {
     append_text(@sg_out, "))");
 }
 
+// several declarations in one: `int a = 1, b = 2;`  is  `int a = 1; int b = 2;`  (docs/syntax-design.md 112: the type is written once and
+// belongs to every name, `int^ p, q;` makes two pointers). The text of the statement is read as written, up to the ; (a comma inside (), [], {}, <> or a
+// text does not split). Called with the current token = the first word of the declaration; if the statement has a comma at the top, the tokens up
+// to the ; are replaced by the separate declarations and true is given (the caller then reads the first one).
+char dc_out[600];
+bool decl_commas() {
+    // the text of the statement: the current word and what follows it
+    char txt[420];
+    i64 n = 0;
+    i64 w = 0;
+    while tok_text[w] != 0 && n < 100 {
+        txt[n] = tok_text[w];
+        n += 1;
+        w += 1;
+    }
+    i64 k = 0;
+    i64 depth = 0;
+    bool comma = false;
+    bool in_init = false;
+    while true {
+        i64 c = lc(k);
+        if c == 0 || n >= 410 { return false; }
+        if c == '"' || c == 39 {
+            i64 q = c;
+            txt[n] = c;
+            n += 1;
+            k += 1;
+            while lc(k) != 0 && lc(k) != q && n < 410 {
+                if lc(k) == 92 { txt[n] = lc(k); n += 1; k += 1; }
+                txt[n] = lc(k);
+                n += 1;
+                k += 1;
+            }
+            if lc(k) == 0 { return false; }
+            txt[n] = lc(k);
+            n += 1;
+            k += 1;
+            continue;
+        }
+        if c == '(' || c == '[' || c == '{' { depth += 1; }
+        if c == ')' || c == ']' || c == '}' { depth -= 1; }
+        if c == '=' && depth == 0 { in_init = true; }
+        if c == '<' { return false; }                          // a < anywhere (Result<A, B>, a comparison): not read as a list of names
+        if c == ';' && depth <= 0 { break; }
+        if c == ',' && depth == 0 { comma = true; in_init = false; }
+        txt[n] = c;
+        n += 1;
+        k += 1;
+    }
+    txt[n] = 0;
+    if !comma { return false; }
+    // the first part: TYPE name [= init]; the type is what stands before the name
+    i64 e = 0;
+    depth = 0;
+    i64 eq = 0 - 1;
+    while e < n && !(txt[e] == ',' && depth == 0) {
+        if txt[e] == '(' || txt[e] == '[' || txt[e] == '{' { depth += 1; }
+        if txt[e] == ')' || txt[e] == ']' || txt[e] == '}' { depth -= 1; }
+        if txt[e] == '=' && depth == 0 && eq < 0 && txt[e + 1] != '=' { eq = e; }
+        e += 1;
+    }
+    i64 le = eq;
+    if le < 0 { le = e; }
+    while le > 0 && is_space(txt[le - 1]) { le -= 1; }
+    if le > 0 && txt[le - 1] == ']' {
+        // an array: skip the [..] groups to find the name
+        while le > 0 && txt[le - 1] == ']' {
+            while le > 0 && txt[le - 1] != '[' { le -= 1; }
+            if le > 0 { le -= 1; }
+            while le > 0 && is_space(txt[le - 1]) { le -= 1; }
+        }
+    }
+    i64 ne = le;
+    while le > 0 && (is_letter(txt[le - 1]) || is_digit(txt[le - 1]) || txt[le - 1] == '_') { le -= 1; }
+    if le == ne || le == 0 { return false; }
+    i64 te = le;
+    while te > 0 && is_space(txt[te - 1]) { te -= 1; }
+    if te == 0 { return false; }
+    char ty[120];
+    i64 tn = 0;
+    while tn < te && tn < 118 {
+        ty[tn] = txt[tn];
+        tn += 1;
+    }
+    ty[tn] = 0;
+    dc_out[0] = 0;
+    i64 st = 0;
+    bool first = true;
+    while st < n {
+        i64 en = st;
+        depth = 0;
+        while en < n && !(txt[en] == ',' && depth == 0) {
+            if txt[en] == '(' || txt[en] == '[' || txt[en] == '{' { depth += 1; }
+            if txt[en] == ')' || txt[en] == ']' || txt[en] == '}' { depth -= 1; }
+            en += 1;
+        }
+        i64 a = st;
+        i64 b2 = en;
+        while a < b2 && is_space(txt[a]) { a += 1; }
+        while b2 > a && is_space(txt[b2 - 1]) { b2 -= 1; }
+        if b2 > a {
+            if !first { append_text(@dc_out, @ty); append_text(@dc_out, " "); }
+            char one[200];
+            i64 on = 0;
+            while a < b2 && on < 198 {
+                one[on] = txt[a];
+                on += 1;
+                a += 1;
+            }
+            one[on] = 0;
+            append_text(@dc_out, @one);
+            append_text(@dc_out, "; ");
+        }
+        first = false;
+        st = en + 1;
+    }
+    if str_len(@dc_out) > 560 { die("this declaration list is too long"); }
+    while !tok_is(";") {
+        if tok_kind == T_EOF { die("a ; was expected at the end of the declaration"); }
+        next();
+    }
+    push_macro(@dc_out);
+    next();
+    return true;
+}
+
 // is the first thing after the current token a < ?   (alloc<int n>(50)   free<n>)
 bool sg_angle_next() {
     i64 k = 0;

@@ -2098,7 +2098,8 @@ i64 ast_try() {
 
 i64 ast_stmt() {
     if tok_is("{") { return ast_block(); }
-    if tok_kind == T_IDENT && ast_find_local(@tok_text) < 0 { sg_statement(); }      // alloc[int^ p = n]; free[p]; grow[p = n]: the usual form, read the same way as the parser does
+    if tok_kind == T_IDENT && ast_find_local(@tok_text) < 0 { sg_statement(); }
+    if tok_kind == T_IDENT && ast_type_kw() != 0 { decl_commas(); }        // int a = 1, b = 2;  is  int a = 1; int b = 2;      // alloc[int^ p = n]; free[p]; grow[p = n]: the usual form, read the same way as the parser does
     if tok_is("@") {
         // @no_reorder { ... }
         next();
@@ -2124,8 +2125,15 @@ i64 ast_stmt() {
             if ast_type_kw() != 0 {
                 // for int i = 0; i < n; i++ { }
                 i64 saved_nl3 = ast_nl;
+                decl_commas();                       // for int i = 0, n = 5; ... : the head holds the declarations one after the other
                 i64 ini = ast_decl(ast_type_kw());
                 if ast_ok == 0 { return 0; }
+                i64 ini_last = ini;
+                while ast_type_kw() != 0 {
+                    i64 ini2 = ast_decl(ast_type_kw());
+                    if ast_ok == 0 { return 0; }
+                    if ini_last != 0 && ini2 != 0 { ast_nx[ini_last] = ini2; ini_last = ini2; }
+                }
                 i64 cond = ast_expr(0);
                 if ast_ok == 0 { return 0; }
                 if !tok_is(";") {
