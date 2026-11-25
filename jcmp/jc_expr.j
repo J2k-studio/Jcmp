@@ -1314,9 +1314,16 @@ i64 res_w(i64 a, i64 b) {
 }
 
 // wrap x0 to a signed small width (i8, i32) and remember it as the result width
+// the width of an operand for the result of an arithmetic: a number written in the program (type 96) adapts to the other operand, so it counts as 0
+i64 lit_w(i64 ty, i64 w) {
+    if ty == 96 { return 0; }
+    return w;
+}
+i64 uns_op;                  // 1: the next arith() works on unsigned numbers
 void wrap_result(i64 w) {
-    // arithmetic is done at full register width (like C: i8 + i8 is an int);
-    // the value is cut to its width only when it is stored or cast
+    // arithmetic of 32-bit (or narrower) signed whole numbers is int arithmetic: the result is cut at 32 bits here, where it is made (as C does);
+    // the optimiser drops a cut that a value cannot need. 64-bit values are not touched. -irdbg 140737488355328 turns the cut off.
+    if (w == 4 || w == 1 || w == 5) && uns_op == 0 && wrap32_off == 0 { emit_line("sxtw x0, x0"); ex_w = 4; return; }
     ex_w = 8;
 }
 
@@ -5123,7 +5130,6 @@ void take_operands() {
 
 // the instruction for an arithmetic/bit operator word or symbol applied to
 // x0 and x1
-i64 uns_op;                  // 1: the next arith() works on unsigned numbers
 
 // x1 = the divisor: 0 throws "division by zero" (catchable), in every build
 i64 div_nonzero;             // 1: the divisor is a literal other than 0: no check
@@ -5810,6 +5816,8 @@ void parse_mul() {
             mlw = 8;
             ex_w = 8;
         } else {
+            i64 mlt_l = mlt;
+            i64 mlt_r = ex_ty;
             i64 mlt_t = bin_type(mlt, ex_ty);
             mlt = mlt_t;
             ex_ty = mlt_t;
@@ -5821,7 +5829,7 @@ void parse_mul() {
             arith(@op);
             div_nonzero = 0;
             div_lit = 0;
-            mlw = res_w(mlw, ex_w);
+            mlw = res_w(lit_w(mlt_l, mlw), lit_w(mlt_r, ex_w));
             wrap_result(mlw);
         }
     }
@@ -5866,6 +5874,8 @@ void parse_add() {
             alw = 8;
             ex_w = 8;
         } else {
+            i64 alt_l = alt;
+            i64 alt_r = ex_ty;
             i64 alt_t = bin_type(alt, ex_ty);
             alt = alt_t;
             ex_ty = alt_t;
@@ -5873,7 +5883,7 @@ void parse_add() {
             if is_unsigned(alt_t) { uns_op = 1; }
             take_operands_s(st);
             arith(@aop);
-            alw = res_w(alw, ex_w);
+            alw = res_w(lit_w(alt_l, alw), lit_w(alt_r, ex_w));
             wrap_result(alw);
         }
     }

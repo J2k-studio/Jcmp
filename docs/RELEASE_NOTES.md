@@ -1,6 +1,8 @@
-# J2K / Jcmp 1.2.34.0
+# J2K / Jcmp 1.2.35.0
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
+
+**1.2.35.0:** `int` arithmetic wraps at 32 bits everywhere (it was cut only at a store).
 
 **1.2.34.0:** the ending `.jex` for programs and imports; the build bug of the compiler (buffers of 8 MB for a text of 10 MB) is fixed.
 

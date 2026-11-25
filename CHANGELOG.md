@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.2.35.0 (2026-11-26)
+* **Fixed (language):** `int` arithmetic wraps at 32 bits where the result is made, not only when it is stored: with `a = 2000000000`, `a + a < 0` is true, `a + a` is -294967296, `dbl(a)`, `(a * 3) / 7`, `(a + a) >> 1` and `(a + a) % 10` give what C gives (tree path and text path; the cut after `+ - * <<` is one `sxtw`, which the optimiser drops when a value cannot need it; measured over 13 benchmarks: no change on average).
+* **Added (tests):** t630 (the same program as a C twin).
+
 ## 1.2.34.0 (2026-11-26)
 * **Added (language):** the ending `.jex` for a program: `jcmp hello.jex` makes the program `hello`, and `#import "name"` finds `name.jex` (after `name.j` and `name.jk`).
 * **Fixed:** the build of the compiler failed with "the assembler could not read this line of the code written by jcmp" when its own assembler text passed 8 MB (it is 10 MB before the back end): the buffers of the peephole and the register pass were 8 MB and the text was written past their end, spoiling the memory behind. Both are 16 MB now and a text that is longer gives a clear error. (The cache and `-nopeep` had hidden it.)

@@ -2470,6 +2470,26 @@ void gl_farith(i64 ao) {
 }
 
 // v1 = v1 op v2 (whole numbers; / and % through gl_divide)
+// is the value of the node x a 32-bit `int` (a variable or a field of that type, a number that adapts, an arithmetic of such values)? At least one 32-bit
+// operand makes the arithmetic of a number a 32-bit one; a 64-bit variable makes it 64 bits. depth: how far down to look
+// is the node only numbers (a number, or arithmetic of numbers)? Such a value is not a 32-bit int: it is worked out at 64 bits (i64 big = 100000 * 100000)
+bool gl_litonly(i64 x, i64 depth) {
+    if at_kind[x] == AK_NUM { return true; }
+    if depth > 0 && at_kind[x] == AK_BIN && (at_val[x] == AO_ADD || at_val[x] == AO_SUB || at_val[x] == AO_MUL || at_val[x] == AO_SHL) { return gl_litonly(at_a[x], depth - 1) && gl_litonly(at_b[x], depth - 1); }
+    return false;
+}
+
+bool gl_is32(i64 x, i64 depth) {
+    if at_ty[x] == 4 { return true; }
+    if at_kind[x] == AK_NUM { return at_ty[x] == 8 || at_ty[x] == 4; }
+    if depth > 0 && at_kind[x] == AK_BIN && (at_val[x] == AO_ADD || at_val[x] == AO_SUB || at_val[x] == AO_MUL || at_val[x] == AO_SHL) {
+        bool la = gl_is32(at_a[x], depth - 1);
+        bool lb = gl_is32(at_b[x], depth - 1);
+        return la && lb && (at_ty[at_a[x]] == 4 || at_ty[at_b[x]] == 4 || at_kind[at_a[x]] == AK_BIN || at_kind[at_b[x]] == AK_BIN);
+    }
+    return false;
+}
+
 void gl_iarith(i64 ao, bool nzk) {
     gl_ensure();
     if ao == AO_ADD { ir_add(IR_ADD, 1, 1, 2, 0, 0); }
@@ -3525,7 +3545,12 @@ void gl_expr(i64 n) {
         gl_operands(a, b);
         gl_ensure();
         if gl_is_cmp(ao) { ir_add(IR_SETCC, 1, 1, 2, 0, gl_cc(ao)); }
-        else { gl_iarith(ao, nzk); }
+        else {
+            gl_iarith(ao, nzk);
+            // an int is 32 bits: the result of + - * << is cut at 32 bits here, where it is made, not only when it is stored (the optimiser drops a cut that
+            // a value cannot need). -irdbg 140737488355328 turns the cut off.
+            if (ao == AO_ADD || ao == AO_SUB || ao == AO_MUL || ao == AO_SHL) && gl_is32(a, 4) && gl_is32(b, 4) && !(gl_litonly(a, 4) && gl_litonly(b, 4)) && wrap32_off == 0 { gl_wrap(4); }
+        }
         return;
     }
     gl_failx(6);
