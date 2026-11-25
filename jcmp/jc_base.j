@@ -198,6 +198,7 @@ void write_err_int(i64 v) {
 i64 opt_debug;               // -d : a debug build
 i64 opt_strict;              // -st : warnings are errors
 i64 opt_novec = 0;           // -novec: no loop is made into NEON vector code (for a machine that has no NEON, such as the emulator of Jaric OS)
+i64 asm_marked;                // 1: the file has the line #!using asm (the low-level words are open in every file today)
 i64 opt_fma = 1;             // 1: fmul + fadd / fsub of one value become fmadd / fmsub / fnmsub (-nofma switches it off)
 i64 opt_regs = 1;            // 1: the register pass keeps the busiest whole-number locals of loops in x19..x25 (-noregs switches it off)
 i64 opt_loopalign = 1;       // 1: the head of a loop starts at a multiple of 16 bytes (".align 16"); -noloopalign: off

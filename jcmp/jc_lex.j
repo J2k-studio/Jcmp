@@ -1701,7 +1701,25 @@ void next() {
                 adv();
             }
             mk[mn] = 0;
-            if !str_eq(@mk, "library") { die("unknown marker after '#!' (the known one is  #!library )"); }
+            if str_eq(@mk, "using") {
+                // #!using asm : the file uses the low-level words (Reg::, Cpu::, raw, naked ...). They are open in every file today, so this only records the
+                // wish of the file (docs/syntax-design.md 111); a later release will close them in a file that does not say it
+                while lc(0) == 32 || lc(0) == 9 { adv(); }
+                char uw[16];
+                i64 un = 0;
+                while is_letter(lc(0)) && un < 15 {
+                    uw[un] = lc(0);
+                    un += 1;
+                    adv();
+                }
+                uw[un] = 0;
+                if !str_eq(@uw, "asm") { die("unknown word after '#!using' (the known one is  #!using asm )"); }
+                asm_marked = 1;
+                while lc(0) != 10 && lc(0) != 0 { adv(); }
+                next();
+                return;
+            }
+            if !str_eq(@mk, "library") { die("unknown marker after '#!' (the known ones are  #!library  and  #!using asm )"); }
             bare_mode = 1;
             while lc(0) != 10 && lc(0) != 0 { adv(); }
             next();

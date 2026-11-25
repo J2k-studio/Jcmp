@@ -56,6 +56,7 @@ i64 fn_ls;
 i64 cur_ret_str;             // 1 if the function returns a String
 i64 cur_ret_isptr;           // 1 if the function returns a pointer or a dynamic array
 i64 cur_ret_tid;
+i64 cur_ret_w;               // width code of a small whole-number result (fretw)
 i64 cur_is_main;             // compiling main?
 i64 ret_label;               // label of the current function's epilogue
 i64 patch_a;                 // out_buf positions of the frame-size digits
@@ -2655,6 +2656,10 @@ void parse_statement_inner() {
             }
             check_assign(cur_ret_tid);
             if cur_ret_isptr == 0 { no_text_for_int(cur_ret_tid); } else { no_num_for_ptr(); }
+            if cur_ret_w == 1 { emit_line("sxtb x0, x0"); }
+            if cur_ret_w == 2 || cur_ret_w == 11 { emit_line("uxtb x0, x0"); }
+            if cur_ret_w == 5 { emit_line("sxth x0, x0"); }
+            if cur_ret_w == 14 { emit_line("uxth x0, x0"); }
             if rv_valid == 1 && cur_ret_isptr == 1 { ret_mv = own_find(rv_off); }
             i64 rhow = 0;
             i64 rsrc = 0;
@@ -2793,12 +2798,15 @@ bool ovr_has(char^ name) {
 void parse_function() {
     i64 f_void = ty_void;
     i64 f_rettid = ty_tid;
+    i64 f_retw = 0;
+    if ty_void == 0 && ty_ptr == 0 && ty_dyn == 0 && (ty_width == 1 || ty_width == 2 || ty_width == 5 || ty_width == 11 || ty_width == 14) && ty_tid != 90 && ty_tid != 91 { f_retw = ty_width; }
     cur_ret_isptr = 0;
     cur_ret_str = 0;
     if is_str_dyn(ty_dyn) { cur_ret_str = 1; }
     if ty_ptr != 0 || ty_dyn != 0 { cur_ret_isptr = 1; }
     if ty_ptr != 0 { f_rettid = 0; }
     cur_ret_tid = f_rettid;
+    cur_ret_w = f_retw;
     // a function of the user that has the name of a function of the built-in library replaces it (1.2.13): the library one is kept
     // under the name NAME__std (nothing calls it by that name) so that new functions of the library never break old programs
     if lvl_lib[lx_depth] == 1 && ovr_n > 0 && pass_no >= 2 && ovr_has(@d_fname) { append_text(@d_fname, "__std"); }
@@ -2836,6 +2844,7 @@ void parse_function() {
         fself[fcount] = 0;
         fnpar[fcount] = 0;
         fret[fcount] = f_rettid;
+        fretw[fcount] = f_retw;
         fcharret[fcount] = 0;
         fretstr[fcount] = 0;
         fretdyn[fcount] = ty_dyn;

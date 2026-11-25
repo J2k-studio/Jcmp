@@ -872,6 +872,13 @@ void gen_lambda() {
 
 // is the current token a type that is followed by "(" : the start of  int(int a, int b) { ... } ?
 bool lambda_fn_ahead() {
+    if tok_kind == T_IDENT && (tok_is("fn") || tok_is("fnv")) {
+        // Jex (docs/syntax-design.md 111): fn(int a, int b) { return a + b; } and fnv(...) { ... }; but a variable or a function that is called fn is a call
+        if find_local(@tok_text) >= 0 || find_global(@tok_text) >= 0 || find_func(@tok_text) >= 0 { return false; }
+        char^ fb = @src_bufs + cur_base;
+        i64 fi = gen_blanks(fb, cur_pos, cur_len);
+        return fi < cur_len && fb[fi] == '(';
+    }
     if !at_type() { return false; }
     char^ b = @src_bufs + cur_base;
     i64 n = cur_len;
@@ -889,6 +896,7 @@ void gen_lambda_fn() {
     i64 line = err_line;
     i64 sv_fn = parse_fn_type_ok;
     parse_fn_type_ok = 0;                // the "(" after the type starts the parameters, not a function pointer type
+    if tok_is("fn") { str_copy(@tok_text, "i32", 8); } else if tok_is("fnv") { str_copy(@tok_text, "void", 8); }
     parse_type();
     parse_fn_type_ok = sv_fn;
     i64 r_tid = ty_tid;

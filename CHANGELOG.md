@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.31.0 (2026-11-25)
+* **Added (language):** a lambda can be written `fn(int a, int b) { ... }` (result `int`) or `fnv(...) { ... }` (no result); `alloc<type name>(count)` and `free<name>` as another way to write `alloc[type^ name = count]` and `free[name]`; the line `#!using asm` (it names the low-level words that the file uses; accepted now, those words are open in every file for the moment).
+* **Added (speed):** inside a completely unrolled loop (`for dx in 0..3`) the known part of an array index goes to the displacement of the load: `tiles[(y + dy - 1) * w + (x + dx - 1)]` works out `row + x` once for the three loads of a row (tile-map scan about 7 % faster; `-irdbg 140737488355328` turns it off).
+* **Fixed:** the result of a function whose type is `i8`, `i16`, `u8`, `u16` or `char` was not cut to that size at `return` (`i8 f(i8 v) { return v + v; }` gave 200 for 100; now -56 as in C).
+* **Added (tests):** t621 (the result is cut), t622 (known part of an index, also with the switch off), t623 (lambda with `fn`), t624 (`alloc<>` and `free<>`), t625 (`#!using asm`).
+
 ## 1.2.30.0 (2026-11-25)
 * **Added (language):** the 16-bit types `i16` and `u16` (locals, globals, arrays, struct fields, pointers, casts, `sizeof`; the same on ARM64 and ARM32); the assembler knows `sxth` and `uxth`. `fn` (returns `int`) and `fnv` (returns nothing) at the start of a function; the long forms still work.
 * **Added (warning):** a `main` that gives a value and has no `return` warns (`[-Wmain-return]`) and ends with 0; `fnv main()` has no result and no warning.

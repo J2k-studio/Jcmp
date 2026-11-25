@@ -188,7 +188,7 @@ Put the folder on your `PATH` (once per shell, or add the line to `~/.bashrc`), 
 
 ```bash
 export PATH="$PWD:$PATH"            # inside the folder; or the full path of your folder
-jcmp -version                      # jcmp 1.2.30.0 (J2K compiler, Linux ARM64)
+jcmp -version                      # jcmp 1.2.31.0 (J2K compiler, Linux ARM64)
 
 printf '#import <stdlib>\nusing stdlib\nvoid main() { jout << "hi\\n"; }\n' > hi.jk
 jcmp hi.jk -o hi && ./hi            # hi

@@ -1799,6 +1799,16 @@ void gl_wrap(i64 code) {
     if code != 2 { ir_w[e] = 1; }
 }
 
+i64 gl_retw;                  // the width code the result of the function is cut to at `return` (0: none)
+// v1 = v1 cut to a small width (1 i8, 2 char, 11 u8: 8 bits; 5 i16, 14 u16: 16 bits)
+void gl_wrap2(i64 code) {
+    gl_ensure();
+    i64 bits = 8;
+    if code == 5 || code == 14 { bits = 16; }
+    i64 e = ir_add(IR_EXT, 1, 1, 0, 0, bits);
+    if code == 1 || code == 5 { ir_w[e] = 1; }
+}
+
 void gl_store(i64 base, i64 off, i64 val) {
     gl_ensure();
     i64 e = ir_add(IR_STORE, 0, base, val, 0, off);
@@ -2814,6 +2824,68 @@ i64 gl_rowelems(i64 n) {
     return 0;
 }
 
+// ---- constants that a completely unrolled loop gives (-irdbg 140737488355328 = 1<<47 turns it off, together with the other constant fold of the tree: every bit below 1<<63 is taken): inside the copy of the body the counter has a known value,
+// so `tiles[(y + dy - 1) * w + (x + dx - 1)]` is `tiles[R + x + K]` with K known: the part K goes to the displacement of the load and the shared part
+// `R + x` is worked out once for the three loads of a row (instead of an add and a subtract for each one)
+i64 gl_kn;
+i64 gl_kvar[16];
+i64 gl_kval[16];
+i64 gl_kres;
+i64 gl_ksum;
+i64 gl_kfail;
+
+bool gl_kconst(i64 n) {
+    i64 k = at_kind[n];
+    if k == AK_NUM && at_ty[n] / 65536 == 0 { gl_kres = at_val[n]; return true; }
+    if k == AK_VAR {
+        i64 i = 0;
+        while i < gl_kn {
+            if gl_kvar[i] == at_val[n] { gl_kres = gl_kval[i]; return true; }
+            i += 1;
+        }
+        return false;
+    }
+    if k == AK_BIN && (at_val[n] == AO_ADD || at_val[n] == AO_SUB || at_val[n] == AO_MUL) {
+        if !gl_kconst(at_a[n]) { return false; }
+        i64 x = gl_kres;
+        if !gl_kconst(at_b[n]) { return false; }
+        i64 y = gl_kres;
+        if at_val[n] == AO_ADD { gl_kres = x + y; } else if at_val[n] == AO_SUB { gl_kres = x - y; } else { gl_kres = x * y; }
+        return true;
+    }
+    return false;
+}
+
+// the sum without its constant terms (they are added to gl_ksum, with the sign they have in the whole sum sg = 1 or -1); 0: nothing is left
+i64 gl_strip(i64 n, i64 sg) {
+    if gl_kconst(n) { gl_ksum += sg * gl_kres; return 0; }
+    if at_kind[n] == AK_BIN && (at_val[n] == AO_ADD || at_val[n] == AO_SUB) {
+        i64 sr = sg;
+        if at_val[n] == AO_SUB { sr = 0 - sg; }
+        i64 l = gl_strip(at_a[n], sg);
+        i64 r = gl_strip(at_b[n], sr);
+        if l == at_a[n] && r == at_b[n] { return n; }
+        if l == 0 && r == 0 { return 0; }
+        if r == 0 { return l; }
+        if l == 0 {
+            if at_val[n] == AO_SUB { gl_kfail = 1; return n; }          // const - r: a negated term cannot be left alone
+            return r;
+        }
+        if at_n >= AT_MAX - 8 { gl_kfail = 1; return n; }
+        i64 nn = at_n;
+        at_n += 1;
+        at_kind[nn] = AK_BIN;
+        at_a[nn] = l;
+        at_b[nn] = r;
+        at_c[nn] = 0;
+        at_val[nn] = at_val[n];
+        at_nx[nn] = 0;
+        at_ty[nn] = at_ty[n];
+        return nn;
+    }
+    return n;
+}
+
 void gl_addr(i64 n) {
     gl_ensure();
     i64 k = at_kind[n];
@@ -2970,14 +3042,38 @@ void gl_addr(i64 n) {
         }
         return;
     }
-    gl_expr(ix);
+    i64 ixn = ix;
+    i64 kdisp = 0;
+    i64 asave = at_n;
+    if gl_kn > 0 && is_arr && bvr == 29 && (ir_opt & 140737488355328) == 0 && at_n < AT_MAX - 64 {
+        // inside an unrolled loop: the known part of the index goes to the displacement of the load
+        gl_ksum = 0;
+        gl_kfail = 0;
+        i64 st = gl_strip(ix, 1);
+        i64 kd = gl_ksum * es;
+        if gl_kfail == 0 && gl_ksum != 0 && kd > 0 - 2048 && kd < 2048 && boff + kd >= 0 {
+            if st == 0 {
+                if kd >= 0 && gl_ksum < 4096 {
+                    gl_ab = bvr;
+                    gl_ao = boff + kd;
+                    at_n = asave;
+                    return;
+                }
+            } else {
+                ixn = st;
+                kdisp = kd;
+            }
+        }
+    }
+    gl_expr(ixn);
+    at_n = asave;
     gl_scale(es, esh);
     gl_ensure();
     if is_arr && bvr == 29 {
         // a global array: the offset of the array goes to the load (`add x0, x28, x1, lsl #3` then `ldr x0, [x0, #off]`)
         ir_add(IR_ADD, 1, 1, 29, 0, 0);
         gl_ab = 1;
-        gl_ao = boff;
+        gl_ao = boff + kdisp;
         return;
     }
     if is_arr {
@@ -3719,6 +3815,7 @@ void gl_for(i64 n) {
                 gl_ensure();
                 ir_add(IR_CONST, 1, 0, 0, 0, ust + ut);
                 gl_store(30, uiv, 1);
+                if gl_kn < 16 { gl_kvar[gl_kn] = at_val[n]; gl_kval[gl_kn] = ust + ut; gl_kn += 1; }
                 i64 unx = gl_label();
                 if gl_loops >= 32 { gl_failx(8); return; }
                 gl_brk[gl_loops] = uend;
@@ -3726,6 +3823,7 @@ void gl_for(i64 n) {
                 gl_looptry[gl_loops] = gl_trydepth;
                 gl_loops += 1;
                 gl_stmt(at_c[n]);
+                if gl_kn > 0 { gl_kn -= 1; }
                 gl_loops -= 1;
                 gl_place(unx);
                 ut += 1;
@@ -5108,6 +5206,7 @@ void gl_stmt(i64 n) {
                 ir_add(IR_F2BITS, 1, 32, 0, 0, 0);
             } else {
                 gl_expr(at_a[n]);
+                if gl_retw != 0 { gl_wrap2(gl_retw); }
             }
         }
         gl_leave_tries(gl_trydepth);
@@ -5532,6 +5631,9 @@ i64 ast_lower_body(i64 ti, char^ name) {
     if fvoid[fi] == 0 && fret[fi] == 91 { gl_retd = 1; }
     gl_retf = 0;
     if fvoid[fi] == 0 && fret[fi] == 90 { gl_retf = 1; }
+    gl_retw = 0;
+    if fvoid[fi] == 0 { gl_retw = fretw[fi]; }
+    gl_kn = 0;
     i64 b0 = ir_new_block(0 - 1);
     ir_set_block(b0);
     i64 pk = 0;

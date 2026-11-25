@@ -379,6 +379,20 @@ Limits: a `throw` that leaves a block does not free that block's memory, and mem
 assigned after its declaration is not tracked (use a declaration, or free it yourself).
 A `-d` build reports at the end of `main` how many blocks were never freed (and in which function each one was made), stops at a block freed twice, and finds a block that was written after it was freed.
 
+### The angle form of alloc and free
+
+`alloc<type name>(count)` declares the pointer `name` and allocates `count` elements; `free<name>;` gives the block back. It is the same as `alloc[type^ name = count]` and `free[name]` (both keep working).
+
+```jk
+fn main() {
+    alloc<int n>(50);                      // int^ n, 50 ints; n owns them
+    for i in 0..50 { n[i] = i * i; }
+    jout << n[7] << "\n";                   // 49
+    free<n>;
+    return 0;
+}
+```
+
 ### The bracket forms of memory
 
 A shorter way to write the same things (the forms with parentheses, `alloc(bytes)`, `free(p)`, `arr(n)`, stay). `n` is a number of **elements**:
@@ -717,6 +731,18 @@ int apply(int(int, int)^ f, int x, int y) { return f(x, y); }
 jout << apply(int(int a, int b) { return a + b; }, 3, 4) << "\n";      // 7
 int(int)^ twice = int(int x) { return x * 2; };                         // keep it in a function pointer
 void()^ hello = void() { jout << "hi\n"; };
+```
+
+The words `fn` and `fnv` start a lambda too (`fn` gives an `int`, `fnv` gives nothing); a variable or a function that is called `fn` is still a call.
+
+```jk
+fn main() {
+    int(int, int)^ add = fn(int a, int b) { return a + b; };
+    void()^ hello = fnv() { jout << "hi\n"; };
+    hello();
+    jout << add(2, 3) << "\n";          // 5
+    return 0;
+}
 ```
 
 A lambda is an ordinary function in disguise (the compiler names it `__lambda_N`), so it **cannot use the variables around it**; it can use
@@ -1094,6 +1120,19 @@ naked void start() {
 ```
 
 The program is 12 bytes of code after the 176 bytes of the ELF header. An unknown marker (`#!banana`) is an error.
+
+### `#!using asm`
+
+The line `#!using asm` says that the file uses the low-level words (`Reg::`, `Cpu::`, `raw`, `naked`, `register { }`). They are open in every file today, so the line changes nothing yet; it tells the reader (and a later release, which will close those words in a file without the line) what the file does. Any other word after `#!using` is an error.
+
+```jk
+#!using asm
+fn main() {
+    Cpu::nop();
+    jout << "asm\n";
+    return 0;
+}
+```
 
 ## Fused multiply-add (0.9.113)
 

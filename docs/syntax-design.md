@@ -2360,3 +2360,4 @@ Owner's choice, 2026-11-06: option C for the name `i32`. After the switch `i32` 
 * **No `var`** (the owner): withdraws item 1 of section 109; a local is written with its type in front, a long type in full.
 * **`for` is the C form without parentheses** (as `if` and `while`, sections 18 and 56): `for int i = 0; i < n; i++ { ... }`; nested loops are nested blocks. The range form `for i in a..b` is planned to go at a later migration (not in this release; it still works).
 * Other decisions of the same day are recorded in the private notes until they are built.
+* **Built in 1.2.31.0:** a lambda written `fn(int a, int b) { ... }` / `fnv(...) { ... }` (the old `int(int a, int b) { ... }` stays); `alloc<type name>(count)` and `free<name>` (the bracket forms stay); the line `#!using asm` (accepted; the low-level words are open in every file for now); the result of a function with a small result type (`i8 i16 u8 u16 char`) is cut to it at `return`.

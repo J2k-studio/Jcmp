@@ -734,6 +734,7 @@ i64 fretstr[16384];             // 1 if the function returns a String
 i64 fowned[16384];           // 1 if the function returns memory it owned (return p; moves it out)
 i64 fcharret[16384];            // 1 if the function returns a char: cout prints the result as a character
 i64 fret[16384];              // type of the result
+i64 fretw[16384];             // width code of a small whole-number result (1 i8, 2 char, 5 i16, 11 u8, 14 u16), else 0: the result is cut to it at `return`
 i64 fptid[131072];            // type of each parameter (8 per function)
 i64 fptid2[131072];           // type of the parameters 8 .. 15 (8 per function): an argument that goes on the stack is checked and converted like the others
 i64 fop[16384];               // 1 if the method was declared with the word `operator` (a + b calls a.add(b))
@@ -3277,6 +3278,98 @@ void sg_make(i64 kind) {
     append_text(@sg_out, "))");
 }
 
+// is the first thing after the current token a < ?   (alloc<int n>(50)   free<n>)
+bool sg_angle_next() {
+    i64 k = 0;
+    while is_space(lc(k)) { k += 1; }
+    return lc(k) == '<';
+}
+
+// the angle form (Jex, docs/syntax-design.md 111) of alloc (kind 0) or free (kind 2): sg_in gets the text of the bracket form
+//   alloc<int n>(50)  ->  int^ n = 50  (as alloc[int^ n = 50])        free<n>  ->  n  (as free[n])
+bool sg_read_angle(i64 kind) {
+    i64 k = 0;
+    while is_space(lc(k)) { k += 1; }
+    k += 1;
+    char head[120];
+    i64 hn = 0;
+    while true {
+        i64 c = lc(k);
+        if c == 0 || c == 10 || hn >= 110 { return false; }
+        if c == '>' { break; }
+        head[hn] = c;
+        hn += 1;
+        k += 1;
+    }
+    head[hn] = 0;
+    k += 1;
+    while hn > 0 && is_space(head[hn - 1]) { hn -= 1; }
+    head[hn] = 0;
+    sg_in[0] = 0;
+    if kind == 2 {
+        append_text(@sg_in, @head);
+        return true;
+    }
+    while is_space(lc(k)) { k += 1; }
+    if lc(k) != '(' { return false; }
+    k += 1;
+    i64 depth = 1;
+    char cnt[200];
+    i64 cn = 0;
+    while true {
+        i64 c2 = lc(k);
+        if c2 == 0 || cn >= 190 { return false; }
+        if c2 == '(' { depth += 1; }
+        if c2 == ')' {
+            depth -= 1;
+            if depth == 0 { break; }
+        }
+        cnt[cn] = c2;
+        cn += 1;
+        k += 1;
+    }
+    cnt[cn] = 0;
+    // head = "int n": the name is the last word, the type is what comes before it
+    i64 e = hn;
+    while e > 0 && (is_letter(head[e - 1]) || is_digit(head[e - 1]) || head[e - 1] == '_') { e -= 1; }
+    if e == hn || e == 0 { return false; }
+    i64 te = e;
+    while te > 0 && is_space(head[te - 1]) { te -= 1; }
+    if te == 0 { return false; }
+    i64 j = 0;
+    while j < te {
+        sg_in[j] = head[j];
+        j += 1;
+    }
+    sg_in[j] = 0;
+    append_text(@sg_in, "^ ");
+    append_text(@sg_in, @head + e);
+    append_text(@sg_in, " = ");
+    append_text(@sg_in, @cnt);
+    return true;
+}
+
+// skip the tokens of the angle form up to its last one: the `)` of alloc<..>(..), the `>` of free<..>
+void sg_skip_angle(i64 kind) {
+    if kind == 2 {
+        next();
+        next();
+        next();
+        return;
+    }
+    i64 depth = 0;
+    bool seen = false;
+    while true {
+        if tok_kind == T_EOF { die("a ) was expected after alloc<type name>("); }
+        if tok_is("(") { depth += 1; seen = true; }
+        if tok_is(")") {
+            depth -= 1;
+            if seen && depth == 0 { break; }
+        }
+        next();
+    }
+}
+
 // the current token is alloc, alloc0, free or grow at the start of a statement, followed by [ : the statement is replaced by its usual
 // form (without the ; that follows)
 bool sg_statement() {
@@ -3288,6 +3381,15 @@ bool sg_statement() {
     else if str_eq(@tok_text, "grow") { kind = 3; }
     if kind < 0 { return false; }
     if lookup_var(@tok_text) { return false; }               // a variable of that name: p[i] stays an index
+    if (kind == 0 || kind == 2) && sg_angle_next() {
+        if !sg_read_angle(kind) { return false; }
+        sg_skip_angle(kind);
+        sg_make(kind);
+        if str_len(@sg_out) > 290 { die("this < > form is too long"); }
+        push_macro(@sg_out);
+        next();
+        return true;
+    }
     if !sg_bracket_next() { return false; }
     if !sg_read(0) { return false; }
     sg_skip(0);

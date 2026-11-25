@@ -1,6 +1,8 @@
-# J2K / Jcmp 1.2.30.0
+# J2K / Jcmp 1.2.31.0
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
+
+**1.2.31.0:** lambdas with `fn`/`fnv`, `alloc<int n>(50)` and `free<n>`, the line `#!using asm`; the result of a small-type function is cut at `return`; the tile-map scan is a little faster.
 
 **1.2.30.0:** the types `i16` and `u16`; `fn` and `fnv` function headers; a warning for a `main` without `return`.
 
