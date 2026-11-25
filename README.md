@@ -54,7 +54,7 @@ Hello from J2K!
 |---------------------------------------------|-------|
 | Compiler written in J2K (`jcmp/`)           | **Working, self-hosting** (two generations are identical, byte for byte) |
 | Assembler written in J2K (`jcmp/jc_asm.j`)  | Working, built into the compiler |
-| Language                                    | Integers (`i8 i32 int char bool`, unsigned `u8 u32 u64`), floats (`float double`), arrays (up to 3 dimensions, with lists `int a[3] = {1, 2, 3};`), pointers (`T^`, `T^^`), function pointers and lambdas (`int(int a) { ... }`), structs with methods and **operator methods** (`operator vec3 add(self, vec3 o)` makes `a + b`, `-a`, `2.0 * a` work), enums (also **with data**: `Shape::Circle(r)`), `switch` that takes a value apart, `Option<T>` / `Result<T, E>` and `?`, `defer`, `try`/`catch`/`throw`, panics with a stack trace, `sizeof`, dynamic arrays (`T[]`), `String` (UTF-8, `+`, `==`, `<`), generics with inference (`T max<T>(T a, T b)`, `struct Stack<T>`), `#define`, imports |
+| Language                                    | Integers (`int` is 32 bits, `i64` is 64 bits, also `i8 bool`; `char` is one byte (a letter of the ASCII text, not a Unicode letter); `i32` is another name for `int`; unsigned `u8 u32 u64`), floats (`float double`), arrays (up to 3 dimensions, with lists `int a[3] = {1, 2, 3};`), pointers (`T^`, `T^^`), function pointers and lambdas (`int(int a) { ... }`), structs with methods and **operator methods** (`operator vec3 add(self, vec3 o)` makes `a + b`, `-a`, `2.0 * a` work), enums (also **with data**: `Shape::Circle(r)`), `switch` that takes a value apart, `Option<T>` / `Result<T, E>` and `?`, `defer`, `try`/`catch`/`throw`, panics with a stack trace, `sizeof`, dynamic arrays (`T[]`), `String` (UTF-8, `+`, `==`, `<`), generics with inference (`T max<T>(T a, T b)`, `struct Stack<T>`), `#define`, imports |
 | Standard library                            | `#import <stdlib>`: `Sys`, `Mem`, `Str`, `Math` (complete), `File`, `Fs`, `Dir`, `Env`, `Time`, `Random`, `Num` (parse), `Term` (size, key), `List` / `Map` / `Set`, `Json`, `Sha256`, `Proc` (run programs), `Path`, `Hex`, `Base64` |
 | Math and graphics                           | `#import <math>` then `using math::vector;` (`vec2 vec3 vec4`, swizzle `v.xy`, `c.rgb`), `matrix` (`mat3 mat4`: rotate, perspective, look_at), `quat`, `complex`, `stats`; `#import <gfx>` then `using gfx::canvas;` (characters with a depth buffer) or `using gfx::screen;` (colour dots: lines, circles, gradients, glow, vignette) |
 | Diagnostics                                 | `file:line:col: error/warning:` with the source line and `^`; `-st` makes warnings errors |
@@ -188,7 +188,7 @@ Put the folder on your `PATH` (once per shell, or add the line to `~/.bashrc`), 
 
 ```bash
 export PATH="$PWD:$PATH"            # inside the folder; or the full path of your folder
-jcmp -version                      # jcmp 0.9.158 (J2K compiler, Linux ARM64)
+jcmp -version                      # jcmp 1.2.30.0 (J2K compiler, Linux ARM64)
 
 printf '#import <stdlib>\nusing stdlib\nvoid main() { jout << "hi\\n"; }\n' > hi.jk
 jcmp hi.jk -o hi && ./hi            # hi

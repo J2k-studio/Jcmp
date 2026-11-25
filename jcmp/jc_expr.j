@@ -1103,6 +1103,8 @@ void load_scalar() {
     if v_elem == 4 { str_copy(@lop, "ldrsw", 8); }
     if v_elem == 11 { str_copy(@lop, "ldrb", 8); }
     if v_elem == 12 { str_copy(@lop, "ldrw", 8); }
+    if v_elem == 5 { str_copy(@lop, "ldrsh", 8); }
+    if v_elem == 14 { str_copy(@lop, "ldrh", 8); }
     ins_mem(@lop, "x0", var_base(), v_off);
 }
 
@@ -1112,6 +1114,7 @@ i64 size_of(i64 code) {
     if code >= 16 { return ssize[code - 16]; }
     if code == 8 || code == 9 || code == 7 || code == 13 { return 8; }
     if code == 6 || code == 4 || code == 12 { return 4; }
+    if code == 5 || code == 14 { return 2; }
     return 1;
 }
 
@@ -1122,6 +1125,8 @@ void store_scalar() {
     if v_elem == 4 { emit_line("sxtw x0, x0"); }
     if v_elem == 11 { emit_line("uxtb x0, x0"); }
     if v_elem == 12 { emit_line("uxtw x0, x0"); }
+    if v_elem == 5 { emit_line("sxth x0, x0"); }
+    if v_elem == 14 { emit_line("uxth x0, x0"); }
     ins_mem("str", "x0", var_base(), v_off);
 }
 
@@ -1220,6 +1225,10 @@ void load_through(i64 code) {
     if code == 11 { code = 2; }
     if code == 1 {
         if !load_direct("ldrsb", 1) { emit_line("ldrsb x0, [x0, #0]"); }
+    } else if code == 5 {
+        if !load_direct("ldrsh", 2) { emit_line("ldrsh x0, [x0, #0]"); }
+    } else if code == 14 {
+        if !load_direct("ldrh", 2) { emit_line("ldrh x0, [x0, #0]"); }
     } else if code == 12 {
         if !load_direct("ldrw", 4) { emit_line("ldrw x0, [x0, #0]"); }
     } else if code == 4 {
@@ -1245,6 +1254,10 @@ void load_from_x3(i64 code) {
     if code == 11 { code = 2; }
     if code == 1 {
         emit_line("ldrsb x0, [x3, #0]");
+    } else if code == 5 {
+        emit_line("ldrsh x0, [x3, #0]");
+    } else if code == 14 {
+        emit_line("ldrh x0, [x3, #0]");
     } else if code == 12 {
         emit_line("ldrw x0, [x3, #0]");
     } else if code == 4 {
@@ -1262,6 +1275,8 @@ void store_through(i64 code) {
     if code == 6 || code == 12 { code = 4; }
     if code == 8 {
         emit_line("str x1, [x3, #0]");
+    } else if code == 5 || code == 14 {
+        emit_line("strh x1, [x3, #0]");
     } else if code == 4 {
         emit_line("strw x1, [x3, #0]");
     } else {
@@ -2443,7 +2458,7 @@ void gen_call() {
 i64 pointee_tid(i64 code) {
     if code >= 400 { return 0; }
     if code == 11 { return 93; }
-    if code == 12 { return 94; }
+    if code == 12 || code == 14 { return 94; }
     if code == 13 { return 95; }
     if code == 3 { return 1; }
     if code == 6 { return 90; }
@@ -4151,7 +4166,7 @@ i64 arr_kind(i64 code, i64 eptr) {
     if eptr != 0 { return 1; }
     if code == 6 { return 2; }
     if code == 7 { return 3; }
-    if code == 2 || code == 3 || code == 11 || code == 12 || code == 13 { return 1; }
+    if code == 2 || code == 3 || code == 11 || code == 12 || code == 13 || code == 14 { return 1; }
     return 0;
 }
 
@@ -4598,6 +4613,8 @@ void gen_float_cast(i64 to, i64 src, i64 to_width) {
     if to_width == 2 || to_width == 11 { emit_line("uxtb x0, x0"); }
     if to_width == 4 { emit_line("sxtw x0, x0"); }
     if to_width == 12 { emit_line("uxtw x0, x0"); }
+    if to_width == 5 { emit_line("sxth x0, x0"); }
+    if to_width == 14 { emit_line("uxth x0, x0"); }
 }
 
 // sizeof(Type) or sizeof(variable / field / element): the size in bytes, known now
@@ -4774,6 +4791,8 @@ void parse_unary_core() {
                 if ty_width == 2 || ty_width == 11 { emit_line("uxtb x0, x0"); }
                 if ty_width == 4 { emit_line("sxtw x0, x0"); }
                 if ty_width == 12 { emit_line("uxtw x0, x0"); }
+                if ty_width == 5 { emit_line("sxth x0, x0"); }
+                if ty_width == 14 { emit_line("uxth x0, x0"); }
                 ex_w = ty_width;
             }
             return;
@@ -5249,7 +5268,7 @@ bool pure_group_ok(i64 o) {
         o += 1;
     }
     w[n] = 0;
-    if str_eq(@w, "int") || str_eq(@w, "double") || str_eq(@w, "float") || str_eq(@w, "char") || str_eq(@w, "bool") || str_eq(@w, "i8") || str_eq(@w, "i32") || str_eq(@w, "u8") || str_eq(@w, "u32") || str_eq(@w, "u64") {
+    if str_eq(@w, "int") || str_eq(@w, "double") || str_eq(@w, "float") || str_eq(@w, "char") || str_eq(@w, "bool") || str_eq(@w, "i8") || str_eq(@w, "i16") || str_eq(@w, "u16") || str_eq(@w, "i32") || str_eq(@w, "u8") || str_eq(@w, "u32") || str_eq(@w, "u64") {
         return true;
     }
     if !lookup_var(@w) { return false; }

@@ -1862,6 +1862,8 @@ void as_instruction() {
     if as_mn_is("sxtb") { as_h_sxt(0x9340, 0x1C00); return; }
     if as_mn_is("sxtw") { as_h_sxt(0x9340, 0x7C00); return; }
     if as_mn_is("uxtb") { as_h_sxt(0xD340, 0x1C00); return; }
+    if as_mn_is("sxth") { as_h_sxt(0x9340, 0x3C00); return; }
+    if as_mn_is("uxth") { as_h_sxt(0xD340, 0x3C00); return; }
     if as_mn_is("b") { as_h_branch(); return; }
     if as_mn_is("bl") { as_ci -= 1; as_h_branch(); return; }
     if as_mn_is("ret") { as_put32(0xD65F03C0); return; }

@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.30.0 (2026-11-25)
+* **Added (language):** the 16-bit types `i16` and `u16` (locals, globals, arrays, struct fields, pointers, casts, `sizeof`; the same on ARM64 and ARM32); the assembler knows `sxth` and `uxth`. `fn` (returns `int`) and `fnv` (returns nothing) at the start of a function; the long forms still work.
+* **Added (warning):** a `main` that gives a value and has no `return` warns (`[-Wmain-return]`) and ends with 0; `fnv main()` has no result and no warning.
+* **Added (tests):** t618 (16-bit numbers), t619 (`fn`/`fnv`), t620 (the `main` warning); the frozen assembly seed skips the t6xx tests.
+* **Fixed:** the README said `int` was 64 bits; it is 32 bits since 1.2.23.0 (README and the version example corrected).
+
 ## 1.2.29.0 (2026-11-06)
 * **Added (speed):** a loop over `i % c` (c up to 8, starting at a multiple of c) is run in whole rounds of c turns with the body written c times, so the remainders are numbers: `loop` 267 -> 139 ms (clang -O2: 198), the 32-bit `loop` 281 -> 209 (212). `-irdbg 281474976710656` turns it off. Test t617. `loop` and `i32_loop` leave the known exceptions of `gate.sh`.
 * **Fixed:** none in this release.

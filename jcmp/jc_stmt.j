@@ -138,7 +138,7 @@ bool at_type() {
     if tok_kind == T_IDENT && find_enum(@tok_text) >= 0 { return true; }
     if tok_kind == T_IDENT && find_struct(@tok_text) >= 0 { return true; }
     if tok_kind == T_IDENT && tok_is("String") { return true; }
-    return tok_is("int") || tok_is("char") || tok_is("bool") || tok_is("void") || tok_is("i8") || tok_is("i32") || tok_is("float") || tok_is("double") || tok_is("f32") || tok_is("f64") || tok_is("u8") || tok_is("u32") || tok_is("u64");
+    return tok_is("int") || tok_is("char") || tok_is("bool") || tok_is("void") || tok_is("i8") || tok_is("i16") || tok_is("u16") || tok_is("i32") || tok_is("float") || tok_is("double") || tok_is("f32") || tok_is("f64") || tok_is("u8") || tok_is("u32") || tok_is("u64");
 }
 
 // TYPE [^] ; sets the ty_* variables and leaves the token after the type
@@ -203,6 +203,13 @@ void parse_type() {
     } else if tok_is("i8") {
         ty_elem = 1;
         ty_width = 1;
+    } else if tok_is("i16") {
+        ty_elem = 5;
+        ty_width = 5;
+    } else if tok_is("u16") {
+        ty_elem = 14;
+        ty_width = 14;
+        ty_tid = 94;                     // a u16 value is read as a u32 (as C reads it as an int): no wrap inside an expression, it wraps when it is stored
     } else if tok_is("u8") {
         ty_elem = 11;
         ty_width = 11;
@@ -1266,6 +1273,8 @@ void read_into_object(i64 is_f) {
         i64 uns = 0;
         if code == 1 { lo = 0 - 128; hi = 127; }
         if code == 4 { lo = 0 - 2147483648; hi = 2147483647; }
+        if code == 5 { lo = 0 - 32768; hi = 32767; }
+        if code == 14 { lo = 0; hi = 65535; uns = 1; }
         if code == 11 { lo = 0; hi = 255; uns = 1; }
         if code == 12 { lo = 0; hi = 4294967295; uns = 1; }
         if code == 13 { uns = 1; }
@@ -3177,6 +3186,14 @@ void parse_function() {
         append_text(@rm, "' must return a value but has no return statement (make it void, or return something)");
         if pass_no >= 2 { die(@rm); }
     }
+    if fvoid[f_idx] == 0 && cur_is_main == 1 && fn_returns == 0 && pass_no >= 2 && in_lambda == 0 {
+        // Jex (docs/syntax-design.md 111): a main without `return` gives 0; the warning says so (write `fnv main()` for a main with no result)
+        err_line = fn_line;
+        err_col = fn_col;
+        err_base = fn_base;
+        err_ls = fn_ls;
+        warn("main has no return: it returns 0 (write  return 0;  or use  fnv main()  for no result)", "main-return");
+    }
     in_lambda = 0;
     patch_b = 0;
     cur_in_func = 0;
@@ -3332,6 +3349,8 @@ void parse_global(char^ name) {
                     if g_elem == 12 { gv = gv & 4294967295; }
                     if g_elem == 1 { gv = (gv & 255) xor 128; gv = gv - 128; gv = gv & 255; }
                     if g_elem == 4 { gv = gv & 4294967295; }
+                    if g_elem == 5 { gv = (gv & 65535) xor 32768; gv = gv - 32768; gv = gv & 65535; }
+                    if g_elem == 14 { gv = gv & 65535; }
                     if gl_es == 8 {
                         if gv != 0 { add_ginit(gl_at, gv); }
                     } else {
@@ -3420,6 +3439,8 @@ void parse_global(char^ name) {
         if g_width == 12 { value = value & 4294967295; }
         if g_width == 1 { value = (value & 255) xor 128; value = value - 128; }
         if g_width == 4 { value = (value & 4294967295) xor 2147483648; value = value - 2147483648; }
+        if g_width == 5 { value = (value & 65535) xor 32768; value = value - 32768; }
+        if g_width == 14 { value = value & 65535; }
         if value != 0 { add_ginit(goff[gcount - 1], value); }
     }
     expect(";");
@@ -3671,6 +3692,9 @@ void parse_top_item() {
         }
         next();
     }
+    // Jex (docs/syntax-design.md 111): `fn name(...)` returns int, `fnv name(...)` returns nothing; only where a function can start
+    if tok_kind == T_IDENT && tok_is("fn") { str_copy(@tok_text, "i32", 8); }
+    else if tok_kind == T_IDENT && tok_is("fnv") { str_copy(@tok_text, "void", 8); }
     parse_type();
     if tok_kind != T_IDENT { die_found("the name of the function", "write the name after the return type:  int name(...) { ... }"); }
     str_copy(@d_fname, @tok_text, 256);

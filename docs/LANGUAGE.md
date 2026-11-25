@@ -36,10 +36,10 @@ Statements end with `;`. Blocks use `{ }` and are always required. `//` and `/* 
 |---------|------------------------------------------|
 | `int`   | 32-bit signed integer (`i32` is another, older name of it); `int + int` wraps around at 32 bits |
 | `i64`   | 64-bit signed integer: use it for sizes, large counts, file offsets and pointers cast to a number |
-| `i8`    | 8-bit signed integer                     |
-| `char`  | 8-bit **unsigned** (a byte / character)  |
+| `i8`, `i16` | 8 / 16-bit signed integers           |
+| `char`  | 8-bit **unsigned**: one byte (an ASCII letter, not a Unicode letter) |
 | `bool`  | `true` / `false` (1 byte)                |
-| `u8`, `u32`, `u64` | unsigned integers (8 / 32 / 64 bit) |
+| `u8`, `u16`, `u32`, `u64` | unsigned integers (8 / 16 / 32 / 64 bit) |
 | `double`, `float` | floating point                      |
 | `T^`    | pointer to `T`  (`void^` = pointer to anything) |
 
@@ -58,6 +58,23 @@ void main() {
     i8 small = a + b;     // -56 (cut to 8 bits when stored)
     jout << sum << "\n";
     jout << small << "\n";
+}
+```
+
+### 16-bit numbers
+
+`i16` and `u16` are 16-bit whole numbers. A value read from memory is already extended to a full number; it is cut to 16 bits when stored (`i16` wraps at 32767, `u16` at 65535). `u16` takes part in arithmetic as a 32-bit unsigned number, so mixing it with an `int` needs a cast, as for `u8` and `u32`.
+
+```jk
+fn main() {
+    i16 a = 30000;
+    a += 5000;                   // 35000 does not fit: -30536
+    u16 c = 65535;
+    c += 2;                      // wraps to 1
+    i16 v[3];
+    v[1] = 70000;                // 4464
+    jout << a << " " << c << " " << v[1] << " " << sizeof(i16) << "\n";
+    return 0;
 }
 ```
 
@@ -146,6 +163,21 @@ without `_` that misses a member gives a warning (`-Wswitch`).
 ```jk
 int add(int a, int b) { return a + b; }
 void main() { jout << add(2, 3) << "\n"; }       // functions may be used before they are written
+```
+
+### `fn` and `fnv`
+
+`fn` at the start of a function means that it returns an `int`; `fnv` means that it returns nothing (`void`). The long forms keep working; use whichever reads better.
+A `main` that gives a value and has no `return` ends with 0 and the compiler warns (`[-Wmain-return]`): write `return 0;`, or `fnv main()` when there is no result.
+
+```jk
+fn add(int a, int b) { return a + b; }
+fnv hello(String who) { jout << "hello " << who << "\n"; }
+fn main() {
+    hello("fn");
+    jout << add(2, 3) << "\n";
+    return 0;
+}
 ```
 
 At most 16 parameters (the 9th and later travel through a small area of global memory, so programs that call functions from several threads would need another scheme). A function can be used above its definition. Arrays are passed with

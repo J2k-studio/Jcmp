@@ -737,7 +737,7 @@ bool lambda_ahead() {
     char word[64];
     i64 e = gen_word(b, i, n, @word);
     if e == i { return false; }
-    bool is_ty = str_eq(@word, "int") || str_eq(@word, "char") || str_eq(@word, "bool") || str_eq(@word, "i8") || str_eq(@word, "i32");
+    bool is_ty = str_eq(@word, "int") || str_eq(@word, "char") || str_eq(@word, "bool") || str_eq(@word, "i8") || str_eq(@word, "i16") || str_eq(@word, "u16") || str_eq(@word, "i32");
     if str_eq(@word, "u8") || str_eq(@word, "u32") || str_eq(@word, "u64") || str_eq(@word, "float") || str_eq(@word, "double") { is_ty = true; }
     if str_eq(@word, "f32") || str_eq(@word, "f64") || str_eq(@word, "String") { is_ty = true; }
     if find_struct(@word) >= 0 || find_enum(@word) >= 0 { is_ty = true; }
@@ -963,6 +963,8 @@ bool code_text(i64 code, i64 tid, char^ out) {
     if tid == 94 { str_copy(out, "u32", 8); return true; }
     if tid == 95 { str_copy(out, "u64", 8); return true; }
     if code == 1 { str_copy(out, "i8", 8); return true; }
+    if code == 5 { str_copy(out, "i16", 8); return true; }
+    if code == 14 { str_copy(out, "u16", 8); return true; }
     if code == 2 { str_copy(out, "char", 8); return true; }
     if code == 3 { str_copy(out, "bool", 8); return true; }
     if code == 4 { str_copy(out, "i32", 8); return true; }
@@ -1254,7 +1256,7 @@ bool str_eq_n(char^ a, char^ b, i64 n) {
 }
 
 bool is_integer_type(char^ t) {
-    return str_eq(t, "int") || str_eq(t, "i8") || str_eq(t, "i32") || str_eq(t, "u8") || str_eq(t, "u32") || str_eq(t, "u64");
+    return str_eq(t, "int") || str_eq(t, "i8") || str_eq(t, "i16") || str_eq(t, "u16") || str_eq(t, "i32") || str_eq(t, "u8") || str_eq(t, "u32") || str_eq(t, "u64");
 }
 
 void bind_param(i64 ti, i64 q, char^ text) {
