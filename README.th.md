@@ -8,26 +8,26 @@
 
 ## ติดตั้ง
 ต้องใช้เครื่อง Linux **ARM64** (มือถือที่มี Termux ได้) และ `curl` หรือ `wget` (Termux: `pkg install curl wget`)
-คอมไพเลอร์เป็นไฟล์เดียว ปล่อยเป็น [release](https://github.com/J2k-studio/Jcmp/releases)
+คอมไพเลอร์เป็นไฟล์เดียว ปล่อยเป็น [release](https://github.com/J2k-studio/Jexcmp/releases)
 
 **วิธีที่ 1 — `install.sh` (แนะนำ)** โหลดรุ่นล่าสุด ตรวจ SHA-256 แล้ววาง `jcmp` ในโฟลเดอร์:
 
 ```
-curl -fsSL https://raw.githubusercontent.com/J2k-studio/Jcmp/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/J2k-studio/Jexcmp/main/install.sh | sh
 ```
 
 ```
-wget -qO- https://raw.githubusercontent.com/J2k-studio/Jcmp/main/install.sh | sh
+wget -qO- https://raw.githubusercontent.com/J2k-studio/Jexcmp/main/install.sh | sh
 ```
 
 เลือกโฟลเดอร์เอง เช่น bin ที่อยู่ข้างโปรเจกต์ (../bin):
 
 ```
-curl -fsSL https://raw.githubusercontent.com/J2k-studio/Jcmp/main/install.sh | sh -s -- --dir ../bin
+curl -fsSL https://raw.githubusercontent.com/J2k-studio/Jexcmp/main/install.sh | sh -s -- --dir ../bin
 ```
 
 ```
-wget -qO- https://raw.githubusercontent.com/J2k-studio/Jcmp/main/install.sh | sh -s -- --dir ../bin
+wget -qO- https://raw.githubusercontent.com/J2k-studio/Jexcmp/main/install.sh | sh -s -- --dir ../bin
 ```
 ตัวเลือก: `--dir โฟลเดอร์`, `--version 0.9.158` (เลือกรุ่น), `--with-assembler` (ติดตั้ง `j2k_asm` ด้วย)
 โฟลเดอร์เริ่มต้นคือ `$PREFIX/bin` (Termux) หรือ `~/.local/bin` รันซ้ำเพื่ออัปเดต ลบไฟล์เพื่อถอนการติดตั้ง
@@ -40,11 +40,11 @@ mkdir -p ../bin
 ```
 
 ```
-curl -fL https://github.com/J2k-studio/Jcmp/releases/latest/download/jcmp.tar.gz | tar xz -C ../bin
+curl -fL https://github.com/J2k-studio/Jexcmp/releases/latest/download/jcmp.tar.gz | tar xz -C ../bin
 ```
 
 ```
-wget -qO- https://github.com/J2k-studio/Jcmp/releases/latest/download/jcmp.tar.gz | tar xz -C ../bin
+wget -qO- https://github.com/J2k-studio/Jexcmp/releases/latest/download/jcmp.tar.gz | tar xz -C ../bin
 ```
 
 ```
@@ -58,11 +58,11 @@ mkdir -p ../bin && cd ../bin
 ```
 
 ```
-curl -fLO https://github.com/J2k-studio/Jcmp/releases/latest/download/jcmp     # หรือ wget URL เดียวกัน
+curl -fLO https://github.com/J2k-studio/Jexcmp/releases/latest/download/jcmp     # หรือ wget URL เดียวกัน
 ```
 
 ```
-curl -fLO https://github.com/J2k-studio/Jcmp/releases/latest/download/SHA256SUMS
+curl -fLO https://github.com/J2k-studio/Jexcmp/releases/latest/download/SHA256SUMS
 ```
 
 ```
@@ -82,7 +82,7 @@ printf '#import <stdlib>\nusing stdlib\nvoid main() { jout << "hi\\n"; }\n' > hi
 jcmp hi.jk -o hi && ./hi
 ```
 ไม่ตั้ง `PATH` ก็เรียกด้วยที่อยู่เต็มได้ เช่น `../bin/jcmp hi.jk -o hi`
-ถ้าอยากอ่าน/สร้างคอมไพเลอร์เอง: `git clone https://github.com/J2k-studio/Jcmp.git` (มี `bin/jcmp` พร้อมใช้)
+ถ้าอยากอ่าน/สร้างคอมไพเลอร์เอง: `git clone https://github.com/J2k-studio/Jexcmp.git` (มี `bin/jcmp` พร้อมใช้)
 
 ## สถานะ
 * **ภาษา:** จำนวนเต็ม (`int i32 i8 char bool`, `u8 u32 u64`), `float/double`, array (สูงสุด 3 มิติ, เริ่มต้นด้วยลิสต์ค่า `int a[3] = {1, 2, 3};`),

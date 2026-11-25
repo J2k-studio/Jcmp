@@ -1,8 +1,8 @@
 #!/bin/sh
 # install.sh -- download the Jcmp compiler from the latest GitHub release, check it and put it in a folder.
 #
-#   curl -fsSL https://raw.githubusercontent.com/J2k-studio/Jcmp/main/install.sh | sh
-#   wget -qO- https://raw.githubusercontent.com/J2k-studio/Jcmp/main/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/J2k-studio/Jexcmp/main/install.sh | sh
+#   wget -qO- https://raw.githubusercontent.com/J2k-studio/Jexcmp/main/install.sh | sh
 #
 # Options (after `sh -s --` when the script comes through a pipe):
 #   --dir DIR          the folder for the program (default: $PREFIX/bin on Termux, else ~/.local/bin).
@@ -14,7 +14,7 @@
 # Environment: JCMP_VERSION (same as --version), JCMP_BASE=URL to download from another place (a mirror,
 # or file:///folder for a local copy).
 set -eu
-REPO="J2k-studio/Jcmp"
+REPO="J2k-studio/Jexcmp"
 BINDIR=""
 VERSION="${JCMP_VERSION:-}"
 WITH_ASM=0

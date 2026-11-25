@@ -13,10 +13,10 @@
 บน Termux ติดตั้งคอมไพเลอร์ด้วยคำสั่งเดียว (จาก README):
 
 ```console
-curl -fsSL https://raw.githubusercontent.com/J2k-studio/Jcmp/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/J2k-studio/Jexcmp/main/install.sh | sh
 ```
 
-ถ้าใช้ `wget` แทน: `wget -qO- https://raw.githubusercontent.com/J2k-studio/Jcmp/main/install.sh | sh`
+ถ้าใช้ `wget` แทน: `wget -qO- https://raw.githubusercontent.com/J2k-studio/Jexcmp/main/install.sh | sh`
 ถ้าไม่มีคำสั่งใดคำสั่งหนึ่ง ให้รัน `pkg install curl wget` ก่อน บน Termux คอมไพเลอร์จะอยู่ใน
 `$PREFIX/bin` ซึ่งอยู่ใน path อยู่แล้ว ตรวจด้วย `jcmp -version`
 

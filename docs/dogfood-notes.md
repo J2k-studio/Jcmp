@@ -1,6 +1,6 @@
 # Dogfood notes: what it is like to write a real program in J2K (2026-10-22)
 
-First program: `jgrep` (a small grep: `-i -n -v -c`, regular expressions, files or stdin), about 90 lines, source in `~/jgrep/jgrep.jk` (planned for the Jcmp-Tools repo). Compared with the real `grep -E` on 8 cases: the same output on all.
+First program: `jgrep` (a small grep: `-i -n -v -c`, regular expressions, files or stdin), about 90 lines, source in `~/jgrep/jgrep.jk` (planned for the Jextool repo). Compared with the real `grep -E` on 8 cases: the same output on all.
 
 ## What felt good
 * It compiled on the first try; the library had everything (`Env::args`, `Fs::read_lines`, `Regex::find`, `String.lower/split`, `Result` with `switch`).

@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.32.0 (2026-11-25)
+* **Added (speed, games):** a compare of two `float` values is written on the floats (`fcmp s0, s1`) without the two conversions to double, and a `float` read from memory goes straight into an `s` register (`ldr s0, [...]`) instead of `ldrsw` + `fmov` (ARM64 only; `-irdbg 140737488355328` turns both off). The particle benchmark (floats in a struct array) is about 20 % faster; the results are the same, also for NaN.
+* **Changed:** the repositories have new names: the compiler is `J2k-studio/Jexcmp` and the tools are `J2k-studio/Jextool`. The old names still work (GitHub forwards them), so installed compilers keep updating; the links in the README, the documents, `install.sh` and the messages of the compiler use the new names.
+* **Added (tests):** t626 (float compares and loads, with the switch off and on the text path).
+* **Fixed:** none in this release.
+
 ## 1.2.31.0 (2026-11-25)
 * **Added (language):** a lambda can be written `fn(int a, int b) { ... }` (result `int`) or `fnv(...) { ... }` (no result); `alloc<type name>(count)` and `free<name>` as another way to write `alloc[type^ name = count]` and `free[name]`; the line `#!using asm` (it names the low-level words that the file uses; accepted now, those words are open in every file for the moment).
 * **Added (speed):** inside a completely unrolled loop (`for dx in 0..3`) the known part of an array index goes to the displacement of the load: `tiles[(y + dy - 1) * w + (x + dx - 1)]` works out `row + x` once for the three loads of a row (tile-map scan about 7 % faster; `-irdbg 140737488355328` turns it off).

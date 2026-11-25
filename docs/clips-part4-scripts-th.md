@@ -5,7 +5,7 @@
 
 ## คลิป 1: ติดตั้งและ Hello (5 นาที)
 1. (0:00) บอกว่า J2K คือภาษาที่คอมไพล์เป็นโค้ดเครื่องตรงๆ ไม่มี libc จบคลิปนี้จะรันโปรแกรมแรกได้
-2. (0:30) พิมพ์ `curl -fsSL https://raw.githubusercontent.com/J2k-studio/Jcmp/main/install.sh | sh` ; รัน `jcmp --version`
+2. (0:30) พิมพ์ `curl -fsSL https://raw.githubusercontent.com/J2k-studio/Jexcmp/main/install.sh | sh` ; รัน `jcmp --version`
 3. (1:30) สร้าง `hello.jk` ตามบทเรียน 1 (`#import <stdlib>` + `jout`) ; `jcmp hello.jk -o hello && ./hello`
 4. (3:00) แสดงว่าไฟล์ผลลัพธ์เล็กแค่ไหน (`ls -l hello`) ; `jcmp hello.jk -show main` ให้เห็นแอสเซมบลีสั้นๆ
 5. (4:15) ข้อความผิดพลาด: ลบ `;` หรือพิมพ์ชื่อผิด ให้เห็นรูปแบบ `ไฟล์:บรรทัด:คอลัมน์: error: ...`

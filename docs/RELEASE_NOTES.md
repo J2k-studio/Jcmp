@@ -1,6 +1,8 @@
-# J2K / Jcmp 1.2.31.0
+# J2K / Jcmp 1.2.32.0
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
+
+**1.2.32.0:** a compare of floats and a float read from memory use the float registers directly (the particle benchmark is about 20 % faster); the repositories are now `Jexcmp` (this one) and `Jextool` (the old names are forwarded).
 
 **1.2.31.0:** lambdas with `fn`/`fnv`, `alloc<int n>(50)` and `free<n>`, the line `#!using asm`; the result of a small-type function is cut at `return`; the tile-map scan is a little faster.
 

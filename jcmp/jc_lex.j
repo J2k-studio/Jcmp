@@ -848,7 +848,7 @@ void self_update(char^ version) {
     if cut <= 1 { write_err("jcmp: -update cannot find the folder of the compiler\n"); syscall(93, 1); }
     exe[cut - 1] = 0;
     char^ url = env_get("JCMP_INSTALL_URL");
-    if url == null || url[0] == 0 { url = "https://raw.githubusercontent.com/J2k-studio/Jcmp/main/install.sh"; }
+    if url == null || url[0] == 0 { url = "https://raw.githubusercontent.com/J2k-studio/Jexcmp/main/install.sh"; }
     char script[1200];
     script[0] = 0;
     append_text(@script, "U='");
@@ -965,7 +965,7 @@ void push_lib(char^ name) {
         str_copy(@m, "the library '", 20);
         append_text(@m, name);
         append_text(@m, "' is not installed");
-        die_help(@m, "install it with  jc lib install NAME  (jc: https://github.com/J2k-studio/Jcmp-Tools; jget -li install NAME still works if you have jc)  (the tools: https://github.com/J2k-studio/Jcmp-Tools); the libraries that come with jcmp are in its folder Library");
+        die_help(@m, "install it with  jc lib install NAME  (jc: https://github.com/J2k-studio/Jextool; jget -li install NAME still works if you have jc)  (the tools: https://github.com/J2k-studio/Jextool); the libraries that come with jcmp are in its folder Library");
     }
     if lx_depth >= 15 { die("imports nested too deeply"); }
     stk_pos[lx_depth] = cur_pos;

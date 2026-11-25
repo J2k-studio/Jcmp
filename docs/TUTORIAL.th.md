@@ -1,7 +1,7 @@
 # เรียนรู้ภาษา J2K ทีละขั้น
 
 บทเรียนนี้สอนภาษาด้วยโปรแกรมเล็กๆ ทุกโปรแกรมถูกคอมไพล์และรันจริงเพื่อให้ได้ผลลัพธ์ที่เห็น
-ต้องมีคอมไพเลอร์ก่อน (ดู README: `curl -fsSL https://raw.githubusercontent.com/J2k-studio/Jcmp/main/install.sh | sh`)
+ต้องมีคอมไพเลอร์ก่อน (ดู README: `curl -fsSL https://raw.githubusercontent.com/J2k-studio/Jexcmp/main/install.sh | sh`)
 พิมพ์โปรแกรมลงไฟล์ เช่น `hello.jk` แล้ว
 
 ```bash
@@ -2181,7 +2181,7 @@ int main() {
 
 ## บทที่ 57. สร้างโปรเจกต์ด้วย makej
 
-โปรเจกต์ที่มีหลายไฟล์และหลายโปรแกรมสร้างด้วย **makej** (ติดตั้งด้วย `curl -fsSL https://raw.githubusercontent.com/J2k-studio/Jcmp-Tools/main/install.sh | sh -s -- makej`) ไฟล์ build คือไฟล์ธรรมดาชื่อ `makej` ที่คุณเขียนเอง (`nano makej` หรือ `makej init` เขียนตัวเริ่มต้นให้) แต่ละ `[program.ชื่อ]` คือโปรแกรมที่สร้างจากไฟล์ `main` (พร้อม `flags` ที่ให้) แต่ละ `[library.ชื่อ]` คือไลบรารี (`-l`) และแต่ละ `[step.ชื่อ]` คือคำสั่งเชลล์ใดๆ ส่วน `needs` บอกสิ่งที่ต้องทำก่อน นี่คือโปรแกรมแรกของโปรเจกต์ `src/hello.jk`:
+โปรเจกต์ที่มีหลายไฟล์และหลายโปรแกรมสร้างด้วย **makej** (ติดตั้งด้วย `curl -fsSL https://raw.githubusercontent.com/J2k-studio/Jextool/main/install.sh | sh -s -- makej`) ไฟล์ build คือไฟล์ธรรมดาชื่อ `makej` ที่คุณเขียนเอง (`nano makej` หรือ `makej init` เขียนตัวเริ่มต้นให้) แต่ละ `[program.ชื่อ]` คือโปรแกรมที่สร้างจากไฟล์ `main` (พร้อม `flags` ที่ให้) แต่ละ `[library.ชื่อ]` คือไลบรารี (`-l`) และแต่ละ `[step.ชื่อ]` คือคำสั่งเชลล์ใดๆ ส่วน `needs` บอกสิ่งที่ต้องทำก่อน นี่คือโปรแกรมแรกของโปรเจกต์ `src/hello.jk`:
 
 ```jk
 #import <stdlib>
@@ -2861,7 +2861,7 @@ int main() {
 `jc` นำของมาที่มือถือ สี่ชนิด หนึ่งคำสั่งต่อชนิด:
 
 ```text
-jc install NAME          a tool of Jcmp-Tools (jsh, neuron, mulap, imgj ...), or a package (git, python, clang ...)
+jc install NAME          a tool of Jextool (jsh, neuron, mulap, imgj ...), or a package (git, python, clang ...)
 jc tools                 the list of tools         jc update        every tool and package that has a newer version
 jc lib list              the libraries of J2K      jc lib install web telegram    a library for #import <name>
 jc pkg search git        look in the packages      jc pkg list | remove NAME
@@ -2870,7 +2870,7 @@ jc install FILE.jc       a program of the Jaric store (it asks for the permissio
 
 เครื่องมือ (tool) คือโปรแกรมเดี่ยวที่เขียนด้วย J2K (`jc install neuron`) **แพ็กเกจ (package)** คือโปรแกรมของคนอื่นที่สร้างให้ตรงกับ prefix ของแอป Jaric (`jc install git`, `python`, `python-pip`, `clang`, `dropbear`): แตกลงใน prefix และจดรายการไว้ใน `usr/var/lib/jcpkg/ชื่อ.list` เพื่อให้ `jc pkg remove ชื่อ` เอาออกได้พอดีกับที่ใส่ ไลบรารีคือไฟล์เดียว (`#import <ชื่อ>`): `jc lib install ชื่อ` วางไฟล์ในที่ที่คอมไพเลอร์หา ทุกอย่างถูกตรวจ SHA-256 ก่อนวางลงที่ ถ้า checksum ผิดจะไม่ติดตั้งอะไรเลย
 
-ถ้าจะแชร์เครื่องมือของคุณ: โฟลเดอร์ที่มีโปรแกรม `build.sh`, `test.sh`, `README.md`, `CHANGELOG.md`, `VERSION` ทดสอบ ปล่อยแบบที่ repository Jcmp-Tools ทำ และบรรทัดใน `tools.txt` ทำให้ `jc install` หาเจอ เครื่องมือและไลบรารีทุกตัวต้องมี README ที่บอกว่าคืออะไร ติดตั้งอย่างไร และใช้อย่างไรพร้อมตัวอย่างที่ใช้ได้จริง: เมื่ออ่าน README ที่ไม่สอนอะไร ให้แก้ README
+ถ้าจะแชร์เครื่องมือของคุณ: โฟลเดอร์ที่มีโปรแกรม `build.sh`, `test.sh`, `README.md`, `CHANGELOG.md`, `VERSION` ทดสอบ ปล่อยแบบที่ repository Jextool ทำ และบรรทัดใน `tools.txt` ทำให้ `jc install` หาเจอ เครื่องมือและไลบรารีทุกตัวต้องมี README ที่บอกว่าคืออะไร ติดตั้งอย่างไร และใช้อย่างไรพร้อมตัวอย่างที่ใช้ได้จริง: เมื่ออ่าน README ที่ไม่สอนอะไร ให้แก้ README
 
 # ภาค 4: จากตัวเลขสู่เครื่อง
 

@@ -1602,9 +1602,71 @@ i64 lw_fpimm(i64 bits) {
 }
 
 // one instruction as text; the block b is the one that it is in (for the fall through of jumps)
+// a comparison of two floats: the two conversions to double (fcvt dA, sA / fcvt dB, sB) and the compare are one group, ARM64 only (the ARM32 back end
+// compares doubles): the compare is written on the floats themselves (fcmp sA, sB; the flags are the same, the conversion is exact) and the two
+// conversions are not written. The two registers are scratch of the group (f32, f33: nothing reads them after the branch)
+bool lw_fcmp_pair(i64 k, i64 b) {
+    if k < ir_bs[b] || k + 2 > ir_be[b] - 1 { return false; }
+    if ir_op[k] != IR_FCVT_SD || ir_op[k + 1] != IR_FCVT_SD || ir_op[k + 2] != IR_FBR { return false; }
+    if ir_d[k] != ir_a[k] || ir_d[k + 1] != ir_a[k + 1] || ir_d[k] == ir_d[k + 1] { return false; }
+    if ir_bi[k + 2] != 0 || ir_a[k + 2] != ir_d[k] || ir_b[k + 2] != ir_d[k + 1] { return false; }
+    if (ir_opt & 140737488355328) != 0 { return false; }
+    return true;
+}
+i64 lw_fsingle;                  // 1: the compare that is written now is on floats (fcmp sA, sB)
+char lw_skipf[IR_MAXI];          // 1: this F32IN was written already, by the load before it (ldr sF, [..])
+
+// a float that is read from memory:  ldrsw xT, [..]  ...  fmov sF, wT   becomes   ldr sF, [..]  (ARM64 only; the F32IN is not written).
+// What stands between the two does not touch sF, and nobody reads xT afterwards.
+bool lw_fuse_f32ld(i64 k, i64 b) {
+    if ir_op[k] != IR_LOAD || (ir_w[k] != 0 - 4 && ir_w[k] != 4) || (ir_opt & 140737488355328) != 0 { return false; }
+    i64 t = ir_d[k];
+    if t < 1 || ir_vcls[t] != 0 || (t >= 16 && t < 64) || ir_a[k] == t { return false; }
+    i64 j = k + 1;
+    while j < ir_be[b] && !lw_reads(j, t) {
+        i64 o = ir_op[j];
+        if o == IR_CALL || o == IR_CALLIND || o == IR_SYSCALL || o == IR_JMP || o == IR_BR || o == IR_FBR || o == IR_RET || o == IR_TRAP || o == IR_LRET { return false; }
+        if ir_d[j] == t { return false; }
+        j += 1;
+    }
+    if j >= ir_be[b] || ir_op[j] != IR_F32IN || ir_a[j] != t || ir_d[j] < 32 || ir_d[j] > 63 { return false; }
+    i64 f = ir_d[j];
+    i64 m = k + 1;
+    while m < j {
+        if ir_d[m] == f || lw_reads(m, f) || ir_op[m] == IR_STORE && ir_a[m] == f { return false; }
+        if ir_op[m] >= IR_F32IN && ir_op[m] <= IR_F32TOI && (ir_a[m] == f || ir_b[m] == f) { return false; }
+        if ir_op[m] == IR_FCVT_SD || ir_op[m] == IR_FBR { return false; }
+        m += 1;
+    }
+    // nobody reads xT after the F32IN (it is a named register: the end of the block and the next blocks too)
+    bool gone = false;
+    i64 q = j + 1;
+    while q < ir_be[b] && !gone {
+        if lw_reads(q, t) { return false; }
+        if ir_d[q] == t { gone = true; }
+        q += 1;
+    }
+    if !gone && (ir_opt == 0 || (op_lo[b] & (1 << t)) != 0) { return false; }
+    lw_skipf[j] = 1;
+    lw_def(f);
+    rg_text("ldr ");
+    lw_sreg(f);
+    rg_text(", [");
+    lw_reg(ir_a[k]);
+    rg_text(", #");
+    rg_int(lw_offset(ir_a[k], ir_k[k]));
+    rg_text("]\n");
+    return true;
+}
+
 bool lw_instr(i64 i, i64 b) {
     i64 op = ir_op[i];
     i64 d = ir_d[i];
+    if op == IR_F32IN && lw_skipf[i] == 1 { lw_skipf[i] = 0; return true; }
+    if op == IR_LOAD && lw_fuse_f32ld(i, b) { return true; }
+    if op == IR_FCVT_SD && (lw_fcmp_pair(i, b) || lw_fcmp_pair(i - 1, b)) { return true; }          // the conversions of a float compare are not written
+    lw_fsingle = 0;
+    if op == IR_FBR && lw_fcmp_pair(i - 2, b) { lw_fsingle = 1; }
     if op == IR_PARAM {
         return true;                                     // the arguments are in x0..x7 already
     }
@@ -1966,9 +2028,9 @@ bool lw_instr(i64 i, i64 b) {
         } else {
             rg_text("fcmp ");
         }
-        lw_reg(ir_a[i]);
+        if lw_fsingle == 1 { lw_sreg(ir_a[i]); } else { lw_reg(ir_a[i]); }
         rg_text(", ");
-        if ir_bi[i] == 1 { rg_int(ir_b[i]); } else { lw_reg(ir_b[i]); }
+        if ir_bi[i] == 1 { rg_int(ir_b[i]); } else if lw_fsingle == 1 { lw_sreg(ir_b[i]); } else { lw_reg(ir_b[i]); }
         rg_put(10);
         rg_text("b.");
         char^ ccs = lw_cc(ir_k[i], 0);
@@ -2069,6 +2131,8 @@ bool lw_dup_test(i64 h, i64 b) {
 
 bool lw_function() {
     lw_ovf = 0;
+    i64 zk = 0;
+    while zk < ir_n { lw_skipf[zk] = 0; zk += 1; }          // the flags of the function before are gone
     lw_tmp_i = 0;                // the choice of x15 / x16 must not depend on the functions lowered before (the cache of the back end)
     // the deepest stack cell
     lw_maxq = 0;

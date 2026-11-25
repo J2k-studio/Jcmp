@@ -14,10 +14,10 @@ Read it on a phone, in Termux or in the Jaric app. The Thai version is
 On Termux, install the compiler with one command (from the README):
 
 ```console
-curl -fsSL https://raw.githubusercontent.com/J2k-studio/Jcmp/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/J2k-studio/Jexcmp/main/install.sh | sh
 ```
 
-With `wget` instead: `wget -qO- https://raw.githubusercontent.com/J2k-studio/Jcmp/main/install.sh | sh`.
+With `wget` instead: `wget -qO- https://raw.githubusercontent.com/J2k-studio/Jexcmp/main/install.sh | sh`.
 If one of them is missing, run `pkg install curl wget` first. On Termux the compiler goes to
 `$PREFIX/bin`, which is already on your path. Check it with `jcmp -version`.
 

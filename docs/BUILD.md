@@ -185,12 +185,12 @@ to keep the phone unchanged):
 ```
 jc lib list               # the libraries of J2K that are installed (run: prints gamej, glapp, ... )
 jc lib install NAME       # a library of Jcmp-libs into ~/.j2k/Library (not run here)
-jc install NAME           # a tool of Jcmp-Tools, for example makej or jget (not run here)
+jc install NAME           # a tool of Jextool, for example makej or jget (not run here)
 jc tools                  # the tools
 jc update                 # jsh and the tools that have a newer release
 ```
 
-`jget` is the download tool of [Jcmp-Tools](https://github.com/J2k-studio/Jcmp-Tools); `Net::http.download`
+`jget` is the download tool of [Jextool](https://github.com/J2k-studio/Jextool); `Net::http.download`
 is the library function it uses. A library that `jc lib install NAME` puts in `~/.j2k/Library` is found
 by `#import <NAME>`.
 

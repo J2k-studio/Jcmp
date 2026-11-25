@@ -21,7 +21,7 @@ It is **self-hosting**: the compiler is written in J2K and rebuilds itself, byte
 |---|---|
 | **Compiler** | self-hosting, Linux ARM64 and ARM32, `-j N` many cores, native GPU (`-dyn`), shared libraries for C / Java / Python (`export`, `-l`), 600+ tests |
 | **Language** | structs, methods and operator methods, enums with data, generics, `try`/`throw`, threads, inheritance (`virtual` / `override`), default arguments, text with values inside |
-| **Tools** ([Jcmp-Tools](https://github.com/J2k-studio/Jcmp-Tools)) | shell, package manager, editor, build tool, git, music player, small AI, an emulator that runs ARM64 programs and kernels |
+| **Tools** ([Jextool](https://github.com/J2k-studio/Jextool)) | shell, package manager, editor, build tool, git, music player, small AI, an emulator that runs ARM64 programs and kernels |
 | **Jaric** | an Android terminal app that is the first mode of **Jaric OS**; a kernel with processes, a file system, pipes and a real shell, started in the emulator, with its own boot screen |
 
 ## Where it is going
@@ -71,7 +71,7 @@ Release history: [CHANGELOG.md](CHANGELOG.md).
 
 ## Tools, games and the Jaric app
 
-Around the compiler there are tools written in J2K: [Jcmp-Tools](https://github.com/J2k-studio/Jcmp-Tools) (`jget`, `makej`, the shell `jsh`, `jbox`, the editor `coderin`, `zipj`, `tarj`, the player `mujic`, the task manager `jamanager`, the settings tool `jash`, the small AI tool `neuron` with the assistant `xr`, and Python 3.14 with `pip` and `yt-dlp` for Android; the compiler itself is `jc install jcmp`) and the **Jaric app** for Android, a terminal that is the first mode of Jaric OS.
+Around the compiler there are tools written in J2K: [Jextool](https://github.com/J2k-studio/Jextool) (`jget`, `makej`, the shell `jsh`, `jbox`, the editor `coderin`, `zipj`, `tarj`, the player `mujic`, the task manager `jamanager`, the settings tool `jash`, the small AI tool `neuron` with the assistant `xr`, and Python 3.14 with `pip` and `yt-dlp` for Android; the compiler itself is `jc install jcmp`) and the **Jaric app** for Android, a terminal that is the first mode of Jaric OS.
 
 ```console
 $ makej init -pro mytool     # a project with the right structure: src/, tests/, docs/, manifest.toml ...
@@ -85,31 +85,31 @@ $ makej apk                  # the game as an Android app;  makej pack = a .jc; 
 
 You need a Linux **ARM64** machine (a phone with Termux works) and `curl` or `wget`
 (Termux: `pkg install curl wget`). The compiler `jcmp` and its library (the folder `Library`) are a pair and are published together as a
-[release](https://github.com/J2k-studio/Jcmp/releases).
+[release](https://github.com/J2k-studio/Jexcmp/releases).
 
 ### 1. `install.sh` (recommended)
 
 It downloads the latest release, checks its SHA-256 and puts `jcmp` and the library (`Library`, next to the program folder) in place.
 
 ```
-curl -fsSL https://raw.githubusercontent.com/J2k-studio/Jcmp/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/J2k-studio/Jexcmp/main/install.sh | sh
 ```
 
 Or, with wget:
 
 ```
-wget -qO- https://raw.githubusercontent.com/J2k-studio/Jcmp/main/install.sh | sh
+wget -qO- https://raw.githubusercontent.com/J2k-studio/Jexcmp/main/install.sh | sh
 ```
 
 The default folder is `$PREFIX/bin` on Termux and `~/.local/bin` elsewhere. To choose the folder, for example a
 `bin` folder next to your project (`../bin`):
 
 ```
-curl -fsSL https://raw.githubusercontent.com/J2k-studio/Jcmp/main/install.sh | sh -s -- --dir ../bin
+curl -fsSL https://raw.githubusercontent.com/J2k-studio/Jexcmp/main/install.sh | sh -s -- --dir ../bin
 ```
 
 ```
-wget -qO- https://raw.githubusercontent.com/J2k-studio/Jcmp/main/install.sh | sh -s -- --dir ../bin
+wget -qO- https://raw.githubusercontent.com/J2k-studio/Jexcmp/main/install.sh | sh -s -- --dir ../bin
 ```
 
 | Option | Meaning |
@@ -130,13 +130,13 @@ mkdir -p ../bin
 ```
 
 ```
-curl -fL https://github.com/J2k-studio/Jcmp/releases/latest/download/jcmp.tar.gz | tar xz -C ../bin
+curl -fL https://github.com/J2k-studio/Jexcmp/releases/latest/download/jcmp.tar.gz | tar xz -C ../bin
 ```
 
 Or with wget:
 
 ```
-wget -qO- https://github.com/J2k-studio/Jcmp/releases/latest/download/jcmp.tar.gz | tar xz -C ../bin
+wget -qO- https://github.com/J2k-studio/Jexcmp/releases/latest/download/jcmp.tar.gz | tar xz -C ../bin
 ```
 
 ```
@@ -154,21 +154,21 @@ mkdir -p ../bin && cd ../bin
 With curl:
 
 ```
-curl -fLO https://github.com/J2k-studio/Jcmp/releases/latest/download/jcmp
+curl -fLO https://github.com/J2k-studio/Jexcmp/releases/latest/download/jcmp
 ```
 
 ```
-curl -fLO https://github.com/J2k-studio/Jcmp/releases/latest/download/SHA256SUMS
+curl -fLO https://github.com/J2k-studio/Jexcmp/releases/latest/download/SHA256SUMS
 ```
 
 Or with wget:
 
 ```
-wget https://github.com/J2k-studio/Jcmp/releases/latest/download/jcmp
+wget https://github.com/J2k-studio/Jexcmp/releases/latest/download/jcmp
 ```
 
 ```
-wget https://github.com/J2k-studio/Jcmp/releases/latest/download/SHA256SUMS
+wget https://github.com/J2k-studio/Jexcmp/releases/latest/download/SHA256SUMS
 ```
 
 ```
@@ -188,7 +188,7 @@ Put the folder on your `PATH` (once per shell, or add the line to `~/.bashrc`), 
 
 ```bash
 export PATH="$PWD:$PATH"            # inside the folder; or the full path of your folder
-jcmp -version                      # jcmp 1.2.31.0 (J2K compiler, Linux ARM64)
+jcmp -version                      # jcmp 1.2.32.0 (J2K compiler, Linux ARM64)
 
 printf '#import <stdlib>\nusing stdlib\nvoid main() { jout << "hi\\n"; }\n' > hi.jk
 jcmp hi.jk -o hi && ./hi            # hi
@@ -201,7 +201,7 @@ Without `PATH` you can call it by its path: `../bin/jcmp hi.jk -o hi`.
 To read the compiler or rebuild it (the repository contains a ready `bin/jcmp`):
 
 ```bash
-git clone https://github.com/J2k-studio/Jcmp.git
+git clone https://github.com/J2k-studio/Jexcmp.git
 cd Jcmp
 bin/jcmp examples/fib.jk -o fib && ./fib
 ./bootstrap.sh                       # rebuild the compiler with itself

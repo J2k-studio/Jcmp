@@ -1,7 +1,7 @@
 # Learn J2K: a step-by-step tutorial
 
 This tutorial teaches the language by small programs. Each program was compiled and run to produce the output you see.
-You need the compiler (see the README: `curl -fsSL https://raw.githubusercontent.com/J2k-studio/Jcmp/main/install.sh | sh`).
+You need the compiler (see the README: `curl -fsSL https://raw.githubusercontent.com/J2k-studio/Jexcmp/main/install.sh | sh`).
 Type a program into a file such as `hello.jk`, then:
 
 ```bash
@@ -2184,7 +2184,7 @@ Output:
 
 ## Lesson 57. Building a project with makej
 
-A project with several files and programs is built by **makej** (install it with `curl -fsSL https://raw.githubusercontent.com/J2k-studio/Jcmp-Tools/main/install.sh | sh -s -- makej`). The build file is a plain file called `makej` that you write by hand (`nano makej`, or `makej init` writes a start). Each `[program.NAME]` is a program to build from its `main` file (with the `flags` you give), each `[library.NAME]` a library (`-l`), and each `[step.NAME]` any shell command; `needs` lists what must be made first. This is the first program of the project, `src/hello.jk`:
+A project with several files and programs is built by **makej** (install it with `curl -fsSL https://raw.githubusercontent.com/J2k-studio/Jextool/main/install.sh | sh -s -- makej`). The build file is a plain file called `makej` that you write by hand (`nano makej`, or `makej init` writes a start). Each `[program.NAME]` is a program to build from its `main` file (with the `flags` you give), each `[library.NAME]` a library (`-l`), and each `[step.NAME]` any shell command; `needs` lists what must be made first. This is the first program of the project, `src/hello.jk`:
 
 ```jk
 #import <stdlib>
@@ -2864,7 +2864,7 @@ int main() {
 `jc` brings things to the phone. Four kinds, one command each:
 
 ```text
-jc install NAME          a tool of Jcmp-Tools (jsh, neuron, mulap, imgj ...), or a package (git, python, clang ...)
+jc install NAME          a tool of Jextool (jsh, neuron, mulap, imgj ...), or a package (git, python, clang ...)
 jc tools                 the list of tools         jc update        every tool and package that has a newer version
 jc lib list              the libraries of J2K      jc lib install web telegram    a library for #import <name>
 jc pkg search git        look in the packages      jc pkg list | remove NAME
@@ -2873,7 +2873,7 @@ jc install FILE.jc       a program of the Jaric store (it asks for the permissio
 
 The tools are single programs written in J2K (`jc install neuron`). The **packages** are the programs of other people built for the prefix of the Jaric app (`jc install git`, `python`, `python-pip`, `clang`, `dropbear`): they are unpacked into the prefix and listed in `usr/var/lib/jcpkg/NAME.list` so that `jc pkg remove NAME` takes away exactly what was put there. The libraries are single files (`#import <name>`): `jc lib install NAME` puts the file where the compiler looks. Everything is checked with a SHA-256 before it is put in place; if a checksum is wrong nothing is installed.
 
-To share your own tool: a folder with the program, `build.sh`, `test.sh`, `README.md`, `CHANGELOG.md`, `VERSION`; test it, release it as the repository Jcmp-Tools does, and a line in `tools.txt` makes `jc install` find it. Every tool and library must have a README that says what it is, how to install it and how to use it with an example that works: when you read a README that does not teach you, fix the README.
+To share your own tool: a folder with the program, `build.sh`, `test.sh`, `README.md`, `CHANGELOG.md`, `VERSION`; test it, release it as the repository Jextool does, and a line in `tools.txt` makes `jc install` find it. Every tool and library must have a README that says what it is, how to install it and how to use it with an example that works: when you read a README that does not teach you, fix the README.
 
 # Part 4: from the numbers to the machine
 
