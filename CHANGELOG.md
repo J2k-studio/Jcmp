@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.34.0 (2026-11-26)
+* **Added (language):** the ending `.jex` for a program: `jcmp hello.jex` makes the program `hello`, and `#import "name"` finds `name.jex` (after `name.j` and `name.jk`).
+* **Fixed:** the build of the compiler failed with "the assembler could not read this line of the code written by jcmp" when its own assembler text passed 8 MB (it is 10 MB before the back end): the buffers of the peephole and the register pass were 8 MB and the text was written past their end, spoiling the memory behind. Both are 16 MB now and a text that is longer gives a clear error. (The cache and `-nopeep` had hidden it.)
+* **Added (tests):** t629 (a `.jex` import).
+
 ## 1.2.33.0 (2026-11-26)
 * **Added (language):** several declarations in one statement (`int a = 1, b = 2;`, also in the head of a `for`: `for int i = 0, n = 5; i < n; i++ { }`; the type belongs to every name; a statement with a `<` in it is not read as a list); `using Math, stdlib;` for `using Math; using stdlib;`. Both work in the tree path and in the text path.
 * **Added (bench and tools):** `tools/bench/nn.*` (the same neural network in J2K, C, Python and Rust, with the lengths and the run times), `tools/bench/a32.sh` (the ARM32 table against clang), `tools/tokcount.py` (the number of tokens of two files).

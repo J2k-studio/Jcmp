@@ -9,7 +9,7 @@
 //   cmp x0, A / mov x0, 1 / b.C L / mov x0, 0 / L: / cmp x0, 0 / b.eq|b.ne T     cmp x0, A / b.C' T   (a comparison used as a condition)
 //   b L / L:                                                the jump to the next line goes
 
-char peep_buf[8388608];
+char peep_buf[16777216];      // as large as out_buf. It was 8 MB: the text of the compiler itself is 10 MB before the back end, and the copy wrote past the end of the buffer (the 'assembler could not read this line' bug of 2026-11-26)
 i64 peep_len;
 i64 peep_next;               // the index in out_buf of the line after the one that was just copied (for the rules that look ahead)
 
@@ -618,6 +618,7 @@ bool peep_try() {
 // the whole text of out_buf goes through the rules
 void peep_run() {
     peep_len = 0;
+    if out_len + 4096 >= 16777216 { die("the assembler text of the program is longer than 16 MB: the peephole pass cannot read it (raise out_buf and peep_buf)"); }
     i64 i = 0;
     while i < out_len {
         // copy one line

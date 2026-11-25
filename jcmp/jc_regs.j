@@ -13,7 +13,7 @@
 // puts x19..x25 / d8..d15 back as they were when the try began when it catches (a throw jumps over the frames in between without
 // giving their registers back; jc_stmt.j parse_try). Lines ";H" are always removed. -noregs switches the pass off.
 
-char regs_buf[8388608];
+char regs_buf[16777216];       // as large as out_buf (it was 8 MB: a text of 10 MB was written past the end, 2026-11-26)
 i64 regs_len;
 i64 rg_ls[65536];            // the start of each line of the function
 i64 rg_n;
@@ -209,6 +209,7 @@ i64 rg_slot_use(i64 st) {
 }
 
 void rg_put(char c) {
+    if regs_len >= 16777200 { die("the text of the program is too long for the register pass (the limit is 16 MB of assembler text)"); }
     regs_buf[regs_len] = c;
     regs_len += 1;
 }

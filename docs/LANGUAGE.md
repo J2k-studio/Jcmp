@@ -4,8 +4,8 @@ This is a practical guide to what the compiler accepts **today**. The formal dec
 (and the reasons for them) are in [syntax-design.md](syntax-design.md); things that are
 planned but not built are listed at the end.
 
-Files: `.jk` is a program (it has `main`); `.j` is a component that other files `import`
-(it may not define `main`).
+Files: `.jk` and `.jex` are programs (they have `main`; `jcmp hello.jex` makes the program `hello`); `.j` is a component that other files `import`
+(it may not define `main`). An `import "name"` finds `name.j`, `name.jk` or `name.jex`.
 
 ## Program shape
 

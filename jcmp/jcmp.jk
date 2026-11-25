@@ -3,7 +3,7 @@
 // Use:    jcmp1 input.jk -o program
 // the version of the compiler (also in the file VERSION; release.sh checks that they agree)
 #allow syscall                         // the compiler is the layer under Sys: it calls the system by number on purpose
-#define JCMP_VERSION "1.2.33.0"
+#define JCMP_VERSION "1.2.34.0"
 
 #import "jc_base"
 #import "jc_asm"
@@ -701,7 +701,9 @@ void main() {
         bn += 1;
         bk += 1;
     }
-    if bn > 3 && base[bn - 3] == '.' && base[bn - 2] == 'j' && base[bn - 1] == 'k' {
+    if bn > 4 && base[bn - 4] == '.' && base[bn - 3] == 'j' && base[bn - 2] == 'e' && base[bn - 1] == 'x' {
+        bn -= 4;                 // hello.jex -> hello (the ending of a program in Jex, docs/syntax-design.md 111; .jk keeps working)
+    } else if bn > 3 && base[bn - 3] == '.' && base[bn - 2] == 'j' && base[bn - 1] == 'k' {
         bn -= 3;
     } else if bn > 2 && base[bn - 2] == '.' && base[bn - 1] == 'j' {
         bn -= 2;
@@ -712,7 +714,7 @@ void main() {
     if out_elf == null && out_asm == null && x_show == null {
         // no -o: the program is named like the source, in the current folder
         if bn == 0 {
-            write_err("jcmp: the source file has no .jk or .j name, so say where the program goes: -o name\n");
+            write_err("jcmp: the source file has no .jex, .jk or .j name, so say where the program goes: -o name\n");
             syscall(93, 1);
         }
         out_elf = @base;
@@ -726,7 +728,7 @@ void main() {
         }
         if is_dir {
             if bn == 0 {
-                write_err("jcmp: the source file has no .jk or .j name, so give the program a name: -o folder/name\n");
+                write_err("jcmp: the source file has no .jex, .jk or .j name, so give the program a name: -o folder/name\n");
                 syscall(93, 1);
             }
             str_copy(@derived, out_elf, 250);

@@ -998,7 +998,7 @@ void put(char^ text) {
     cur_len += 1;
 }
 
-// p[0..n) is a path without its extension: try ".j" then ".jk"; the one that
+// p[0..n) is a path without its extension: try ".j", then ".jk", then ".jex"; the one that
 // exists is left in p (if neither exists p ends in ".j")
 bool try_ext(char^ p, i64 n) {
     p[n] = '.';
@@ -1007,6 +1007,10 @@ bool try_ext(char^ p, i64 n) {
     if file_exists(p) { return true; }
     p[n + 2] = 'k';
     p[n + 3] = 0;
+    if file_exists(p) { return true; }
+    p[n + 2] = 'e';
+    p[n + 3] = 'x';
+    p[n + 4] = 0;
     if file_exists(p) { return true; }
     p[n + 2] = 0;
     return false;
