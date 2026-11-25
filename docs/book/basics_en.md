@@ -401,7 +401,7 @@ jout << n * 6 << "\n";
 
 ## Binary numbers and bits
 **What it is.** All data in a computer is kept as binary numbers, which use only 0 and 1. One digit is called a bit. Eight bits make one byte. In binary, each place has a value of 1, 2, 4, 8, 16 and so on, and each value is double the one before. The number 13 is 1101 in binary, because 8 + 4 + 1 is 13.
-**Why it matters.** Knowing binary helps you understand the limits of numbers. An int of 8 bytes has 64 bits. Reading a file of numbers, or debugging a problem with flags, also needs this knowledge.
+**Why it matters.** Knowing binary helps you understand the limits of numbers. An int of 4 bytes has 32 bits (an i64 of 8 bytes has 64). Reading a file of numbers, or debugging a problem with flags, also needs this knowledge.
 **How to do it.**
 
 To change a number to binary, divide it by 2 again and again and keep the remainder each time, until you get 0. Then read the remainders from the bottom to the top. In J2K, the operator >> moves the bits to the right, and & keeps only the bits that you want to look at.

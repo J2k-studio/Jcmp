@@ -90,7 +90,7 @@ jout << "start\n";
 - **Start message** — Write a program that prints the words main runs first. Output: `main runs first`. Hint: Use jout with the text and end it with \n.
 
 ## Integer types: int, i32, i8
-**What it is.** An integer type stores a whole number. int is 64 bits. i32 is 32 bits and i8 is 8 bits. All of them are signed, so they can hold negative values. The size tells you the largest value the type can keep.
+**What it is.** An integer type stores a whole number. int is 32 bits (i32 is another name for it). i64 is 64 bits, i16 is 16 bits and i8 is 8 bits. All of them are signed, so they can hold negative values. The size tells you the largest value the type can keep.
 **Why it matters.** A number that is too big for its type is cut to fit. The result is not what you expect, and the bug is hard to see. Knowing the size prevents it.
 **How to do it.**
 
@@ -119,7 +119,7 @@ void main() {
 > **Watch out:** The result of i8 + i8 is an int during the addition. The cut only happens when the sum is stored in an i8. Store it in an int when you need the full value.
 **Exercises**
 - What is the size of an int in J2K?
-  - a) 8 bits  b) 32 bits  c) 64 bits  — Answer: c. int is 64 bits. i32 is 32 bits and i8 is 8 bits.
+  - a) 8 bits  b) 32 bits  c) 64 bits  — Answer: b. int is 32 bits. i64 is 64 bits and i8 is 8 bits.
 - i8 can hold up to 127. What happens when 200 is stored in an i8?
   - a) The value is cut to fit  b) The compiler stops  c) The value stays 200  — Answer: a. The value is cut to 8 bits when stored, so it does not stay 200.
 - An i8 can hold negative numbers. — Answer: t. All the signed types hold negative values as well as positive ones.
@@ -136,7 +136,7 @@ jout << y << "\n";
 }
 ```
   Output: `128`. The addition is done at full width, so 127 plus 1 is 128 in an int.
-- The type that is 64 bits and signed is ___. — Answer: **int**. int is the normal whole number type of J2K.
+- The type that is 64 bits and signed is ___. — Answer: **i64**. int is the normal whole number type of J2K (32 bits); i64 is for big numbers.
 - Store a big number in an i8: write the number → store it in an i8 → the value is cut to 8 bits → read the value that was kept. The cut happens when the value is stored, so the store is the step that changes it.
 **Tasks**
 - **Small store** — Write a program that stores 200 in an i8 and prints it. Output: `-56`. Hint: 200 is cut to 8 bits. Think of the 8-bit range: from -128 to 127.
