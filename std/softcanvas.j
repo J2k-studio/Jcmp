@@ -241,7 +241,7 @@ struct SoftCanvas impl Canvas2d {
     bool save_ppm(self, String path) {
         i64 fd = Sys::open_write(path.c());
         if fd < 0 { return false; }
-        String head = "P6\n" + str(self.w) + " " + str(self.h) + "\n255\n";
+        String head = "P6\n" + stg(self.w) + " " + stg(self.h) + "\n255\n";
         Sys::write(fd, (void^)head.c(), head.len);
         if self.w > 4096 { Sys::close(fd); return false; }
         char row[12288];

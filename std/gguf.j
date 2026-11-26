@@ -113,14 +113,14 @@ struct GgufFile {
         if t == 7 { return "Q5_1"; }
         if t == 8 { return "Q8_0"; }
         if t == 30 { return "BF16"; }
-        return "type" + str(t);
+        return "type" + stg(t);
     }
     // the dimensions as text, the widest-varying first as GGUF writes them: "4096 32000"
     String shape_text(self, i64 i) {
         String s = "";
         for k in 0..self.t_nd[i] {
             if k > 0 { s.push(' '); }
-            s.append(str(self.t_dims[i * 4 + k]));
+            s.append(stg(self.t_dims[i * 4 + k]));
         }
         return s;
     }
@@ -326,7 +326,7 @@ struct Gg {
         GgufFile f;
         f.path = path + "";
         f.version = rd.u32();
-        if f.version < 2 || f.version > 3 { return Gg::bad("GGUF version " + str(f.version) + " is not read (2 and 3 are)"); }
+        if f.version < 2 || f.version > 3 { return Gg::bad("GGUF version " + stg(f.version) + " is not read (2 and 3 are)"); }
         i64 ntensors = rd.u64();
         i64 nkv = rd.u64();
         f.align = 32;
@@ -360,18 +360,18 @@ struct Gg {
                     else { rd.u64(); }
                     if rd.bad { break; }
                 }
-                val = "[array of " + str(cnt) + "]";
+                val = "[array of " + stg(cnt) + "]";
             } else if ty == 8 { val = rd.str(); }
-            else if ty == 0 || ty == 7 { val = str(rd.u8()); }
-            else if ty == 1 { i64 v = rd.u8(); if v >= 128 { v -= 256; } val = str(v); }
-            else if ty == 2 { val = str(rd.u8() | (rd.u8() << 8)); }
-            else if ty == 3 { i64 v = rd.u8() | (rd.u8() << 8); if v >= 32768 { v -= 65536; } val = str(v); }
-            else if ty == 4 { val = str(rd.u32()); }
-            else if ty == 5 { i64 v = rd.u32(); if v >= 2147483648 { v -= 4294967296; } val = str(v); }
+            else if ty == 0 || ty == 7 { val = stg(rd.u8()); }
+            else if ty == 1 { i64 v = rd.u8(); if v >= 128 { v -= 256; } val = stg(v); }
+            else if ty == 2 { val = stg(rd.u8() | (rd.u8() << 8)); }
+            else if ty == 3 { i64 v = rd.u8() | (rd.u8() << 8); if v >= 32768 { v -= 65536; } val = stg(v); }
+            else if ty == 4 { val = stg(rd.u32()); }
+            else if ty == 5 { i64 v = rd.u32(); if v >= 2147483648 { v -= 4294967296; } val = stg(v); }
             else if ty == 6 { val = Json::num_text((double)gg_f32(rd.u32())); }
-            else if ty == 10 || ty == 11 { val = str(rd.u64()); }
+            else if ty == 10 || ty == 11 { val = stg(rd.u64()); }
             else if ty == 12 { val = "[double]"; rd.u64(); }
-            else { return Gg::bad("a metadata value of the type " + str(ty) + " is not known"); }
+            else { return Gg::bad("a metadata value of the type " + stg(ty) + " is not known"); }
             if rd.bad { return Gg::bad("the header ends too early (a file over 64 MB of header?)"); }
             f.keys.push(key);
             f.vals.push(val);
@@ -385,7 +385,7 @@ struct Gg {
         for i in 0..ntensors {
             String nm = rd.str();
             i64 nd = rd.u32();
-            if nd < 1 || nd > 4 { return Gg::bad("the tensor " + nm + " has " + str(nd) + " dimensions"); }
+            if nd < 1 || nd > 4 { return Gg::bad("the tensor " + nm + " has " + stg(nd) + " dimensions"); }
             for k in 0..4 {
                 i64 dv = 1;
                 if k < nd { dv = rd.u64(); }

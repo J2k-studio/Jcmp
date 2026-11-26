@@ -68,12 +68,12 @@ struct Telegram {
                     String why = "";
                     i64 dn = d.get(0, "description");
                     if dn >= 0 { why = d.text(dn); }
-                    if why.len == 0 { why = "HTTP " + str(resp.status); }
+                    if why.len == 0 { why = "HTTP " + stg(resp.status); }
                     return Result<String, Error>::Err(Error::make(ErrorKind::Io, "Telegram: " + why));
                 }
                 return Result<String, Error>::Ok(resp.body);
             }
-            Result::Err(e): { return Result<String, Error>::Err(Error::make(ErrorKind::Parse, "Telegram sent no JSON (HTTP " + str(resp.status) + ")")); }
+            Result::Err(e): { return Result<String, Error>::Err(Error::make(ErrorKind::Parse, "Telegram sent no JSON (HTTP " + stg(resp.status) + ")")); }
         }
         return Result<String, Error>::Err(Error::make(ErrorKind::Parse, "no answer"));
     }
@@ -104,7 +104,7 @@ struct Telegram {
 
     // a message of text to a chat
     Result<i64, Error> send(self, i64 chat, String text) {
-        String body = "{\"chat_id\":" + str(chat) + ",\"text\":" + Json::quote(text) + "}";
+        String body = "{\"chat_id\":" + stg(chat) + ",\"text\":" + Json::quote(text) + "}";
         Result<String, Error> r = self.call("sendMessage", body);
         switch r {
             Result::Ok(d): { return Result<i64, Error>::Ok(1); }
@@ -115,7 +115,7 @@ struct Telegram {
 
     // the news since the offset; seconds is how long the server may wait for a message (0: answer at once)
     Result<TgUpdates, Error> poll(self, i64 offset, i64 seconds) {
-        String body = "{\"offset\":" + str(offset) + ",\"timeout\":" + str(seconds) + ",\"allowed_updates\":[\"message\"]}";
+        String body = "{\"offset\":" + stg(offset) + ",\"timeout\":" + stg(seconds) + ",\"allowed_updates\":[\"message\"]}";
         Result<String, Error> r = self.call("getUpdates", body);
         switch r {
             Result::Ok(answer): {

@@ -67,7 +67,7 @@ struct Web {
         }
         String req = method + " " + path + " HTTP/1.1\r\nHost: " + hostport + "\r\nUser-Agent: j2k-web\r\nAccept: */*\r\nConnection: close\r\n";
         if headers.len > 0 { req = req + headers + "\r\n"; }
-        if body.len > 0 || method == "POST" || method == "PUT" || method == "PATCH" { req = req + "Content-Length: " + str(body.len) + "\r\n"; }
+        if body.len > 0 || method == "POST" || method == "PUT" || method == "PATCH" { req = req + "Content-Length: " + stg(body.len) + "\r\n"; }
         req = req + "\r\n" + body;
         switch Net::http_chan_send(secure, h, req) {
             Result::Ok(n): { }

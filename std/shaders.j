@@ -39,7 +39,7 @@ String shader_expand(String path, i64 depth, String[] names, String[] err) {
                 if t[k] == '"' { if a < 0 { a = k; } else { b = k; } }
             }
             if a < 0 || b < 0 {
-                if err.len == 0 { err.push("bad #include in " + path + " line " + str(i + 1)); }
+                if err.len == 0 { err.push("bad #include in " + path + " line " + stg(i + 1)); }
             } else {
                 out = out + shader_expand(dir + t.slice(a + 1, b), depth + 1, names, err);
                 out = out + "\n";

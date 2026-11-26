@@ -28,7 +28,7 @@ void game_frame(int ms) {
     c^.clear(u.th.bg);
     u.begin(c, (double)glapp_w(), (double)glapp_h());
     u.title("MY APP");
-    u.label("TAPS " + str(taps));
+    u.label("TAPS " + stg(taps));
     if u.button("TAP ME") { taps += 1; }
     u.toggle("SOUND", @sound);
     u.slider("SPEED", @speed, 0.0, 10.0);

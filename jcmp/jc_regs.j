@@ -2178,6 +2178,31 @@ bool pt_rules(i64 i) {
             pt_parse(1, j);
         }
     }
+    // mov xA, 0 / fmov sB, wA   where nothing reads xA afterwards   ->   fmov sB, wzr   (a float zero needs no whole number register)
+    if pt_mn(0, "mov") && pt_no[0] == 2 && pt_isreg(0, 0) && pt_isnum(0, 1) && pt_mn(1, "fmov") && pt_no[1] == 2 && pt_o[(1 * 4) * 40] == 's' {
+        i64 zr = pt_regno(0, 0, 'x');
+        i64 zw = pt_regno(1, 1, 'w');
+        i64 zv = 0 - 1;
+        i64 zo = (0 * 4 + 1) * 40;
+        i64 zi = 0;
+        if pt_o[zo] == '#' { zi = 1; }
+        if pt_o[zo + zi] == '0' && pt_o[zo + zi + 1] == 0 { zv = 0; }
+        if zv == 0 && zr == zw && zr >= 1 && zr <= 17 && pt_dead(pt_next(j), zr, 40) {
+            char zl[48];
+            i64 zq = 0;
+            zl[0] = 'f'; zl[1] = 'm'; zl[2] = 'o'; zl[3] = 'v'; zl[4] = ' ';
+            zq = 5;
+            i64 so = (1 * 4 + 0) * 40;
+            i64 sk = 0;
+            while pt_o[so + sk] != 0 && sk < 8 { zl[zq] = pt_o[so + sk]; zq += 1; sk += 1; }
+            zl[zq] = ','; zl[zq + 1] = ' '; zl[zq + 2] = 'w'; zl[zq + 3] = 'z'; zl[zq + 4] = 'r'; zl[zq + 5] = 0;
+            pt_set(i, "");
+            pt_set(j, @zl);
+            return true;
+        }
+        pt_parse(0, i);
+        pt_parse(1, j);
+    }
     // OP xA, ... / mov xK, xA   where xA is not needed afterwards   ->   OP xK, ...   (the operation writes the register it was meant for)
     if pt_no[0] >= 2 && pt_isreg(0, 0) && pt_mn(1, "mov") && pt_no[1] == 2 && pt_isreg(1, 0) && pt_isreg(1, 1) && (pt_mn(0, "add") || pt_mn(0, "sub") || pt_mn(0, "mul") || pt_mn(0, "and") || pt_mn(0, "orr") || pt_mn(0, "eor") || pt_mn(0, "lsl") || pt_mn(0, "lsr") || pt_mn(0, "asr") || pt_mn(0, "smulh") || pt_mn(0, "umulh") || pt_mn(0, "msub") || pt_mn(0, "madd") || pt_mn(0, "sdiv") || pt_mn(0, "udiv")) {
         i64 fa0 = pt_regno(0, 0, 'x');

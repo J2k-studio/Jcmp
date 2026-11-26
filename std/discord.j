@@ -62,12 +62,12 @@ struct Discord {
         switch rr {
             Result::Ok(r): {
                 if r.status >= 200 && r.status < 300 { return Result<String, Error>::Ok(r.body); }
-                String why = "HTTP " + str(r.status);
+                String why = "HTTP " + stg(r.status);
                 Result<JsonDoc, Error> pj = Json::parse(r.body);
                 switch pj {
                     Result::Ok(d): {
                         i64 mn = d.get(0, "message");
-                        if mn >= 0 { why = "Discord: " + d.text(mn) + " (HTTP " + str(r.status) + ")"; }
+                        if mn >= 0 { why = "Discord: " + d.text(mn) + " (HTTP " + stg(r.status) + ")"; }
                     }
                     Result::Err(e2): { }
                 }
@@ -91,7 +91,7 @@ struct Discord {
 
     // the messages of a channel after the message `after` (text; "" for the newest ones), at most `limit` (1 to 100), the oldest first
     Result<DcMessages, Error> messages(self, String channel, String after, i64 limit) {
-        String path = "/channels/" + channel + "/messages?limit=" + str(limit);
+        String path = "/channels/" + channel + "/messages?limit=" + stg(limit);
         if after.len > 0 { path = path + "&after=" + after; }
         Result<String, Error> r = self.call("GET", path, "");
         switch r {
@@ -173,7 +173,7 @@ struct DiscordGateway {
 
     void beat(self) {
         String d = "null";
-        if self.seq >= 0 { d = str(self.seq); }
+        if self.seq >= 0 { d = stg(self.seq); }
         self.ws.send_text("{\"op\":1,\"d\":" + d + "}");
         self.next_beat = Time::now_ms() + self.interval;
     }
@@ -226,7 +226,7 @@ struct DiscordGateway {
                 self.interval = hb;
                 if self.interval <= 0 { self.interval = 40000; }
                 self.next_beat = Time::now_ms() + self.interval / 2;
-                String ident = "{\"op\":2,\"d\":\x7b\"token\":" + Json::quote(self.token) + ",\"intents\":" + str(self.intents);
+                String ident = "{\"op\":2,\"d\":\x7b\"token\":" + Json::quote(self.token) + ",\"intents\":" + stg(self.intents);
                 ident = ident + ",\"properties\":\x7b\"os\":\"linux\",\"browser\":\"j2k\",\"device\":\"j2k\"\x7d\x7d\x7d";
                 self.ws.send_text(ident);
                 self.identified = true;

@@ -60,7 +60,7 @@ failed: cannot open /no/such/file: there is no file or folder with this name (er
 void main() {
     jout << Math::sqrt(2.0) << " " << Math::pow(2.0, 10.0) << " " << Math::floor(-2.5) << "\n";
     jout << Math::min(3.0, 1.5) << " " << Math::abs(-4.25) << " " << Math::clamp(15.0, 0.0, 10.0) << "\n";
-    Result<int, Error> n = Num::parse_int("1234");
+    Result<i64, Error> n = Num::parse_int("1234");
     jout << n.unwrap() + 1 << "\n";
     Result<double, Error> d = Num::parse_double("2.5");
     jout << d.unwrap() * 2.0 << "\n";
@@ -375,6 +375,29 @@ An app made with `makej init -apk` is a shared library (`libgame.so`) that an An
 
 **Tip.** `apkj build` makes the apk of such an app without `aapt2`, `ecj`, `d8` or `apksigner` (tutorial lesson 85).
 
+## Text as characters: `#import <utf8>` (1.2.40)
+
+A `str` is bytes: `"สวัสดี".len` is 18 although a reader sees 6 letters. `<utf8>` counts, reads, cuts and changes the case of a text by **characters**, and says how many
+columns it takes on a terminal (a Thai mark that is drawn on a letter takes 0, a Chinese character 2). A byte that is not valid UTF-8 is one character (U+FFFD); nothing fails.
+
+```jk
+#import <stdlib>
+#import <utf8>
+
+i32 main() {
+    str th = "สวัสดี";
+    jout << th.len << " " << Utf8::len(th) << "\n";                       // 18 6
+    jout << Utf8::at(th, 1) << "\n";                                      // 3623 (U+0E27, the second character)
+    jout << Utf8::slice("aé€😀z", 1, 4) << "\n";                           // é€😀
+    jout << Utf8::upper("straße ñ é") << " " << Utf8::lower("ÀÉÑ Δ Ж") << "\n";   // STRAßE Ñ É àéñ δ ж
+    jout << Utf8::text_width(th) << " " << Utf8::text_width("日本") << "\n";   // 4 4
+    jout << Utf8::encode(0x20AC) << " " << Utf8::valid(th) << "\n";         // € true
+    return 0;
+}
+```
+`size`, `width_at`, `decode`, `next` and `pos_of` work on byte positions (to walk a text yourself); `len`, `at`, `slice`, `reverse` work on character numbers.
+Case change covers ASCII, Latin-1, Greek and Cyrillic; other letters stay as they are.
+
 ## Shapes that touch: `#import <geom>` (1.2.38)
 
 Boxes, circles, segments, rays and polygons: the questions that a game or a picker asks. Everything is plain numbers (doubles); `y` grows downwards; touching edges count as a hit.
@@ -682,31 +705,39 @@ What it offers:
 
 ### `<profile>`
 
-timers by name, for a frame or a function.   #import <profile>   (needs jcmp 1.2.1.0; license: MPL-2.0)
+timers by name, for a frame or a function (a start and a stop cost about 0.2 to 0.4 us).   #import <profile>   (needs jcmp 1.2.1.0; license: MPL-2.0)
 
 ```text
   Profile p = Profile::make();
   int t = p.start();   ...work...   p.stop("physics", t);      // adds the time of this run to the timer "physics"
+  int id = p.timer("physics");  ...  p.stop_id(id, t);         // the same with no search by name (the fastest: for a function that runs a million times)
   p.frame();                                                    // call once a frame: counts frames
   jout << p.report();                                           // one line a timer: name, calls, total ms, average us, share
   p.total_us("physics"), p.calls("physics"), p.average_us("physics"), p.frames, p.reset();
-Times are in microseconds (monotonic clock). A timer that does not exist yet is made by its first stop().
+Times are read from the system counter of the CPU (cntvct_el0, no system call: 60 to 120 ns a read on the development phone, where the counter runs at
+1.92 MHz: one tick is 0.52 us, so one run shorter than that counts as 0 or 1 tick; the sum over many runs is right) and given in microseconds.
+Profile::make_exact() reads the monotonic clock instead (a system call: 0.44 us a read, but the time is in ns): for a few long runs. A timer that does not exist yet is made by its first stop().
 ```
 
 What it offers:
 
 * `Profile::make()` returns `Profile`
-* `Profile.start()` returns `i64` — the start mark to give to stop()
+* `Profile::make_exact()` returns `Profile` — timers that read the monotonic clock (ns, but slower to read)
+* `Profile.now()` returns `i64` — the start mark to give to stop()
+* `Profile.start()` returns `i64`
+* `Profile.ns_of(i64 ticks)` returns `i64` — the nanoseconds of some ticks
 * `Profile.index(String name)` returns `i64`
 * `Profile.stop(String name, i64 t)` returns `i64` — adds the time since the mark t to the timer `name`; returns that time in ns
-* `Profile.add_ns(String name, i64 d)` returns `void`
+* `Profile.timer(String name)` returns `i64` — the number of a timer (it is made when it does not exist): give it to stop_id() to skip the search by name
+* `Profile.stop_id(i64 id, i64 t)` returns `i64` — stop() for a timer that has a number
+* `Profile.add_ticks(String name, i64 d)` returns `void`
+* `Profile.add_ns(String name, i64 d)` returns `void` — adds a time that was measured somewhere else, in ns
 * `Profile.frame()` returns `void`
 * `Profile.calls(String name)` returns `i64`
 * `Profile.total_us(String name)` returns `i64`
 * `Profile.average_us(String name)` returns `i64`
 * `Profile.reset()` returns `void`
 * `Profile.report()` returns `String` — one line a timer, in the order they were first used
-
 
 ### `<qr>`
 

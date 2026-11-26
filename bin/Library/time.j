@@ -145,12 +145,12 @@ struct Date {
     }
     // "2024-02-29 13:05:09"
     String text(self) {
-        String m = str(self.month);
-        String d = str(self.day);
-        String h = str(self.hour);
-        String mi = str(self.minute);
-        String s = str(self.second);
-        String r = str(self.year) + "-";
+        String m = stg(self.month);
+        String d = stg(self.day);
+        String h = stg(self.hour);
+        String mi = stg(self.minute);
+        String s = stg(self.second);
+        String r = stg(self.year) + "-";
         if m.len < 2 { r += "0"; }
         r += m + "-";
         if d.len < 2 { r += "0"; }

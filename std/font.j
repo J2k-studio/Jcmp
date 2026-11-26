@@ -667,7 +667,7 @@ struct Font impl Text2d {
             h = (h + 1) & 4095;
             tries += 1;
         }
-        String path = self.dir + "/f" + str(face) + "_" + str(ipx) + "_" + str(g) + ".png";
+        String path = self.dir + "/f" + stg(face) + "_" + stg(ipx) + "_" + stg(g) + ".png";
         bool made = false;
         i64 pic = -1;
         if face == 0 { made = ttf_render(@self.a, g, (double)ipx, gl); } else { made = ttf_render(@self.b, g, (double)ipx, gl); }

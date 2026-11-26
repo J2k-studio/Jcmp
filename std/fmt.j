@@ -27,12 +27,12 @@ struct Fmt {
         double scale = 1.0;
         for i in 0..digits { scale = scale * 10.0; }
         double r = v * scale + 0.5;
-        if r >= 9.0e18 { return str(x); }
+        if r >= 9.0e18 { return stg(x); }
         i64 n = (i64)r;
         i64 sc = (i64)scale;
-        String s = str(n / sc);
+        String s = stg(n / sc);
         if digits > 0 {
-            String f = str(n % sc);
+            String f = stg(n % sc);
             s += ".";
             s += Fmt::pad_left(f, digits, '0');
         }
@@ -67,7 +67,7 @@ struct Fmt {
     }
     // 1234567 -> "1,234,567"
     static String thousands(i64 n) {
-        String s = str(n);
+        String s = stg(n);
         bool neg = false;
         i64 start = 0;
         if s.len > 0 && s[0] == '-' {
@@ -98,7 +98,7 @@ struct Fmt {
     }
     // a size in bytes: 1536 -> "1.5 KB"
     static String bytes(i64 n) {
-        if n < 1024 { return str(n) + " B"; }
+        if n < 1024 { return stg(n) + " B"; }
         double v = (double)n;
         String unit = "KB";
         v = v / 1024.0;

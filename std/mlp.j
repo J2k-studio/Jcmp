@@ -157,8 +157,8 @@ struct Mlp {
     }
 
     bool save(self, String path) {
-        String cfg = str(self.act) + " " + str(self.sizes.len);
-        for i in 0..self.sizes.len { cfg = cfg + " " + str(self.sizes[i]); }
+        String cfg = stg(self.act) + " " + stg(self.sizes.len);
+        for i in 0..self.sizes.len { cfg = cfg + " " + stg(self.sizes[i]); }
         cfg = cfg + "\n";
         if !self.g.save(path) { return false; }
         switch Fs::write_text(path + ".cfg", cfg) {

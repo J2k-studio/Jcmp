@@ -3827,8 +3827,8 @@ void gen_identifier() {
         rv_valid = 0;
         return;
     }
-    if tok_is("(") && str_eq(@id_name, "str") && !lookup_var(@id_name) && find_func(@id_name) < 0 {
-        // str(x) : a new String with the number, the character, the bool or the String x
+    if tok_is("(") && str_eq(@id_name, "stg") && !lookup_var(@id_name) && find_func(@id_name) < 0 {
+        // stg(x) : a new String with the number, the character, the bool or the String x
         next();
         parse_expr();
         expect(")");
@@ -3860,7 +3860,7 @@ void gen_identifier() {
             if sx_ty == 95 { emit_line("mov x1, 1"); }
             rt_call("__Str__from_int");
         } else {
-            die_help("str(x) works on numbers, characters, bools and Strings", "write str(n) for a number, str(c) for a char, str(s) for a String");
+            die_help("stg(x) works on numbers, characters, bools and Strings", "write stg(n) for a number, stg(c) for a char, str(s) for a String");
         }
         str_temp();
         return;
@@ -4103,7 +4103,7 @@ void str_adopt() {
             write_err("a String cannot be made from ");
             type_name_err(ex_ty);
             end_msg();
-            write_err("  help: a String comes from a text or another String; str(value) makes text from a number\n");
+            write_err("  help: a String comes from a text or another String; stg(value) makes text from a number\n");
             die_end();
         }
     }

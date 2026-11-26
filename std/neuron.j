@@ -376,13 +376,13 @@ struct Network {
     }
     // the weights as text:  neuron-jw 1 / layers N / for each layer: inputs outputs and the numbers
     String text(self) {
-        String t = "neuron-jw 1\nlayers " + str(self.count) + "\n";
+        String t = "neuron-jw 1\nlayers " + stg(self.count) + "\n";
         for k in 0..self.count {
             Dense l = self.layers[k];
-            t = t + str(l.w.rows) + " " + str(l.w.cols) + "\n";
-            for i in 0..l.w.rows * l.w.cols { t = t + str(l.w.d[i]) + " "; }
+            t = t + stg(l.w.rows) + " " + stg(l.w.cols) + "\n";
+            for i in 0..l.w.rows * l.w.cols { t = t + stg(l.w.d[i]) + " "; }
             t = t + "\n";
-            for i in 0..l.b.cols { t = t + str(l.b.d[i]) + " "; }
+            for i in 0..l.b.cols { t = t + stg(l.b.d[i]) + " "; }
             t = t + "\n";
         }
         return t;
@@ -1332,11 +1332,11 @@ struct Graph {
         String t = "neuron-graph 1\n";
         i64 np = 0;
         for n in 0..self.keep { if self.op[n] == OP_PARAM() { np += 1; } }
-        t.append("params " + str(np) + "\n");
+        t.append("params " + stg(np) + "\n");
         for n in 0..self.keep {
             if self.op[n] == OP_PARAM() {
                 String line = "";
-                for k in 0..self.val[n].shape.len { line.append(str(self.val[n].shape[k]) + " "); }
+                for k in 0..self.val[n].shape.len { line.append(stg(self.val[n].shape[k]) + " "); }
                 t.append(line + "\n");
                 String nums = "";
                 for k in 0..self.val[n].d.len {
@@ -1356,12 +1356,12 @@ struct Graph {
         if ls.len < 2 || ls[0] != "neuron-graph 1" { return false; }
         i64 np = 0;
         for n in 0..self.keep { if self.op[n] == OP_PARAM() { np += 1; } }
-        if ls[1] != "params " + str(np) { return false; }
+        if ls[1] != "params " + stg(np) { return false; }
         i64 at = 2;
         for n in 0..self.keep {
             if self.op[n] == OP_PARAM() {
                 String want = "";
-                for k in 0..self.val[n].shape.len { want.append(str(self.val[n].shape[k]) + " "); }
+                for k in 0..self.val[n].shape.len { want.append(stg(self.val[n].shape[k]) + " "); }
                 if at + 1 >= ls.len || ls[at] != want { return false; }
                 String[] nums = ls[at + 1].split(" ");
                 if nums.len != self.val[n].d.len { return false; }
@@ -1630,7 +1630,7 @@ struct Gpt {
 
     // the weights go to `path`, the sizes to `path.cfg`
     bool save(self, String path) {
-        String cfg = "gpt 1 " + str(self.vocab) + " " + str(self.ctx) + " " + str(self.d) + " " + str(self.heads) + " " + str(self.layers) + "\n";
+        String cfg = "gpt 1 " + stg(self.vocab) + " " + stg(self.ctx) + " " + stg(self.d) + " " + stg(self.heads) + " " + stg(self.layers) + "\n";
         Result<i64, Error> r = Fs::write_text(path + ".cfg", cfg);
         if !r.is_ok() { return false; }
         return self.g.save(path);

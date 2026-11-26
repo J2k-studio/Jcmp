@@ -107,7 +107,7 @@ struct Player {
     String name;
     int score;
     void add(self, int points) { self.score += points; }
-    String describe(self) { return self.name + ": " + str(self.score); }
+    String describe(self) { return self.name + ": " + stg(self.score); }
 }
 
 int main() {
@@ -406,7 +406,7 @@ int main() {
     String r = "";
     for i in 0..parts.len { r += parts[i].slice(0, 1); }
     jout << r << "\n";
-    jout << str(42) + "/" + str(7) << " " << "12".to_int() + 1 << "\n";
+    jout << stg(42) + "/" + stg(7) << " " << "12".to_int() + 1 << "\n";
     return 0;
 }
 ```

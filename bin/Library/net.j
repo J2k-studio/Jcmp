@@ -264,7 +264,7 @@ struct Net {
             i64 rdlen = ((r[p + 8] & 255) << 8) | (r[p + 9] & 255);
             p += 10;
             if type == 1 && rdlen == 4 && p + 4 <= r.len {
-                return str(r[p] & 255) + "." + str(r[p + 1] & 255) + "." + str(r[p + 2] & 255) + "." + str(r[p + 3] & 255);
+                return stg(r[p] & 255) + "." + stg(r[p + 1] & 255) + "." + stg(r[p + 2] & 255) + "." + stg(r[p + 3] & 255);
             }
             p += rdlen;
         }
@@ -479,7 +479,7 @@ struct Net {
             return Net::http_fetch(loc, depth + 1);
         }
         if code >= 400 {
-            return Result<String, Error>::Err(Error::make(ErrorKind::NotFound, "HTTP " + str(code) + " from " + url));
+            return Result<String, Error>::Err(Error::make(ErrorKind::NotFound, "HTTP " + stg(code) + " from " + url));
         }
         if lh.contains("\r\ntransfer-encoding: chunked") {
             i64 ok[1];
@@ -533,7 +533,7 @@ struct Net {
         if !lowh.starts_with("user-agent:") && lowh.find("\r\nuser-agent:") < 0 { req.append("User-Agent: jget\r\n"); }
         if !lowh.starts_with("accept:") && lowh.find("\r\naccept:") < 0 { req.append("Accept: */*\r\n"); }
         req.append(headers);
-        if body.len > 0 { req.append("Content-Length: " + str(body.len) + "\r\n"); }
+        if body.len > 0 { req.append("Content-Length: " + stg(body.len) + "\r\n"); }
         req.append("\r\n");
         req.append(body);
         switch Net::http_chan_send(secure, h, req) {
@@ -613,15 +613,15 @@ struct Net {
         r.push(host);
         r.push(hostport);
         r.push(path);
-        r.push(str(port));
-        r.push(str(secure));
+        r.push(stg(port));
+        r.push(stg(secure));
         return r;
     }
     // 1.2 MB, 340.5 KB, 17 B
     static String http_size_text(i64 n) {
-        if n < 1024 { return str(n) + " B"; }
-        if n < 1048576 { return str(n / 1024) + "." + str((n % 1024) * 10 / 1024) + " KB"; }
-        return str(n / 1048576) + "." + str((n % 1048576) * 10 / 1048576) + " MB";
+        if n < 1024 { return stg(n) + " B"; }
+        if n < 1048576 { return stg(n / 1024) + "." + stg((n % 1024) * 10 / 1024) + " KB"; }
+        return stg(n / 1048576) + "." + stg((n % 1048576) * 10 / 1048576) + " MB";
     }
     // 3:07 or 1:02:03
     static String http_time_text(i64 sec) {
@@ -629,12 +629,12 @@ struct Net {
         i64 h = sec / 3600;
         i64 m = (sec % 3600) / 60;
         i64 s2 = sec % 60;
-        String ms = str(m);
-        String ss = str(s2);
+        String ms = stg(m);
+        String ss = stg(s2);
         if ss.len < 2 { ss = "0" + ss; }
         if h > 0 {
             if ms.len < 2 { ms = "0" + ms; }
-            return str(h) + ":" + ms + ":" + ss;
+            return stg(h) + ":" + ms + ":" + ss;
         }
         return ms + ":" + ss;
     }
@@ -674,7 +674,7 @@ struct Net {
             for i in 0..width {
                 if i < filled { bar.push('#'); } else if i == filled && last == 0 { bar.push('>'); } else { bar.push(' '); }
             }
-            String ps = str(pct);
+            String ps = stg(pct);
             while ps.len < 3 { ps = " " + ps; }
             if last == 1 {
                 line = line + "[" + bar + "] " + ps + "%  " + Net::http_size_text(done) + " in " + Net::http_time_text(ms / 1000) + "  (" + Net::http_size_text(avg) + "/s)";
@@ -773,7 +773,7 @@ struct Net {
             if loc.starts_with("/") { loc = scheme + hostport + loc; }
             return Net::http_download_to(loc, path, show, depth + 1);
         }
-        if code >= 400 { Net::http_chan_close(secure, fd); return Result<i64, Error>::Err(Error::make(ErrorKind::NotFound, "HTTP " + str(code) + " from " + url)); }
+        if code >= 400 { Net::http_chan_close(secure, fd); return Result<i64, Error>::Err(Error::make(ErrorKind::NotFound, "HTTP " + stg(code) + " from " + url)); }
         i64 total = -1;
         i64 cl = lh.find("\r\ncontent-length:");
         if cl >= 0 {
@@ -866,7 +866,7 @@ struct Net {
         }
         if failed {
             Sys::unlink(tmp.c());
-            return Result<i64, Error>::Err(Error::make(ErrorKind::Io, "the download of " + url + " stopped before the end (" + str(done) + " bytes)"));
+            return Result<i64, Error>::Err(Error::make(ErrorKind::Io, "the download of " + url + " stopped before the end (" + stg(done) + " bytes)"));
         }
         i64 rr = Sys::rename(tmp.c(), path.c());
         if rr < 0 {

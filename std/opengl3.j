@@ -139,7 +139,7 @@ struct Gl {
         if major >= 3 && minor > 0 { Native::poke32(cx + 8, 12539); Native::poke32(cx + 12, minor); n = 16; }   // EGL_CONTEXT_MINOR_VERSION
         Native::poke32(cx + n, 12344);
         g.ctx = Native::call4(make_ctx, g.dpy, cfg, 0, cx);
-        if g.ctx == 0 { g.log = "eglCreateContext failed: this phone has no OpenGL ES " + str(major) + "." + str(minor); return g; }
+        if g.ctx == 0 { g.log = "eglCreateContext failed: this phone has no OpenGL ES " + stg(major) + "." + stg(minor); return g; }
         if Native::call4(make_current, g.dpy, g.surf, g.surf, g.ctx) == 0 { g.log = "eglMakeCurrent failed"; return g; }
         g.ok = true;
         i64 gs = g.fn("glGetString");

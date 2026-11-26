@@ -402,6 +402,7 @@ i64 as_parse_freg() {
 i64 as_parse_wreg() {
     if as_cur() != 'w' { as_fail(); }
     as_ci += 1;
+    if as_cur() == 'z' && as_peek(1) == 'r' { as_ci += 2; return 31; }       // wzr
     return as_parse_number();
 }
 
@@ -1040,7 +1041,9 @@ void as_h_fp3(i64 dbase, i64 sbase) {
 void as_h_fp4(i64 base) {
     as_skip_spaces();
     i64 rd = as_parse_freg();
-    if as_fp_kind != 1 { as_fail(); }
+    i64 kind = as_fp_kind;
+    if kind > 1 { as_fail(); }
+    if kind == 0 { base = base - 4194304; }            // single precision: fmadd sD, sN, sM, sA  (the double form has the type bits 01)
     as_expect_comma();
     i64 rn = as_parse_freg();
     as_expect_comma();

@@ -65,7 +65,7 @@ struct Error {
     // the error for a system error number: "what: reason (error N)"
     static Error from_errno(i64 e, String what) {
         if e < 0 { e = 0 - e; }
-        String m = what + ": " + Error::reason(e) + " (error " + str(e) + ")";
+        String m = what + ": " + Error::reason(e) + " (error " + stg(e) + ")";
         return Error::make(Error::kind_of(e), m);
     }
     void free(self) {

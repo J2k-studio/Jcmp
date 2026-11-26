@@ -200,6 +200,28 @@ fn main() {
 
 `using Math, stdlib;` is `using Math; using stdlib;`.
 
+### `=>`: a function that is one expression
+
+`int sq(int a) => a * a;` is the same as `int sq(int a) { return a * a; }`. It works for functions, methods and `static` functions that give a value; the expression ends at the `;`.
+(A function that gives nothing keeps its braces, and so does a lambda.)
+
+```jk
+int sq(int a) => a * a;
+bool is_flag(str s) => s.len > 1 && s[0] == '-';
+struct Box {
+    int w;
+    int h;
+    int area(self) => self.w * self.h;
+}
+fn main() {
+    Box b;
+    b.w = 3;
+    b.h = 4;
+    jout << sq(7) << " " << is_flag("-x") << " " << b.area() << "\n";      // 49 true 12
+    return 0;
+}
+```
+
 ### `fn` and `fnv`
 
 `fn` at the start of a function means that it returns an `int`; `fnv` means that it returns nothing (`void`). The long forms keep working; use whichever reads better.
@@ -231,7 +253,7 @@ Methods work the same way (`int bump(self, int d = 1)`). Named arguments are not
 
 ## Arrays and strings
 
-A function can have any number of array parameters (`int dot(int a[], int b[])`), anywhere in the list. `stg(x)` (older name `str(x)`) makes a str from a number, a char, a bool or a String: `stg(42)`, `stg(2.5)`, `stg('x')`, `str(true)`.
+A function can have any number of array parameters (`int dot(int a[], int b[])`), anywhere in the list. `stg(x)` (older name `stg(x)`) makes a str from a number, a char, a bool or a String: `stg(42)`, `stg(2.5)`, `stg('x')`, `stg(true)`.
 
 ```jk
 int sum(int a[]) {                  // an array parameter arrives with its length
@@ -286,10 +308,42 @@ use the same array, and `f(a)` shares it. A variable that was never given an arr
 using it throws `the dynamic array is null` (catch it with `try`/`catch`). Indexing is checked against the
 length in a `-d` build.
 
+## Constants of the compiler and `#if`
+
+The compiler knows a few constants before it reads your program; they are ordinary `#define`s: `ARCH` (`"arm64"` or `"arm32"`), `VERSION` (the compiler's number, a text),
+`POINTER_BITS` (64 or 32), `BIG_ENDIAN` (0 or 1) and `DEBUG` (1 with `-d`, else 0). `#if ... #else ... #end` keeps one part of the text and does not read the other part at all
+(so the part that is left out can even hold code that would not compile on this machine). A condition is a constant, a comparison (`==`, `!=`, `<`, `>`), `!`, `&&` and `||`;
+`#if` nests, and `#define NAME value` makes more constants.
+
+```jk
+#define FAST 1
+
+#if ARCH == "arm64"
+fn bits() { return 64; }
+#else
+fn bits() { return 32; }
+#end
+
+#if FAST && POINTER_BITS == 64
+fn mode() { return 1; }
+#else
+fn mode() { return 2; }
+#end
+
+fn main() {
+    jout << bits() << " " << mode() << "\n";          // 64 1
+    #if DEBUG == 1
+    jout << "a debug build\n";
+    #end
+    return 0;
+}
+```
+Use it for what differs between machines or between a debug and a normal build; for the rest, ordinary `if` is simpler.
+
 ## Strings
 
 `str` (long form `String`) is text that can grow. It lives on the heap and is freed at the end of its block, like a dynamic array.
-Below, `String` and `str` are the same type; `stg(x)` makes text from a value (`str(x)` still works).
+Below, `String` and `str` are the same type; `stg(x)` makes text from a value (`stg(x)` still works).
 
 ```jk
 String a = "abc";            // a copy of the text
@@ -302,7 +356,7 @@ c += "!";                    // append (a String, a text or a char)
 jin >> a;                    // one word
 ```
 
-* **Text with values inside** (owner's design, section 99 of the syntax notes): `{expression}` in a text is the value of the expression as text, so `"x = {x}, y = {y + 1}"` means `"x = " + str(x) + ", y = " + str(y + 1)`. The expression is a number, a char, a bool or a String (what `str` takes). `{{` and `}}` are a `{` and a `}`. A `{` that is not followed by a letter or `(` stays as it is (`"{ text }"`, `"{}"`).
+* **Text with values inside** (owner's design, section 99 of the syntax notes): `{expression}` in a text is the value of the expression as text, so `"x = {x}, y = {y + 1}"` means `"x = " + stg(x) + ", y = " + stg(y + 1)`. The expression is a number, a char, a bool or a String (what `str` takes). `{{` and `}}` are a `{` and a `}`. A `{` that is not followed by a letter or `(` stays as it is (`"{ text }"`, `"{}"`).
 
 ```jk
 int x = 5;

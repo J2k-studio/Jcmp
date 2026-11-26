@@ -154,7 +154,7 @@ struct Game {
                 Option::Some(t): { tmp = t; }
                 Option::None: { }
             }
-            g.spath = tmp + "/gamej-fb-" + str(Sys::getpid());
+            g.spath = tmp + "/gamej-fb-" + stg(Sys::getpid());
             g.sfd = Sys::open_write(g.spath.c());
             if g.sfd < 0 {
                 g.surf = false;
@@ -461,13 +461,13 @@ struct Game {
                 if top == ptop && bot == pbot { continue; }
                 self.prev[(2 * r) * self.w + x] = top;
                 self.prev[(2 * r + 1) * self.w + x] = bot;
-                if lastrow != r || lastcol != x - 1 { s.append("\e["); s.append(str(r + 1)); s.append(";"); s.append(str(x + 1)); s.append("H"); }
+                if lastrow != r || lastcol != x - 1 { s.append("\e["); s.append(stg(r + 1)); s.append(";"); s.append(stg(x + 1)); s.append("H"); }
                 if fgc != top {
-                    s.append("\e[38;2;"); s.append(str((top >> 16) & 255)); s.append(";"); s.append(str((top >> 8) & 255)); s.append(";"); s.append(str(top & 255)); s.append("m");
+                    s.append("\e[38;2;"); s.append(stg((top >> 16) & 255)); s.append(";"); s.append(stg((top >> 8) & 255)); s.append(";"); s.append(stg(top & 255)); s.append("m");
                     fgc = top;
                 }
                 if bgc != bot {
-                    s.append("\e[48;2;"); s.append(str((bot >> 16) & 255)); s.append(";"); s.append(str((bot >> 8) & 255)); s.append(";"); s.append(str(bot & 255)); s.append("m");
+                    s.append("\e[48;2;"); s.append(stg((bot >> 16) & 255)); s.append(";"); s.append(stg((bot >> 8) & 255)); s.append(";"); s.append(stg(bot & 255)); s.append("m");
                     bgc = bot;
                 }
                 s.append("▀");

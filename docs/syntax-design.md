@@ -2416,3 +2416,39 @@ This is different from C (where only `b` is set); written in LANGUAGE.md. Built 
 * **Low-level file mode is written `#!asm`** (owner, 2026-11-27; it was `#!using asm` in docs/design/34): at the top of a file, the whole file may have raw instruction
   lines; without it the names of the instructions (`mov`, `x0`) are not reserved. `#!asm` starts with `#!`, so it cannot be mixed up with `using NAME;`.
   Built with the other low-level steps (WP3); not yet in the compiler.
+
+## 116. The compiler and its Library folder share an ABI number, not the exact version (owner chose option B, 2026-11-27)
+`Library/ABI` holds one number; the compiler has `JCMP_ABI` (jcmp/jcmp.jk). A Library folder with an `ABI` file is used when the numbers are equal, whatever
+`Library/VERSION` says (so a small release needs no new library). A different number is refused with both numbers named. A folder with no `ABI` file keeps the
+old rule (the same version). `gen_std.sh` writes `Library/ABI`; `release.sh` ships it. Raise `JCMP_ABI` only when the compiler and the library stop fitting
+together (a renamed runtime function, a changed layout). Test: the extlib block of run_all_tests.sh.
+
+## 117. `str(x)` is removed; `stg(x)` is the only call that makes text from a value (owner, 2026-11-27: "cut str() so that they do not repeat")
+`str` is the name of the type only. `str(5)` is an error that says so and names `stg`. All the library, tests, tools and teaching documents were changed
+(183 calls in 47 files); the `{x}` in a text writes `stg(x)`. A method called `str` (`reader.str()`) and a user function called `stg` are not touched.
+
+## 118. `=>` for a function with a name (built 2026-11-27, owner's decision of section 115)
+`int sq(int a) => a * a;` is `int sq(int a) { return a * a; }`. It works for functions, methods and `static` functions that give a value (`fnv` and `void` keep
+their braces). The expression ends at the `;`. A lambda cannot use it yet (a lambda is copied from the text of the file; its braces stay): the compiler says so.
+Built in the lexer (`fat_arrow`, jc_lex.j), test t650. Next in the plan: arguments with names, `#assert`, ranges in `switch`.
+
+**Correction to 117 (2026-11-27, after the suite and the other repositories were checked):** `str(x)` is not an error yet. It works for two releases with the warning `[-Wdeprecated]`
+("str(x) is the old name of stg(x) and stops working in 1.2.42.0"), the same policy as the old `alloc[...]`; jget (36 files), Jaric and the other repositories use it. A method or
+a function that is called `str` (`rd.str()`, `String str(self)`) is not touched: only a call in the place of an expression is read as `stg`.
+
+## 119. The command of the ecosystem is `ex` (owner, 2026-11-27: "the shell commands are not `jc`, change them to `ex`")
+`ex` is the one front-end that people type; it replaces `jc` (and the planned `jex` of the Jex plan: one name, not two). The compiler keeps its own name (`jcmp`, later `jexcmp`);
+`ex` calls it. Proposed set (adjustable): `ex run file.jk` · `ex build` (makej) · `ex install NAME` / `ex update` / `ex remove NAME` / `ex list` (the work of jget: tools and libraries,
+patches included) · `ex lib ...` · `ex fmt`, `ex lint`, `ex test`, `ex migrate` (track T of the plan) · `ex doctor` (versions, paths, what is missing). `jc` stays as a name that
+prints "use ex" and does the same for two releases, like the other old names. Note: in other systems `ex` is the old line editor of vi; in exos there is no such tool, so the name is free.
+
+**Amendment to 119 (2026-11-27, later the same day):** the owner also said `jc` becomes `jex`. The two are made to agree: the program is **`jex`** (the name that goes with the language Jex), and `ex` is its short
+form that exos makes (a link, as `cc` is for a compiler). `jc` prints "use jex" for two releases. (If the owner wants only one of the two names, remove the other; nothing else changes.)
+
+**Final form of 119 (owner, 2026-11-27, replaces the two proposals above): two commands with two jobs.**
+* **`jex`** (was `jc`) is for the **language only**: `jex run file.jk`, `jex build` (makej), `jex fmt`, `jex lint`, `jex test`, `jex migrate`, `jex lib ...` (the libraries of the language), `jex doc`, `jex doctor`
+  (is the toolchain whole). The compiler keeps its own name (`jcmp`, later `jexcmp`); `jex` calls it.
+* **`ex`** is for the **commands of the system** (exos): `ex install NAME` / `ex update` / `ex remove NAME` / `ex list` / `ex rollback NAME` (tools and apps, with patches; the work of jget),
+  `ex doctor` (the whole system: versions, paths, what is missing), and the commands that ask the phone through `OSC 7777`: `ex set font NAME`, `ex set theme NAME`, `ex open FILE` (the file picker or the app that opens it),
+  `ex clip` (the clipboard), `ex play FILE`, `ex info`. A new system command is a new word of `ex`, not a new program.
+* `jc` stays two releases: for a language word it prints "use jex ..." and does the job; for install / update it prints "use ex ...". `jget` is the name of the engine under `ex install` and stays as a program for two releases.

@@ -449,7 +449,7 @@ String qr_decode_grid(i64 n, bool^ ok) {
         else if mode == 2 { if ver <= 9 { cbits = 9; } else if ver <= 26 { cbits = 11; } else { cbits = 13; } }
         else if mode == 4 { if ver <= 9 { cbits = 8; } else { cbits = 16; } }
         else if mode == 8 { if ver <= 9 { cbits = 8; } else if ver <= 26 { cbits = 10; } else { cbits = 12; } }
-        else { qr_err = "a kind of data that is not read (mode " + str(mode) + ")"; return out; }
+        else { qr_err = "a kind of data that is not read (mode " + stg(mode) + ")"; return out; }
         if pos + cbits > nbits { break; }
         i64 cnt = 0;
         for i in 0..cbits { cnt = (cnt << 1) | (((data[(pos + i) / 8] & 255) >> (7 - (pos + i) % 8)) & 1); }
@@ -485,7 +485,7 @@ String qr_decode_grid(i64 n, bool^ ok) {
                 if pos + nb2 > nbits { break; }
                 i64 v = 0;
                 for i in 0..nb2 { v = (v << 1) | (((data[(pos + i) / 8] & 255) >> (7 - (pos + i) % 8)) & 1); }
-                String ds = str(v);
+                String ds = stg(v);
                 while ds.len < take { ds = "0" + ds; }
                 out.append(ds);
                 pos += nb2; left -= take;

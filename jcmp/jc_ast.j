@@ -1012,7 +1012,7 @@ i64 ast_resolve_func(char^ name) {
 bool ast_is_builtin(char^ n) {
     if n[0] == '_' && n[1] == '_' { return true; }
     if n[0] == 'a' && n[1] == 'l' && n[2] == 'l' && n[3] == 'o' && n[4] == 'c' { return true; }
-    return str_eq(n, "alloc") || str_eq(n, "str") || str_eq(n, "free") || str_eq(n, "arr") || str_eq(n, "sizeof") || str_eq(n, "move") || str_eq(n, "panic")
+    return str_eq(n, "alloc") || str_eq(n, "stg") || str_eq(n, "free") || str_eq(n, "arr") || str_eq(n, "sizeof") || str_eq(n, "move") || str_eq(n, "panic")
         || str_eq(n, "assert") || str_eq(n, "argc") || str_eq(n, "arg") || str_eq(n, "syscall") || str_eq(n, "exit") || str_eq(n, "len")
         || str_eq(n, "__fsqrt") || str_eq(n, "__cas") || str_eq(n, "pool") || str_eq(n, "grow") || str_eq(n, "arr_of");
 }
@@ -1088,7 +1088,7 @@ i64 ast_fop_of(i64 at) {
     if str_eq(nm, "free") { return 6; }
     if str_eq(nm, "arr") { return 7; }              // arr(n): a new dynamic array (only as the value of a declaration)
     if str_eq(nm, "move") { return 14; }               // move(p): the value of the owner p, which becomes null
-    if str_eq(nm, "str") { return 13; }                // str(x): a new String with the number, the character or the String x
+    if str_eq(nm, "stg") { return 13; }                // stg(x): a new String with the number, the character or the String x
     if str_eq(nm, "__gl") { return 40; }               // __gl(): the address of the global area (x28 on ARM64): a library finds its variables with it
     if str_eq(nm, "argc") { return 11; }              // argc(): the number of arguments of the command line
     if str_eq(nm, "arg") { return 12; }               // arg(i): the i-th argument, a text

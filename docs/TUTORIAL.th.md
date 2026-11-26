@@ -3170,7 +3170,7 @@ int main() {
     src.push("print r0"); src.push("stop");
     int[] code = assemble(src);
     String line = "";
-    for i in 0..code.len { line = line + str(code[i]) + " "; }
+    for i in 0..code.len { line = line + stg(code[i]) + " "; }
     jout << code.len << " bytes: " << line << "\n";           // the program of lesson 80
     String[] bad = arr(2);
     bad.push("jump somewhere");
@@ -3263,7 +3263,7 @@ int main() {
     int[] cents = arr(3);
     cents.push(1250); cents.push(499); cents.push(1500000);
     for i in 0..items.len {
-        jout << pad(items[i], 14) << padl(Fmt::thousands(cents[i] / 100), 9) << "." << Fmt::pad_left(str(cents[i] % 100), 2, '0') << "\n";
+        jout << pad(items[i], 14) << padl(Fmt::thousands(cents[i] / 100), 9) << "." << Fmt::pad_left(stg(cents[i] % 100), 2, '0') << "\n";
     }
     jout << "ratio " << fmt(2.0 / 3.0, 3) << "   hex " << tohex(48879) << "   bits " << tobin(37) << "\n";
     return 0;
@@ -6854,7 +6854,7 @@ void main() {
     jout << "n          linear    binary\n";
     int n = 16;
     for t in 0..5 {
-        jout << pad(str(n), 10) << " " << pad(str(linear_steps(n)), 9) << " " << binary_steps(n) << "\n";
+        jout << pad(stg(n), 10) << " " << pad(stg(linear_steps(n)), 9) << " " << binary_steps(n) << "\n";
         n = n * 16;
     }
 }

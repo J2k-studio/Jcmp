@@ -1894,6 +1894,136 @@ void gl_fv(i64 n) {
     ir_add(IR_F32OUT, 1, 32, 0, 0, 0);
 }
 
+// a float expression is calculated in the float registers (d0 .. d6: 32 .. 38) and not as bits in whole number registers: the leaves are read straight
+// into a float register (ldr sD), the operations are fadd / fsub / fmul / fdiv on the registers r and r + 1. Only a tree of float variables, fields,
+// elements, numbers, + - * /, the minus and casts of a whole number or a float is made this way (nothing in it uses a float register itself, and it has
+// no call); any other float expression goes the old way (bits in v1, F32IN). -irdbg 562949953421312 (2^49) switches it off.
+i64 gl_ffoff;
+
+// how many float registers above r the tree needs, or -1 when the tree cannot be made in float registers
+// the bits of a float that is the nearest to the double whose bits are db (round to nearest, ties to even; too small gives 0, too big infinity)
+i64 gl_f32bits(i64 db) {
+    i64 sign = (db >> 63) & 1;
+    i64 ex = (db >> 52) & 2047;
+    i64 fr = db & 4503599627370495;
+    if ex == 0 { return sign << 31; }
+    if ex == 2047 {
+        if fr != 0 { return (sign << 31) | 2143289344; }
+        return (sign << 31) | 2139095040;
+    }
+    i64 e2 = ex - 1023 + 127;
+    if e2 >= 255 { return (sign << 31) | 2139095040; }
+    if e2 <= 0 { return sign << 31; }
+    i64 rest = fr & 536870911;
+    i64 m = fr >> 29;
+    if rest > 268435456 || (rest == 268435456 && (m & 1) == 1) { m += 1; }
+    if m == 8388608 { m = 0; e2 += 1; if e2 >= 255 { return (sign << 31) | 2139095040; } }
+    return (sign << 31) | (e2 << 23) | m;
+}
+
+i64 gl_ff_need(i64 n) {
+    if n == 0 { return 0 - 1; }
+    if at_kind[n] == AK_FNUM { return 0; }
+    if at_ty[n] != 6 { return 0 - 1; }
+    i64 k = at_kind[n];
+    if k == AK_VAR || k == AK_GVAR || k == AK_FIELD || k == AK_DEREF { return 0; }
+    if k == AK_NUM { return 0; }
+    if k == AK_INDEX {
+        if gl_ff_call(at_b[n]) { return 0 - 1; }
+        return 0;
+    }
+    if k == AK_NEG { return gl_ff_need(at_a[n]); }
+    if k == AK_CAST {
+        i64 src = at_a[n];
+        if at_ty[src] == 6 { return gl_ff_need(src); }
+        if gl_isd(src) || gl_ff_call(src) || at_ty[src] / 65536 != 0 { return 0 - 1; }
+        return 0;
+    }
+    if k == AK_BIN {
+        if !(at_val[n] == AO_ADD || at_val[n] == AO_SUB || at_val[n] == AO_MUL || at_val[n] == AO_DIV) { return 0 - 1; }
+        i64 x = gl_ff_need(at_a[n]);
+        i64 y = gl_ff_need(at_b[n]);
+        if x < 0 || y < 0 { return 0 - 1; }
+        if at_kind[at_a[n]] == AK_FNUM && at_kind[at_b[n]] == AK_FNUM { return 0 - 1; }
+        if y + 1 > x { return y + 1; }
+        return x;
+    }
+    return 0 - 1;
+}
+
+bool gl_ff_call(i64 n) {
+    if n == 0 { return false; }
+    i64 k = at_kind[n];
+    if k == AK_CALL || k == AK_STR { return true; }
+    if k == AK_BIN || k == AK_INDEX { return gl_ff_call(at_a[n]) || gl_ff_call(at_b[n]); }
+    if k == AK_NEG || k == AK_CAST || k == AK_FIELD || k == AK_DEREF { return gl_ff_call(at_a[n]); }
+    return false;
+}
+
+// can the tree n be made in the float registers from r on?
+bool gl_ff_ok(i64 n, i64 r) {
+    if gl_ffoff != 0 { return false; }
+    i64 d = gl_ff_need(n);
+    if d < 0 || gl_ff_call(n) { return false; }
+    return r + d <= 38;
+}
+
+// when the last instruction made is the load of a 32-bit float into v1, it loads into the float register r instead
+bool gl_ff_retarget(i64 r) {
+    i64 p = ir_n - 1;
+    while p >= 0 && ir_op[p] == IR_NOP { p -= 1; }
+    if p < 0 || p < ir_bs[ir_nb - 1] { return false; }
+    if ir_op[p] == IR_LOAD && ir_d[p] == 1 && (ir_w[p] == 0 - 4 || ir_w[p] == 4) && ir_a[p] != 30 {      // not a slot of the frame: those are moved into registers by a later pass as whole numbers
+        ir_d[p] = r;
+        ir_w[p] = 4;
+        return true;
+    }
+    return false;
+}
+
+// the value of the float tree n in the float register r (call gl_ff_ok first)
+void gl_ffv(i64 n, i64 r) {
+    i64 k = at_kind[n];
+    if k == AK_BIN {
+        gl_ffv(at_a[n], r);
+        gl_ffv(at_b[n], r + 1);
+        gl_ensure();
+        i64 op = IR_FADD32;
+        if at_val[n] == AO_SUB { op = IR_FSUB32; }
+        else if at_val[n] == AO_MUL { op = IR_FMUL32; }
+        else if at_val[n] == AO_DIV { op = IR_FDIV32; }
+        ir_add(op, r, r, r + 1, 0, 0);
+        return;
+    }
+    if k == AK_NEG {
+        gl_ffv(at_a[n], r);
+        gl_ensure();
+        ir_add(IR_FUN32, r, r, 0, 0, 0);
+        return;
+    }
+    if k == AK_CAST {
+        i64 src = at_a[n];
+        if at_ty[src] == 6 {
+            gl_ffv(src, r);
+        } else {
+            gl_expr(src);
+            gl_ensure();
+            ir_add(IR_I2F32, r, 1, 0, 0, 0);
+        }
+        return;
+    }
+    if k == AK_FNUM {
+        gl_ensure();
+        ir_add(IR_CONST, 1, 0, 0, 0, gl_f32bits(float_literal_bits(at_a[n], at_b[n])));
+        ir_add(IR_F32IN, r, 1, 0, 0, 0);
+        return;
+    }
+    gl_expr(n);
+    gl_ensure();
+    if k != AK_NUM && gl_ff_retarget(r) { return; }
+    ir_add(IR_F32IN, r, 1, 0, 0, 0);
+}
+
 // v1 = the bits of a, v2 = the bits of b (both floats)
 void gl_fops(i64 a, i64 b) {
     gl_fv(a);
@@ -1923,10 +2053,16 @@ void gl_f32arith(i64 ao) {
 
 // f32 = a, f33 = b, as doubles (the conversion is exact: the comparison is the same)
 void gl_fcmp_ops(i64 a, i64 b) {
-    gl_fops(a, b);
-    gl_ensure();
-    ir_add(IR_F32IN, 32, 1, 0, 0, 0);
-    ir_add(IR_F32IN, 33, 2, 0, 0, 0);
+    if gl_ff_ok(a, 32) && gl_ff_ok(b, 33) {
+        gl_ffv(a, 32);
+        gl_ffv(b, 33);
+        gl_ensure();
+    } else {
+        gl_fops(a, b);
+        gl_ensure();
+        ir_add(IR_F32IN, 32, 1, 0, 0, 0);
+        ir_add(IR_F32IN, 33, 2, 0, 0, 0);
+    }
     ir_add(IR_FCVT_SD, 32, 32, 0, 0, 0);
     ir_add(IR_FCVT_SD, 33, 33, 0, 0, 0);
 }
@@ -1935,11 +2071,23 @@ void gl_fcmp_ops(i64 a, i64 b) {
 bool gl_fexpr(i64 n) {
     i64 k = at_kind[n];
     if k == AK_BIN {
+        if gl_ff_ok(n, 32) {
+            gl_ffv(n, 32);
+            gl_ensure();
+            ir_add(IR_F32OUT, 1, 32, 0, 0, 0);
+            return true;
+        }
         gl_fops(at_a[n], at_b[n]);
         gl_f32arith(at_val[n]);
         return true;
     }
     if k == AK_NEG {
+        if gl_ff_ok(n, 32) {
+            gl_ffv(n, 32);
+            gl_ensure();
+            ir_add(IR_F32OUT, 1, 32, 0, 0, 0);
+            return true;
+        }
         gl_fv(at_a[n]);
         gl_ensure();
         ir_add(IR_F32IN, 32, 1, 0, 0, 0);
@@ -3152,8 +3300,10 @@ void gl_assign_mem(i64 target, i64 value, i64 ao, i64 step) {
     }
     bool td = gl_isd(target);
     bool tf = at_ty[target] == 6;
+    bool fdirect = false;                // 1: the new float value is in f32 (d0) and is stored from there
     if ao == 0 && step == 0 {
-        if tf { gl_fv(value); } else if td { gl_expr_d(value); } else { gl_expr(value); }
+        if tf && gl_ff_ok(value, 32) { gl_ffv(value, 32); fdirect = true; }
+        else if tf { gl_fv(value); } else if td { gl_expr_d(value); } else { gl_expr(value); }
         gl_ensure();
     } else {
         // the value of the target now
@@ -3166,6 +3316,18 @@ void gl_assign_mem(i64 target, i64 value, i64 ao, i64 step) {
         ir_w[le] = gl_vw(target);
         if step != 0 {
             ir_add(IR_ADD, 1, 1, step, 1, 0);
+        } else if tf && fb != 30 && gl_ff_ok(value, 33) && (ao == AO_ADD || ao == AO_SUB || ao == AO_MUL || ao == AO_DIV) {
+            // the target and the value stay in float registers: ldr s0, [..]; (value in s1); fadd s0, s0, s1; str s0, [..]
+            ir_d[le] = 32;
+            ir_w[le] = 4;
+            gl_ffv(value, 33);
+            gl_ensure();
+            i64 fpo = IR_FADD32;
+            if ao == AO_SUB { fpo = IR_FSUB32; }
+            else if ao == AO_MUL { fpo = IR_FMUL32; }
+            else if ao == AO_DIV { fpo = IR_FDIV32; }
+            ir_add(fpo, 32, 32, 33, 0, 0);
+            fdirect = true;
         } else if tf {
             i64 fcc = gl_cell(gl_depth);
             gl_store(30, fcc, 1);
@@ -3198,7 +3360,9 @@ void gl_assign_mem(i64 target, i64 value, i64 ao, i64 step) {
         fb = 2;
     }
     gl_ensure();
-    i64 se = ir_add(IR_STORE, 0, fb, 1, 0, fo);
+    i64 sreg = 1;
+    if fdirect { sreg = 32; }
+    i64 se = ir_add(IR_STORE, 0, fb, sreg, 0, fo);
     ir_w[se] = gl_sw(target);
 }
 

@@ -1016,6 +1016,35 @@ void lib_init(char^ ver) {
     }
     while vn > 0 && (vb[vn - 1] == 10 || vb[vn - 1] == 13 || vb[vn - 1] == ' ') { vn -= 1; }
     vb[vn] = 0;
+    // the number of compatibility (ABI): when the folder has a file ABI, the library is used if its number is the number of this compiler, whatever the
+    // version says (a small release does not change what the compiler and the library agree on); a folder with no ABI file must have the same version
+    char ap[300];
+    str_copy(@ap, @lib_dir, 250);
+    append_text(@ap, "/ABI");
+    char ab[16];
+    i64 an = read_file(@ap, @ab, 12);
+    if an > 0 {
+        while an > 0 && (ab[an - 1] == 10 || ab[an - 1] == 13 || ab[an - 1] == ' ') { an -= 1; }
+        ab[an] = 0;
+        char mine[16];
+        mine[0] = 0;
+        append_int(@mine, JCMP_ABI);
+        if str_eq(@ab, @mine) { lib_external = 1; return; }
+        begin_msg("error");
+        write_err("the library in '");
+        write_err(@lib_dir);
+        write_err("' has ABI ");
+        write_err(@ab);
+        write_err(", but this compiler (jcmp ");
+        write_err(ver);
+        write_err(") needs ABI ");
+        write_err(@mine);
+        end_msg();
+        write_err("  help: the ABI is the number that the compiler and its library must agree on; install the library of this compiler (jcmp -update, or the install script)\n");
+        err_count += 1;
+        err_summary();
+        syscall(93, 1);
+    }
     if !str_eq(@vb, ver) {
         begin_msg("error");
         write_err("the library in '");
@@ -1820,7 +1849,7 @@ bool interp_rewrite() {
             }
             if lit_open == 1 { interp_tmp[q] = '"'; q += 1; lit_open = 0; }
             if parts > 0 { interp_tmp[q] = ' '; interp_tmp[q + 1] = '+'; interp_tmp[q + 2] = ' '; q += 3; }
-            interp_tmp[q] = 's'; interp_tmp[q + 1] = 't'; interp_tmp[q + 2] = 'r'; interp_tmp[q + 3] = '('; q += 4;
+            interp_tmp[q] = 's'; interp_tmp[q + 1] = 't'; interp_tmp[q + 2] = 'g'; interp_tmp[q + 3] = '('; q += 4;
             i64 k = p + 1;
             while k < e2 - 1 { interp_tmp[q] = src_bufs[base + k]; q += 1; k += 1; if q > 4000 { return false; } }
             interp_tmp[q] = ')'; q += 1;
@@ -1860,6 +1889,22 @@ bool interp_rewrite() {
     i64 w = 0;
     while w < q { src_bufs[base + cur_pos + w] = interp_tmp[w]; w += 1; }
     cur_len += delta;
+    return true;
+}
+
+// is the word `str` that was just read in the place of a call (not a definition `String str(self)`, not `x.str()` or `A::str()`)?
+i64 str_old_warned;
+bool str_call_context(i64 wn) {
+    i64 p = cur_pos - wn - 1;
+    while p >= 0 && is_space(src_bufs[cur_base + p]) { p -= 1; }
+    if p < 0 { return true; }
+    i64 c = src_bufs[cur_base + p];
+    if c == '.' || c == ':' { return false; }
+    if is_alnum(c) || c == '^' || c == ']' || c == '>' {
+        // `return str(x)` is a call
+        if p >= 5 && src_bufs[cur_base + p] == 'n' && src_bufs[cur_base + p - 1] == 'r' && src_bufs[cur_base + p - 2] == 'u' && src_bufs[cur_base + p - 3] == 't' && src_bufs[cur_base + p - 4] == 'e' && src_bufs[cur_base + p - 5] == 'r' { return true; }
+        return false;
+    }
     return true;
 }
 
@@ -2179,10 +2224,17 @@ void next() {
         else if wn == 4 && str_eq(@tok_text, "jerr") { str_copy(@tok_text, "cerr", 8); }
         // i64 is another name of int while int is 64 bits (owner's decision 2026-11-06, docs/syntax-design.md 110): the same word to the compiler
         else if wn == 3 && str_eq(@tok_text, "i64") { str_copy(@tok_text, "int", 8); }
-        // stg(x) makes text from a value: the same call as str(x), a name that does not repeat the type str (the owner's choice, 2026-11-26)
-        if wn == 3 && str_eq(@tok_text, "stg") && lc_after_space_lex() == '(' { str_copy(@tok_text, "str", 8); }
+        // stg(x) makes text from a value (the call; `str` is the name of the type only: the owner removed the call str(x) on 2026-11-27, spec 117)
         // str is the short name of String when it is followed by a name (str s) or by [] (str[] v); str(x) and a variable called str stay as they are
         if wn == 3 && str_eq(@tok_text, "str") && str_is_type_here() { str_copy(@tok_text, "String", 8); }
+        // str(x) (the old call): written as stg(x) with a warning; removed in 1.2.42.0 (the owner cut it on 2026-11-27, two releases of warning as for alloc[..])
+        else if wn == 3 && str_eq(@tok_text, "str") && lc_after_space_lex() == '(' && str_call_context(wn) {
+            if str_old_warned == 0 && pass_no == 3 {
+                warn("str(x) is the old name of stg(x) and stops working in 1.2.42.0: write stg(x)", "deprecated");
+                str_old_warned = 1;
+            }
+            str_copy(@tok_text, "stg", 8);
+        }
         if lc(0) == '[' && slice_rewrite(wn) {
             // a[lo..hi] became span(a, lo, hi): read it again from the start of the name
             cur_pos = slice_start;
@@ -2332,6 +2384,7 @@ void next() {
         tok_num = cch;
         return;
     }
+    if c == '=' && lc(1) == '>' && fat_arrow() { return; }
     // operators: longest match
     tok_kind = T_OP;
     i64 c1 = lc(1);
@@ -2361,6 +2414,93 @@ void next() {
         k += 1;
     }
     tok_text[len] = 0;
+}
+
+
+// `=> expression` after the head of a function or a lambda is `{ return expression; }` (spec 115, owner 2026-11-27): int sq(int a) => a * a;
+// The expression ends at the first ; at depth 0 (the ; is part of the form), or at a , or an unmatched ) (a lambda inside a call: f(fn(int a) => a + 1, 2)).
+char fa_out[900];
+bool fat_arrow_is_lambda() {
+    // look back from the `=` : `)` then its `(` then the word before it (the name of a function, or fn / fnv / a type word of a lambda), then what is before that word
+    i64 p = cur_pos - 1;
+    while p >= 0 && is_space(src_bufs[cur_base + p]) { p -= 1; }
+    if p < 0 || src_bufs[cur_base + p] != ')' { return false; }
+    i64 depth = 0;
+    while p >= 0 {
+        i64 ch = src_bufs[cur_base + p];
+        if ch == ')' { depth += 1; }
+        if ch == '(' { depth -= 1; if depth == 0 { break; } }
+        p -= 1;
+    }
+    p -= 1;
+    while p >= 0 && is_space(src_bufs[cur_base + p]) { p -= 1; }
+    i64 xe = p;
+    while p >= 0 && is_alnum(src_bufs[cur_base + p]) { p -= 1; }
+    i64 xs = p + 1;
+    if xe < xs { return false; }
+    if xe - xs + 1 <= 3 && src_bufs[cur_base + xs] == 'f' && src_bufs[cur_base + xs + 1] == 'n' { return true; }       // fn( and fnv(
+    while p >= 0 && is_space(src_bufs[cur_base + p]) { p -= 1; }
+    if p < 0 { return false; }
+    i64 y = src_bufs[cur_base + p];
+    if y == '=' || y == '(' || y == ',' || y == '{' { return true; }
+    if is_alnum(y) {
+        i64 ye = p;
+        while p >= 0 && is_alnum(src_bufs[cur_base + p]) { p -= 1; }
+        if ye - p == 6 && src_bufs[cur_base + p + 1] == 'r' && src_bufs[cur_base + p + 2] == 'e' && src_bufs[cur_base + p + 3] == 't' { return true; }    // return
+    }
+    return false;
+}
+
+bool fat_arrow() {
+    if fat_arrow_is_lambda() { die_help("=> is for a function with a name (int f(int a) => a * 2;); a lambda keeps its braces", "write  fn(int a) { return a * 2; }"); }
+    i64 n = 0;
+    fa_out[0] = 0;
+    append_text(@fa_out, "{ return ");
+    n = str_len(@fa_out);
+    i64 k = 2;
+    i64 depth = 0;
+    i64 used = 0;
+    while true {
+        i64 c = lc(k);
+        if c == 0 || n >= 880 { die_help("=> needs an expression that ends with ;", "write  int f(int a) => a * 2;   (one expression; use { } for more lines)"); }
+        if c == '"' || c == 39 {
+            i64 q = c;
+            fa_out[n] = c;
+            n += 1;
+            k += 1;
+            while lc(k) != 0 && lc(k) != q && n < 880 {
+                if lc(k) == 92 { fa_out[n] = lc(k); n += 1; k += 1; }
+                fa_out[n] = lc(k);
+                n += 1;
+                k += 1;
+            }
+            fa_out[n] = lc(k);
+            n += 1;
+            k += 1;
+            continue;
+        }
+        if c == '(' || c == '[' || c == '{' { depth += 1; }
+        if c == ')' || c == ']' || c == '}' {
+            if depth == 0 { used = k; break; }
+            depth -= 1;
+        }
+        if depth == 0 && c == ',' { used = k; break; }
+        if depth == 0 && c == ';' { used = k + 1; break; }
+        if c == 10 { c = ' '; }
+        fa_out[n] = c;
+        n += 1;
+        k += 1;
+    }
+    fa_out[n] = 0;
+    append_text(@fa_out, "; }");
+    i64 e = 2;
+    while e < n && is_space(fa_out[9 + (e - 2)]) { e += 1; }
+    if str_len(@fa_out) <= 12 { die_help("=> needs an expression", "write  int f(int a) => a * 2;"); }
+    i64 u = 0;
+    while u < used { adv(); u += 1; }
+    push_macro(@fa_out);
+    next();
+    return true;
 }
 
 // ------------------------------------------------------------ parser helpers

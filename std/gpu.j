@@ -84,7 +84,7 @@ struct Gpu {
             Option::Some(t): { tmp = t; }
             Option::None: { }
         }
-        g.path = tmp + "/gpu-cmd-" + str(Sys::getpid());
+        g.path = tmp + "/gpu-cmd-" + stg(Sys::getpid());
         g.fd = Sys::open_write(g.path.c());
         if g.fd < 0 { g.alive = false; return g; }
         g.buf_cap = 65536;

@@ -434,7 +434,7 @@ struct Lm {
                 m.wq = arr(m.layers + 1); m.wk = arr(m.layers + 1); m.wv = arr(m.layers + 1); m.wo = arr(m.layers + 1);
                 m.anorm = arr(m.layers + 1); m.gate = arr(m.layers + 1); m.down = arr(m.layers + 1); m.up = arr(m.layers + 1); m.fnorm = arr(m.layers + 1);
                 for l in 0..m.layers {
-                    String pre = "blk." + str(l) + ".";
+                    String pre = "blk." + stg(l) + ".";
                     m.wq.push(f.load_mat(pre + "attn_q.weight", @ok));
                     if !ok { return Lm::bad("missing " + pre + "attn_q.weight"); }
                     m.wk.push(f.load_mat(pre + "attn_k.weight", @ok));

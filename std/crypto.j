@@ -834,7 +834,7 @@ struct Crypto {
         i64 type = Crypto::tls_read_record(c);
         char^ plain = (char^)Crypto::tls_geti(c, 72);
         while type == 20 { type = Crypto::tls_read_record(c); }
-        if type == 21 { return Crypto::tls_fail(c, "the server sent an alert (" + str(plain[1] & 255) + ")"); }
+        if type == 21 { return Crypto::tls_fail(c, "the server sent an alert (" + stg(plain[1] & 255) + ")"); }
         if type != 22 || Crypto::tls_geti(c, 48) < 40 || (plain[0] & 255) != 2 { return Crypto::tls_fail(c, "the server did not answer with a TLS ServerHello"); }
         i64 shlen = Crypto::tls_get24(plain + 1);
         Crypto::tls_transcript(c, plain, 4 + shlen);
@@ -843,7 +843,7 @@ struct Crypto {
         q += 1 + sidlen;
         i64 suite = Crypto::tls_get16(plain + q);
         q += 3;                                  // the suite and the compression
-        if suite != 0x1303 && suite != 0x1301 { return Crypto::tls_fail(c, "the server chose a cipher suite that is not written (" + str(suite) + ")"); }
+        if suite != 0x1303 && suite != 0x1301 { return Crypto::tls_fail(c, "the server chose a cipher suite that is not written (" + stg(suite) + ")"); }
         Crypto::tls_seti(c, 392, suite);
         i64 extlen = Crypto::tls_get16(plain + q);
         q += 2;
@@ -890,7 +890,7 @@ struct Crypto {
             type = Crypto::tls_read_record(c);
             if type == 20 { type = 0 - 2; }
             if type == 0 - 2 { }
-            else if type == 21 { Mem::free((void^)hs); return Crypto::tls_fail(c, "the server sent an alert (" + str(plain[1] & 255) + ")"); }
+            else if type == 21 { Mem::free((void^)hs); return Crypto::tls_fail(c, "the server sent an alert (" + stg(plain[1] & 255) + ")"); }
             else if type != 22 { Mem::free((void^)hs); return Crypto::tls_fail(c, "the handshake of " + host + " broke off"); }
             else {
                 i64 pl = Crypto::tls_geti(c, 48);

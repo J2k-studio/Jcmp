@@ -329,7 +329,7 @@ struct __System {
 }
 
 // Log: messages for the person who runs the program, on the error output (standard error), with a level.
-//   Log::set_level(2);    Log::info("not shown");    Log::error("shown: " + str(code));
+//   Log::set_level(2);    Log::info("not shown");    Log::error("shown: " + stg(code));
 // levels: 0 debug, 1 info, 2 warn, 3 error (the default is 1)
 i64 std_log_level = 1;
 

@@ -82,13 +82,13 @@ struct TileMap {
 
     // the world as text: a header, then for each chunk that exists  layer chunk  and its 256 numbers (the file of a save; small, readable)
     void save(self, String path) {
-        String s = "tilemap 1 " + str(self.w) + " " + str(self.h) + " " + str(self.layers) + "\n";
+        String s = "tilemap 1 " + stg(self.w) + " " + stg(self.h) + " " + stg(self.layers) + "\n";
         i64 total = self.layers * self.cw * self.ch;
         for c in 0..total {
             i64 at = self.chunk_of[c];
             if at == 0 { continue; }
-            s.append("c " + str(c));
-            for k in 0..256 { s.append(" "); s.append(str(self.data[(at - 1) * 256 + k])); }
+            s.append("c " + stg(c));
+            for k in 0..256 { s.append(" "); s.append(stg(self.data[(at - 1) * 256 + k])); }
             s.append("\n");
         }
         Fs::write_text(path, s);

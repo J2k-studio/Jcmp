@@ -62,7 +62,7 @@ text += gen_units("push_std_units", units, "push_std_units(mask): the units of t
 for lib in ("cpu", "vector", "matrix"):
     writelib(lib, [lib])
 os.makedirs("build/libs", exist_ok=True)
-for lib in ("simd", "quat", "complex", "stats", "canvas", "screen", "neuron", "deflate", "png", "qr", "sprite", "tilemap", "phys2d", "profile", "jobs", "spritebatch", "shaders", "compute", "tasks", "canvas2d", "glcanvas", "glapp", "compute", "gamej", "gpu", "native", "opengl3", "vulkan", "web", "telegram", "discord", "websocket", "gguf", "llama", "neurongpu", "retrieve", "mlp", "npu", "ui", "softcanvas", "draw2d", "geom", "rng"):
+for lib in ("simd", "quat", "complex", "stats", "canvas", "screen", "neuron", "deflate", "png", "qr", "sprite", "tilemap", "phys2d", "profile", "jobs", "spritebatch", "shaders", "compute", "tasks", "canvas2d", "glcanvas", "glapp", "compute", "gamej", "gpu", "native", "opengl3", "vulkan", "web", "telegram", "discord", "websocket", "gguf", "llama", "neurongpu", "retrieve", "mlp", "npu", "ui", "softcanvas", "draw2d", "utf8", "geom", "rng"):
     t = libtext([lib])
     open("build/libs/%s.j" % lib, "w").write(t)
     if os.path.isdir(os.path.expanduser("~/Jcmp-libs/libs")):
@@ -75,4 +75,6 @@ for f in os.listdir("Library"):
     if f not in keep:
         os.remove(os.path.join("Library", f))
 open("Library/VERSION", "w").write(open("VERSION").read().strip() + "\n")
+import re as _re
+open("Library/ABI", "w").write(_re.search(r"#define JCMP_ABI (\d+)", open("jcmp/jcmp.jk").read()).group(1) + "\n")
 PY

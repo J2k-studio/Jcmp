@@ -6428,6 +6428,11 @@ bool vz_scan(i64 q, i64 islot, i64 incl, i64 inch, bool emit) {
                         vz_vec[d] = qv;
                     }
                     vz_kind[d] = VZ_WORD;
+                    // a float read straight into a float register (f32 = load.4 [..]): it is a vector of floats already, not the bits of one
+                    if d >= 32 && d < 64 && ir_w[j2] == 4 {
+                        if vz_w != 4 { return vz_fail(5409); }
+                        vz_kind[d] = VZ_VEC;
+                    }
                 } else {
                     if (ir_opt & 4194304) != 0 { write_err("load a="); write_err_int(ir_a[j2]); write_err(" kind(a)="); write_err_int(vz_kind[ir_a[j2]]); write_err(" k="); write_err_int(ir_k[j2]); write_err(" w="); write_err_int(ir_w[j2]); write_err(" lslot="); write_err_int(vz_lslot[ir_a[j2]]); write_err(" base="); write_err_int(vz_base[ir_a[j2]]); write_err("\n"); }
                     return vz_fail(5408);
@@ -6724,7 +6729,8 @@ bool vz_scan(i64 q, i64 islot, i64 incl, i64 inch, bool emit) {
                 if vz_iabs(ir_w[j2]) != vz_w || ir_bi[j2] != 0 { return vz_fail(5638); }
                 if vz_kind[ir_a[j2]] != VZ_ADDR { return vz_fail(5639); }
                 i64 kv = vz_kind[ir_b[j2]];
-                if kv != VZ_VWORD && kv != VZ_WORD && kv != VZ_INV { return vz_fail(5641); }
+                bool kfl = kv == VZ_VEC && ir_b[j2] >= 32 && ir_b[j2] < 64 && ir_w[j2] == 4;       // a float register stored straight (str sD)
+                if kv != VZ_VWORD && kv != VZ_WORD && kv != VZ_INV && !kfl { return vz_fail(5641); }
                 if vz_nacc >= 64 { return vz_fail(5642); }
                 vz_acc_base[vz_nacc] = vz_base[ir_a[j2]] + 1000000 * vz_dyn[ir_a[j2]];
                 vz_acc_off[vz_nacc] = vz_off[ir_a[j2]] + ir_k[j2];
@@ -6732,7 +6738,7 @@ bool vz_scan(i64 q, i64 islot, i64 incl, i64 inch, bool emit) {
                 vz_nacc += 1;
                 if emit {
                     i64 qs = 0;
-                    if kv == VZ_VWORD || kv == VZ_WORD { qs = vz_vec[ir_b[j2]]; }
+                    if kv == VZ_VWORD || kv == VZ_WORD || kfl { qs = vz_vec[ir_b[j2]]; }
                     else {
                         qs = vz_bcast(ir_b[j2]);
                     }

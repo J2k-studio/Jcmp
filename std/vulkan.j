@@ -26,7 +26,7 @@ String vk_result_text(i64 rc) {
     if rc == -9 { return "VK_ERROR_INCOMPATIBLE_DRIVER"; }
     if rc == -10 { return "VK_ERROR_TOO_MANY_OBJECTS"; }
     if rc == -11 { return "VK_ERROR_FORMAT_NOT_SUPPORTED"; }
-    return "VkResult " + str(rc);
+    return "VkResult " + stg(rc);
 }
 
 
@@ -355,7 +355,7 @@ struct Vk {
         return a;
     }
 
-    String api_text(self) { return str(self.api_version >> 22) + "." + str((self.api_version >> 12) & 1023) + "." + str(self.api_version & 4095); }
+    String api_text(self) { return stg(self.api_version >> 22) + "." + stg((self.api_version >> 12) & 1023) + "." + stg(self.api_version & 4095); }
 
     static Vk open() {
         Vk vk;
@@ -379,7 +379,7 @@ struct Vk {
         Native::poke64(pinst, 0);
         i64 create = Native::sym(vk.lib, "vkCreateInstance");
         i64 rc = Native::call3(create, ici, 0, pinst);
-        if rc != 0 { vk.log = "vkCreateInstance failed: " + str(rc); return vk; }
+        if rc != 0 { vk.log = "vkCreateInstance failed: " + stg(rc); return vk; }
         vk.instance = Native::peek64(pinst);
         i64 enum_dev = vk.fn("vkEnumeratePhysicalDevices");
         i64 pcount = (i64)Mem::alloc(16);

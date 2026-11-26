@@ -1496,6 +1496,46 @@ bool lw_fuse(i64 k, i64 b) {
     return true;
 }
 
+// a float product that the next instruction adds to something (or takes away from something) and nobody reads again is one fmadd / fmsub (the same fusing
+// that C compilers do by default: x += v * dt is one rounding). -irdbg 1125899906842624 (2^50) switches it off.
+i64 lw_nofma;
+bool lw_fuse_fma(i64 k, i64 b) {
+    if ir_op[k] != IR_FMUL32 || lw_nofma != 0 || k + 1 >= ir_be[b] { return false; }
+    i64 t = ir_d[k];
+    if t < 32 || t > 63 { return false; }
+    i64 n = k + 1;
+    i64 op = ir_op[n];
+    char^ nm = null;
+    i64 other = 0;
+    if op == IR_FADD32 && ir_a[n] == t && ir_b[n] != t { nm = "fmadd"; other = ir_b[n]; }
+    else if op == IR_FADD32 && ir_b[n] == t && ir_a[n] != t { nm = "fmadd"; other = ir_a[n]; }
+    else if op == IR_FSUB32 && ir_b[n] == t && ir_a[n] != t { nm = "fmsub"; other = ir_a[n]; }
+    if nm == null { return false; }
+    // nobody reads the product afterwards
+    bool gone = ir_d[n] == t;
+    i64 j = n + 1;
+    while j < ir_be[b] && !gone {
+        if lw_reads(j, t) { return false; }
+        if ir_d[j] == t { gone = true; }
+        i64 oj = ir_op[j];
+        if oj == IR_CALL || oj == IR_CALLIND || oj == IR_SYSCALL { gone = true; }
+        j += 1;
+    }
+    if !gone && (ir_opt == 0 || (op_lo[b] & (1 << t)) != 0) { return false; }
+    lw_def(ir_d[n]);
+    rg_text(nm);
+    rg_text(" ");
+    lw_sreg(ir_d[n]);
+    rg_text(", ");
+    lw_sreg(ir_a[k]);
+    rg_text(", ");
+    lw_sreg(ir_b[k]);
+    rg_text(", ");
+    lw_sreg(other);
+    rg_put(10);
+    return true;
+}
+
 // the block that is written after the block b (the last block of the function is written at the end)
 i64 lw_ord[IR_MAXB];              // the order in which the blocks are written
 i64 lw_pos[IR_MAXB];
@@ -1968,20 +2008,30 @@ bool lw_instr(i64 i, i64 b) {
         i64 w = ir_w[i];
         if op == IR_LOAD {
             lw_def(d);
-            if w == 8 { rg_text("ldr "); }
-            else if w == 1 { rg_text("ldrb "); }
-            else if w == 2 { rg_text("ldrh "); }
-            else if w == 4 { rg_text("ldrw "); }
-            else if w == 0 - 1 { rg_text("ldrsb "); }
-            else if w == 0 - 2 { rg_text("ldrsh "); }
-            else { rg_text("ldrsw "); }
-            lw_reg(d);
+            if d >= 32 && d < 64 && w == 4 {
+                rg_text("ldr ");                         // a float read from memory straight into a float register (ldr sD, [..])
+                lw_sreg(d);
+            } else {
+                if w == 8 { rg_text("ldr "); }
+                else if w == 1 { rg_text("ldrb "); }
+                else if w == 2 { rg_text("ldrh "); }
+                else if w == 4 { rg_text("ldrw "); }
+                else if w == 0 - 1 { rg_text("ldrsb "); }
+                else if w == 0 - 2 { rg_text("ldrsh "); }
+                else { rg_text("ldrsw "); }
+                lw_reg(d);
+            }
         } else {
-            if w == 8 { rg_text("str "); }
-            else if w == 1 { rg_text("strb "); }
-            else if w == 2 { rg_text("strh "); }
-            else { rg_text("strw "); }
-            lw_reg(ir_b[i]);
+            if ir_b[i] >= 32 && ir_b[i] < 64 && w == 4 {
+                rg_text("str ");                         // a float written to memory from a float register (str sS, [..])
+                lw_sreg(ir_b[i]);
+            } else {
+                if w == 8 { rg_text("str "); }
+                else if w == 1 { rg_text("strb "); }
+                else if w == 2 { rg_text("strh "); }
+                else { rg_text("strw "); }
+                lw_reg(ir_b[i]);
+            }
         }
         rg_text(", [");
         lw_reg(ir_a[i]);
@@ -2255,6 +2305,10 @@ bool lw_function() {
         lw_scan(b);
         while k < ir_be[b] {
             lw_cur = k;
+            if lw_fuse_fma(k, b) {
+                k += 2;
+                continue;
+            }
             if lw_fuse(k, b) {
                 k += 2;
                 continue;

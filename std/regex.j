@@ -206,8 +206,8 @@ struct Regex {
         if nmax > 0 { nmax -= 1; }
         if nmax == 0 { again = ""; }
         else if nmax < 0 && nmin == 0 { again = again + "*"; }
-        else if nmax < 0 { again = again + "{" + str(nmin) + ",}"; }
-        else { again = again + "{" + str(nmin) + "," + str(nmax) + "}"; }
+        else if nmax < 0 { again = again + "{" + stg(nmin) + ",}"; }
+        else { again = again + "{" + stg(nmin) + "," + stg(nmax) + "}"; }
         if lazy == 1 { if again.len > 0 { again = again + "?"; } }
         if lazy == 1 && qmin == 0 {
             i64 r0 = Regex::m(rest, 0, rest.len, t, ti);
