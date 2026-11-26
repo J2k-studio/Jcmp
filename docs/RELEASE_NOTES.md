@@ -1,6 +1,8 @@
-# J2K / Jcmp 1.2.35.0
+# J2K / Jcmp 1.2.36.0
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
+
+**1.2.36.0:** the counting loop `for i = 0 < n; i++ { }` (the bound is worked out once).
 
 **1.2.35.0:** `int` arithmetic wraps at 32 bits everywhere (it was cut only at a store).
 

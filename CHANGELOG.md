@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.36.0 (2026-11-26)
+* **Added (language):** the counting loop `for i = 0 < n; i++ { }`: `i` is a new `int`, it starts at the first value and runs while `i < bound`; the bound is worked out once, before the first turn; any step (`i += 2`) is allowed; it works in the tree and the text path. `for i in a..b` stays until the migration tool.
+* **Fixed:** the cost of `int` wrapping (1.2.35): a number written in the program no longer forces a cut (`i64 big = 100000 * 100000` stays 64 bits).
+* **Added (tests):** t631 (the counting loop, both paths).
+
 ## 1.2.35.0 (2026-11-26)
 * **Fixed (language):** `int` arithmetic wraps at 32 bits where the result is made, not only when it is stored: with `a = 2000000000`, `a + a < 0` is true, `a + a` is -294967296, `dbl(a)`, `(a * 3) / 7`, `(a + a) >> 1` and `(a + a) % 10` give what C gives (tree path and text path; the cut after `+ - * <<` is one `sxtw`, which the optimiser drops when a value cannot need it; measured over 13 benchmarks: no change on average).
 * **Added (tests):** t630 (the same program as a C twin).

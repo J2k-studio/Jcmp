@@ -129,12 +129,14 @@ void main() {
     for int i = 0; i < 10; i += 2 { if i == 6 { break; } }   // C-style
     for i in 0..5 { jout << i << " "; }                      // 0,1,2,3,4 (end excluded)
     jout << "\n";
+    for i = 0 < 5; i++ { jout << i << " "; }               // the counting loop: i is an int, 0,1,2,3,4; the bound is worked out once
+    jout << "\n";
 
     if n == 3 { jout << "three\n"; } else if n == 4 { jout << "four\n"; } else { jout << "other\n"; }
 }
 ```
 
-`for i in a..b` evaluates `b` once. `break` and `continue` work in both loops.
+`for i = A < B; i++ { }` is the counting loop (1.2.36): `i` is a new `int`, it starts at `A` and runs while `i < B`; `B` is worked out once, before the first turn; another step (`i += 2`) is allowed. It is the form that stays; `for i in a..b` (below) is kept until the migration tool removes it. `for i in a..b` evaluates `b` once. `break` and `continue` work in both loops.
 
 ### switch
 

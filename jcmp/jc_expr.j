@@ -3411,6 +3411,88 @@ bool decl_commas() {
     return true;
 }
 
+// The counting loop  for i = A < B; i++ {  : the current token is the name i (after `for`). It is rewritten as
+//   for int i = A, __bN = B; i < __bN; i++ {      (B is worked out once; i is an int)
+// and the tokens up to the first ; at depth 0 are replaced. Returns true if the rewrite was made.
+i64 fc_n;
+char fc_out[600];
+bool for_count() {
+    if tok_kind != T_IDENT { return false; }
+    i64 k = 0;
+    while is_space(lc(k)) { k += 1; }
+    if lc(k) != '=' || lc(k + 1) == '=' { return false; }
+    k += 1;
+    // the text of A and B: A is up to the first < at depth 0, B up to ; at depth 0
+    char ta[200];
+    char tb[200];
+    i64 na = 0;
+    i64 nb = 0;
+    i64 depth = 0;
+    bool seen_lt = false;
+    while true {
+        i64 c = lc(k);
+        if c == 0 { return false; }
+        if c == '"' || c == 39 { return false; }
+        if c == '(' || c == '[' || c == '{' { depth += 1; }
+        if c == ')' || c == ']' || c == '}' { depth -= 1; }
+        if c == ';' && depth <= 0 { break; }
+        if c == '{' && depth == 0 { return false; }
+        if c == '<' && depth == 0 && !seen_lt {
+            if lc(k + 1) == '<' || lc(k + 1) == '=' { return false; }
+            seen_lt = true;
+            k += 1;
+            continue;
+        }
+        if seen_lt {
+            if nb >= 190 { return false; }
+            tb[nb] = c;
+            nb += 1;
+        } else {
+            if na >= 190 { return false; }
+            ta[na] = c;
+            na += 1;
+        }
+        k += 1;
+    }
+    if !seen_lt { return false; }
+    ta[na] = 0;
+    tb[nb] = 0;
+    fc_n += 1;
+    char nm[32];
+    str_copy(@nm, "__b", 32);
+    char num[16];
+    i64 v = fc_n;
+    i64 d = 0;
+    char rev[16];
+    while v > 0 { rev[d] = '0' + v % 10; d += 1; v = v / 10; }
+    i64 q = 0;
+    while d > 0 { d -= 1; num[q] = rev[d]; q += 1; }
+    num[q] = 0;
+    append_text(@nm, @num);
+    fc_out[0] = 0;
+    append_text(@fc_out, "int ");
+    append_text(@fc_out, @tok_text);
+    append_text(@fc_out, " = ");
+    append_text(@fc_out, @ta);
+    append_text(@fc_out, ", ");
+    append_text(@fc_out, @nm);
+    append_text(@fc_out, " = ");
+    append_text(@fc_out, @tb);
+    append_text(@fc_out, "; ");
+    append_text(@fc_out, @tok_text);
+    append_text(@fc_out, " < ");
+    append_text(@fc_out, @nm);
+    append_text(@fc_out, ";");
+    if str_len(@fc_out) > 560 { die("this for loop head is too long"); }
+    while !tok_is(";") {
+        if tok_kind == T_EOF { die("a ; was expected in the head of the for loop"); }
+        next();
+    }
+    push_macro(@fc_out);
+    next();
+    return true;
+}
+
 // is the first thing after the current token a < ?   (alloc<int n>(50)   free<n>)
 bool sg_angle_next() {
     i64 k = 0;

@@ -925,6 +925,7 @@ void parse_for() {
     i64 lend = new_label();
     next();                              // "for"
     if loop_depth >= 63 { die("loops nested too deeply"); }
+    for_count();                       // for i = 0 < n; i++ {  becomes  for int i = 0, __b1 = n; i < __b1; i++ {
     if at_type() {
         if decl_commas() { }               // for int i = 0, n = 5; ... : the head holds the declarations one after the other
         parse_local_decl();              // the declaration ends with ';'

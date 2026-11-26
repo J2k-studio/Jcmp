@@ -2122,6 +2122,7 @@ i64 ast_stmt() {
         }
         if tok_is("for") {
             next();
+            for_count();                           // for i = 0 < n; i++ {  becomes  for int i = 0, __b1 = n; i < __b1; i++ {
             if ast_type_kw() != 0 {
                 // for int i = 0; i < n; i++ { }
                 i64 saved_nl3 = ast_nl;
