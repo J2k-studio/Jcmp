@@ -416,6 +416,8 @@ bool ast_global_ok(i64 gi) {
     ast_gkind = 0;
     ast_gbase = gelem[gi];
     ast_gdims = 1;
+    if gtid[gi] == 1 && gkind[gi] == 0 && gptr[gi] == 0 && gelem[gi] == 8 { ast_gbase = 3; }     // a global bool (type id 1) is a bool: printed true / false
+    if gtid[gi] == 3 && gkind[gi] == 0 && gptr[gi] == 0 { ast_gbase = 3; }     // a global bool is a bool (printed true / false), not a byte
     if gkind[gi] == 1 {
         ast_gkind = 2;
         ast_gdims = gnd[gi];
@@ -2110,6 +2112,7 @@ i64 ast_stmt() {
     }
     if tok_kind == T_IDENT {
         if tok_is("if") { return ast_if(); }
+        loop_word();                           // loop { }  is  while true { }
         if tok_is("while") {
             next();
             i64 c = ast_expr(0);

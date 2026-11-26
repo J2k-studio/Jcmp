@@ -2054,6 +2054,20 @@ bool lw_instr(i64 i, i64 b) {
         }
         return true;
     }
+    if op == IR_SETCC {
+        // d = (a cc b) ? 1 : 0 as a value (before this a comparison that is kept in a variable could only be made by the text path): cmp, cset
+        rg_text("cmp ");
+        lw_reg(ir_a[i]);
+        rg_text(", ");
+        if ir_bi[i] == 1 { rg_int(ir_b[i]); } else { lw_reg(ir_b[i]); }
+        rg_put(10);
+        rg_text("cset ");
+        lw_reg(ir_d[i]);
+        rg_text(", ");
+        rg_text(lw_cc(ir_k[i], 0));
+        rg_put(10);
+        return true;
+    }
     if op == IR_RET {
         return true;                                     // the epilogue follows the last block (a return is a jump to it, below)
     }
@@ -2503,6 +2517,12 @@ void ir_pipeline(char^ name_) {
                 }
             }
             if (ir_opt & 549755813888) != 0 { ir_print(); syscall(64, 2, @ir_pbuf, ir_plen); }      // -irdbg 549755813888: the IR after the cells were promoted
+            if (ir_opt & 8) != 0 && (ir_opt & 281474976710656) == 0 {
+                // floats that went through a whole number register for no reason (jc_opt.j op_f32fwd): after the copies and the nops were cleaned
+                i64 ff0 = ff_changes;
+                op_f32fwd();
+                if ff_changes != ff0 && (ir_opt & 4) != 0 { op_clean_run(); }
+            }
             rp_stage(6);
             if (ir_opt & 2) != 0 { op_ra_run(); }
             rp_stage(7);

@@ -1795,7 +1795,15 @@ void gl_wrap(i64 code) {
     if code != 1 && code != 2 && code != 4 { return; }
     gl_ensure();
     i64 bits = 8;
-    if code == 4 { bits = 32; }
+    if code == 4 {
+        bits = 32;
+        // v1 was just loaded as a signed 32-bit number (or cut to 32 bits already): the cut changes nothing (`a = b;` with two ints)
+        i64 lp = ir_n - 1;
+        if lp >= 0 && lp >= ir_bs[ir_nb - 1] && ir_d[lp] == 1 {
+            if ir_op[lp] == IR_LOAD && ir_w[lp] == 0 - 4 { return; }
+            if ir_op[lp] == IR_EXT && ir_k[lp] == 32 && ir_w[lp] == 1 && ir_a[lp] == 1 { return; }
+        }
+    }
     i64 e = ir_add(IR_EXT, 1, 1, 0, 0, bits);
     if code != 2 { ir_w[e] = 1; }
 }

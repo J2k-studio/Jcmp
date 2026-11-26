@@ -1,4 +1,4 @@
-# A tour of J2K
+# A tour of Jex
 
 This is a practical guide to what the compiler accepts **today**. The formal decisions
 (and the reasons for them) are in [syntax-design.md](syntax-design.md); things that are
@@ -183,6 +183,19 @@ fn main() {
 }
 ```
 
+A name without a value takes the value of the next name that has one, so one value can be given to several names in one line (this differs
+from C, where only the last one gets it): `int a, b = 5;` makes both 5, and `double x, y = 2.5;` both 2.5. Names with no value after them
+(`int c;`) are left as they are.
+
+```jk
+fn main() {
+    int a, b = 5;
+    double x, y = 2.5;
+    jout << a << " " << b << " " << x << " " << y << "\n";
+    return 0;
+}
+```
+
 ### `using` with several names
 
 `using Math, stdlib;` is `using Math; using stdlib;`.
@@ -194,7 +207,7 @@ A `main` that gives a value and has no `return` ends with 0 and the compiler war
 
 ```jk
 fn add(int a, int b) { return a + b; }
-fnv hello(String who) { jout << "hello " << who << "\n"; }
+fnv hello(str who) { jout << "hello " << who << "\n"; }
 fn main() {
     hello("fn");
     jout << add(2, 3) << "\n";
@@ -218,7 +231,7 @@ Methods work the same way (`int bump(self, int d = 1)`). Named arguments are not
 
 ## Arrays and strings
 
-A function can have any number of array parameters (`int dot(int a[], int b[])`), anywhere in the list. `str(x)` makes a String from a number, a char, a bool or a String: `str(42)`, `str(2.5)`, `str('x')`, `str(true)`.
+A function can have any number of array parameters (`int dot(int a[], int b[])`), anywhere in the list. `stg(x)` (older name `str(x)`) makes a str from a number, a char, a bool or a String: `stg(42)`, `stg(2.5)`, `stg('x')`, `str(true)`.
 
 ```jk
 int sum(int a[]) {                  // an array parameter arrives with its length
@@ -232,7 +245,7 @@ void main() {
     for i in 0..5 { v[i] = i + 1; }
     int grid[3][4];                  // up to 3 dimensions
     grid[1][2] = 7;
-    char name[] = "J2K";             // size counted for you (includes the 0 at the end)
+    char name[] = "Jex";             // size counted for you (includes the 0 at the end)
     double dist[3] = {12.0, 18.0, 25.0};   // a list of values (the rest, if any, is zero)
     int primes[] = {2, 3, 5, 7};     // [] : the size is the number of values (1 dimension; also for globals, with constants)
     char path[] = r"C:\raw\string";  // raw string: no escapes
@@ -275,7 +288,8 @@ length in a `-d` build.
 
 ## Strings
 
-`String` is text that can grow. It lives on the heap and is freed at the end of its block, like a dynamic array.
+`str` (long form `String`) is text that can grow. It lives on the heap and is freed at the end of its block, like a dynamic array.
+Below, `String` and `str` are the same type; `stg(x)` makes text from a value (`str(x)` still works).
 
 ```jk
 String a = "abc";            // a copy of the text
@@ -1116,8 +1130,8 @@ using stdlib;
 
 void main() {
     // text and numbers
-    String s = "  Hello, J2K  ";
-    jout << s.trim().upper() << " " << s.trim().count() << "\n";         // HELLO, J2K 10
+    String s = "  Hello, Jex  ";
+    jout << s.trim().upper() << " " << s.trim().count() << "\n";         // HELLO, Jex 10
     // Num::parse_int("42") and Num::parse_double("2.5") give a Result (see the Option, Result and ? section)
     // files, folders, the environment, time and random numbers
     //   Fs::read_text(path)?  Fs::write_text(path, text)?  Dir::list(path)?  Env::get("HOME")  Time::now_ms()  Random::range(1, 6)

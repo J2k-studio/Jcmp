@@ -1,13 +1,17 @@
-<p align="center"><img src="docs/banner.svg" alt="J2K and Jcmp" width="100%"></p>
+<p align="center"><img src="docs/banner.svg" alt="Jex and Jexcmp" width="100%"></p>
 
-# J2K & Jcmp
+# Jex & Jexcmp
 
 > **A language that talks straight to the CPU. Written in itself, built on a phone.**
 
-**J2K** is a small systems language, designed from scratch and close to the machine.
-**Jcmp** is its native compiler: it reads `.jk` / `.j` source and writes a Linux ARM64 executable
+**Jex** is a small systems language, designed from scratch and close to the machine.
+**Jexcmp** is its native compiler: it reads `.jk` / `.j` source and writes a Linux ARM64 executable
 directly (its own assembler and ELF writer: no LLVM, no GCC, no `as`, no `ld`).
-It is **self-hosting**: the compiler is written in J2K and rebuilds itself, byte for byte.
+It is **self-hosting**: the compiler is written in Jex and rebuilds itself, byte for byte.
+
+> **The names.** The language is **Jex** (it was called J2K until 1.2.37) and its compiler is **Jexcmp** (it was Jcmp). The programs of the language end in `.jex`
+> (`.jk` still works, and `.j` is a module). The command of the compiler is still `jcmp` in this release; a `jexcmp` command, the same program under its new name,
+> is made together with the rename of the tools (`jc` becomes `jex`). Nothing you wrote breaks: a program, a module and the library work with both names.
 
 ## Why it exists
 
@@ -28,20 +32,20 @@ It is **self-hosting**: the compiler is written in J2K and rebuilds itself, byte
 
 1. **Speed:** match `clang -O2` (division by constants, vector loops, better registers).
 2. **More targets:** x86-64, then WebAssembly or Windows.
-3. **Languages that meet:** J2K libraries that Java, C and Python call; tools that build Android apps from J2K.
+3. **Languages that meet:** Jex libraries that Java, C and Python call; tools that build Android apps from Jex.
 4. **Jaric OS with a real screen:** phone mode (portrait) and desktop mode (landscape), apps for graphics, video and sound on the Jaric Engine.
 
 ```jk
 // hello.jk
 void main() {
-    jout << "Hello from J2K!\n";
+    jout << "Hello from Jex!\n";
 }
 ```
 
 ```console
 $ bin/jcmp examples/hello.jk -o hello
 $ ./hello
-Hello from J2K!
+Hello from Jex!
 ```
 
 > [ภาษาไทย → README.th.md](README.th.md)
@@ -52,8 +56,8 @@ Hello from J2K!
 
 | Component                                   | State |
 |---------------------------------------------|-------|
-| Compiler written in J2K (`jcmp/`)           | **Working, self-hosting** (two generations are identical, byte for byte) |
-| Assembler written in J2K (`jcmp/jc_asm.j`)  | Working, built into the compiler |
+| Compiler written in Jex (`jcmp/`)           | **Working, self-hosting** (two generations are identical, byte for byte) |
+| Assembler written in Jex (`jcmp/jc_asm.j`)  | Working, built into the compiler |
 | Language                                    | Integers (`int` is 32 bits, `i64` is 64 bits, also `i8 bool`; `char` is one byte (a letter of the ASCII text, not a Unicode letter); `i32` is another name for `int`; unsigned `u8 u32 u64`), floats (`float double`), arrays (up to 3 dimensions, with lists `int a[3] = {1, 2, 3};`), pointers (`T^`, `T^^`), function pointers and lambdas (`int(int a) { ... }`), structs with methods and **operator methods** (`operator vec3 add(self, vec3 o)` makes `a + b`, `-a`, `2.0 * a` work), enums (also **with data**: `Shape::Circle(r)`), `switch` that takes a value apart, `Option<T>` / `Result<T, E>` and `?`, `defer`, `try`/`catch`/`throw`, panics with a stack trace, `sizeof`, dynamic arrays (`T[]`), `String` (UTF-8, `+`, `==`, `<`), generics with inference (`T max<T>(T a, T b)`, `struct Stack<T>`), `#define`, imports |
 | Standard library                            | `#import <stdlib>`: `Sys`, `Mem`, `Str`, `Math` (complete), `File`, `Fs`, `Dir`, `Env`, `Time`, `Random`, `Num` (parse), `Term` (size, key), `List` / `Map` / `Set`, `Json`, `Sha256`, `Proc` (run programs), `Path`, `Hex`, `Base64` |
 | Math and graphics                           | `#import <math>` then `using math::vector;` (`vec2 vec3 vec4`, swizzle `v.xy`, `c.rgb`), `matrix` (`mat3 mat4`: rotate, perspective, look_at), `quat`, `complex`, `stats`; `#import <gfx>` then `using gfx::canvas;` (characters with a depth buffer) or `using gfx::screen;` (colour dots: lines, circles, gradients, glow, vignette) |
@@ -71,7 +75,7 @@ Release history: [CHANGELOG.md](CHANGELOG.md).
 
 ## Tools, games and the Jaric app
 
-Around the compiler there are tools written in J2K: [Jextool](https://github.com/J2k-studio/Jextool) (`jget`, `makej`, the shell `jsh`, `jbox`, the editor `coderin`, `zipj`, `tarj`, the player `mujic`, the task manager `jamanager`, the settings tool `jash`, the small AI tool `neuron` with the assistant `xr`, and Python 3.14 with `pip` and `yt-dlp` for Android; the compiler itself is `jc install jcmp`) and the **Jaric app** for Android, a terminal that is the first mode of Jaric OS.
+Around the compiler there are tools written in Jex: [Jextool](https://github.com/J2k-studio/Jextool) (`jget`, `makej`, the shell `jsh`, `jbox`, the editor `coderin`, `zipj`, `tarj`, the player `mujic`, the task manager `jamanager`, the settings tool `jash`, the small AI tool `neuron` with the assistant `xr`, and Python 3.14 with `pip` and `yt-dlp` for Android; the compiler itself is `jc install jcmp`) and the **Jaric app** for Android, a terminal that is the first mode of Jaric OS.
 
 ```console
 $ makej init -pro mytool     # a project with the right structure: src/, tests/, docs/, manifest.toml ...
@@ -188,7 +192,7 @@ Put the folder on your `PATH` (once per shell, or add the line to `~/.bashrc`), 
 
 ```bash
 export PATH="$PWD:$PATH"            # inside the folder; or the full path of your folder
-jcmp -version                      # jcmp 1.2.38.0 (J2K compiler, Linux ARM64)
+jcmp -version                      # jcmp 1.2.39.0 (Jex compiler, Linux ARM64)
 
 printf '#import <stdlib>\nusing stdlib\nvoid main() { jout << "hi\\n"; }\n' > hi.jk
 jcmp hi.jk -o hi && ./hi            # hi
@@ -202,7 +206,7 @@ To read the compiler or rebuild it (the repository contains a ready `bin/jcmp`):
 
 ```bash
 git clone https://github.com/J2k-studio/Jexcmp.git
-cd Jcmp
+cd Jexcmp
 bin/jcmp examples/fib.jk -o fib && ./fib
 ./bootstrap.sh                       # rebuild the compiler with itself
 ```
@@ -210,7 +214,7 @@ bin/jcmp examples/fib.jk -o fib && ./fib
 If the repository or its releases are private, `curl`/`wget` need a token
 (`curl -fL -H "Authorization: Bearer $TOKEN" ...`) or use `gh release download`.
 
-New to J2K? Start with the tutorial: [docs/TUTORIAL.md](docs/TUTORIAL.md).
+New to Jex? Start with the tutorial: [docs/TUTORIAL.md](docs/TUTORIAL.md).
 More: [docs/USAGE.md](docs/USAGE.md) (command line, building, testing) and
 [docs/LANGUAGE.md](docs/LANGUAGE.md) (a tour of the language), [docs/LIBRARIES.md](docs/LIBRARIES.md) (how to use each part of the library, by category), [docs/LIMITS.md](docs/LIMITS.md) (what it does not do yet) and [docs/API.md](docs/API.md) (every library function).
 
@@ -263,18 +267,18 @@ an enum is not a number, `int` and `float` do not mix without a cast), **no hidd
 ## Repository layout
 
 ```
-Jcmp/
+Jexcmp/
 ├── README.md, README.th.md, LICENSE, VERSION, CHANGELOG.md
 ├── install.sh            download + check + install the latest release
 ├── bin/                  the compiler and assembler binaries (built by themselves)
-│   ├── jcmp              the compiler (J2K -> ARM64 ELF)
+│   ├── jcmp              the compiler (Jex -> ARM64 ELF)
 │   └── j2k_asm_j2k       the stand-alone assembler (.jasm -> ELF)
-├── jcmp/                 the compiler's own source, in J2K
+├── jcmp/                 the compiler's own source, in Jex
 │   ├── jcmp.jk             entry point (main, command line)
 │   ├── jc_base.j  jc_lex.j  jc_expr.j  jc_stmt.j   the four parts
 │   ├── jc_asm.j            the assembler (a library)
 │   └── jc_std.j            generated from std/ by gen_std.sh
-├── std/                  the standard library (J2K): sys, mem, str, math, fs
+├── std/                  the standard library (Jex): sys, mem, str, math, fs
 ├── examples/             small programs
 ├── docs/                 language specification and guides
 │   ├── syntax-design.md    the language specification (decisions are recorded here)
@@ -290,7 +294,7 @@ Jcmp/
 ## How it was built (bootstrapping)
 
 The first assembler and compiler were hand-written in ARM64 assembly. The assembler was then
-rewritten in J2K, then the compiler, in four parts. Today the compiler compiles itself:
+rewritten in Jex, then the compiler, in four parts. Today the compiler compiles itself:
 `bootstrap.sh` starts from the committed `bin/jcmp`, builds three generations and checks that
 the last two are byte-for-byte identical. The assembly versions are no longer part of this
 repository.
@@ -301,7 +305,7 @@ repository.
 
 This project is **source-available** under its own license (version 1.2):
 
-* **Programs you write in J2K and build with jcmp are yours.** You may distribute them, sell them and use them commercially, without asking and without paying; no credit line is needed.
+* **Programs you write in Jex and build with jcmp are yours.** You may distribute them, sell them and use them commercially, without asking and without paying; no credit line is needed.
 * **Every update of jcmp 1.x is free of charge.** A new release never needs a new payment.
 * You may read the compiler, run it, and study it. You may **not** modify it and redistribute it, redistribute the compiler or the library as such, or sell or offer the compiler itself as a product or a service. (A private copy may be changed for your own use if you never share it.)
 

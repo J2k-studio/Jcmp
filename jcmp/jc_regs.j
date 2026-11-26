@@ -163,7 +163,7 @@ bool rg_fmov_back(i64 i, i64 r) {
 
 // the line st is "sxtw x<r>, x<s>" (the register r now holds a sign-extended 32-bit value)
 bool rg_sxtw_self(i64 st, i64 r) {
-    return rg_has(st, "sxtw x") && rg_writes_x(st, r);
+    return (rg_has(st, "sxtw x") || rg_has(st, "ldrsw x")) && rg_writes_x(st, r);       // ldrsw: a load of 32 bits that is already sign-extended
 }
 
 i64 rg_isd;                  // 1: the use at the line is ldr dK / str dK (a double, written by the lowering of the IR)

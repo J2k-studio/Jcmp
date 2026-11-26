@@ -1,4 +1,4 @@
-# Using Jcmp
+# Using Jexcmp
 
 ## Compile and run
 
@@ -26,6 +26,8 @@ jcmp input.jk output                    (the second name is the program; if it e
 | `-I dir`           | where `#import "name"` also looks (after the folder of the importing file) |
 | `-version`, `-help` | print the version / a short list of the options (one or two dashes: `--version`; also `-v`, `-h`) |
 | `-asm NAME`        | write the assembler text of the function NAME and the number of its instructions (`-asm all`: the whole program); `-show NAME` is the same |
+| `-jh FILE`          | write the interface of a file (its declarations without the bodies) as a `.jh` file; `-api NAME` does it for a library |
+| `-progress FILE`    | write the percent of the compile into FILE (`makej` shows it as a bar) |
 | `-mc NAME`         | write the machine code of the function NAME (ARM64): the address, the word in hex (as the CPU reads it) and the assembler line, e.g. `400970  d65f03c0  ret` |
 | `-show NAME`       | write the code of the function NAME as it is in the program (ARM64) and the number of its instructions, then stop (nothing else is written) |
 | `-l`               | make a shared library (`.so`) instead of a program: the functions written with `export` in front are its entry points. See "Shared libraries" in LANGUAGE.md |
@@ -107,14 +109,14 @@ installed together with the compiler. The compiler looks for it in the folder na
 [Jcmp-libs](https://github.com/J2k-studio/Jcmp-libs): `jc lib install simd` puts one in `~/.j2k/Library`; the compiler says so when a program imports one that is missing.
 
 ### `jget`: a separate tool
-`jget` downloads files (with a progress bar) and installs libraries for J2K. It is one of the tools of [Jextool](https://github.com/J2k-studio/Jextool) (a repository of its own, because the tools are
+`jget` downloads files (with a progress bar) and installs libraries for Jex. It is one of the tools of [Jextool](https://github.com/J2k-studio/Jextool) (a repository of its own, because the tools are
 useful without the compiler too); install it with
 `curl -fsSL https://raw.githubusercontent.com/J2k-studio/Jextool/main/install-jget.sh | sh`
 (or `install.sh` of that repository, which can install several tools and asks which). A library that `jc lib install NAME` puts in `~/.j2k/Library/NAME.j` is found by `#import <NAME>`.
 The part of its work that is done by the library of the compiler is `Net::http.download(url, file, 1)` (HTTP over TCP, DNS by name) and `Net::dns.lookup(name)`.
 
 ### https
-`Net::http.get(url)` and `Net::http.download(url, file, show)` speak **https://** too: TLS 1.3 written in J2K (see the library, struct `Crypto`). The server is checked: the chain of certificates, the name, the dates and a trusted root. The trusted
+`Net::http.get(url)` and `Net::http.download(url, file, show)` speak **https://** too: TLS 1.3 written in Jex (see the library, struct `Crypto`). The server is checked: the chain of certificates, the name, the dates and a trusted root. The trusted
 roots are read from the file named in `J2K_CA` (or `SSL_CERT_FILE`), else from the usual places (`$PREFIX/etc/tls/cert.pem`, `/etc/ssl/certs/ca-certificates.crt`, `/etc/ssl/cert.pem`, Android's `/system/etc/security/cacerts`). The cipher suites
 offered are ChaCha20-Poly1305 and AES-128-GCM with X25519; servers that only know TLS 1.2 or older are not reached. This code is new and has not been audited.
 

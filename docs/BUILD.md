@@ -204,7 +204,7 @@ nothing is published yet (the index format is in `SPEC.md` there). This guide do
 | `VERSION` (repository) | the version of the compiler, `1.2.13.0` |
 | `JCMP_VERSION` in `jcmp/jcmp.jk` | the same number, built into the compiler (`#define JCMP_VERSION`) |
 | `Library/VERSION` | must be the version of the compiler (else the compiler says to install them again) |
-| `jcmp -version` | prints `jcmp 1.2.13.0 (J2K compiler, Linux ARM64)` |
+| `jcmp -version` | prints `jcmp 1.2.13.0 (Jex compiler, Linux ARM64)` |
 | first line of a library file | `// jobs 0.1.0 -- run many small jobs ...` (name, version, what it does) |
 | `makej --version` | `makej 0.11.0` |
 

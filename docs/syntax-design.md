@@ -2383,3 +2383,36 @@ Each one is judged by the rule of three (borrowed from other languages, easy for
 
 * **Owner, 2026-11-26 (final answers):** `for i in` (and `for x in list`) is REMOVED (the counting loop `for i = 0 < n; i++` and the C `for` remain); `%%` does NOT exist (no such operator; `%` and `//` stay). Priority order of the work: see docs/plan-parts.md "Plan in order of importance".
 * **Owner, 2026-11-26: `local` hides a name.** `local` before a function, a global variable or a struct at file level means: only this file sees it (another file that imports it gets an error that names the declaring file and says to remove `local` if it should be public). Chosen over `static` (which already means "no instance needed" in a struct) and `private`; reason from the owner: in a game nobody else should see or change the internals. The optimiser may remove or inline an unused `local` function. `local` hides names in the language; it does not hide the code: for that the library is built as a `.jo` without the source (plan part 3). Not built yet.
+
+* **Owner, 2026-11-26: constants of the compiler and conditional compilation.** (1) The compiler defines constants before a program is read, as ordinary `#define` lines (the text replaces the name; a `#define` of the program with the same name replaces them): `ARCH` ("arm64" or "arm32"), `VERSION` (the version of the compiler as a text), `POINTER_BITS` (64 or 32), `BIG_ENDIAN` (0), `DEBUG` (1 with -d, else 0). More may be added (file and line, the features of the CPU) when the owner asks. (2) `#if CONDITION` ... `#else` ... `#end`: the lines of the part that is not chosen are not read at all (they may be anything, even wrong code); the condition has numbers, "texts", names (an undefined name is 0), `== != < > <= >= && || !` and `( )`; `#if` can be nested; `#else` is optional. Chosen by the owner from three spellings (Compiler::, __ARCH__, #define) and two ways of conditions (#if or a plain `if`). Built in 1.2.38; test t638.
+
+## 113. `str` is the short name of `String` (owner's request, 2026-11-26)
+`str s`, `str[] v`, `fn f(str name)` mean the same as `String`. `str(x)` is still the call that makes text from a value, and a variable
+called `str` still works: the word is the type only when a name or `[]` follows it (`str xor 1`, `str and x` keep a variable).
+`String` stays valid (`jex migrate` may rewrite it later). Built by a rewrite in the lexer (`str_is_type_here`), test t645.
+
+### 113a. `stg(x)` makes text from a value (owner's choice, 2026-11-26)
+`stg(n)` is the call that `str(x)` was, so the call does not repeat the type name `str`. `str(x)` still works (kept for old code; a later
+`jex migrate` can rewrite it). Built in the lexer next to `str`, test t646.
+
+## 114. `int a, b = 5;` gives the value to every name before it (owner's request, 2026-11-26)
+A name in a declaration list that has no `=` takes the value of the next name that has one: `int a, b = 5;` is `int a = 5; int b = 5;`,
+`double x, y = 2.5;` both 2.5, `int e = 7, f, g = 9;` makes f = 9. Names with no value after them (`int c;`) stay uninitialised as before.
+This is different from C (where only `b` is set); written in LANGUAGE.md. Built in `decl_commas` (jc_expr.j), test t647.
+
+## 115. Decisions of 2026-11-27 on shortening (owner)
+* **Early return stays:** `if c { return x; }` (no `return x if c;`).
+* **`=>` for a one-expression function** (`int f(int a) => a * 2;`): YES. Only one expression; more lines use braces as before.
+* **`p^.field` stays** (no auto-deref: a pointer must be seen).
+* **`alloc<n>(...)` and `free<n>` are reserved words of the language**: written without `Mem::` and without any `#using`. The other functions of the group
+  `Mem` (`copy`, `fill`, `compare` ...) are used after `using Mem;` at the top of the file (then `copy(a, b, n)`); without it they are written `Mem::copy(...)`.
+  **Correction (same day):** `using NAME;` (no `#`) ALREADY EXISTS (`using stdlib;`, `using Mem;`, `using Sys, Fmt;`, `using enum Kind;`) and works for the group
+  `Mem`; so no new `#using` is made, the existing `using Mem;` is the way, and only `alloc<n>` / `free<n>` are built as reserved words. A name of the file itself wins over a used one.
+  Related: `#!using asm` (decision of docs/design/34) is the low-level mode of a file and is a different directive.
+* **Struct literal with field names** `Enemy{ x: 10, y: 4 }` (missing fields = 0), next to the positional `{7}` that exists: asked for, option shown, built with `=>` and `#using` in 1.2.40.0 (owner has not yet said no).
+* Open: item 3 (automatic widening of a number, the assistant recommends yes, a warning when a product may overflow before it widens).
+* There is only `struct` (value type with methods, `static`, one base, `virtual`/`override`, `itf`); no `class`. A reference `class` would need a decision on memory (no GC).
+
+* **Low-level file mode is written `#!asm`** (owner, 2026-11-27; it was `#!using asm` in docs/design/34): at the top of a file, the whole file may have raw instruction
+  lines; without it the names of the instructions (`mov`, `x0`) are not reserved. `#!asm` starts with `#!`, so it cannot be mixed up with `using NAME;`.
+  Built with the other low-level steps (WP3); not yet in the compiler.

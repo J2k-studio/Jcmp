@@ -86,12 +86,208 @@ bool define_is_expr(char^ s, i64 n) {
 }
 
 i64 find_define(char^ name) {
-    i64 i = 0;
-    while i < def_count {
+    i64 i = def_count - 1;                       // the newest first: a #define of a program replaces one that the compiler made
+    while i >= 0 {
         if str_eq(@def_name + i * 64, name) { return i; }
-        i += 1;
+        i -= 1;
     }
     return -1;
+}
+
+// ---------------------------------------------------------------- the constants of the compiler and  #if ... #else ... #end
+// A name that the compiler defines before the program is read (they are ordinary #define lines: the text replaces the name):
+//   ARCH "arm64" | "arm32"   VERSION "1.2.39.0"   POINTER_BITS 64 | 32   BIG_ENDIAN 0   DEBUG 1 with -d, else 0
+void add_define(char^ name, char^ val) {
+    if def_count >= 2040 { return; }
+    str_copy(@def_name + def_count * 64, name, 64);
+    str_copy(@def_val + def_count * 256, val, 256);
+    def_count += 1;
+}
+
+void predefine_constants() {
+    if x_target == 32 { add_define("ARCH", "\"arm32\""); add_define("POINTER_BITS", "32"); }
+    else { add_define("ARCH", "\"arm64\""); add_define("POINTER_BITS", "64"); }
+    char vq[64];
+    str_copy(@vq, "\"", 64);
+    append_text(@vq, JCMP_VERSION);
+    append_text(@vq, "\"");
+    add_define("VERSION", @vq);
+    add_define("BIG_ENDIAN", "0");
+    if opt_debug == 1 { add_define("DEBUG", "1"); } else { add_define("DEBUG", "0"); }
+}
+
+// the condition of an #if: numbers, "texts", names (a name that is not defined is 0), == != < > <= >= && || ! and ( )
+char ce_line[512];
+i64 ce_pos;
+i64 ce_kind;                     // the value just read: 0 a number, 1 a text
+i64 ce_num;
+char ce_txt[256];
+i64 ce_depth;
+
+void ce_skip() { while ce_line[ce_pos] == ' ' || ce_line[ce_pos] == 9 { ce_pos += 1; } }
+
+
+void ce_primary() {
+    ce_skip();
+    i64 c = ce_line[ce_pos];
+    ce_kind = 0;
+    ce_num = 0;
+    if c == '(' {
+        ce_pos += 1;
+        ce_or();
+        ce_skip();
+        if ce_line[ce_pos] != ')' { die_help("a ) is missing in the condition of #if", "write #if (A && B) || C"); }
+        ce_pos += 1;
+    } else if c == '!' {
+        ce_pos += 1;
+        ce_primary();
+        if ce_kind == 1 { ce_num = 1; if ce_txt[0] != 0 { ce_num = 0; } ce_kind = 0; }
+        else if ce_num == 0 { ce_num = 1; }
+        else { ce_num = 0; }
+    } else if c == '"' {
+        ce_pos += 1;
+        i64 n = 0;
+        while ce_line[ce_pos] != '"' && ce_line[ce_pos] != 0 { if n < 250 { ce_txt[n] = ce_line[ce_pos]; n += 1; } ce_pos += 1; }
+        ce_txt[n] = 0;
+        if ce_line[ce_pos] == '"' { ce_pos += 1; }
+        ce_kind = 1;
+    } else if c >= '0' && c <= '9' {
+        while ce_line[ce_pos] >= '0' && ce_line[ce_pos] <= '9' { ce_num = ce_num * 10 + (ce_line[ce_pos] - '0'); ce_pos += 1; }
+    } else if is_letter(c) {
+        char nm[64];
+        i64 n = 0;
+        while is_alnum(ce_line[ce_pos]) { if n < 62 { nm[n] = ce_line[ce_pos]; n += 1; } ce_pos += 1; }
+        nm[n] = 0;
+        i64 di = find_define(@nm);
+        if di >= 0 && ce_depth < 6 {
+            char sv[512];
+            str_copy(@sv, @ce_line, 512);
+            i64 sp = ce_pos;
+            str_copy(@ce_line, @def_val + di * 256, 512);
+            ce_pos = 0;
+            ce_depth += 1;
+            ce_or();
+            ce_depth -= 1;
+            str_copy(@ce_line, @sv, 512);
+            ce_pos = sp;
+        }
+    } else {
+        die_help("this cannot be read in the condition of #if", "a number, a \"text\", a name, ! && || == != < > <= >= and ( ) can be used");
+    }
+}
+
+void ce_cmp() {
+    ce_primary();
+    ce_skip();
+    i64 c = ce_line[ce_pos];
+    i64 c2 = ce_line[ce_pos + 1];
+    i64 op = 0;                                  // 1 == 2 != 3 < 4 > 5 <= 6 >=
+    if c == '=' && c2 == '=' { op = 1; } else if c == '!' && c2 == '=' { op = 2; }
+    else if c == '<' && c2 == '=' { op = 5; } else if c == '>' && c2 == '=' { op = 6; }
+    else if c == '<' { op = 3; } else if c == '>' { op = 4; }
+    if op == 0 { return; }
+    ce_pos += 2;
+    if op == 3 || op == 4 { ce_pos -= 1; }
+    i64 lk = ce_kind;
+    i64 ln = ce_num;
+    char lt[256];
+    str_copy(@lt, @ce_txt, 256);
+    ce_primary();
+    i64 r = 0;
+    if lk != ce_kind { r = 0; if op == 2 { r = 1; } }
+    else if lk == 1 {
+        if op == 1 { if str_eq(@lt, @ce_txt) { r = 1; } }
+        else if op == 2 { if !str_eq(@lt, @ce_txt) { r = 1; } }
+        else { die_help("texts can only be compared with == and !=", "compare numbers with < > <= >="); }
+    } else {
+        if op == 1 && ln == ce_num { r = 1; }
+        if op == 2 && ln != ce_num { r = 1; }
+        if op == 3 && ln < ce_num { r = 1; }
+        if op == 4 && ln > ce_num { r = 1; }
+        if op == 5 && ln <= ce_num { r = 1; }
+        if op == 6 && ln >= ce_num { r = 1; }
+    }
+    ce_kind = 0;
+    ce_num = r;
+}
+
+void ce_and() {
+    ce_cmp();
+    while true {
+        ce_skip();
+        if !(ce_line[ce_pos] == '&' && ce_line[ce_pos + 1] == '&') { return; }
+        ce_pos += 2;
+        i64 l = ce_num;
+        if ce_kind == 1 { l = 1; if ce_txt[0] == 0 { l = 0; } }
+        ce_cmp();
+        i64 r = ce_num;
+        if ce_kind == 1 { r = 1; if ce_txt[0] == 0 { r = 0; } }
+        ce_kind = 0;
+        ce_num = 0;
+        if l != 0 && r != 0 { ce_num = 1; }
+    }
+}
+
+void ce_or() {
+    ce_and();
+    while true {
+        ce_skip();
+        if !(ce_line[ce_pos] == '|' && ce_line[ce_pos + 1] == '|') { return; }
+        ce_pos += 2;
+        i64 l = ce_num;
+        if ce_kind == 1 { l = 1; if ce_txt[0] == 0 { l = 0; } }
+        ce_and();
+        i64 r = ce_num;
+        if ce_kind == 1 { r = 1; if ce_txt[0] == 0 { r = 0; } }
+        ce_kind = 0;
+        ce_num = 0;
+        if l != 0 || r != 0 { ce_num = 1; }
+    }
+}
+
+// read the rest of the line as the condition of an #if: true or false
+bool cond_true() {
+    i64 n = 0;
+    while cur_pos < cur_len && lc(0) != 10 && !(lc(0) == '/' && lc(1) == '/') {
+        if n < 500 { ce_line[n] = lc(0); n += 1; }
+        adv();
+    }
+    ce_line[n] = 0;
+    while cur_pos < cur_len && lc(0) != 10 { adv(); }
+    ce_pos = 0;
+    ce_depth = 0;
+    ce_or();
+    ce_skip();
+    if ce_line[ce_pos] != 0 { die_help("something is left after the condition of #if", "check the ( ) and the operators"); }
+    if ce_kind == 1 { return ce_txt[0] != 0; }
+    return ce_num != 0;
+}
+
+// the lines up to the #end (or the #else when stop_else = true) that belong to this #if are not read; returns 1 at #else, 2 at #end
+i64 cond_skip(bool stop_else) {
+    i64 nest = 0;
+    while cur_pos < cur_len {
+        while lc(0) == 32 || lc(0) == 9 { adv(); }
+        if lc(0) == '#' {
+            adv();
+            char w[16];
+            i64 wn = 0;
+            while is_letter(lc(0)) && wn < 15 { w[wn] = lc(0); wn += 1; adv(); }
+            w[wn] = 0;
+            if str_eq(@w, "if") { nest += 1; }
+            else if str_eq(@w, "end") {
+                if nest == 0 { while cur_pos < cur_len && lc(0) != 10 { adv(); } return 2; }
+                nest -= 1;
+            } else if str_eq(@w, "else") && nest == 0 && stop_else {
+                while cur_pos < cur_len && lc(0) != 10 { adv(); }
+                return 1;
+            }
+        }
+        while cur_pos < cur_len && lc(0) != 10 { adv(); }
+        if cur_pos < cur_len { adv(); }
+    }
+    die_help("an #if has no #end", "close it with  #end  on a line of its own");
+    return 2;
 }
 
 // ------------------------------------------------------------- the token
@@ -716,6 +912,7 @@ void pop_file() {
 
 void lex_init(char^ path) {
     def_count = 0;
+    predefine_constants();
     gen_reset();
     lx_depth = 0;
     lvl_inst[0] = 0;
@@ -1666,6 +1863,33 @@ bool interp_rewrite() {
     return true;
 }
 
+// the word `str` was just read: is it the type (a name or [] follows) and not a call or a variable?
+i64 lc_after_space_lex() {
+    i64 o = 0;
+    while is_space(lc(o)) { o += 1; }
+    return lc(o);
+}
+
+bool str_is_type_here() {
+    i64 o = 0;
+    while is_space(lc(o)) { o += 1; }
+    i64 c = lc(o);
+    if c == '[' {
+        o += 1;
+        while is_space(lc(o)) { o += 1; }
+        return lc(o) == ']';
+    }
+    if !is_letter(c) { return false; }
+    // a word that is an operator keyword after a variable named str (str xor 1, str and x)
+    char w[8];
+    i64 k = 0;
+    while is_alnum(lc(o + k)) && k < 6 { w[k] = lc(o + k); k += 1; }
+    w[k] = 0;
+    if is_alnum(lc(o + k)) { return true; }
+    if str_eq(@w, "xor") || str_eq(@w, "and") || str_eq(@w, "or") || str_eq(@w, "mod") || str_eq(@w, "is") { return false; }
+    return true;
+}
+
 void next() {
     tok_seq += 1;
     prev_tok_line = err_line;
@@ -1866,6 +2090,22 @@ void next() {
             next();
             return;
         }
+        if str_eq(@dw, "if") {
+            if !cond_true() { cond_skip(true); }                  // false: the lines are not read up to the #else (the else part is read) or the #end
+            next();
+            return;
+        }
+        if str_eq(@dw, "else") {
+            while cur_pos < cur_len && lc(0) != 10 { adv(); }
+            cond_skip(false);                                     // the part before was read: the lines of the else are not
+            next();
+            return;
+        }
+        if str_eq(@dw, "end") {
+            while cur_pos < cur_len && lc(0) != 10 { adv(); }       // the end of a part that was read
+            next();
+            return;
+        }
         if !str_eq(@dw, "define") { die("unknown directive after #"); }
         while lc(0) == 32 || lc(0) == 9 { adv(); }
         if !is_letter(lc(0)) { die_help("#define needs a name", "write #define NAME value"); }
@@ -1939,6 +2179,10 @@ void next() {
         else if wn == 4 && str_eq(@tok_text, "jerr") { str_copy(@tok_text, "cerr", 8); }
         // i64 is another name of int while int is 64 bits (owner's decision 2026-11-06, docs/syntax-design.md 110): the same word to the compiler
         else if wn == 3 && str_eq(@tok_text, "i64") { str_copy(@tok_text, "int", 8); }
+        // stg(x) makes text from a value: the same call as str(x), a name that does not repeat the type str (the owner's choice, 2026-11-26)
+        if wn == 3 && str_eq(@tok_text, "stg") && lc_after_space_lex() == '(' { str_copy(@tok_text, "str", 8); }
+        // str is the short name of String when it is followed by a name (str s) or by [] (str[] v); str(x) and a variable called str stay as they are
+        if wn == 3 && str_eq(@tok_text, "str") && str_is_type_here() { str_copy(@tok_text, "String", 8); }
         if lc(0) == '[' && slice_rewrite(wn) {
             // a[lo..hi] became span(a, lo, hi): read it again from the start of the name
             cur_pos = slice_start;

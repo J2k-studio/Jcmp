@@ -607,7 +607,7 @@ i64 shift_type(i64 a, i64 b) {
     if pass_no < 2 { return 0; }
     if !is_numeric(a) || !is_numeric(b) { die_help("arithmetic needs numbers (bool and enum values cannot be used)", "compare them, or cast with (int) when you really want the number"); }
     if is_unsigned(a) { return a; }
-    if is_litnum(a) && is_litnum(b) { return 96; }
+    if is_litnum(a) { return 96; }                // a number written in the program that is shifted stays such a number: it takes the type of the other side (1 << b)
     return 0;
 }
 
@@ -3416,6 +3416,49 @@ bool decl_commas() {
             }
             one[on] = 0;
             append_text(@dc_out, @one);
+            // `int a, b = 5;`: a name without a value takes the value of the next name that has one (docs/syntax-design.md 114)
+            bool has_eq = false;
+            i64 dq = b2 - on;
+            i64 dd = 0;
+            while dq < b2 {
+                if txt[dq] == '(' || txt[dq] == '[' || txt[dq] == '{' { dd += 1; }
+                if txt[dq] == ')' || txt[dq] == ']' || txt[dq] == '}' { dd -= 1; }
+                if txt[dq] == '=' && dd == 0 && txt[dq + 1] != '=' { has_eq = true; }
+                dq += 1;
+            }
+            // an array (int arr[3], n = 3;) does not take the value
+            i64 dk2 = b2 - on;
+            while dk2 < b2 { if txt[dk2] == '[' { has_eq = true; } dk2 += 1; }
+            if !has_eq {
+                i64 ns = en + 1;
+                bool found = false;
+                while ns < n && !found {
+                    i64 ne2 = ns;
+                    i64 d3 = 0;
+                    i64 eqp = 0 - 1;
+                    while ne2 < n && !(txt[ne2] == ',' && d3 == 0) {
+                        if txt[ne2] == '(' || txt[ne2] == '[' || txt[ne2] == '{' { d3 += 1; }
+                        if txt[ne2] == ')' || txt[ne2] == ']' || txt[ne2] == '}' { d3 -= 1; }
+                        if txt[ne2] == '=' && d3 == 0 && eqp < 0 && txt[ne2 + 1] != '=' { eqp = ne2; }
+                        ne2 += 1;
+                    }
+                    if eqp >= 0 {
+                        found = true;
+                        char val[200];
+                        i64 vn = 0;
+                        i64 vq = eqp;
+                        while vq < ne2 && vn < 198 {
+                            val[vn] = txt[vq];
+                            vn += 1;
+                            vq += 1;
+                        }
+                        val[vn] = 0;
+                        append_text(@dc_out, " ");
+                        append_text(@dc_out, @val);
+                    }
+                    ns = ne2 + 1;
+                }
+            }
             append_text(@dc_out, "; ");
         }
         first = false;
@@ -3511,6 +3554,16 @@ bool for_count() {
     push_macro(@fc_out);
     next();
     return true;
+}
+
+// `loop { ... }` is `while true { ... }`: the word loop is a loop only when a { follows it (loop stays a name for a variable); the current token becomes `while` and `true` comes next
+void loop_word() {
+    if !tok_is("loop") { return; }
+    i64 k = 0;
+    while is_space(lc(k)) { k += 1; }
+    if lc(k) != '{' { return; }
+    str_copy(@tok_text, "while", 8);
+    push_macro("true");
 }
 
 // is the first thing after the current token a < ?   (alloc<int n>(50)   free<n>)
@@ -5190,7 +5243,7 @@ void parse_unary_core() {
         next();
         parse_unary();
         need_num(ex_ty);
-        if !is_unsigned(ex_ty) { ex_ty = 0; }
+        if !is_unsigned(ex_ty) && ex_ty != 96 { ex_ty = 0; }          // the not of a number written in the program is still such a number
         emit_line("mov x1, -1");
         emit_line("eor x0, x0, x1");
         if ex_ty == 93 { emit_line("uxtb x0, x0"); }

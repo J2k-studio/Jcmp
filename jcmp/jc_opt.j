@@ -2537,6 +2537,14 @@ void fr_run() {
             if l2 < out_len && rg_has(l2, "str x29, [sp, #0]\n") { l3 = rg_end(l2) + 1; }
             if l3 > 0 && l3 < out_len && rg_has(l3, "str x30, [sp, #8]\n") { l4 = rg_end(l3) + 1; }
             if l4 > 0 && l4 < out_len && rg_has(l4, "add x29, sp, #0\n") && n >= 16 && n <= 512 && n % 8 == 0 {
+                if fr_on == 2 {
+                    // a plain pair store after the sub (no pre-index write back)
+                    rg_text("sub sp, sp, #");
+                    rg_int(n);
+                    rg_text("\nstp x29, x30, [sp, #0]\nadd x29, sp, #0\n");
+                    i = rg_end(l4) + 1;
+                    continue;
+                }
                 rg_text("stp x29, x30, [sp, #-");
                 rg_int(n);
                 rg_text("]!\nadd x29, sp, #0\n");
@@ -2551,6 +2559,13 @@ void fr_run() {
             if l3 > 0 && l3 < out_len && rg_has(l3, "add sp, sp, #") {
                 i64 n = fr_number(l3 + 13);
                 if n >= 16 && n <= 504 && n % 8 == 0 {
+                    if fr_on == 2 {
+                        rg_text("ldp x29, x30, [sp, #0]\nadd sp, sp, #");
+                        rg_int(n);
+                        rg_put(10);
+                        i = rg_end(l3) + 1;
+                        continue;
+                    }
                     rg_text("ldp x29, x30, [sp], #");
                     rg_int(n);
                     rg_put(10);
@@ -3074,6 +3089,84 @@ void vf_kill_reg(i64 r) {
         j += 1;
     }
     vf_n = m;
+}
+
+// a float that was turned into its bits and is turned into a float again a few lines later (`vA = f32out fS ... fT = f32in vA`, the accumulator style
+// of the tree lowering: every operation of a float expression goes through a whole number register) becomes a copy between the float
+// registers: fmov dT, dS. The f32out stays (the whole number may be read again); a pass that removes dead definitions takes it away if not.
+i64 ff_changes;
+void op_f32fwd() {
+    i64 b = 0;
+    while b < ir_nb {
+        i64 p = ir_bs[b];
+        while p < ir_be[b] {
+            if ir_op[p] == IR_F32OUT && ir_d[p] >= 1 && ir_d[p] < 32 && ir_a[p] >= 32 && ir_a[p] < 64 {
+                i64 va = ir_d[p];
+                i64 fs = ir_a[p];
+                i64 q = p + 1;
+                while q < ir_be[b] {
+                    i64 o = ir_op[q];
+                    if o == IR_F32IN && ir_a[q] == va && ir_d[q] >= 32 && ir_d[q] < 64 {
+                        ir_op[q] = IR_COPY;
+                        ir_a[q] = fs;
+                        ir_b[q] = 0;
+                        ir_bi[q] = 0;
+                        ir_k[q] = 0;
+                        ff_changes += 1;
+                        break;
+                    }
+                    if o == IR_CALL || o == IR_CALLIND || o == IR_SYSCALL || o == IR_JMP || o == IR_BR || o == IR_FBR || o == IR_RET || o == IR_TRAP || o == IR_LRET { break; }
+                    if ir_d[q] == va { break; }
+                    if ir_d[q] == fs {
+                        // the float register fs is written again before the F32IN: the copy is put where an empty slot (a nop) stands after the F32OUT
+                        // (fs still has the value there) if the target register ft is not touched between that slot and the F32IN
+                        i64 f2 = q + 1;
+                        while f2 < ir_be[b] && !(ir_op[f2] == IR_F32IN && ir_a[f2] == va && ir_d[f2] >= 32 && ir_d[f2] < 64) {
+                            if ir_d[f2] == va || ir_op[f2] == IR_CALL || ir_op[f2] == IR_CALLIND || ir_op[f2] == IR_SYSCALL || ir_op[f2] == IR_JMP || ir_op[f2] == IR_BR || ir_op[f2] == IR_FBR || ir_op[f2] == IR_RET || ir_op[f2] == IR_TRAP || ir_op[f2] == IR_LRET { f2 = ir_be[b]; break; }
+                            f2 += 1;
+                        }
+                        if f2 < ir_be[b] {
+                            i64 ft = ir_d[f2];
+                            i64 slot = 0 - 1;
+                            i64 m = p + 1;
+                            bool fs_ok = true;
+                            while m < f2 && slot < 0 && fs_ok {
+                                if ir_op[m] == IR_NOP { slot = m; }
+                                else if ir_d[m] == fs { fs_ok = false; }
+                                m += 1;
+                            }
+                            if slot >= 0 {
+                                i64 t2 = slot + 1;
+                                bool ft_ok = ft != fs;
+                                while t2 < f2 && ft_ok {
+                                    if ir_d[t2] == ft || ir_a[t2] == ft || (ir_uses_b(ir_op[t2]) && ir_bi[t2] == 0 && ir_b[t2] == ft) { ft_ok = false; }
+                                    t2 += 1;
+                                }
+                                if ft_ok {
+                                    ir_op[slot] = IR_COPY;
+                                    ir_d[slot] = ft;
+                                    ir_a[slot] = fs;
+                                    ir_b[slot] = 0;
+                                    ir_bi[slot] = 0;
+                                    ir_k[slot] = 0;
+                                    ir_op[f2] = IR_COPY;
+                                    ir_a[f2] = ft;
+                                    ir_b[f2] = 0;
+                                    ir_bi[f2] = 0;
+                                    ir_k[f2] = 0;
+                                    ff_changes += 1;
+                                }
+                            }
+                        }
+                        break;
+                    }
+                    q += 1;
+                }
+            }
+            p += 1;
+        }
+        b += 1;
+    }
 }
 
 void op_vfwd() {

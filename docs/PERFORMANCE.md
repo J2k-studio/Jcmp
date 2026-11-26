@@ -223,6 +223,19 @@ Other switches that help with speed work: `-irdbg 4194304` (why the vectoriser g
 - Do not run the test suite or a diff check at the same time as a timing.
 - Check the output as well: both programs must print the same value.
 - Write down the switches used. A timing with `-novec` or `-noir` is a different measurement.
+- **Use the stable value, not the best run.** `tools/bench/run.sh` times the programs in the same rounds (10 by default), drops the fastest and
+  the slowest fifth of the rounds, and takes the middle of the rest. It prints the **spread** ((slowest - fastest) / stable value) of every line:
+  a line with a spread over 30 % is noisy and must be measured again before it is believed. Measured on the development phone (4 little and
+  4 big cores, 1.5 to 2.4 GHz): the same C program changed from 269 to 392 ms in 150 runs (max / min 1.46), and a quiet and a busy phone gave
+  a table that differed by up to ten times. `tools/bench/selfhost.sh` measures the compiler compiling itself in the same way and checks that the
+  program is the same in every round.
+
+## Target of the speed work (decided 2026-11-27, scope reduced)
+The goal is a program that is **not more than 1.10 times the time of the same C program** (`clang -O2`) on ARM64, and 1.00 where it can be.
+Measured on a quiet phone (stable value, 2026-11-27): 22 of 26 benchmarks are at or under 1.05; `gcd` 1.02, `hashmap` 1.09; `particles` and
+`tilemap` are 1.2 to 1.7 because C vectorises the count of the neighbours with NEON and J2K does not yet. These two are the only listed
+exceptions. The order of work: ARM64 first (the `int` 32-bit code, then the vector idioms of `particles` and `tilemap`), then ARM32, then x86-64.
+What is **not** in the target: beating C with `-O3 -march=native`, auto-parallel loops, link-time optimisation of other languages.
 
 ## 8. Threads
 

@@ -1,11 +1,21 @@
 # Changelog
 
+## 1.2.39.0 (2026-11-27)
+* **Added (language):** `str` is the short name of `String` (`str s`, `str[] v`, `fn f(str name)`); `str(x)` and a variable called `str` keep working. `stg(x)` makes text from a value (the old `str(x)` still works). `int a, b = 5;` gives the value to every name before it (`double x, y = 2.5;` both 2.5; an array in the list does not take it).
+* **Fixed (compiler):** a function that kept a comparison in a variable (`bool over = a[i] > limit;`) used to be given to the old text path (the tree lowering could not write the comparison as a value); it is lowered now (`cmp` and `cset`). A global `bool` is printed `true` / `false` in a function made by the tree path (it printed 1).
+* **Added (speed):** a 32-bit `int` that is loaded or stored is no longer cut a second time (the loop of `i32_gcd` had three `sxtw`, it has one); a float that went through a whole number register and back is a copy between float registers (`particles` 2.2x -> 2.05x of C); `-stp2` (a plain `stp x29, x30` frame, 4 % on `fib`; optional).
+* **Added (tools):** `tools/bench/run.sh` times the J2K and the C programs in the same rounds and prints the stable value (the middle of the rounds without the fastest and slowest fifth) and the spread of every line; `tools/bench/selfhost.sh` does the same for the compiler compiling itself and checks that every round gives the same program. The goal and the measuring rules are in docs/PERFORMANCE.md (not more than 1.10 times the time of C -O2).
+* **Added (tests):** t643 (a comparison kept as a value), t644 (a global bool is printed), t645 (`str`), t646 (`stg`), t647 (several names in one declaration), t627 repaired for arrays in a list.
+* **Rejected after measuring:** if-conversion of `if c { n += 1; }` (slower on this phone: the gain of clang there is NEON); a `stp`/`ldp` frame with write-back (slower).
+
 ## 1.2.38.0 (2026-11-26)
 * **Fixed (crash):** a loop that divides by a local number and reads an array (`i64 n = list.len; ... for j in 0..cnt.len { s += newest[j] * 9 / n; }`) read the field at 16 of the NUMBER `n` before the loop (the check of a divisor was taken for the null check of an array handle in the hoist of handles): "runtime error: segmentation fault". `jsh` hit it as soon as the grey text found a line of the history. Test t637. Programs built with 1.2.2x - 1.2.37 can have it: build them again.
 * **Fixed (speed):** a `for` loop of the C form (`for int i = 0; i < n; i++ { }` and the counting loop) was never made by the tree path: every function that had one was made from its text (values in stack cells). It is now lowered by the tree path (the step runs at `continue`); a loop that chases pointers in `main` went from 445 to 169 ms.
 * **Added (library):** `<draw2d>` 0.1.0: ellipses, boxes with round corners, rings, arcs, cubic Bezier curves, convex polygons, horizontal / vertical / radial gradients, outlines and colour mixing, over any `Canvas2d` (OpenGL, memory ...); opaque colours have no seams.
 * **Added (compiler):** `-asm NAME` (the assembler text of a function, `-asm all` the whole program; the old `-show` is the same) and `-mc NAME` (the machine code of a function on ARM64: address, the word in hex, the assembler line).
-* **Added (tests):** t635 (pixels of every shape on the memory backend), a check of `-asm` and `-mc`.
+* **Added (language):** constants of the compiler (`ARCH`, `VERSION`, `POINTER_BITS`, `BIG_ENDIAN`, `DEBUG`: ordinary `#define` lines that the compiler makes; a `#define` of the program replaces them) and `#if CONDITION` ... `#else` ... `#end`: the part that is not chosen is not read at all.
+* **Changed (language):** a number written in the program that is shifted (`1 << b`) or negated with `~` stays such a number, so it takes the type of the other side without a cast: `u64 x; x |= 1 << b;`, `u32 z = 1 << b;`, `u64 mask = ~(1 << b);` compile.
+* **Added (tests):** t639 (the numbers that adapt), t638 (`#if`), t637, t635 (pixels of every shape on the memory backend), a check of `-asm` and `-mc`.
 
 ## 1.2.37.0 (2026-11-26)
 * **Added (language):** `local` before a function or a global variable: only the file that declares it may use it; another file gets the error "this function is local to another file" (or "variable"), with the way to fix it. It hides a name, not the code.

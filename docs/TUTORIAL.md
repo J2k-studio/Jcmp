@@ -1,4 +1,4 @@
-# Learn J2K: a step-by-step tutorial
+# Learn Jex: a step-by-step tutorial
 
 This tutorial teaches the language by small programs. Each program was compiled and run to produce the output you see.
 You need the compiler (see the README: `curl -fsSL https://raw.githubusercontent.com/J2k-studio/Jexcmp/main/install.sh | sh`).
@@ -186,14 +186,14 @@ Every program starts at `main`. `jout <<` prints; `\n` is a new line. Save this 
 using stdlib;
 
 void main() {
-    jout << "Hello, J2K!\n";
+    jout << "Hello, Jex!\n";
 }
 ```
 
 Output:
 
 ```
-Hello, J2K!
+Hello, Jex!
 ```
 
 Compile and run: `jcmp hello.jk -o hello` then `./hello`. If you made a typo, the compiler tells you the file, line and column
@@ -820,7 +820,7 @@ using stdlib;
 void main() {
     i32 f = File::open("note.txt", FileMode::Write);
     if f < 0 { throw "cannot create note.txt"; }
-    File::write(f, "J2K can write files\n");
+    File::write(f, "Jex can write files\n");
     File::close(f);
 
     char line[64];
@@ -834,7 +834,7 @@ void main() {
 Output:
 
 ```
-J2K can write files
+Jex can write files
 ```
 
 ## Lesson 20. A program in several files
@@ -1085,7 +1085,7 @@ One year after 1970-01-01 is 1971-01-01, a Friday (5). 2024 is a leap year, so F
 using stdlib;
 
 void main() {
-    String text = "{\"name\": \"J2K\", \"version\": 0.9, \"tags\": [\"fast\", \"small\"], \"ok\": true}";
+    String text = "{\"name\": \"Jex\", \"version\": 0.9, \"tags\": [\"fast\", \"small\"], \"ok\": true}";
     JsonDoc doc = Json::parse(text).unwrap();
     int root = doc.root();
     jout << doc.text(doc.get(root, "name")) << " " << doc.number(doc.get(root, "version")) << "\n";
@@ -1100,7 +1100,7 @@ void main() {
 Output:
 
 ```
-J2K 0.900000
+Jex 0.900000
 fast small true
 ["fast","small"]
 "say \"hi\""
@@ -2242,7 +2242,7 @@ The first `makej` builds everything; the second finds nothing to do, because a p
 
 ## Lesson 58. Several cores, and the build file as a program
 
-`makej -j 4` builds 4 things at the same time (the default is the number of cores that are on, 8 on a phone like this one): a target starts as soon as what it needs is done, and if one fails the others that run finish, nothing new starts, and the exit code is 1. When a build needs a loop or a condition, write the build file as a J2K program instead, `makej.jk` (it wins over the plain file when both exist):
+`makej -j 4` builds 4 things at the same time (the default is the number of cores that are on, 8 on a phone like this one): a target starts as soon as what it needs is done, and if one fails the others that run finish, nothing new starts, and the exit code is 1. When a build needs a loop or a condition, write the build file as a Jex program instead, `makej.jk` (it wins over the plain file when both exist):
 
 ```jk
 #import <stdlib>
@@ -2281,7 +2281,7 @@ int main() {
 
 ## Lesson 59. Shared libraries: export and -l
 
-A program is not the only thing the compiler can make. With `-l` it makes a **shared library** (`.so`) whose entry points are the functions marked `export`. This is how J2K code becomes the "brain" of an Android app or a helper of any other program. The file below is a normal program here, so that this lesson can run; the library code comes after it.
+A program is not the only thing the compiler can make. With `-l` it makes a **shared library** (`.so`) whose entry points are the functions marked `export`. This is how Jex code becomes the "brain" of an Android app or a helper of any other program. The file below is a normal program here, so that this lesson can run; the library code comes after it.
 
 ```jk
 #import <stdlib>
@@ -2353,7 +2353,7 @@ To write and build on the phone: `coderin hello.jk` (Ctrl-S saves, Ctrl-Q quits)
 ## Lesson 61. The libraries of the phone: `-dyn` and `<native>`
 
 
-A normal J2K program is *static*: it is one file that talks to the kernel with system calls and needs nothing else. The graphics chip, however, is reached through the libraries of the phone (`libvulkan.so`, `libEGL.so`, `libGLESv3.so`, `libOpenCL.so`). To use them the program must be *dynamic*: the loader of Android starts it and gives it `libdl.so` and `libc.so`. You ask for that with one option:
+A normal Jex program is *static*: it is one file that talks to the kernel with system calls and needs nothing else. The graphics chip, however, is reached through the libraries of the phone (`libvulkan.so`, `libEGL.so`, `libGLESv3.so`, `libOpenCL.so`). To use them the program must be *dynamic*: the loader of Android starts it and gives it `libdl.so` and `libc.so`. You ask for that with one option:
 
 ```
 jcmp -dyn gpu.jk -o gpu       # a dynamic executable; it runs in Termux and in the Jaric app, without any other app
@@ -2383,12 +2383,12 @@ int main() {
 
 On the phone of the author this prints `Vulkan 1.1`. Built the normal (static) way it prints the first message, because a static program has no `libdl.so`.
 
-How it works, in short: the library reads `/proc/self/maps`, finds where `libdl.so` is in memory, reads its symbol table and finds `dlopen` and `dlsym`; a function pointer made from that number is called like any function. Floating point arguments (OpenGL takes many) are passed with `Native::callf1 .. callf4` (floats only) and `Native::calli_f1 .. calli_f4` (a number first, then floats), because the C convention wants them in other registers than J2K uses.
+How it works, in short: the library reads `/proc/self/maps`, finds where `libdl.so` is in memory, reads its symbol table and finds `dlopen` and `dlsym`; a function pointer made from that number is called like any function. Floating point arguments (OpenGL takes many) are passed with `Native::callf1 .. callf4` (floats only) and `Native::calli_f1 .. calli_f4` (a number first, then floats), because the C convention wants them in other registers than Jex uses.
 
 ## Lesson 62. OpenGL ES: the first picture, drawn by the chip
 
 
-`<opengl3>` makes an *off-screen* OpenGL ES context (a surface the size you ask, not shown on the screen) on the real driver, then every call is the same as in the OpenGL ES documentation, spelled the J2K way (`glClearColor` is `gl.clear_color`).
+`<opengl3>` makes an *off-screen* OpenGL ES context (a surface the size you ask, not shown on the screen) on the real driver, then every call is the same as in the OpenGL ES documentation, spelled the Jex way (`glClearColor` is `gl.clear_color`).
 
 ```jk
 #import <stdlib>
@@ -2611,7 +2611,7 @@ int main() {
 
 int main() {
     Discord bot = Discord::bot("TOKEN-of-the-bot");
-    switch bot.send("123456789012345678", "hello from J2K") {
+    switch bot.send("123456789012345678", "hello from Jex") {
         Result::Ok(x): { jout << "sent\n"; }
         Result::Err(e): { jout << "failed: " << e.message << "\n"; }         // Discord's own words: 401 = the token is wrong
     }
@@ -2856,7 +2856,7 @@ int main() {
 }
 ```
 
-`i8x16` has one more trick, `a.dot(b)`: the dot product of sixteen bytes by sixteen bytes into four 32-bit sums in **one instruction** (the SDOT of the Cortex-A76). It is what makes a quantised model fast: `i32x4 d = i8x16::load(w, i).dot(i8x16::load(x, i));`. Keep a function with vectors small, with no calls inside the loop, so that the compiler can keep every vector in a register (look with `jcmp -show NAME file.jk` and `jcmp -irstat file.jk`). A function can have at most 8 parameters. And compare with a plain C version when it matters: the aim of J2K is to be within a small factor of C, and the numbers of `bench/` say where it is now.
+`i8x16` has one more trick, `a.dot(b)`: the dot product of sixteen bytes by sixteen bytes into four 32-bit sums in **one instruction** (the SDOT of the Cortex-A76). It is what makes a quantised model fast: `i32x4 d = i8x16::load(w, i).dot(i8x16::load(x, i));`. Keep a function with vectors small, with no calls inside the loop, so that the compiler can keep every vector in a register (look with `jcmp -show NAME file.jk` and `jcmp -irstat file.jk`). A function can have at most 8 parameters. And compare with a plain C version when it matters: the aim of Jex is to be within a small factor of C, and the numbers of `bench/` say where it is now.
 
 ## Lesson 75. Programs and libraries from the net: `jc`
 
@@ -2866,12 +2866,12 @@ int main() {
 ```text
 jc install NAME          a tool of Jextool (jsh, neuron, mulap, imgj ...), or a package (git, python, clang ...)
 jc tools                 the list of tools         jc update        every tool and package that has a newer version
-jc lib list              the libraries of J2K      jc lib install web telegram    a library for #import <name>
+jc lib list              the libraries of Jex      jc lib install web telegram    a library for #import <name>
 jc pkg search git        look in the packages      jc pkg list | remove NAME
 jc install FILE.jc       a program of the Jaric store (it asks for the permissions it wants)
 ```
 
-The tools are single programs written in J2K (`jc install neuron`). The **packages** are the programs of other people built for the prefix of the Jaric app (`jc install git`, `python`, `python-pip`, `clang`, `dropbear`): they are unpacked into the prefix and listed in `usr/var/lib/jcpkg/NAME.list` so that `jc pkg remove NAME` takes away exactly what was put there. The libraries are single files (`#import <name>`): `jc lib install NAME` puts the file where the compiler looks. Everything is checked with a SHA-256 before it is put in place; if a checksum is wrong nothing is installed.
+The tools are single programs written in Jex (`jc install neuron`). The **packages** are the programs of other people built for the prefix of the Jaric app (`jc install git`, `python`, `python-pip`, `clang`, `dropbear`): they are unpacked into the prefix and listed in `usr/var/lib/jcpkg/NAME.list` so that `jc pkg remove NAME` takes away exactly what was put there. The libraries are single files (`#import <name>`): `jc lib install NAME` puts the file where the compiler looks. Everything is checked with a SHA-256 before it is put in place; if a checksum is wrong nothing is installed.
 
 To share your own tool: a folder with the program, `build.sh`, `test.sh`, `README.md`, `CHANGELOG.md`, `VERSION`; test it, release it as the repository Jextool does, and a line in `tools.txt` makes `jc install` find it. Every tool and library must have a README that says what it is, how to install it and how to use it with an example that works: when you read a README that does not teach you, fix the README.
 
@@ -2920,7 +2920,7 @@ int main() {
 }
 ```
 
-`n >> i` moves the bits `i` places to the right, `& 1` keeps the lowest one: so `(n >> i) & 1` is bit number `i`. Doubling a number moves all its bits one place left (`n << 1`), halving moves them right. A byte holds 8 bits, a `short` 16, an `int` of J2K 64.
+`n >> i` moves the bits `i` places to the right, `& 1` keeps the lowest one: so `(n >> i) & 1` is bit number `i`. Doubling a number moves all its bits one place left (`n << 1`), halving moves them right. A byte holds 8 bits, a `short` 16, an `int` of Jex 64.
 
 **Try:** print the powers of two up to 2^16 in binary and hex; write a function that turns the text `"1011"` into 11.
 
@@ -2958,7 +2958,7 @@ int main() {
 }
 ```
 
-An `int` of J2K has 64 bits, so its smallest number is -2^63 and its largest 2^63 - 1; adding one to the largest wraps to the smallest. `i8`, `i16`, `i32` and `u8` ... `u64` (lesson 54) show the same thing in smaller sizes. When a small signed number is made wider, the sign bit is copied to the new places (**sign extension**): `11111110` as 8 bits and `1111111111111110` as 16 bits are both -2.
+An `int` of Jex has 64 bits, so its smallest number is -2^63 and its largest 2^63 - 1; adding one to the largest wraps to the smallest. `i8`, `i16`, `i32` and `u8` ... `u64` (lesson 54) show the same thing in smaller sizes. When a small signed number is made wider, the sign bit is copied to the new places (**sign extension**): `11111110` as 8 bits and `1111111111111110` as 16 bits are both -2.
 
 **Try:** what are 100 + 100 in an i8, 0 - 1 in a u8? Make the answer by hand with bits first.
 
@@ -3173,7 +3173,7 @@ int main() {
     src.push("print r0"); src.push("stop");
     int[] code = assemble(src);
     String line = "";
-    for i in 0..code.len { line = line + str(code[i]) + " "; }
+    for i in 0..code.len { line = line + stg(code[i]) + " "; }
     jout << code.len << " bytes: " << line << "\n";           // the program of lesson 80
     String[] bad = arr(2);
     bad.push("jump somewhere");
@@ -3182,7 +3182,7 @@ int main() {
 }
 ```
 
-The real assembler of J2K is the same in kind (`jcmp/jc_asm.j`), only the instructions are ARM64's: each one is one 32-bit word with fields for the operation and the registers (lesson 82). It also has to choose between several encodings of one mnemonic (a short and a long jump) and to check that a number fits its field: a good assembler says "the number does not fit" rather than writing a wrong word.
+The real assembler of Jex is the same in kind (`jcmp/jc_asm.j`), only the instructions are ARM64's: each one is one 32-bit word with fields for the operation and the registers (lesson 82). It also has to choose between several encodings of one mnemonic (a short and a long jump) and to check that a number fits its field: a good assembler says "the number does not fit" rather than writing a wrong word.
 
 **Try:** add the instruction `mul`; make the assembler say the line number of a mistake; write a "disassembler" that turns the bytes back into text.
 
@@ -3244,7 +3244,7 @@ Look at the machine code that the compiler makes for your own function with `jcm
 ## Lesson 83. Laying out the output: columns, digits, hex
 
 
-`jout <<` prints a value as it is. For tables, money and addresses you want it laid out: so many digits, a column of fixed width, a number in base 16. There is no format string (`%5.2f`) in J2K and no new syntax: the layout is done by ordinary functions, and you put them inside the stream.
+`jout <<` prints a value as it is. For tables, money and addresses you want it laid out: so many digits, a column of fixed width, a number in base 16. There is no format string (`%5.2f`) in Jex and no new syntax: the layout is done by ordinary functions, and you put them inside the stream.
 
 | function | gives | example |
 |---|---|---|
@@ -3266,7 +3266,7 @@ int main() {
     int[] cents = arr(3);
     cents.push(1250); cents.push(499); cents.push(1500000);
     for i in 0..items.len {
-        jout << pad(items[i], 14) << padl(Fmt::thousands(cents[i] / 100), 9) << "." << Fmt::pad_left(str(cents[i] % 100), 2, '0') << "\n";
+        jout << pad(items[i], 14) << padl(Fmt::thousands(cents[i] / 100), 9) << "." << Fmt::pad_left(stg(cents[i] % 100), 2, '0') << "\n";
     }
     jout << "ratio " << fmt(2.0 / 3.0, 3) << "   hex " << tohex(48879) << "   bits " << tobin(37) << "\n";
     return 0;
@@ -3313,7 +3313,7 @@ A button clicks when the finger goes down **and up** inside its box (a user who 
 ## Lesson 85. An apk without the Android tools: `apkj`
 
 
-An apk is a zip file with five kinds of part: a binary `AndroidManifest.xml`, a (nearly empty) `resources.arsc`, a `classes.dex` (the small Java part that starts your native library), your `libgame.so`, and a signature. The usual tools (`aapt2`, `ecj`, `d8`, `zipalign`, `apksigner`, Java) are heavy on a phone. `apkj` is a tool written in J2K that makes all of it itself, and the signature too (ECDSA P-256 with its own certificate):
+An apk is a zip file with five kinds of part: a binary `AndroidManifest.xml`, a (nearly empty) `resources.arsc`, a `classes.dex` (the small Java part that starts your native library), your `libgame.so`, and a signature. The usual tools (`aapt2`, `ecj`, `d8`, `zipalign`, `apksigner`, Java) are heavy on a phone. `apkj` is a tool written in Jex that makes all of it itself, and the signature too (ECDSA P-256 with its own certificate):
 
 ```text
 apkj key                                           # makes ~/.apkj.key once; keep it (an update of an app must be signed with the same key)
@@ -4426,7 +4426,7 @@ The matrices are equal, so the loop order does not change the answer. Only the o
 
 ## Lesson 110. Comparing with C fairly
 
-To say that J2K is faster or slower than C, compare the same algorithm, the same data and the same settings. Run the two versions in
+To say that Jex is faster or slower than C, compare the same algorithm, the same data and the same settings. Run the two versions in
 turns (A, B, A, B ...) so that heat and other work hit both alike; keep the best of N runs; and check that both give the same answer before you
 compare any time. This program shows the shape of such a test: two versions of one kernel, run in turns, the answers compared, and no time printed.
 
@@ -5522,7 +5522,7 @@ Compile only the main file: `jcmp main.jk -o main`. The compiler finds `report.j
 
 ## Lesson 132. A test for your own function
 
-A test checks one result: it calls your function with a known input and compares the answer with the answer you expect. Here is a tiny test runner in J2K: each check prints `PASS` or `FAIL`, and the last line counts them. You can keep the runner in its own `.j` file and use it in every program.
+A test checks one result: it calls your function with a known input and compares the answer with the answer you expect. Here is a tiny test runner in Jex: each check prints `PASS` or `FAIL`, and the last line counts them. You can keep the runner in its own `.j` file and use it in every program.
 
 ```jk
 #import <stdlib>
@@ -6869,7 +6869,7 @@ void main() {
     jout << "n          linear    binary\n";
     int n = 16;
     for t in 0..5 {
-        jout << pad(str(n), 10) << " " << pad(str(linear_steps(n)), 9) << " " << binary_steps(n) << "\n";
+        jout << pad(stg(n), 10) << " " << pad(stg(linear_steps(n)), 9) << " " << binary_steps(n) << "\n";
         n = n * 16;
     }
 }

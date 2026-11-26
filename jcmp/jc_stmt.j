@@ -2610,6 +2610,7 @@ void parse_statement_inner() {
         parse_if();
         return;
     }
+    loop_word();                       // loop { }  is  while true { }
     if tok_is("while") {
         parse_while();
         return;
