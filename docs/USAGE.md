@@ -25,6 +25,8 @@ jcmp input.jk output                    (the second name is the program; if it e
 | `-st`              | strict: every warning becomes an error |
 | `-I dir`           | where `#import "name"` also looks (after the folder of the importing file) |
 | `-version`, `-help` | print the version / a short list of the options (one or two dashes: `--version`; also `-v`, `-h`) |
+| `-asm NAME`        | write the assembler text of the function NAME and the number of its instructions (`-asm all`: the whole program); `-show NAME` is the same |
+| `-mc NAME`         | write the machine code of the function NAME (ARM64): the address, the word in hex (as the CPU reads it) and the assembler line, e.g. `400970  d65f03c0  ret` |
 | `-show NAME`       | write the code of the function NAME as it is in the program (ARM64) and the number of its instructions, then stop (nothing else is written) |
 | `-l`               | make a shared library (`.so`) instead of a program: the functions written with `export` in front are its entry points. See "Shared libraries" in LANGUAGE.md |
 | `-dyn`             | make a *dynamic* executable: the loader of Android starts it with `libdl.so` and `libc.so`, so the program can load the libraries of the phone (`libvulkan.so`, `libEGL.so`, `libGLESv3.so` ...) with the library `<native>`. Tutorial lessons 61 to 66 |

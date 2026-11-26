@@ -286,5 +286,6 @@ i64 lam_seq;                     // the number of the next lambda (__lambda_<n>)
 i64 x_target;                    // 32: -target arm32 (the ARM32 back end, jc_a32.j)
 i64 x_dyn;                       // 1: -dyn, a program that is a dynamic executable (it loads libc.so and libdl.so and can call the libraries of the system)
 i64 x_lib;                       // 1: -l, the program is a shared library (.so) with the functions marked `export`
+char^ x_mc;                      // -mc NAME: the machine code of the function NAME: address, the words in hex, the assembler line
 char^ x_show;                    // -show NAME: the assembler text of the function NAME, as it is in the program, and the number of its instructions
 char^ x_map;                     // -xmap FILE: the addresses of the functions (and the labels) of the program

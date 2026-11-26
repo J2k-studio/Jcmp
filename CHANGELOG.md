@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.38.0 (2026-11-26)
+* **Fixed (crash):** a loop that divides by a local number and reads an array (`i64 n = list.len; ... for j in 0..cnt.len { s += newest[j] * 9 / n; }`) read the field at 16 of the NUMBER `n` before the loop (the check of a divisor was taken for the null check of an array handle in the hoist of handles): "runtime error: segmentation fault". `jsh` hit it as soon as the grey text found a line of the history. Test t637. Programs built with 1.2.2x - 1.2.37 can have it: build them again.
+* **Fixed (speed):** a `for` loop of the C form (`for int i = 0; i < n; i++ { }` and the counting loop) was never made by the tree path: every function that had one was made from its text (values in stack cells). It is now lowered by the tree path (the step runs at `continue`); a loop that chases pointers in `main` went from 445 to 169 ms.
+* **Added (library):** `<draw2d>` 0.1.0: ellipses, boxes with round corners, rings, arcs, cubic Bezier curves, convex polygons, horizontal / vertical / radial gradients, outlines and colour mixing, over any `Canvas2d` (OpenGL, memory ...); opaque colours have no seams.
+* **Added (compiler):** `-asm NAME` (the assembler text of a function, `-asm all` the whole program; the old `-show` is the same) and `-mc NAME` (the machine code of a function on ARM64: address, the word in hex, the assembler line).
+* **Added (tests):** t635 (pixels of every shape on the memory backend), a check of `-asm` and `-mc`.
+
 ## 1.2.37.0 (2026-11-26)
 * **Added (language):** `local` before a function or a global variable: only the file that declares it may use it; another file gets the error "this function is local to another file" (or "variable"), with the way to fix it. It hides a name, not the code.
 * **Added (tests):** t632 (local names used inside their file), t633 and t634 (a call and a write from another file are rejected).

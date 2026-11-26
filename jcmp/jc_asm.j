@@ -1897,6 +1897,27 @@ void as_skip_to_eol() {
 }
 
 // one whole pass over the text
+// -mc: the lines of the text that are listed with their machine code (offsets into as_src), and what the assembler made of each line
+i64 mc_from;
+i64 mc_to;                      // 0: nothing is listed
+i64 mc_n;
+i64 mc_pos[8192];               // where the code of the line begins and ends (bytes from the start of the code), and where the line is in the text
+i64 mc_end[8192];
+i64 mc_at[8192];
+
+// the assembler takes one line (a label may stand before it): when the line is in the part to list, what it made is remembered
+void as_line_listed() {
+    i64 p0 = as_pos;
+    i64 c0 = as_ci;
+    as_instruction();
+    if mc_to > 0 && c0 >= mc_from && c0 < mc_to && mc_n < 8192 && as_pos > p0 {
+        mc_pos[mc_n] = p0;
+        mc_end[mc_n] = as_pos;
+        mc_at[mc_n] = c0;
+        mc_n += 1;
+    }
+}
+
 void as_run_pass() {
     as_ci = 0;
     as_pos = 0;
@@ -1911,11 +1932,11 @@ void as_run_pass() {
                 as_add_label();
                 as_skip_spaces();
                 if as_ci < as_src_len && as_src[as_ci] != 10 {
-                    as_instruction();
+                    as_line_listed();
                     as_skip_to_eol();
                 }
             } else {
-                as_instruction();
+                as_line_listed();
                 as_skip_to_eol();
             }
         }

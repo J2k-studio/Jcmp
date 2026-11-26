@@ -2168,7 +2168,11 @@ i64 ast_stmt() {
                 ast_loop_depth -= 1;
                 ast_nl = saved_nl3;
                 if ast_ok == 0 { return 0; }
-                return ast_node(AK_WHILE, cond, body4, ini, 0 - 1 - stp);
+                // the C for loop: { init; while cond { body } } with the step in c (it runs after the body and at `continue`); val = 1
+                i64 wh = ast_node(AK_WHILE, cond, body4, stp, 1);
+                if ini == 0 { return wh; }
+                ast_nx[ini_last] = wh;
+                return ast_node(AK_BLOCK, ini, 0, 0, 0);
             }
             if tok_kind != T_IDENT {
                 ast_fail("a for loop that is not understood");

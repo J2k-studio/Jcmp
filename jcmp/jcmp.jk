@@ -3,7 +3,7 @@
 // Use:    jcmp1 input.jk -o program
 // the version of the compiler (also in the file VERSION; release.sh checks that they agree)
 #allow syscall                         // the compiler is the layer under Sys: it calls the system by number on purpose
-#define JCMP_VERSION "1.2.37.0"
+#define JCMP_VERSION "1.2.38.0"
 
 #import "jc_base"
 #import "jc_asm"
@@ -99,7 +99,9 @@ void help() {
     write_out("  -dyn             make a dynamic executable (it can load the libraries of the system: libvulkan.so, libEGL.so ... with the library native)\n");
     write_out("  -progress FILE   write the percent of the compile into FILE (makej shows it as a bar)\n");
     write_out("  -j N             work on N processes in the long passes (a big program; the default is the cores this process may use; -j 1 = one)\n");
-    write_out("  -show name       write the code of the function name as it is in the program (ARM64) and how many instructions it has; nothing else is written\n");
+    write_out("  -asm name        the assembler text of the function name (and how many instructions it has); -asm all: the whole program\n");
+    write_out("  -mc name         the machine code of the function name: address, the word in hex, the assembler line (ARM64)\n");
+    write_out("  -show name       the same as -asm name\n");
     write_out("  -jh file         write the interface of a file (its declarations without the bodies); -api name: of a library\n");
     write_out("  -cache dir       keep the code of the functions that did not change in dir (J2K_CACHE=dir for every build); -nocache: not; -clean dir: delete a cache\n");
     write_out("  -update [version] replace the compiler and its library (as a pair) by the latest release, or by the given version\n");
@@ -167,6 +169,105 @@ void write_label_map(char^ path) {
         sl += 1;
     }
     write_file(path, buf, n);
+}
+
+// the bytes of a number as 8 hex digits (a word of code)
+void write_hex32(i64 w) {
+    char hx[16];
+    i64 k = 0;
+    while k < 8 {
+        i64 d = (w >> (28 - k * 4)) & 15;
+        if d < 10 { hx[k] = '0' + d; } else { hx[k] = 'a' + d - 10; }
+        k += 1;
+    }
+    hx[8] = 0;
+    write_out(@hx);
+}
+
+void write_hex_addr(i64 a) {
+    char hx[16];
+    i64 k = 0;
+    while k < 6 {
+        i64 d = (a >> (20 - k * 4)) & 15;
+        if d < 10 { hx[k] = '0' + d; } else { hx[k] = 'a' + d - 10; }
+        k += 1;
+    }
+    hx[6] = 0;
+    write_out(@hx);
+}
+
+// -mc NAME: assemble the program and list the function NAME with its machine code:  ADDRESS  WORD  the line of the assembler text
+void machine_code_of(char^ name) {
+    if x_target == 32 { write_err("jcmp: -mc works for ARM64 only (the ARM32 back end has no listing yet)\n"); syscall(93, 1); }
+    i64 nl = str_len(name);
+    i64 p = 0;
+    i64 start = 0 - 1;
+    while p < out_len {
+        i64 e = p;
+        while e < out_len && out_buf[e] != 10 { e += 1; }
+        if e - p == nl + 1 && out_buf[e - 1] == ':' {
+            i64 k = 0;
+            while k < nl && out_buf[p + k] == name[k] { k += 1; }
+            if k == nl { start = p; break; }
+        }
+        p = e + 1;
+    }
+    if start < 0 {
+        write_err("jcmp: -mc: there is no function ");
+        write_err(name);
+        write_err(" in the program (a function that nobody calls is not made)\n");
+        syscall(93, 1);
+    }
+    i64 stop = start + 1;
+    bool first = true;
+    p = start;
+    while p < out_len {
+        i64 e2 = p;
+        while e2 < out_len && out_buf[e2] != 10 { e2 += 1; }
+        bool label = out_buf[e2 - 1] == ':';
+        bool localab = label && out_buf[p] == 'L' && out_buf[p + 1] >= '0' && out_buf[p + 1] <= '9';
+        if !first && ((label && !localab) || out_buf[p] == '.') { break; }
+        first = false;
+        stop = e2 + 1;
+        p = e2 + 1;
+    }
+    i64 k2 = 0;
+    while k2 < out_len {
+        as_src[k2] = out_buf[k2];
+        k2 += 1;
+    }
+    mc_from = start;
+    mc_to = stop;
+    as_embedded = 1;
+    as_lib = 0;
+    as_dyn = x_dyn;
+    as_assemble(out_len);
+    write_out("// ");
+    write_out(name);
+    write_out(":  address, machine code (little endian words as the CPU reads them), assembler text\n");
+    i64 n = 0;
+    while n < mc_n {
+        i64 w = mc_pos[n];
+        bool firstw = true;
+        while w < mc_end[n] {
+            i64 word = (as_code[w] & 255) | ((as_code[w + 1] & 255) << 8) | ((as_code[w + 2] & 255) << 16) | ((as_code[w + 3] & 255) << 24);
+            write_out("  ");
+            write_hex_addr(0x4000B0 + w);
+            write_out("  ");
+            write_hex32(word);
+            if firstw {
+                write_out("  ");
+                i64 c = mc_at[n];
+                i64 q = c;
+                while q < as_src_len && as_src[q] != 10 { q += 1; }
+                syscall(64, 1, @as_src + c, q - c);
+            }
+            write_out("\n");
+            firstw = false;
+            w += 4;
+        }
+        n += 1;
+    }
 }
 
 // -show NAME: the lines of the function NAME in the final assembler text, then the number of instructions (lines that are not labels, directives or comments)
@@ -637,10 +738,14 @@ void main() {
             ai += 1;
             if ai >= argc() { usage(); }
             str_copy(@inc_dir, arg(ai), 256);
-        } else if str_eq(a, "-show") {
+        } else if str_eq(a, "-show") || str_eq(a, "-asm") {
             ai += 1;
             if ai >= argc() { usage(); }
-            x_show = arg(ai);
+            x_show = arg(ai);                     // -asm NAME (or -asm all for the whole program): the assembler text
+        } else if str_eq(a, "-mc") {
+            ai += 1;
+            if ai >= argc() { usage(); }
+            x_mc = arg(ai);                       // -mc NAME: the machine code of a function
         } else if is_opt(a, "emit-asm") {
             ai += 1;
             if ai >= argc() { usage(); }
@@ -712,7 +817,7 @@ void main() {
         bn = 0;
     }
     base[bn] = 0;
-    if out_elf == null && out_asm == null && x_show == null {
+    if out_elf == null && out_asm == null && x_show == null && x_mc == null {
         // no -o: the program is named like the source, in the current folder
         if bn == 0 {
             write_err("jcmp: the source file has no .jex, .jk or .j name, so say where the program goes: -o name\n");
@@ -815,7 +920,11 @@ void main() {
     tm_stage("peephole + alignment");
     if x_target != 32 { check_expectations(); }          // ARM32 has no register allocation yet: its counts are not comparable, so the limits are not checked there
     if x_show != null {
-        show_function(x_show);
+        if str_eq(x_show, "all") { syscall(64, 1, @out_buf, out_len); } else { show_function(x_show); }
+        syscall(93, 0);
+    }
+    if x_mc != null {
+        machine_code_of(x_mc);
         syscall(93, 0);
     }
     if out_asm != null {

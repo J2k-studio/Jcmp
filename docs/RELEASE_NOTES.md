@@ -1,6 +1,8 @@
-# J2K / Jcmp 1.2.37.0
+# J2K / Jcmp 1.2.38.0
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
+
+**1.2.38.0:** a crash fixed (a divisor in a loop that reads an array), the C `for` loop is made by the tree path (2.6 times faster in a pointer loop), `-asm NAME` and `-mc NAME` show the assembler and the machine code, the library `<draw2d>`.
 
 **1.2.37.0:** `local` hides a function or a variable from the other files.
 

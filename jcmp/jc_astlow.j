@@ -1254,7 +1254,7 @@ bool as1_stmt(i64 n) {
         return (ast_kind[ex] == AK_CALL && as1_call(ex)) || (ast_kind[ex] == AK_METHOD && as1_method(ex));
     }
     if k == AK_IF { return as1_expr(ast_a[n]) && as1_stmt(ast_b[n]) && as1_stmt(ast_c[n]); }
-    if k == AK_WHILE { return ast_val[n] == 0 && ast_c[n] == 0 && as1_expr(ast_a[n]) && as1_stmt(ast_b[n]); }
+    if k == AK_WHILE { return as1_expr(ast_a[n]) && as1_stmt(ast_b[n]) && (ast_c[n] == 0 || as1_stmt(ast_c[n])); }      // c: the step of a C for loop
     if k == AK_FOR && ast_b[n] == 0 { return as1_foreach(n); }
     if k == AK_FOR { return ast_b[n] != 0 && as1_expr(ast_a[n]) && as1_expr(ast_b[n]) && !as1_dbl(ast_ty[ast_a[n]]) && !as1_dbl(ast_ty[ast_b[n]]) && as1_stmt(ast_c[n]); }
     if k == AK_RET {
@@ -1344,7 +1344,8 @@ bool as1_stmt(i64 n) {
 
 // the node fields that hold nodes, by kind: bit 0 a, bit 1 b, bit 2 c
 i64 at_fields(i64 k) {
-    if k == AK_BIN || k == AK_WHILE || k == AK_INDEX { return 3; }
+    if k == AK_WHILE { return 7; }
+    if k == AK_BIN || k == AK_INDEX { return 3; }
     if k == AK_DEREF || k == AK_ADDR || k == AK_FIELD { return 1; }
     if k == AK_NEG || k == AK_NOT || k == AK_CALL || k == AK_BLOCK || k == AK_DECL || k == AK_EXPR || k == AK_RET || k == AK_INCDEC || k == AK_CAST || k == AK_TRYQ { return 1; }
     if k == AK_ASSIGN { return 5; }
@@ -3751,6 +3752,7 @@ void wr_scan(i64 n) {
     } else if k == AK_INDEX || k == AK_WHILE {
         wr_scan(at_a[n]);
         wr_scan(at_b[n]);
+        if k == AK_WHILE && at_c[n] != 0 { wr_scan(at_c[n]); }
     } else if k == AK_ASSIGN {
         if at_kind[at_c[n]] == AK_VAR && at_val[at_c[n]] == wr_vi { wr_ok = false; return; }
         wr_scan(at_c[n]);
@@ -5168,9 +5170,12 @@ void gl_stmt(i64 n) {
         gl_brk[gl_loops] = le2;
         gl_cnt[gl_loops] = lc;
         gl_looptry[gl_loops] = gl_trydepth;
+        i64 lstep2 = 0;
+        if at_c[n] != 0 { lstep2 = gl_label(); gl_cnt[gl_loops] = lstep2; }      // `continue` of a C for loop runs the step
         gl_loops += 1;
         gl_stmt(at_b[n]);
         gl_loops -= 1;
+        if at_c[n] != 0 { gl_place(lstep2); gl_stmt(at_c[n]); }
         gl_jmp(lc);
         gl_place(le2);
         return;
@@ -5538,6 +5543,7 @@ void gl_slots(i64 n) {
         gl_hastmp[n] = 0;
         if gl_nstemps != ns1 { gl_hastmp[n] = 1; }
         gl_slots(at_b[n]);
+        if at_c[n] != 0 { gl_slots(at_c[n]); }
     } else if k == AK_TRYCATCH {
         // the registers x19 .. x25 and d8 .. d15 are kept in 120 bytes; then the try block, the name of the text, the catch block
         gl_bsl[n] = gl_nslot;

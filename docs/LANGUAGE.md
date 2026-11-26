@@ -1268,7 +1268,7 @@ int main() {
 
 ## Looking at the code, and keeping it short
 
-`jcmp program.jk -show NAME` writes the code that was made for the function `NAME` and how many instructions it has. `#expect` in front of a
+`jcmp program.jk -asm NAME` (also `-show NAME`) writes the assembler text that was made for the function `NAME`, and `jcmp program.jk -mc NAME` the machine code of it with the address and the word of each instruction (`-asm all` writes the whole program); the number of instructions of the function is written too. `#expect` in front of a
 function makes the compiler stop when the function grows past a limit:
 
 ```jk

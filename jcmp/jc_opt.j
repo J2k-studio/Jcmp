@@ -8898,6 +8898,19 @@ bool ah_written(i64 nch, i64 off) {
     return false;
 }
 
+// does the trap block report a missing array (not a division by zero)? The check of a divisor (n != 0) has the same shape as the check of an
+// array handle (h != 0), but n is a number: its field at 16 must never be read (it was, before the loop: a crash in jsh)
+bool ah_isnulltrap(i64 b) {
+    i64 j = ir_bs[b];
+    bool trap = false;
+    while j < ir_be[b] {
+        if ir_op[j] == IR_TRAP { trap = true; }
+        if ir_op[j] == IR_CALL && str_eq(@ir_name + ir_k[j] * 64, "j2k_divzero") { return false; }
+        j += 1;
+    }
+    return trap;
+}
+
 bool ah_istrap(i64 b) {
     i64 j = ir_bs[b];
     while j < ir_be[b] {
@@ -8931,7 +8944,7 @@ void ah_collect_checked() {
             while j < ir_be[b] {
                 i64 op = ir_op[j];
                 i64 d = ir_d[j];
-                if op == IR_BR && ir_k[j] == IR_NE && ir_bi[j] == 1 && ir_b[j] == 0 && ah_get(ir_a[j]) >= 0 && ir_t2[j] >= 0 && ah_nck < 64 && ah_istrap(ir_t2[j]) {
+                if op == IR_BR && ir_k[j] == IR_NE && ir_bi[j] == 1 && ir_b[j] == 0 && ah_get(ir_a[j]) >= 0 && ir_t2[j] >= 0 && ah_nck < 64 && ah_isnulltrap(ir_t2[j]) {
                     if !ah_incheck(ah_get(ir_a[j])) { ah_ck[ah_nck] = ah_get(ir_a[j]); ah_nck += 1; }
                 }
                 if d > 0 && d < IR_MAXV {
@@ -9011,7 +9024,7 @@ void ah_scan(i64 b, i64 nch, i64 spine) {
         j += 1;
     }
     i64 tt = ir_be[b] - 1;
-    if ir_op[tt] == IR_BR && ir_k[tt] == IR_NE && ir_bi[tt] == 1 && ir_b[tt] == 0 && ah_get(ir_a[tt]) >= 0 {
+    if ir_op[tt] == IR_BR && ir_k[tt] == IR_NE && ir_bi[tt] == 1 && ir_b[tt] == 0 && ah_get(ir_a[tt]) >= 0 && ir_t2[tt] >= 0 && ah_isnulltrap(ir_t2[tt]) {
         i64 cell2 = ah_get(ir_a[tt]);
         i64 hi2 = ah_cellidx(cell2);
         if hi2 == ah_n && spine == 1 && ah_n < AH_MAXH {
