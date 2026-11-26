@@ -3,7 +3,7 @@
 // Use:    jcmp1 input.jk -o program
 // the version of the compiler (also in the file VERSION; release.sh checks that they agree)
 #allow syscall                         // the compiler is the layer under Sys: it calls the system by number on purpose
-#define JCMP_VERSION "1.2.40.0"
+#define JCMP_VERSION "1.2.41.0"
 #define JCMP_ABI 1                  // the number that the compiler and its Library folder must share (Library/ABI); raise it only when they stop fitting together
 
 #import "jc_base"
@@ -536,6 +536,10 @@ void main() {
             opt_novec = 1;
         } else if str_eq(a, "-stp") {
             fr_on = 1;
+        } else if str_eq(a, "-nosched") {
+            rg_sched_on = 0;
+        } else if str_eq(a, "-noifconv") {
+            gl_ifconv_on = 0;
         } else if str_eq(a, "-stp2") {
             fr_on = 2;
         } else if str_eq(a, "-iropt") {

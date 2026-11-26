@@ -1404,6 +1404,23 @@ void as_h_cset() {
     as_put32(0x9A9F07E0 | ((cond xor 1) << 12) | rd);
 }
 
+// cinc xd, xn, cond   or   cinc wd, wn, cond      (csinc rd, rn, rn, the opposite condition)
+void as_h_cinc() {
+    as_skip_spaces();
+    bool w = as_cur() == 'w';
+    i64 rd = 0;
+    if w { rd = as_parse_wreg(); } else { rd = as_parse_reg(); }
+    as_expect_comma();
+    i64 rn = 0;
+    if w { rn = as_parse_wreg(); } else { rn = as_parse_reg(); }
+    as_expect_comma();
+    as_skip_spaces();
+    i64 cond = as_parse_cond();
+    i64 base = 0x9A800400;
+    if w { base = 0x1A800400; }
+    as_put32(base | (rn << 16) | ((cond xor 1) << 12) | (rn << 5) | rd);
+}
+
 // ldar / stlr / ldarb / stlrb ...   xt, [xn]
 void as_h_acq(i64 base) {
     as_skip_spaces();
@@ -1655,6 +1672,7 @@ bool as_more() {
     if as_mn_is("umulh") { as_h_rrr(0x9BC07C00); return true; }
     if as_mn_is("csel") { as_h_csel(); return true; }
     if as_mn_is("cset") { as_h_cset(); return true; }
+    if as_mn_is("cinc") { as_h_cinc(); return true; }
     if as_mn_is("ldrh") { as_h_mem(0x7940, 1); return true; }
     if as_mn_is("strh") { as_h_mem(0x7900, 1); return true; }
     if as_mn_is("ldrsh") { as_h_mem(0x7980, 1); return true; }

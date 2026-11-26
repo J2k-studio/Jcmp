@@ -2166,6 +2166,73 @@ bool pt_rules(i64 i) {
     if j < 0 { return false; }
     if !pt_parse(0, i) { return false; }
     if !pt_parse(1, j) { return false; }
+    // cset xT, cc / add xD, xA, xT / sxtw xA, xD   where xT and xD are not needed afterwards   ->   cinc xA, xA, cc
+    // (a counter that grows by the 0 / 1 of a comparison: one instruction, and the chain of the counter is one cycle long instead of three)
+    if pt_mn(0, "cset") && pt_no[0] == 2 && pt_mn(1, "add") && pt_no[1] == 3 {
+        i64 ck = pt_next(j);
+        if ck >= 0 && pt_parse(2, ck) && pt_mn(2, "sxtw") && pt_no[2] == 2 {
+            i64 ct = pt_regno(0, 0, 'x');
+            i64 cd = pt_regno(1, 0, 'x');
+            i64 ca = pt_regno(1, 1, 'x');
+            i64 ct2 = pt_regno(1, 2, 'x');
+            i64 csd = pt_regno(2, 0, 'x');
+            i64 css = pt_regno(2, 1, 'x');
+            if ct >= 1 && ct <= 17 && ct == ct2 && cd >= 0 && cd <= 17 && cd == css && ca >= 19 && ca <= 25 && ca == csd && ct != cd {
+                char cc[8];
+                i64 cq = 0;
+                i64 co = (0 * 4 + 1) * 40;
+                while pt_o[co + cq] != 0 && cq < 6 { cc[cq] = pt_o[co + cq]; cq += 1; }
+                cc[cq] = 0;
+                if cq >= 2 && pt_dead(pt_next(ck), ct, 40) && pt_dead(pt_next(ck), cd, 40) {
+                    char cl[48];
+                    i64 cn = 0;
+                    cl[0] = 'c'; cl[1] = 'i'; cl[2] = 'n'; cl[3] = 'c'; cl[4] = ' '; cl[5] = 'w';
+                    cn = 6;
+                    cl[cn] = '0' + ca / 10; cl[cn + 1] = '0' + ca % 10;
+                    cn += 2;
+                    cl[cn] = ','; cl[cn + 1] = ' '; cl[cn + 2] = 'w'; cl[cn + 3] = '0' + ca / 10; cl[cn + 4] = '0' + ca % 10; cl[cn + 5] = ','; cl[cn + 6] = ' ';
+                    cn += 7;
+                    i64 cz = 0;
+                    while cc[cz] != 0 { cl[cn] = cc[cz]; cn += 1; cz += 1; }
+                    cl[cn] = 0;
+                    // the counter is a 32-bit number: the increment is made in the w register (it wraps at 32 bits) and the extension follows
+                    // (a later pass drops the extension when the next line that uses the register is another cinc)
+                    char sx[24];
+                    sx[0] = 's'; sx[1] = 'x'; sx[2] = 't'; sx[3] = 'w'; sx[4] = ' '; sx[5] = 'x';
+                    sx[6] = '0' + ca / 10; sx[7] = '0' + ca % 10; sx[8] = ','; sx[9] = ' '; sx[10] = 'x';
+                    sx[11] = '0' + ca / 10; sx[12] = '0' + ca % 10; sx[13] = 0;
+                    pt_set(i, "");
+                    pt_set(j, @cl);
+                    pt_set(ck, @sx);
+                    return true;
+                }
+            }
+        }
+        pt_parse(0, i);
+        pt_parse(1, j);
+    }
+    // sxtw xA, xA   when the next line that mentions xA is `cinc wA, wA, cc` (it reads only the low 32 bits): the extension is not needed there
+    if pt_mn(0, "sxtw") && pt_no[0] == 2 && pt_regno(0, 0, 'x') == pt_regno(0, 1, 'x') && pt_regno(0, 0, 'x') >= 19 {
+        i64 sa = pt_regno(0, 0, 'x');
+        i64 sk = j;
+        i64 sn = 0;
+        bool sgo = true;
+        while sk >= 0 && sgo && sn < 12 {
+            sn += 1;
+            if pt_txt[sk * 64] == '.' || !pt_parse(1, sk) { sgo = false; break; }
+            if pt_mentions(1, sa) {
+                if pt_mn(1, "cinc") && pt_no[1] == 3 && pt_o[(1 * 4 + 0) * 40] == 'w' && pt_has_reg(1, 0, sa) && pt_has_reg(1, 1, sa) {
+                    pt_set(i, "");
+                    return true;
+                }
+                break;
+            }
+            if pt_is_branch(1) { break; }
+            sk = pt_next(sk);
+        }
+        pt_parse(0, i);
+        pt_parse(1, j);
+    }
     // mov xD, xS  /  mov xD, N   where nothing reads xD before it is written again (or the function ends): the line does nothing
     if pt_mn(0, "mov") && pt_no[0] == 2 && pt_isreg(0, 0) && (pt_isreg(0, 1) || pt_isnum(0, 1)) {
         i64 dr = pt_regno(0, 0, 'x');
@@ -4050,6 +4117,212 @@ bool pt_mentions(i64 s, i64 r) {
     return false;
 }
 
+// ---- load hoisting for in-order cores (Cortex-A53 / A55: a load gives its value three cycles later and the core waits when the next line needs it).
+// In a straight run of lines a load moves up over the lines before it (at most 8) when they neither write a register its address uses nor read or write
+// the register it loads into; when one of them does, the load gets another scratch register (every use of the loaded value is renamed with it).
+// The loads of the 9 neighbours of a tile then leave together and the compares follow. Lines that store, call, branch or are not plain arithmetic stop it.
+// -irdbg 9007199254740992 (2^53) switches it off.
+
+i64 rg_sched_on = 1;
+
+// a line that names the stack pointer (it moves it, or reads from it): the lines are not reordered over it
+bool pt_names_sp(i64 s) {
+    i64 k = 0;
+    while k < pt_no[s] {
+        i64 o = (s * 4 + k) * 40;
+        i64 i = 0;
+        while pt_o[o + i] != 0 {
+            if pt_o[o + i] == 's' && pt_o[o + i + 1] == 'p' && (i == 0 || pt_o[o + i - 1] < 'a' || pt_o[o + i - 1] > 'z') && (pt_o[o + i + 2] < 'a' || pt_o[o + i + 2] > 'z') { return true; }
+            i += 1;
+        }
+        k += 1;
+    }
+    return false;
+}
+
+bool pt_sched_ok(i64 s) {
+    if pt_names_sp(s) { return false; }
+    return pt_mn(s, "mov") || pt_mn(s, "add") || pt_mn(s, "sub") || pt_mn(s, "mul") || pt_mn(s, "and") || pt_mn(s, "orr") || pt_mn(s, "eor") || pt_mn(s, "lsl") || pt_mn(s, "lsr") || pt_mn(s, "asr") || pt_mn(s, "sxtw") || pt_mn(s, "uxtw") || pt_mn(s, "cmp") || pt_mn(s, "cmn") || pt_mn(s, "tst") || pt_mn(s, "cset") || pt_mn(s, "cinc") || pt_mn(s, "csel") || pt_mn(s, "csinc") || pt_mn(s, "neg") || pt_mn(s, "mvn") || pt_mn(s, "ldr") || pt_mn(s, "ldrb") || pt_mn(s, "ldrh") || pt_mn(s, "ldrsw") || pt_mn(s, "ldrsb") || pt_mn(s, "ldrsh") || pt_mn(s, "sdiv") || pt_mn(s, "udiv");
+}
+
+bool pt_sched_load(i64 s) {
+    if !(pt_mn(s, "ldr") || pt_mn(s, "ldrb") || pt_mn(s, "ldrh") || pt_mn(s, "ldrsw") || pt_mn(s, "ldrsb") || pt_mn(s, "ldrsh")) { return false; }
+    if pt_no[s] != 2 { return false; }
+    i64 o = (s * 4 + 1) * 40;
+    if pt_o[o] != '[' { return false; }
+    i64 e = 0;
+    while pt_o[o + e] != 0 { e += 1; }
+    if pt_o[o + e - 1] != ']' { return false; }          // a write-back (`!` or a post index) is not moved
+    if pt_names_sp(s) { return false; }
+    return pt_regno(s, 0, 'x') >= 0;
+}
+
+// the line idx is a boundary of the straight run
+bool pt_sched_edge(i64 idx) {
+    i64 b = idx * 64;
+    if pt_txt[b] == '.' || pt_txt[b] == ';' { return true; }
+    if !pt_parse(2, idx) { return true; }                // a label
+    return false;
+}
+
+// rename the register r into r2 in the line idx (x and w forms)
+void pt_sched_rename(i64 idx, i64 r, i64 r2, bool first_only) {
+    char nb[64];
+    i64 b = idx * 64;
+    i64 i = 0;
+    i64 n = 0;
+    bool done = false;
+    while pt_txt[b + i] != 0 && n < 60 {
+        char c = pt_txt[b + i];
+        bool hit = false;
+        if !done && (c == 'x' || c == 'w') && (i == 0 || (pt_txt[b + i - 1] < 'a' || pt_txt[b + i - 1] > 'z') && (pt_txt[b + i - 1] < '0' || pt_txt[b + i - 1] > '9')) && pt_txt[b + i + 1] >= '0' && pt_txt[b + i + 1] <= '9' {
+            i64 j = i + 1;
+            i64 v = 0;
+            while pt_txt[b + j] >= '0' && pt_txt[b + j] <= '9' { v = v * 10 + (pt_txt[b + j] - '0'); j += 1; }
+            if v == r {
+                nb[n] = c;
+                n += 1;
+                if r2 >= 10 { nb[n] = '0' + r2 / 10; n += 1; }
+                nb[n] = '0' + r2 % 10;
+                n += 1;
+                i = j;
+                hit = true;
+                if first_only { done = true; }
+            }
+        }
+        if !hit {
+            nb[n] = c;
+            n += 1;
+            i += 1;
+        }
+    }
+    nb[n] = 0;
+    pt_set(idx, @nb);
+}
+
+bool pt_sched() {
+    bool changed = false;
+    i64 i = 0;
+    while i < pt_n {
+        if pt_txt[i * 64] == 0 { i += 1; continue; }
+        if pt_sched_edge(i) { i += 1; continue; }
+        pt_parse(0, i);
+        if !pt_sched_load(0) { i += 1; continue; }
+        i64 rl = pt_regno(0, 0, 'x');
+        if rl < 0 || rl == 18 || rl == 16 || rl == 17 || rl > 15 { i += 1; continue; }
+        // the registers of the address
+        bool areg[32];
+        i64 q = 0;
+        while q < 32 { areg[q] = pt_has_reg(0, 1, q); q += 1; }
+        // how far it can go up
+        i64 top = i;
+        i64 steps = 0;
+        bool need_rename = false;
+        i64 cur = pt_prev(i);
+        while cur >= 0 && steps < 8 {
+            if pt_sched_edge(cur) { break; }
+            pt_parse(1, cur);
+            if !pt_sched_ok(1) { break; }
+            bool bad = false;
+            q = 0;
+            while q < 31 { if areg[q] && pt_wr(1, q) { bad = true; } q += 1; }
+            if bad { break; }
+            if pt_mentions(1, rl) || pt_wr(1, rl) { need_rename = true; }
+            top = cur;
+            steps += 1;
+            cur = pt_prev(cur);
+        }
+        if top == i { i += 1; continue; }
+        // the line that is already in front of the load decides nothing more; the load moves to `top`; with a conflict it gets another register first
+        i64 r2 = rl;
+        if need_rename {
+            // the region of the value: the lines after the load that read rl, up to the first line that writes it
+            i64 last = i;
+            i64 k = pt_next(i);
+            bool ok = true;
+            bool ended = false;
+            while k >= 0 && !ended {
+                if pt_sched_edge(k) {
+                    ok = false;                                  // a label: the value may be wanted by the code that jumps here
+                    break;
+                }
+                pt_parse(1, k);
+                if !pt_sched_ok(1) {
+                    // a branch, a call or a store: it may read the register without naming it (arguments, the other way of a branch)
+                    if !pt_dead(k, rl, 40) { ok = false; }
+                    ended = true;
+                    break;
+                }
+                bool rd1 = false;
+                bool wr1 = pt_wr(1, rl);
+                q = 0;
+                i64 no = pt_no[1];
+                i64 kk = 0;
+                if wr1 && !(pt_mn(1, "str") || pt_mn(1, "strb") || pt_mn(1, "strh")) { kk = 1; }
+                while kk < no { if pt_rd(1, kk, rl) { rd1 = true; } kk += 1; }
+                if wr1 && rd1 { ok = false; break; }
+                if wr1 { ended = true; break; }
+                if rd1 { last = k; }
+                k = pt_next(k);
+            }
+            if !ok { i += 1; continue; }
+            if !ended && !pt_dead(pt_next(last), rl, 40) { i += 1; continue; }
+            // a free register: not named in the lines from `top` to the end of the region and not needed afterwards
+            i64 found = 0 - 1;
+            i64 cands[10];
+            cands[0] = 9; cands[1] = 10; cands[2] = 11; cands[3] = 12; cands[4] = 13; cands[5] = 14; cands[6] = 15; cands[7] = 7; cands[8] = 6; cands[9] = 5;
+            i64 ci = 0;
+            while ci < 10 && found < 0 {
+                i64 cr = cands[ci];
+                ci += 1;
+                if cr == rl || areg[cr] { continue; }
+                bool used = false;
+                i64 w = top;
+                while w >= 0 && w <= last {
+                    if pt_txt[w * 64] != 0 && pt_parse(1, w) {
+                        if pt_mentions(1, cr) || pt_wr(1, cr) { used = true; }
+                    }
+                    w = pt_next(w);
+                    if w < 0 { break; }
+                }
+                if used { continue; }
+                if !pt_dead(pt_next(last), cr, 40) { continue; }
+                found = cr;
+            }
+            if found < 0 { i += 1; continue; }
+            r2 = found;
+            // rename the load and the lines that read its value
+            pt_sched_rename(i, rl, r2, true);
+            i64 w2 = pt_next(i);
+            while w2 >= 0 && w2 <= last {
+                pt_sched_rename(w2, rl, r2, false);
+                w2 = pt_next(w2);
+            }
+        }
+        // move the line i up to top: the lines from top to i shift down by one
+        char hold[64];
+        i64 hb = i * 64;
+        i64 hc = 0;
+        while pt_txt[hb + hc] != 0 { hold[hc] = pt_txt[hb + hc]; hc += 1; }
+        hold[hc] = 0;
+        i64 mv = i;
+        while mv > top {
+            i64 pv = pt_prev(mv);
+            i64 sb = pv * 64;
+            char tmp[64];
+            i64 tc = 0;
+            while pt_txt[sb + tc] != 0 { tmp[tc] = pt_txt[sb + tc]; tc += 1; }
+            tmp[tc] = 0;
+            pt_set(mv, @tmp);
+            mv = pv;
+        }
+        pt_set(top, @hold);
+        changed = true;
+        i += 1;
+    }
+    return changed;
+}
+
 bool pt_flag_setter(i64 s) {
     return pt_mn(s, "cmp") || pt_mn(s, "cmn") || pt_mn(s, "tst") || pt_mn(s, "fcmp") || pt_mn(s, "fcmpe") || pt_mn(s, "subs") || pt_mn(s, "adds") || pt_mn(s, "ands") || pt_mn(s, "bics") || pt_mn(s, "negs");
 }
@@ -4694,6 +4967,7 @@ void regs_post(i64 start) {
             if pt_hoist() { changed = 1; }
         }
     }
+    if rg_sched_on == 1 { pt_sched(); }
     regs_len = start;
     i64 i2 = 0;
     while i2 < pt_n {

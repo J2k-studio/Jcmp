@@ -2452,3 +2452,17 @@ form that exos makes (a link, as `cc` is for a compiler). `jc` prints "use jex" 
   `ex doctor` (the whole system: versions, paths, what is missing), and the commands that ask the phone through `OSC 7777`: `ex set font NAME`, `ex set theme NAME`, `ex open FILE` (the file picker or the app that opens it),
   `ex clip` (the clipboard), `ex play FILE`, `ex info`. A new system command is a new word of `ex`, not a new program.
 * `jc` stays two releases: for a language word it prints "use jex ..." and does the job; for install / update it prints "use ex ...". `jget` is the name of the engine under `ex install` and stays as a program for two releases.
+
+**Scope of `jex` (owner, 2026-11-27, replaces the lists of 119 for `jex`):** `jex` manages **the language** and nothing else: the language toolchain (install, update, switch the version of the compiler and its Library), **install libraries** (`jex lib install NAME`, `list`, `remove`, `update`),
+**create a library** (`jex lib new NAME`: the folder, the header comment, a test and a chapter to fill in, the registration), and the **language add-ons** (`jex addon install NAME`: the formatter, the linter, the migrator, the language server, the test runner; each add-on is a tool of the
+language that `jex` installs and keeps up to date). Building, running, testing and packaging a project are the job of **`makej`** (`makej run`, `makej build`, `makej test`, `makej apk`), and a command of the system is the job of **`ex`**.
+Examples: `jex lib install geom`, `jex lib new myparser`, `jex addon install fmt`, `jex update`, `jex doctor`.
+
+**`ex` is for `jsh` (owner, 2026-11-27: "ex is for jsh to use").** The commands of `ex` belong to the shell of the system: `jsh` has `ex` built in (a command typed in jsh does not start another program for the words the shell can do itself), completes its words
+and their arguments (`ex install <Tab>` lists what can be installed), shows its help in the same way as the shell's own commands, and runs it with the right environment of exos (the drives, the prefix). The same `ex` also exists as a program, so a script,
+another shell or an app can call it. One implementation: the library `<ex>` (in J2K) that both `jsh` (built in) and the program `ex` use.
+
+**The old tool `jc` is split into three names (owner, 2026-11-27: "take jc apart into jex; jc becomes jurl, it only downloads URLs, it does the job of curl").**
+* what `jc` did for **the language** (libraries, add-ons) goes to **`jex`** (`jex lib install NAME`);
+* what it did for **tools and apps** (install, update, remove, list, patches) goes to **`ex`** (the package tool is `expkg` inside exshell until `ex` has it built in);
+* **`jurl`** is the program that downloads a URL and nothing else, the job of `curl`: `jurl URL`, `-o FILE`, `-O`, follow redirects (`-L`), headers (`-H`), a body (`-d`), the method (`-X`), resume (`-C`), a progress bar, the status code (`-w`/`-i`), a timeout, https with the trust list of `<crypto>`; it is the engine under `ex install` and `ex update` (they fetch the index and the files with it). The tool `jget` (download with a bar) becomes `jurl` (the old name warns for two releases), and the name `jc` is not used any more.

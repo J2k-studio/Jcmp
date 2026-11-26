@@ -3679,6 +3679,19 @@ void gl_expr(i64 n) {
         i64 ao = at_val[n];
         i64 a = at_a[n];
         i64 b = at_b[n];
+        if (ao == AO_LAND || ao == AO_LOR) && gl_cheap01(n) {
+            gl_expr(a);
+            gl_ensure();
+            i64 cb = gl_cell(gl_depth);
+            gl_store(30, cb, 1);
+            gl_depth += 1;
+            gl_expr(b);
+            gl_ensure();
+            gl_depth -= 1;
+            gl_load(2, 30, cb);
+            if ao == AO_LAND { ir_add(IR_AND, 1, 1, 2, 0, 0); } else { ir_add(IR_OR, 1, 1, 2, 0, 0); }
+            return;
+        }
         if ao == AO_LAND || ao == AO_LOR {
             i64 lt = gl_label();
             i64 lf = gl_label();
@@ -3748,6 +3761,139 @@ void gl_store_var(i64 target) {
     } else {
         gl_store(29, goff[at_val[target]], 1);
     }
+}
+
+// `if a < b { c += 1; }` (a comparison and one counter change, no else): the counter is changed by the 0 / 1 of the comparison, with no jump and no new block
+// (a branch that goes both ways at random is a misprediction in the hot loop, and the cells that cross the blocks of the ifs of a neighbour count are spills).
+// c++, c--, c += K, c -= K with K a small number. -irdbg 1125899906842624 is not used here: it is on with `-xifconv`.
+// ---- conditions without jumps: `c == 3 || (s == 1 && c == 2)` in a hot loop is a row of jumps that the processor cannot guess (data decides); worked out with
+// the comparisons as 0 / 1 and `and` / `or` it is straight code (clang does this too). Only for operands that are variables, numbers and arithmetic (no memory, no
+// division, no call): everything is worked out whether or not the first operand decided. -irdbg 4503599627370496 switches it off.
+bool gl_simple(i64 n) {
+    i64 k = at_kind[n];
+    if gl_isd(n) || at_ty[n] / 65536 != 0 { return false; }
+    if k == AK_NUM { return true; }
+    if k == AK_VAR || k == AK_GVAR { return true; }
+    if k == AK_BIN {
+        i64 o = at_val[n];
+        if o == AO_ADD || o == AO_SUB || o == AO_MUL || o == AO_AND || o == AO_OR || o == AO_XOR || o == AO_SHL || o == AO_SHR { return gl_simple(at_a[n]) && gl_simple(at_b[n]); }
+    }
+    return false;
+}
+
+bool gl_cheap01(i64 n) {
+    if (ir_opt & 4503599627370496) != 0 { return false; }
+    i64 k = at_kind[n];
+    if k == AK_BIN {
+        i64 o = at_val[n];
+        if o >= AO_LT && o <= AO_NE { return gl_simple(at_a[n]) && gl_simple(at_b[n]); }
+        if o == AO_LAND || o == AO_LOR { return gl_cheap01(at_a[n]) && gl_cheap01(at_b[n]); }
+    }
+    return false;
+}
+
+bool gl_same(i64 a, i64 b) {
+    if at_kind[a] != at_kind[b] { return false; }
+    i64 k = at_kind[a];
+    if k == AK_NUM || k == AK_VAR || k == AK_GVAR { return at_val[a] == at_val[b]; }
+    if k == AK_BIN { return at_val[a] == at_val[b] && gl_same(at_a[a], at_a[b]) && gl_same(at_b[a], at_b[b]); }
+    if k == AK_INDEX { return gl_same(at_a[a], at_a[b]) && gl_same(at_b[a], at_b[b]); }
+    return false;
+}
+
+// the only statement of a block, or 0
+i64 gl_only(i64 b) {
+    if b == 0 || at_kind[b] != AK_BLOCK { return 0; }
+    i64 st = at_a[b];
+    if st == 0 || at_nx[st] != 0 { return 0; }
+    return st;
+}
+
+// `if cond { T = K1; } else { T = K0; }` (the same place, two numbers, a condition without jumps) becomes `T = cond * (K1 - K0) + K0`: the node of the `if`
+// turns into the assignment (the value is a new tree of nodes) and is lowered again
+bool gl_ifsel(i64 n) {
+    if (ir_opt & 4503599627370496) != 0 || gl_hastmp[n] != 0 || at_c[n] == 0 { return false; }
+    i64 cd = at_a[n];
+    if !gl_cheap01(cd) { return false; }
+    i64 t = gl_only(at_b[n]);
+    i64 e = gl_only(at_c[n]);
+    if t == 0 || e == 0 || at_kind[t] != AK_ASSIGN || at_kind[e] != AK_ASSIGN || at_b[t] != 0 || at_b[e] != 0 { return false; }
+    i64 v1 = at_a[t];
+    i64 v0 = at_a[e];
+    if at_kind[v1] != AK_NUM || at_kind[v0] != AK_NUM { return false; }
+    i64 tg = at_c[t];
+    if !gl_same(tg, at_c[e]) || gl_isd(tg) || at_ty[tg] / 65536 != 0 { return false; }
+    if at_kind[tg] != AK_VAR && at_kind[tg] != AK_INDEX && at_kind[tg] != AK_GVAR { return false; }
+    if at_n >= AT_MAX - 8 { return false; }
+    i64 k1 = at_val[v1];
+    i64 k0 = at_val[v0];
+    i64 val = cd;
+    if !(k1 == 1 && k0 == 0) {
+        i64 m = at_n;
+        at_n += 1;
+        at_kind[m] = AK_BIN; at_a[m] = cd; at_b[m] = v1; at_c[m] = 0; at_val[m] = AO_MUL; at_nx[m] = 0; at_ty[m] = at_ty[v1];
+        i64 dn = at_n;
+        at_n += 1;
+        at_kind[dn] = AK_NUM; at_a[dn] = 0; at_b[dn] = 0; at_c[dn] = 0; at_val[dn] = k1 - k0; at_nx[dn] = 0; at_ty[dn] = at_ty[v1];
+        at_b[m] = dn;
+        i64 ad = at_n;
+        at_n += 1;
+        at_kind[ad] = AK_BIN; at_a[ad] = m; at_b[ad] = v0; at_c[ad] = 0; at_val[ad] = AO_ADD; at_nx[ad] = 0; at_ty[ad] = at_ty[v1];
+        val = ad;
+    }
+    i64 keep = at_nx[n];
+    at_kind[n] = AK_ASSIGN;
+    at_a[n] = val;
+    at_b[n] = 0;
+    at_c[n] = tg;
+    at_val[n] = at_val[t];
+    at_ty[n] = at_ty[t];
+    at_nx[n] = keep;
+    gl_hastmp[n] = 0;
+    gl_stmt(n);
+    return true;
+}
+
+i64 gl_ifconv_on = 1;
+bool gl_ifconv(i64 n) {
+    if at_c[n] != 0 || gl_hastmp[n] != 0 { return false; }
+    i64 cd = at_a[n];
+    if at_kind[cd] != AK_BIN { return false; }
+    i64 op = at_val[cd];
+    if op < AO_LT || op > AO_NE { return false; }
+    if at_ty[at_a[cd]] / 65536 != 0 || at_ty[at_b[cd]] / 65536 != 0 || gl_isd(at_a[cd]) || gl_isd(at_b[cd]) { return false; }
+    i64 bl = at_b[n];
+    if at_kind[bl] != AK_BLOCK { return false; }
+    i64 st = at_a[bl];
+    if st == 0 || at_nx[st] != 0 { return false; }
+    i64 tg = 0;
+    i64 k = 0;
+    if at_kind[st] == AK_INCDEC {
+        tg = at_a[st];
+        k = at_b[st];
+    } else if at_kind[st] == AK_ASSIGN && (at_b[st] == AO_ADD || at_b[st] == AO_SUB) && at_kind[at_a[st]] == AK_NUM {
+        tg = at_c[st];
+        k = at_val[at_a[st]];
+        if at_b[st] == AO_SUB { k = 0 - k; }
+    } else {
+        return false;
+    }
+    if at_kind[tg] != AK_VAR || at_ty[tg] / 65536 != 0 || gl_isd(tg) { return false; }
+    if k == 0 || k > 65535 || k < 0 - 65535 { return false; }
+    i64 mag = k;
+    if k < 0 { mag = 0 - k; }
+    gl_expr(cd);
+    gl_ensure();
+    ir_add(IR_COPY, 2, 1, 0, 0, 0);
+    if mag != 1 {
+        ir_add(IR_CONST, 3, 0, 0, 0, mag);
+        ir_add(IR_MUL, 2, 2, 3, 0, 0);
+    }
+    gl_expr(tg);
+    gl_ensure();
+    if k < 0 { ir_add(IR_SUB, 1, 1, 2, 0, 0); } else { ir_add(IR_ADD, 1, 1, 2, 0, 0); }
+    gl_store_var(tg);
+    return true;
 }
 
 // an assignment `target op= value` or `target = value`
@@ -5053,6 +5199,112 @@ void gl_foreach(i64 n) {
     if go_peek() == 2 && ow_a[go_pos] == 0 && ow_b[go_pos] == 0 { go_site(0, 0); }      // a list made by a call is freed here (the parser leaves no site number)
 }
 
+// ---- recursion that becomes a loop (the owner asked for speed that is not behind C: clang makes `return f(n - 1) + f(n - 2)` call f once, the last call is a jump).
+// A function with a whole-number result whose `return f(args)` (a call of itself) or `return X + f(args)` / `return X * f(args)` is a jump back to the top after the
+// parameters are changed: for `+` / `*` a cell of the frame (gl_tail_cell) is the sum / product of the X that were passed, every other `return E` gives `acc op E`.
+// Only a function without owners, tries or defers, whose tree is a plain subset (no address of a variable, no text, no struct).  -irdbg 2^51 switches it off.
+i64 tl_ok;
+i64 tl_op;
+i64 tl_n;
+i64 tl_fi;
+i64 gl_tail;                  // 1: this function runs its self calls in tail position as a jump
+i64 gl_tail_op;               // AO_ADD, AO_MUL or 0 (only `return f(args)`)
+i64 gl_tail_top;              // the label after the parameters are stored
+i64 gl_tail_cell;             // the offset of the cell with the sum / product so far
+i64 gl_tail_k;                // its depth in the cells (3, then deeper when the body needs more cells)
+i64 gl_tail_conf;             // 1: the body reached the cell of the sum: the function is made again with a deeper one
+
+bool tl_selfcall(i64 c) {
+    if at_kind[c] != AK_CALL || at_val[c] != tl_fi { return false; }
+    i64 n = 0;
+    i64 a = at_a[c];
+    while a != 0 {
+        if gl_isd(a) || at_ty[a] / 65536 != 0 { return false; }
+        n += 1;
+        a = at_nx[a];
+    }
+    return n == fnpar[tl_fi] && n >= 1 && n <= 6;
+}
+
+// 0: not a tail return; 1: `return f(args)`; 2: `return X op f(args)` (the operator is in tl_cop)
+i64 tl_cop;
+i64 tl_class(i64 r) {
+    i64 v = at_a[r];
+    if v == 0 { return 0; }
+    if tl_selfcall(v) && at_ty[v] / 65536 == 0 && !gl_isd(v) { return 1; }
+    if at_kind[v] == AK_BIN && (at_val[v] == AO_ADD || at_val[v] == AO_MUL) && tl_selfcall(at_b[v]) && at_ty[v] / 65536 == 0 && !gl_isd(v) && !gl_isd(at_a[v]) && at_ty[at_a[v]] / 65536 == 0 {
+        tl_cop = at_val[v];
+        return 2;
+    }
+    return 0;
+}
+
+void tl_chain(i64 s) {
+    while s != 0 && tl_ok == 1 {
+        tl_scan(s);
+        s = at_nx[s];
+    }
+}
+
+void tl_scan(i64 n) {
+    if n == 0 || tl_ok != 1 { return; }
+    i64 k = at_kind[n];
+    if k == AK_NUM || k == AK_VAR || k == AK_GVAR || k == AK_BREAK || k == AK_CONT || k == AK_INCDEC { return; }
+    if k == AK_BIN || k == AK_INDEX {
+        tl_scan(at_a[n]);
+        tl_scan(at_b[n]);
+    } else if k == AK_NEG || k == AK_NOT || k == AK_CAST || k == AK_DEREF || k == AK_EXPR || k == AK_DECL {
+        tl_scan(at_a[n]);
+    } else if k == AK_ASSIGN {
+        tl_scan(at_c[n]);
+        tl_scan(at_a[n]);
+    } else if k == AK_IF || k == AK_WHILE {
+        tl_scan(at_a[n]);
+        tl_scan(at_b[n]);
+        tl_scan(at_c[n]);
+    } else if k == AK_FOR {
+        if at_b[n] == 0 { tl_ok = 0; return; }
+        tl_scan(at_a[n]);
+        tl_scan(at_b[n]);
+        tl_scan(at_c[n]);
+    } else if k == AK_BLOCK {
+        tl_chain(at_a[n]);
+    } else if k == AK_CALL {
+        tl_chain(at_a[n]);
+    } else if k == AK_RET {
+        if at_a[n] != 0 && at_ty[at_a[n]] / 65536 != 0 { tl_ok = 0; return; }
+        tl_scan(at_a[n]);
+        i64 c = tl_class(n);
+        if c != 0 { tl_n += 1; }
+        if c == 2 {
+            if tl_op != 0 && tl_op != tl_cop { tl_ok = 0; return; }
+            tl_op = tl_cop;
+        }
+    } else {
+        tl_ok = 0;          // an address, a text, a field, a method, a switch, a try ...: not a plain function
+    }
+}
+
+// is this function one that can run its tail calls as a jump
+bool tl_check(i64 fi, i64 ti) {
+    if (ir_opt & 2251799813685248) != 0 || gl_ismain == 1 || opt_debug == 1 { return false; }
+    if fvoid[fi] != 0 || fret[fi] >= 90 || gl_retf == 1 || gl_retd == 1 || as1_fretstr == 1 || as1_fretdyn == 1 { return false; }
+    if fnpar[fi] < 1 || fnpar[fi] > 6 || farr[fi] != 0 { return false; }
+    i64 q = 0;
+    while q < fnpar[fi] {
+        if fptid[fi * 8 + q] != 0 || fpstr[fi * 8 + q] != 0 || at_lk[ti * 32 + q] != 0 { return false; }
+        q += 1;
+    }
+    tl_ok = 1;
+    tl_op = 0;
+    tl_n = 0;
+    tl_fi = fi;
+    tl_scan(at_root[ti]);
+    if tl_ok != 1 || tl_n == 0 { return false; }
+    gl_tail_op = tl_op;
+    return true;
+}
+
 void gl_stmt(i64 n) {
     if n == 0 { return; }
     i64 k = at_kind[n];
@@ -5316,6 +5568,8 @@ void gl_stmt(i64 n) {
         }
         return;
     }
+    if k == AK_IF && gl_ifsel(n) { return; }
+    if k == AK_IF && gl_ifconv_on == 1 && gl_ifconv(n) { return; }
     if k == AK_IF {
         i64 lt = gl_label();
         i64 lf = gl_label();
@@ -5399,6 +5653,39 @@ void gl_stmt(i64 n) {
             } else if !(at_kind[rs] == AK_BIN || at_kind[rs] == AK_CALL || (at_kind[rs] == AK_METHOD && at_val[rs] >= 2000005) || (at_kind[rs] == AK_METHOD && at_val[rs] >= 0 && at_val[rs] < 1000000) || (at_kind[rs] == AK_BUILTIN && at_val[rs] == 13)) {
                 gl_rt2("__Str__clone", 1);                  // an element of an array, a field, ...: not ours to give away, the caller gets a copy
             }
+        } else if at_a[n] != 0 && gl_tail == 1 && tl_class(n) != 0 {
+            // a tail call: the sum / product so far takes X, the parameters take the arguments, and the function starts again
+            i64 tv = at_a[n];
+            i64 tc = tl_class(n);
+            i64 tcall = tv;
+            if tc == 2 {
+                tcall = at_b[tv];
+                gl_expr(at_a[tv]);
+                gl_ensure();
+                gl_load(2, 30, gl_tail_cell);
+                if tl_cop == AO_MUL { ir_add(IR_MUL, 1, 1, 2, 0, 0); } else { ir_add(IR_ADD, 1, 1, 2, 0, 0); }
+                gl_store(30, gl_tail_cell, 1);
+            }
+            i64 tbase = gl_depth;
+            i64 targ = at_a[tcall];
+            i64 tk = 0;
+            while targ != 0 {
+                gl_expr(targ);
+                gl_ensure();
+                gl_store(30, gl_cell(gl_depth), 1);
+                gl_depth += 1;
+                tk += 1;
+                targ = at_nx[targ];
+            }
+            gl_depth = tbase;
+            i64 tj = 0;
+            while tj < tk {
+                gl_load(1, 30, gl_cell(tbase + tj));
+                gl_store(30, gl_off[tj], 1);
+                tj += 1;
+            }
+            gl_jmp(gl_tail_top);
+            return;
         } else if at_a[n] != 0 {
             if gl_retf == 1 {
                 gl_fv(at_a[n]);
@@ -5408,6 +5695,11 @@ void gl_stmt(i64 n) {
                 ir_add(IR_F2BITS, 1, 32, 0, 0, 0);
             } else {
                 gl_expr(at_a[n]);
+                if gl_tail == 1 && gl_tail_op != 0 {
+                    gl_ensure();
+                    gl_load(2, 30, gl_tail_cell);
+                    if gl_tail_op == AO_MUL { ir_add(IR_MUL, 1, 1, 2, 0, 0); } else { ir_add(IR_ADD, 1, 1, 2, 0, 0); }
+                }
                 if gl_retw != 0 { gl_wrap2(gl_retw); }
             }
         }
@@ -5881,11 +6173,36 @@ i64 ast_lower_body(i64 ti, char^ name) {
     gl_blkn = 0;
     gl_retn = 0;
     gl_brkn = 0;
+    gl_tail_conf = 0;
+    gl_tail = 0;
+    gl_tail_op = 0;
+    if ow_lo == go_end && tl_check(fi, ti) {
+        gl_tail = 1;
+        gl_tail_cell = gl_cell(gl_tail_k);
+        if gl_tail_op != 0 {
+            gl_ensure();
+            i64 tinit = 0;
+            if gl_tail_op == AO_MUL { tinit = 1; }
+            ir_add(IR_CONST, 1, 0, 0, 0, tinit);
+            gl_store(30, gl_tail_cell, 1);
+        }
+        gl_tail_top = gl_label();
+        gl_place(gl_tail_top);
+    }
     gl_stmt(at_root[ti]);
     go_site(5, 0);
     // every event of the parser was used: what the tree did is what the text path did
     if go_pos != go_end { gl_failx(27); }
     if gl_fail == 1 { return 0; }
+    if gl_tail == 1 {
+        // a cell deeper than the one of the sum was used: the sum would be overwritten
+        i64 tq = 0;
+        while tq < ir_n {
+            if (ir_op[tq] == IR_LOAD || ir_op[tq] == IR_STORE) && ir_a[tq] == 30 && ir_k[tq] < gl_tail_cell { gl_tail_conf = 1; }
+            tq += 1;
+        }
+        if gl_tail_conf == 1 { return 0; }
+    }
     if gl_ismain == 1 {
         // main: falling off the end gives 0; the end is the exit call (the text path: `mov x0, 0`, the label, `mov x8, 94`, `svc 0`)
         if gl_term == 0 {
@@ -5945,7 +6262,12 @@ i64 ast_lower(char^ name) {
     ast_lower_tried += 1;
     i64 ti = at_find(name);
     if ti < 0 { return 0; }
+    gl_tail_k = 3;
     i64 ok = ast_lower_body(ti, name);
+    while ok == 0 && gl_tail_conf == 1 && gl_tail_k < 40 {          // the sum lives deeper than the cells the body uses
+        gl_tail_k = gl_tail_k * 2 + 2;
+        ok = ast_lower_body(ti, name);
+    }
     if ast_lower_report == 1 {
         write_err("astlow: ");
         write_err(name);
