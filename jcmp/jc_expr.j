@@ -700,6 +700,9 @@ i64 frame_bytes;             // frame used so far (starts at 16: saved x29, x30)
 
 // globals
 char gname[1048576];           // 2048 x 64
+i64 glocal[16384];              // 1: the global variable is `local`
+i64 gfile[16384];               // the file where it is declared (see cur_file_id)
+i64 fn_local;                   // 1 while the item being parsed is marked `local` (only its own file may use it)
 i64 gkind[16384];
 i64 gelem[16384];
 i64 goff[16384];
@@ -871,6 +874,7 @@ bool lookup_var(char^ name) {
         return true;
     }
     i64 gi = find_global(name);
+    if gi >= 0 && glocal[gi] == 1 && pass_no >= 2 && gfile[gi] != cur_file_id() { die_help("this variable is local to another file", "it is marked `local` where it is declared: only that file may use it; remove `local` there if it should be public"); }
     if gi >= 0 {
         v_local = 0;
         v_kind = gkind[gi];
@@ -979,6 +983,8 @@ void hint_add(i64 off, i64 size, i64 flag) {
 
 void add_global(char^ name, i64 kind, i64 elem, i64 bytes, i64 ptr) {
     if gcount >= 16384 { die_help("too many global variables", "keep related values in a struct or an array"); }
+    glocal[gcount] = fn_local;
+    gfile[gcount] = cur_file_id();
     str_copy(@gname + gcount * 64, name, 64);
     gkind[gcount] = kind;
     gelem[gcount] = elem;
@@ -2019,6 +2025,19 @@ i64 edge_count;
 i64 freach[16384];
 i64 fexport[16384];             // 1: the function is marked `export` (a library entry point with the C calling rules)
 i64 fn_export;                  // 1 while the function being parsed is marked `export`
+i64 flocal[16384];              // 1: the function is `local`
+i64 ffile[16384];               // a hash of the name of the file where a `local` function is declared
+// a number that stands for the file being read (its name)
+i64 cur_file_id() {
+    i64 h = 7;
+    i64 k = 0;
+    while lvl_name[lx_depth * 128 + k] != 0 && k < 127 {
+        h = (h * 31 + lvl_name[lx_depth * 128 + k]) & 1152921504606846975;
+        k += 1;
+    }
+    return h;
+}
+
 
 void note_call(char^ name) {
     if pass_no != 2 { return; }
@@ -2189,6 +2208,7 @@ void gen_call() {
         expect("(");
     }
     i64 fi = find_func(@callee);
+    if fi >= 0 && fi < 16384 && flocal[fi] == 1 && pass_no >= 2 && ffile[fi] != cur_file_id() { die_help("this function is local to another file", "it is marked `local` where it is declared: only that file may call it; remove `local` there if it should be public"); }
     if fi < 0 && pass_no >= 2 && !(callee[0] == '_' && callee[1] == '_') && !str_eq(@callee, "syscall") && !str_eq(@callee, "argc") && !str_eq(@callee, "arg") {
         if lookup_var(@callee) { die_help("a variable cannot be called like a function", "it holds a value, not a function; call a function by its own name"); }
         die_name("unknown function", @callee);

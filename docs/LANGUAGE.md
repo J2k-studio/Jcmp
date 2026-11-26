@@ -508,6 +508,15 @@ A file marked `#!library` can start with `_.start { ... }`: the first block is t
 
 A pinned variable (`int n @ x19`) is a whole number, pointer, bool, char or enum; its address cannot be taken; two variables of one function cannot share a register; programs with try / catch cannot pin. A function with a `register { }` block keeps its variables in the frame. Changing x19 .. x28 in a block without reserving it is a warning.
 
+### `local`: a name that only its own file may use (1.2.37)
+
+```jk
+local int hidden_twice(int a) { return a * 2; }     // another file that imports this one cannot call it
+local int count = 40;                               // nor read or write this variable
+int visible_sum(int a) { count += 1; return hidden_twice(a) + count; }
+```
+A file that uses a `local` name of another file gets an error that names it (`this function is local to another file`). `local` hides a name in the language; it does not hide the code (a library built without its source does that).
+
 ### `device`: hardware registers as data, and `Sys::` (0.9.80)
 
 ```jk

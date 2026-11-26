@@ -2884,6 +2884,7 @@ void parse_function() {
     i64 f_align = fn_align;
     fn_align = 0;
     i64 f_export = fn_export;
+    i64 f_local = fn_local;
     fn_export = 0;
     if f_interrupt == 1 && f_naked == 1 { die("a function is naked or interrupt, not both (an interrupt function has a prologue that saves the registers)"); }
     if f_idx < 0 {
@@ -2909,6 +2910,7 @@ void parse_function() {
         fcount += 1;
     }
     if f_export == 1 && f_idx >= 0 && f_idx < 16384 { fexport[f_idx] = 1; }
+    if f_local == 1 && f_idx >= 0 && f_idx < 16384 { flocal[f_idx] = 1; ffile[f_idx] = cur_file_id(); }
     if expect_pending > 0 && f_idx >= 0 && f_idx < 16384 {
         fexp_n[f_idx] = expect_pending;
         fexp_line[f_idx] = expect_line;
@@ -3739,8 +3741,10 @@ void parse_top_item() {
     fn_interrupt = 0;
     fn_align = 0;
     fn_export = 0;
-    while tok_is("naked") || tok_is("noreturn") || tok_is("interrupt") || tok_is("align") || tok_is("export") {
+    fn_local = 0;
+    while tok_is("naked") || tok_is("noreturn") || tok_is("interrupt") || tok_is("align") || tok_is("export") || tok_is("local") {
         if tok_is("export") { fn_export = 1; }
+        else if tok_is("local") { fn_local = 1; }
         else if tok_is("naked") { fn_naked = 1; }
         else if tok_is("noreturn") { fn_noreturn = 1; }
         else if tok_is("interrupt") { fn_interrupt = 1; }

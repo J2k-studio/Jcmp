@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.2.37.0 (2026-11-26)
+* **Added (language):** `local` before a function or a global variable: only the file that declares it may use it; another file gets the error "this function is local to another file" (or "variable"), with the way to fix it. It hides a name, not the code.
+* **Added (tests):** t632 (local names used inside their file), t633 and t634 (a call and a write from another file are rejected).
+
 ## 1.2.36.0 (2026-11-26)
 * **Added (language):** the counting loop `for i = 0 < n; i++ { }`: `i` is a new `int`, it starts at the first value and runs while `i < bound`; the bound is worked out once, before the first turn; any step (`i += 2`) is allowed; it works in the tree and the text path. `for i in a..b` stays until the migration tool.
 * **Fixed:** the cost of `int` wrapping (1.2.35): a number written in the program no longer forces a cut (`i64 big = 100000 * 100000` stays 64 bits).
