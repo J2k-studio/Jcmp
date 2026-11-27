@@ -20,6 +20,11 @@ i64 as_label_count;
 char as_nbuf[64];               // the label name just read (zero padded)
 
 i64 as_bss_size;
+// the machine without an OS (#target, spec 120): where the code is loaded, where the RAM is, and whether the file is an ELF or only the bytes of the code
+i64 tg_on;
+i64 tg_entry = 4194304;          // the address of the first byte of the file (the ELF header); the first instruction is 176 bytes after it
+i64 tg_ram = 268435456;          // the address of the RAM (the global area starts there)
+i64 tg_format;                   // 0 an ELF file, 1 the bytes of the code only (a flash image)
 i64 as_dyn;                     // 1: a dynamic executable (with -l's layout): PT_INTERP, DT_NEEDED libdl.so libc.so, the entry is the first instruction
 i64 as_lib;                     // 1: the output is a shared library (.so), not a program
 i64 as_xn_n;                    // the symbols a library gives to others (.export NAME LABEL)
@@ -37,6 +42,7 @@ char as_so_zero[4096];
 // the address (in the file and in memory) of the first instruction: 176 in a program, 288 in a library
 i64 as_base() {
     if as_lib == 1 { return as_h(); }
+    if tg_on == 1 && tg_format == 1 { return 0; }          // a flash image has no header: the first instruction is the first byte
     return 176;
 }
 // the size of the ELF header and the program headers of a library (a dynamic executable has one more: PT_PHDR)
@@ -597,8 +603,22 @@ bool as_peek_is_label() {
 
 void as_h_mov() {
     as_skip_spaces();
-    i64 rd = as_parse_reg();
+    i64 rd = as_parse_reg_or_sp();
+    i64 sp_d = as_last_is_sp;
     as_expect_comma();
+    as_skip_spaces();
+    if as_cur() == 's' && as_peek(1) == 'p' {
+        // mov xD, sp  is  add xD, sp, #0
+        as_parse_reg_or_sp();
+        as_put32(0x91000000 | (31 << 5) | rd);
+        return;
+    }
+    if sp_d != 0 {
+        // mov sp, xN  is  add sp, xN, #0
+        i64 rn = as_parse_reg();
+        as_put32(0x91000000 | (rn << 5) | 31);
+        return;
+    }
     if as_cur() == 'x' || (as_cur() == 'l' && as_peek(1) == 'r') {
         i64 rm = as_parse_reg();
         as_put32(0xAA000000 | (rm << 16) | (31 << 5) | rd);
@@ -647,6 +667,29 @@ void as_h_addsub(bool isadd) {
         as_addsub_imm(v, rd, rn, 0x9100, 0xD100, 0x8B00);
     } else {
         as_addsub_imm(v, rd, rn, 0xD100, 0x9100, 0xCB00);
+    }
+}
+
+// adds / subs xD, xN, xM  or  xD, xN, #number: the sum or the difference, and the flags
+void as_h_addsubs(bool isadd) {
+    as_skip_spaces();
+    i64 rd = as_parse_reg();
+    as_expect_comma();
+    i64 rn = as_parse_reg_or_sp();
+    as_expect_comma();
+    if as_cur() == 'x' {
+        i64 rm = as_parse_reg();
+        i64 base = 0xEB000000;
+        if isadd { base = 0xAB000000; }
+        as_put32(base | (rm << 16) | (rn << 5) | rd);
+        return;
+    }
+    if as_cur() == '#' { as_ci += 1; }
+    i64 v = as_parse_signed();
+    if isadd {
+        as_addsub_imm(v, rd, rn, 0xB100, 0xF100, 0xAB00);
+    } else {
+        as_addsub_imm(v, rd, rn, 0xF100, 0xB100, 0xEB00);
     }
 }
 
@@ -1283,6 +1326,22 @@ void as_h_stex(i64 base) {
 void as_h_svc() {
     as_skip_spaces();
     i64 n = as_parse_number();
+    if tg_on == 1 {
+        // a machine without an operating system: the runtime asks for the system with `svc 0` as always, and here that is a call of j2k_bare_svc (the few calls that
+        // the runtime makes, written by emit_target_stub: memory from the heap, bytes to the console and from the input, the end to the exit device). Every register
+        // but x0 keeps its value (x30 waits on the stack).
+        as_put32(0xD10043FF);                // sub sp, sp, #16
+        as_put32(0xF90003FE);                // str x30, [sp, #0]
+        i64 bi = 0;
+        while bi < 64 { as_nbuf[bi] = 0; bi += 1; }
+        char^ bn = "j2k_bare_svc";
+        bi = 0;
+        while bn[bi] != 0 { as_nbuf[bi] = bn[bi]; bi += 1; }
+        as_emit_ref(0x94000000, 1);          // bl j2k_bare_svc
+        as_put32(0xF94003FE);                // ldr x30, [sp, #0]
+        as_put32(0x910043FF);                // add sp, sp, #16
+        return;
+    }
     as_put32(0xD4000001 | (n << 5));
 }
 
@@ -1676,8 +1735,8 @@ bool as_more() {
     if as_mn_is("orn") { as_h_rrr(0xAA200000); return true; }
     if as_mn_is("eon") { as_h_rrr(0xCA200000); return true; }
     if as_mn_is("ands") { as_h_rrr(0xEA000000); return true; }
-    if as_mn_is("adds") { as_h_rrr(0xAB000000); return true; }
-    if as_mn_is("subs") { as_h_rrr(0xEB000000); return true; }
+    if as_mn_is("adds") { as_h_addsubs(true); return true; }
+    if as_mn_is("subs") { as_h_addsubs(false); return true; }
     if as_mn_is("adc") { as_h_rrr(0x9A000000); return true; }
     if as_mn_is("adcs") { as_h_rrr(0xBA000000); return true; }
     if as_mn_is("sbc") { as_h_rrr(0xDA000000); return true; }
@@ -1693,6 +1752,10 @@ bool as_more() {
     if as_mn_is("stlr") { as_h_acq(0xC89FFC00); return true; }
     if as_mn_is("ldarb") { as_h_acq(0x08DFFC00); return true; }
     if as_mn_is("stlrb") { as_h_acq(0x089FFC00); return true; }
+    if as_mn_is("ldarh") { as_h_acq(0x48DFFC00); return true; }
+    if as_mn_is("stlrh") { as_h_acq(0x489FFC00); return true; }
+    if as_mn_is("ldarw") { as_h_acq(0x88DFFC00); return true; }
+    if as_mn_is("stlrw") { as_h_acq(0x889FFC00); return true; }
     if as_mn_is("swp") { as_h_lse(0xF8208000); return true; }
     if as_mn_is("swpa") { as_h_lse(0xF8A08000); return true; }
     if as_mn_is("swpl") { as_h_lse(0xF8608000); return true; }
@@ -1998,22 +2061,22 @@ void as_build_header() {
     as_put_hdr(16, 2, 2);                   // e_type = EXEC
     as_put_hdr(18, 2, 0xb7);                // e_machine = AArch64
     as_put_hdr(20, 4, 1);
-    as_put_hdr(24, 8, 0x4000B0);            // e_entry
+    as_put_hdr(24, 8, tg_entry + 176);      // e_entry
     as_put_hdr(32, 8, 64);                  // e_phoff
     as_put_hdr(52, 2, 64);
     as_put_hdr(54, 2, 56);
     as_put_hdr(56, 2, 2);                   // two program headers
     as_put_hdr(64, 4, 1);                   // segment 1: code, R+X
     as_put_hdr(68, 4, 5);
-    as_put_hdr(80, 8, 0x400000);
-    as_put_hdr(88, 8, 0x400000);
+    as_put_hdr(80, 8, tg_entry);
+    as_put_hdr(88, 8, tg_entry);
     as_put_hdr(96, 8, 176 + as_pos);
     as_put_hdr(104, 8, 176 + as_pos);
     as_put_hdr(112, 8, 0x10000);
     as_put_hdr(120, 4, 1);                  // segment 2: data (bss), R+W
     as_put_hdr(124, 4, 6);
-    as_put_hdr(136, 8, 0x10000000);
-    as_put_hdr(144, 8, 0x10000000);
+    as_put_hdr(136, 8, tg_ram);
+    as_put_hdr(144, 8, tg_ram);
     i64 mem = (as_bss_size + 4095) & ~4095;
     if mem < 4096 { mem = 4096; }
     as_put_hdr(160, 8, mem);
@@ -2272,7 +2335,7 @@ void as_write_elf(char^ path) {
         syscall(64, 2, @e2, 74);
         syscall(93, 1);
     }
-    syscall(64, out, @as_hdr, 176);
+    if tg_format == 0 { syscall(64, out, @as_hdr, 176); }
     syscall(64, out, @as_code, as_pos);
     syscall(57, out);
 }

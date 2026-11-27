@@ -104,6 +104,207 @@ void add_define(char^ name, char^ val) {
     def_count += 1;
 }
 
+// ---------------------------------------------------------------- #target NAME { entry A; ram A S; stack S; heap S; console A; exit A; format elf|bin; }
+// A machine without an OS (spec 120): the compiler writes the start code (the stack, the global area, `main`, the exit), the program is a raw file (as #!library).
+// The values are also names for the program (TARGET_RAM, TARGET_CONSOLE ...): `char uart @ TARGET_CONSOLE;`
+i64 tg_ram_size;
+i64 tg_stack;
+i64 tg_heap;
+i64 tg_console;
+i64 tg_exit;
+i64 tg_has_console;
+i64 tg_input;
+i64 tg_has_input;
+i64 tg_has_exit;
+char tg_name[64];
+char tg_start[64] = "main";            // the function where a #target program or a raw file starts (#start NAME)
+i64 tg_start_set;
+
+void tg_skip() {
+    while true {
+        i64 c = lc(0);
+        if c == 32 || c == 9 || c == 10 || c == 13 { adv(); }
+        else if c == '/' && lc(1) == '/' { while cur_pos < cur_len && lc(0) != 10 { adv(); } }
+        else { return; }
+    }
+}
+
+// a number: 123, 0x4000_0000, with the suffix K or M (x 1024, x 1048576)
+i64 tg_number() {
+    i64 v = 0;
+    i64 nd = 0;
+    if lc(0) == '0' && (lc(1) == 'x' || lc(1) == 'X') {
+        adv();
+        adv();
+        while true {
+            i64 c = lc(0);
+            i64 d = 0 - 1;
+            if c >= '0' && c <= '9' { d = c - '0'; }
+            else if c >= 'a' && c <= 'f' { d = c - 'a' + 10; }
+            else if c >= 'A' && c <= 'F' { d = c - 'A' + 10; }
+            else if c == '_' { adv(); continue; }
+            if d < 0 { break; }
+            v = v * 16 + d;
+            nd += 1;
+            adv();
+        }
+    } else {
+        while true {
+            i64 c = lc(0);
+            if c == '_' { adv(); continue; }
+            if c < '0' || c > '9' { break; }
+            v = v * 10 + (c - '0');
+            nd += 1;
+            adv();
+        }
+    }
+    if nd == 0 { die_help("a number was expected in #target", "write an address (0x40000000) or a size (64K, 1M)"); }
+    if lc(0) == 'K' || lc(0) == 'k' { v = v * 1024; adv(); }
+    else if lc(0) == 'M' || lc(0) == 'm' { v = v * 1048576; adv(); }
+    return v;
+}
+
+void tg_define(char^ name, i64 v) {
+    char vb[32];
+    i64 n = 0;
+    char dg[24];
+    i64 dn = 0;
+    if v == 0 { dg[0] = '0'; dn = 1; }
+    while v > 0 { dg[dn] = '0' + v % 10; dn += 1; v = v / 10; }
+    while dn > 0 { dn -= 1; vb[n] = dg[dn]; n += 1; }
+    vb[n] = 0;
+    add_define(name, @vb);
+}
+
+void tg_read_block() {
+    if x_target == 32 { die("#target is for ARM64 for now (the ARM32 and Thumb-2 targets of a board come later)"); }
+    tg_skip();
+    i64 k = 0;
+    while is_alnum(lc(0)) || lc(0) == '_' {
+        if k < 62 { tg_name[k] = lc(0); k += 1; }
+        adv();
+    }
+    tg_name[k] = 0;
+    tg_skip();
+    if lc(0) != '{' { die_help("a { was expected after the name of the target", "write  #target virt { entry 0x40000000; ram 0x40100000 1M; stack 64K; }"); }
+    adv();
+    tg_entry = 4194304;
+    tg_ram = 268435456;
+    tg_ram_size = 0;
+    tg_stack = 65536;
+    tg_heap = 0;
+    tg_has_console = 0;
+    tg_console = 0;
+    tg_exit = 0;
+    tg_input = 0;
+    tg_has_input = 0;
+    tg_has_exit = 0;
+    tg_format = 0;
+    while true {
+        tg_skip();
+        if lc(0) == '}' { adv(); break; }
+        if cur_pos >= cur_len { die_help("the #target block is not closed", "end it with a }"); }
+        char key[32];
+        i64 kn = 0;
+        while is_alnum(lc(0)) || lc(0) == '_' {
+            if kn < 30 { key[kn] = lc(0); kn += 1; }
+            adv();
+        }
+        key[kn] = 0;
+        if kn == 0 { die_help("a word was expected in #target", "the words are: entry ram stack heap console input exit format"); }
+        tg_skip();
+        if str_eq(@key, "format") {
+            char fw[16];
+            i64 fn = 0;
+            while is_alnum(lc(0)) { if fn < 14 { fw[fn] = lc(0); fn += 1; } adv(); }
+            fw[fn] = 0;
+            if str_eq(@fw, "elf") { tg_format = 0; }
+            else if str_eq(@fw, "bin") { tg_format = 1; }
+            else { die_help("the format of a target is elf or bin", "elf: a program that a loader (jemu, a bootloader) reads; bin: the bytes of the code only (a flash image)"); }
+        } else if str_eq(@key, "entry") { tg_entry = tg_number(); }
+        else if str_eq(@key, "ram") { tg_ram = tg_number(); tg_skip(); tg_ram_size = tg_number(); }
+        else if str_eq(@key, "stack") { tg_stack = tg_number(); }
+        else if str_eq(@key, "heap") { tg_heap = tg_number(); }
+        else if str_eq(@key, "console") { tg_console = tg_number(); tg_has_console = 1; }
+        else if str_eq(@key, "input") { tg_input = tg_number(); tg_has_input = 1; }
+        else if str_eq(@key, "exit") { tg_exit = tg_number(); tg_has_exit = 1; }
+        else { die_name("a word of #target that is not known (entry ram stack heap console input exit format)", @key); }
+        tg_skip();
+        if lc(0) != ';' { die_help("a ; was expected after the value", "every line of the #target block ends with a ;"); }
+        adv();
+    }
+    if tg_ram_size == 0 { die_help("the target has no RAM", "write  ram ADDRESS SIZE;  for example  ram 0x40100000 1M;"); }
+    if tg_entry % 65536 != 0 { die_help("the entry address must be a multiple of 64K", "the file is mapped as a whole: 0x40000000, 0x08000000"); }
+    if tg_ram % 4096 != 0 || tg_ram_size % 16 != 0 { die("the RAM starts at a multiple of 4096 and its size is a multiple of 16"); }
+    if tg_stack + tg_heap + 4096 > tg_ram_size { die_help("the stack and the heap do not fit in the RAM", "make the RAM bigger or the stack and the heap smaller (the global area needs room too)"); }
+    tg_on = 1;
+    // the names of the target for the program
+    tg_define("TARGET_ENTRY", tg_entry);
+    tg_define("TARGET_RAM", tg_ram);
+    tg_define("TARGET_RAM_SIZE", tg_ram_size);
+    tg_define("TARGET_STACK", tg_stack);
+    tg_define("TARGET_HEAP_SIZE", tg_heap);
+    tg_define("TARGET_HEAP_START", tg_ram + tg_ram_size - tg_stack - tg_heap);
+    tg_define("TARGET_STACK_TOP", tg_ram + tg_ram_size);
+    tg_define("TARGET_CONSOLE", tg_console);          // 0 when the target has no console line (the library <os> writes nothing then)
+    tg_define("TARGET_EXIT", tg_exit);
+}
+
+// ---------------------------------------------------------------- asm { ... }: lines of assembly written as they are (spec 120, the raw block)
+// The block can stand in a function (best a naked one: the compiler has no register in it) or between functions (a table of vectors). Every line, or every part
+// between `;`, goes to the assembler as it is. A `//` ends a line with a comment. Braces inside a line (`{v0.4s}`) are counted: the block ends with the matching }.
+bool asm_block_ahead() {
+    char^ fb = @src_bufs + cur_base;
+    i64 i = gen_blanks(fb, cur_pos, cur_len);
+    return i < cur_len && fb[i] == '{';
+}
+
+void read_asm_block() {
+    while lc(0) == 32 || lc(0) == 9 || lc(0) == 10 || lc(0) == 13 { adv(); }
+    if lc(0) != '{' { die_help("a { was expected after asm", "write  asm { mov x0, 1 }"); }
+    adv();
+    i64 depth = 1;
+    char line[256];
+    i64 n = 0;
+    while true {
+        if cur_pos >= cur_len { die_help("the asm block is not closed", "end it with a }"); }
+        i64 c = lc(0);
+        bool flush = false;
+        if c == '/' && lc(1) == '/' {
+            while cur_pos < cur_len && lc(0) != 10 { adv(); }
+            flush = true;
+        } else if c == 10 || c == 13 || (c == ';' && depth == 1) {
+            adv();
+            flush = true;
+        } else if c == '}' {
+            depth -= 1;
+            if depth == 0 {
+                adv();
+                flush = true;
+            } else {
+                if n < 250 { line[n] = '}'; n += 1; }
+                adv();
+            }
+        } else {
+            if c == '{' { depth += 1; }
+            if n < 250 { line[n] = c; n += 1; } else { die("a line of an asm block is too long (250 characters)"); }
+            adv();
+        }
+        if flush {
+            while n > 0 && (line[n - 1] == 32 || line[n - 1] == 9) { n -= 1; }
+            i64 s0 = 0;
+            while s0 < n && (line[s0] == 32 || line[s0] == 9) { s0 += 1; }
+            if n > s0 {
+                line[n] = 0;
+                emit_line(@line + s0);
+            }
+            n = 0;
+            if depth == 0 { break; }
+        }
+    }
+    next();
+}
+
 void predefine_constants() {
     if x_target == 32 { add_define("ARCH", "\"arm32\""); add_define("POINTER_BITS", "32"); }
     else { add_define("ARCH", "\"arm64\""); add_define("POINTER_BITS", "64"); }
@@ -2114,6 +2315,26 @@ void next() {
             next();
             return;
         }
+        if str_eq(@dw, "start") {
+            // #start NAME : the program starts in this function (a #target program: the start code calls it; a raw file: the first instruction jumps to it)
+            while lc(0) == 32 || lc(0) == 9 { adv(); }
+            if !is_letter(lc(0)) { die_help("#start needs the name of a function", "write  #start kernel_main"); }
+            i64 sk = 0;
+            while is_alnum(lc(0)) || lc(0) == '_' {
+                if sk < 62 { tg_start[sk] = lc(0); sk += 1; }
+                adv();
+            }
+            tg_start[sk] = 0;
+            tg_start_set = 1;
+            while lc(0) != 10 && lc(0) != 0 { adv(); }
+            next();
+            return;
+        }
+        if str_eq(@dw, "target") {
+            tg_read_block();
+            next();
+            return;
+        }
         if str_eq(@dw, "reserve") {
             // #reserve x19, x20 : the compiler never uses these registers; the program does (Reg::x19, register { })
             while true {
@@ -2221,6 +2442,8 @@ void next() {
         // jout and jin are the names of cout and cin (the owner's decision 2026-11-03, docs/syntax-design.md 105): the same words to the compiler
         if wn == 4 && str_eq(@tok_text, "jout") { str_copy(@tok_text, "cout", 8); }
         else if wn == 3 && str_eq(@tok_text, "jin") { str_copy(@tok_text, "cin", 8); }
+        // a #target machine has no process to end: `main` is an ordinary function there (named j2k_kernel inside), the start code calls it and writes its result to the exit device
+        else if tg_on == 1 && !str_eq(@tg_start, "main") && str_eq(@tok_text, @tg_start) { str_copy(@tok_text, "j2k_kernel", 16); }
         else if wn == 4 && str_eq(@tok_text, "jerr") { str_copy(@tok_text, "cerr", 8); }
         // i64 is another name of int while int is 64 bits (owner's decision 2026-11-06, docs/syntax-design.md 110): the same word to the compiler
         else if wn == 3 && str_eq(@tok_text, "i64") { str_copy(@tok_text, "int", 8); }

@@ -723,6 +723,10 @@ void parse_naked_stmt() {
         parse_raw();
         return;
     }
+    if tok_is("asm") && asm_block_ahead() {
+        read_asm_block();
+        return;
+    }
     if tok_kind != T_IDENT && !tok_is("[") { die("a statement of the low level was expected (Reg::x0 = ...; ret; goto ...; if ...)"); }
     if tok_is("ret") {
         next();

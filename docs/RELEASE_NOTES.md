@@ -1,7 +1,8 @@
-# J2K / Jcmp 1.2.41.1
+# J2K / Jcmp 1.2.41.2
 
 A self-hosting compiler for the J2K language that writes Linux ARM64 executables directly.
 
+**1.2.41.2:** programs without an operating system: `#target` (the compiler writes the start code; `jout`, `jin`, `alloc`, arrays, `String` and `Arena` work on a lower layer that you can write yourself: `os_write`, `os_read`, `os_map`, `os_unmap`, `os_exit`), `#start`, variables at an address (`int reg @ 0x...;`), `asm { }` blocks, `Cpu::irq_*` and system registers, the library `<os>`, `fn`/`fnv` in struct methods, the guide `docs/BARE.md`.
 **1.2.41.1:** the vectoriser reads comparisons (the tile map 2.75 -> 0.98 of C on a big core: 18 of 28 benchmarks within 1.10 of C -O2), values of struct fields kept across stores and loads, `cmeq` / `cmgt` / `cmge`.
 **1.2.41.0:** a recursion that ends with a call of itself (`return f(n - 1) + f(n - 2)`, `return n * f(n - 1)`, `return gcd(b, a % b)`) makes the last call a jump (`fib` is as fast as C); conditions without jumps (`cinc`, `&&` and `||` as 0 or 1) and loads moved up for the little cores (the tile map 19 % faster there).
 **1.2.40.0:** `=>` for a function of one expression, floats in the float registers with `fmadd` (particles 1.97 -> 1.34 of C), `<utf8>` (characters, columns, Thai marks), a faster `<profile>`, an ABI number between the compiler and its Library, `str(x)` is now `stg(x)` (the old name warns until 1.2.42.0), and a steadier way to measure speed.

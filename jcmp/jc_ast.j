@@ -404,6 +404,7 @@ i64 ast_gkind;
 i64 ast_gbase;
 i64 ast_gdims;
 bool ast_global_ok(i64 gi) {
+    if gabs[gi] == 1 { return false; }          // a variable at a fixed address (a register of the hardware) is made from the text
     if gdyn[gi] != 0 {
         if is_str_dyn(gdyn[gi]) { ast_gkind = 4; ast_gbase = 8; } else { ast_gkind = 5; ast_gbase = ast_dyn_base(gdyn[gi]); }
         return true;

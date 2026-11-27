@@ -2,6 +2,7 @@
 // Mem: a small heap. Every block has a 16-byte header: [size, next-free].
 i64 std_heap_cur;
 i64 std_heap_end;
+i64 std_chunk = 1048576;          // the size of the piece that the heap asks the system for (a #target machine makes it smaller than its heap)
 i64 std_free_list;
 i64 std_direct[64];                // blocks of 256 KB and more that have pages of their own (given back to the system by free)
 i64 std_direct_n;
@@ -70,6 +71,15 @@ struct Cpu {
     static void send_event() { __cpu_send_event(); }      // sev
     static void pause() { __cpu_pause(); }                // yield: "I am spinning" (pause on x86)
     static void nop() { __cpu_nop(); }
+    // the interrupts of this core (ARM64: the I and F bits of DAIF; for the code that runs at EL1 or higher)
+    static void irq_off() { __cpu_irq_off(); }              // no IRQ and no FIQ from here until irq_on (msr daifset, #3)
+    static void irq_on() { __cpu_irq_on(); }                // msr daifclr, #3
+    static i64 irq_state() { return __cpu_irq_state(); }   // the DAIF bits as they are now: keep them before irq_off, give them back with irq_restore
+    static void irq_restore(i64 state) { __cpu_irq_restore(state); }
+    // a system register of the CPU by its name (a word, not a value): Cpu::read_sysreg(vbar_el1), Cpu::write_sysreg(vbar_el1, table). The compiler writes mrs / msr.
+    // The names are the ones of the assembler (vbar_el1 elr_el1 spsr_el1 esr_el1 far_el1 sp_el0 daif currentel mair_el1 cntvct_el0 ...) and the general form s3_0_c12_c0_0.
+    static i64 read_sysreg(i64 name) { return 0; }
+    static void write_sysreg(i64 name, i64 value) { }
     // crc32 (the polynomial of zip / png / ethernet) and crc32c (Castagnoli: iSCSI, ext4): the crc so far and the next 8 bytes (or 1 byte);
     // they need  #require cpu "crc32"  (ARM64). Start with crc = 0xFFFFFFFF and flip the bits of the end result (~crc & 0xFFFFFFFF).
     static i64 crc32(i64 crc, i64 data) { return __cpu_crc32(crc, data); }
@@ -252,7 +262,7 @@ struct Mem {
     // the next `need` bytes of the chunk that is in use (a new chunk from the system when it is full)
     static i64 bump(i64 need) {
         if std_heap_cur + need > std_heap_end {
-            i64 chunk = 1048576;
+            i64 chunk = std_chunk;
             if need > chunk { chunk = (need + 4095) / 4096 * 4096; }
             i64 base = syscall(222, 0, chunk, 3, 34, -1, 0);      // mmap: anonymous, read + write
             if base < 0 { return 0; }

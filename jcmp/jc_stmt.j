@@ -399,6 +399,7 @@ void parse_assign_core(char^ target) {
     i64 a_ptr = lv_ptr;
     i64 a_fresh = lv_fresh;              // the target is a plain variable (no [ ] . ^ in front of the =)
     i64 a_base_local = lv_base_local;
+    i64 a_abs = lv_abs;               // the target is a variable at a fixed address: its read and its write are the acquire / release instructions
     i64 a_base_off = lv_base_off;
     if lv_kind == 1 { die_name("an array needs an index", target); }
     i64 tgt_ty = a_tid;
@@ -560,6 +561,7 @@ void parse_assign_core(char^ target) {
     }
     emit_line("mov x1, x0");
     if op[0] != 0 {
+        lv_abs = a_abs;
         if direct_fl { ins_mem("ldr", "x0", tgt_bname, tgt_off); } else { load_from_x3(a_wcode); }
         if is_float(tgt_ty) {
             fp_binop(@op, tgt_ty, rhs_ty);
@@ -570,7 +572,9 @@ void parse_assign_core(char^ target) {
         }
         emit_line("mov x1, x0");
     }
+    lv_abs = a_abs;
     if direct_fl { ins_mem("str", "x1", tgt_bname, tgt_off); } else { store_through(a_wcode); }
+    lv_abs = 0;
     if src_owner >= 0 {
         // p = owner; storing it somewhere that outlives the block (a field, an element, a global,
         // another owner) moves the ownership there; a plain alias variable only borrows it
@@ -2598,6 +2602,10 @@ void parse_statement_inner() {
             return;
         }
     }
+    if tok_kind == T_IDENT && tok_is("asm") && asm_block_ahead() {
+        read_asm_block();                // lines of assembly written as they are
+        return;
+    }
     if tok_is("@") {
         parse_no_reorder();
         return;
@@ -3351,6 +3359,27 @@ void parse_global(char^ name) {
     i64 g_ptr = ty_ptr;
     i64 g_tid = ty_tid;
     i64 g_dyn = ty_dyn;
+    if tok_is("@") {
+        // int reg @ 0x40020014;   a variable at a fixed address of the machine (a register of the hardware): no place is given to it in the global area,
+        // and every read and every write in the text is one access that is not joined, moved, repeated or left out
+        next();
+        i64 g_at = parse_const();
+        if cf_flag == 1 { die("an address (a whole number) was expected after @"); }
+        if g_dyn != 0 || (g_width >= 16 && g_ptr == 0) || g_elem == 6 || g_elem == 7 || g_tid == 90 || g_tid == 91 { die_help("only a whole number, a pointer, a bool or a char can be at an address", "a float or a struct at an address is not built yet; use a whole number and read the bits"); }
+        if g_at < 0 { die("the address must not be negative"); }
+        if tok_is("=") { die_help("a variable at an address has no start value", "it is a register of the machine: write it in a function (main or the start of the program)"); }
+        i64 g_size = size_of(g_width);
+        if g_ptr != 0 { g_size = 8; }
+        if g_at % g_size != 0 { die_help("the address is not a multiple of the size of the variable", "a register of 4 bytes is at an address that is a multiple of 4"); }
+        ty_tid = g_tid;
+        i64 g_saved = gl_bytes;
+        add_global(name, 0, g_width, 8, g_ptr);
+        gl_bytes = g_saved;
+        goff[gcount - 1] = g_at;
+        gabs[gcount - 1] = 1;
+        expect(";");
+        return;
+    }
     if tok_is("[") {
         i64 g_count = parse_dims();
         i64 g_nd = dim_nd;
@@ -3606,6 +3635,9 @@ void parse_struct() {
             is_static = 1;
             next();
         }
+        // `fn name(...)` returns int and `fnv name(...)` returns nothing in a struct too (docs/syntax-design.md 111); a field or a method that is called fn / fnv is not touched when no ( follows
+        if tok_kind == T_IDENT && tok_is("fn") && lambda_fn_ahead_name() { str_copy(@tok_text, "i32", 8); }
+        else if tok_kind == T_IDENT && tok_is("fnv") && lambda_fn_ahead_name() { str_copy(@tok_text, "void", 8); }
         parse_type();
         if tok_kind != T_IDENT { die_help("a field or method name was expected", "write the name after the dot"); }
         char m_name[256];
@@ -3737,6 +3769,7 @@ void parse_struct() {
 }
 
 void parse_top_item() {
+    if tok_kind == T_IDENT && tok_is("asm") && asm_block_ahead() { read_asm_block(); return; }
     fn_naked = 0;
     fn_noreturn = 0;
     fn_interrupt = 0;
@@ -4169,6 +4202,208 @@ void emit_lib_stub() {
         k += 1;
     }
     emit_stub_tail();
+}
+
+// the start code of a machine without an OS (#target): the entry (`b j2k_start` is the first instruction of the program) comes here: the base of the global area
+// and the stack are the RAM of the target, the global area is made zero, the values of the globals are stored, main runs, its result goes to the exit device
+// a #target program has a small kernel under it (j2k_bare_svc below): memory from the heap, bytes to the console and from the input, the end to the exit device, so
+// alloc, arrays, String, Arena, jout and jin work; what cannot work is a thread (one core, no scheduler)
+void tg_check_reach() {
+    i64 e = 0;
+    while e < edge_count {
+        char^ to = @edge_to + e * 64;
+        if str_eq(to, "__thread_start") || str_eq(to, "j2k_thread_start") {
+            i64 f = edge_from[e];
+            if f >= 0 && f < fcount && fbuiltin[f] == 0 {
+                char msg[200];
+                str_copy(@msg, "the function ", 200);
+                append_text(@msg, @fname + f * 64);
+                append_text(@msg, " of a #target program starts a thread");
+                die_help(@msg, "the machine has one core and no scheduler: tasks are written by the kernel (see docs/BARE.md)");
+            }
+        }
+        e += 1;
+    }
+}
+
+// the start code and the small kernel of a machine without an OS (#target). The runtime asks for the system with `svc 0` as on Linux; the assembler makes that a
+// call of j2k_bare_svc, which knows the few calls that the runtime makes: mmap (a block of the heap, whole pages, zero), munmap / mprotect / yield / madvise
+// (nothing), write (the bytes go to the console register), read (bytes from the input register, up to the end of the line), exit (the code goes to the exit device,
+// then the CPU waits).
+void emit_target_stub() {
+    i64 kf = find_func("main");
+    char^ kname = "main";
+    if !str_eq(@tg_start, "main") { kf = find_func("j2k_kernel"); kname = "j2k_kernel"; }
+    if kf < 0 { die_help("a #target program needs a main function", "main is called when the machine starts; #start NAME names another function"); }
+    i64 heap_top = tg_ram + tg_ram_size - tg_stack;
+    i64 heap_lo = (heap_top - tg_heap + 4095) / 4096 * 4096;       // whole pages (the first page keeps the state of the allocator)
+    if tg_heap == 0 { heap_lo = 0; }
+    bool heap_on = heap_lo > 0 && heap_top > heap_lo;
+    emit_line("j2k_start:");
+    ins_n("mov x28, ", tg_ram);
+    emit_line("add x27, x28, #72");            // this thread's block (thrown text, try handlers)
+    ins_n("mov x9, ", tg_ram + tg_ram_size);
+    emit_line("mov sp, x9");
+    // the global area and the heap are zero
+    i64 blocks = (gl_bytes + 15) / 16;
+    if blocks > 0 {
+        emit_line("mov x0, x28");
+        ins_n("mov x1, ", blocks);
+        emit_line("j2k_tz1:");
+        emit_line("stp xzr, xzr, [x0, #0]");
+        emit_line("add x0, x0, #16");
+        emit_line("sub x1, x1, #1");
+        emit_line("cbnz x1, j2k_tz1");
+    }
+    if heap_on {
+        ins_n("mov x0, ", heap_lo);
+        ins_n("mov x1, ", (heap_top - heap_lo) / 16);
+        emit_line("j2k_tz2:");
+        emit_line("stp xzr, xzr, [x0, #0]");
+        emit_line("add x0, x0, #16");
+        emit_line("sub x1, x1, #1");
+        emit_line("cbnz x1, j2k_tz2");
+        ins_n("mov x16, ", heap_lo);
+        emit_line("add x17, x16, #4096");
+        emit_line("str x17, [x16, #0]");
+    }
+    // argc() is 0: the word at the start of the global area points to an empty list of arguments
+    emit_line("sub sp, sp, #32");
+    emit_line("str xzr, [sp, #0]");
+    emit_line("str xzr, [sp, #8]");
+    emit_line("add x9, sp, #0");
+    emit_line("str x9, [x28, #0]");
+    emit_global_init();
+    // the heap asks the system for pieces of std_chunk bytes: on this machine a piece is an eighth of the heap
+    i64 cg = find_global("std_chunk");
+    if heap_on && cg >= 0 {
+        i64 chunk = (tg_heap / 8) / 4096 * 4096;
+        if chunk < 4096 { chunk = 4096; }
+        ins_n("mov x9, ", chunk);
+        emit_str("str x9, [x28, #");
+        emit_int(goff[cg]);
+        emit_line("]");
+    }
+    emit_str("bl ");
+    emit_line(kname);
+    if str_eq(kname, "j2k_kernel") {
+        if fvoid[kf] == 1 { emit_line("mov x0, 0"); }          // a function without a result ends the machine with 0
+        i64 ff = find_func("__flush");
+        if ff >= 0 && freach[ff] == 1 {
+            emit_line("mov x19, x0");
+            emit_line("bl __flush");                            // what jout kept goes out
+            emit_line("mov x0, x19");
+        }
+        emit_line("mov x8, 94");
+        emit_line("svc 0");
+    }
+    emit_line("j2k_halt:");
+    emit_line("wfi");
+    emit_line("b j2k_halt");
+    // the small kernel
+    emit_line("j2k_bare_svc:");
+    emit_line("cmp x8, 222");
+    emit_line("b.eq j2k_bs_mmap");
+    emit_line("cmp x8, 64");
+    emit_line("b.eq j2k_bs_write");
+    emit_line("cmp x8, 63");
+    emit_line("b.eq j2k_bs_read");
+    emit_line("cmp x8, 94");
+    emit_line("b.eq j2k_bs_exit");
+    emit_line("cmp x8, 93");
+    emit_line("b.eq j2k_bs_exit");
+    emit_line("cmp x8, 215");
+    if find_func("os_unmap") >= 0 { emit_line("b.eq os_unmap"); } else { emit_line("b.eq j2k_bs_zero"); }          // os_unmap(address, length)
+    emit_line("cmp x8, 226");
+    emit_line("b.eq j2k_bs_zero");
+    emit_line("cmp x8, 233");
+    emit_line("b.eq j2k_bs_zero");
+    emit_line("cmp x8, 124");
+    emit_line("b.eq j2k_bs_zero");
+    emit_line("mov x0, -38");
+    emit_line("ret");
+    emit_line("j2k_bs_zero:");
+    emit_line("mov x0, 0");
+    emit_line("ret");
+    emit_line("j2k_bs_mmap:");
+    if find_func("os_map") >= 0 { emit_line("b os_map"); }          // the program takes the memory over: os_map(address, length) gives a block or a negative number
+    else if heap_on {
+        ins_n("mov x16, ", heap_lo);
+        emit_line("ldr x17, [x16, #0]");
+        emit_line("add x0, x1, #4095");
+        emit_line("lsr x0, x0, #12");
+        emit_line("lsl x0, x0, #12");
+        emit_line("add x0, x17, x0");
+        ins_n("mov x16, ", heap_top);
+        emit_line("cmp x0, x16");
+        emit_line("b.hi j2k_bs_nomem");
+        ins_n("mov x16, ", heap_lo);
+        emit_line("str x0, [x16, #0]");
+        emit_line("mov x0, x17");
+        emit_line("ret");
+    }
+    emit_line("j2k_bs_nomem:");
+    emit_line("mov x0, -12");
+    emit_line("ret");
+    emit_line("j2k_bs_write:");
+    if find_func("os_write") >= 0 { emit_line("b os_write"); }          // os_write(file, buffer, count) gives the count
+    else if tg_has_console == 1 {
+        emit_line("sub sp, sp, #32");
+        emit_line("stp x3, x4, [sp, #0]");
+        emit_line("mov x3, x1");
+        emit_line("mov x4, x2");
+        ins_n("mov x16, ", tg_console);
+        emit_line("j2k_bs_wl:");
+        emit_line("cbz x4, j2k_bs_wd");
+        emit_line("ldrb x17, [x3, #0]");
+        emit_line("strb x17, [x16, #0]");
+        emit_line("add x3, x3, #1");
+        emit_line("sub x4, x4, #1");
+        emit_line("b j2k_bs_wl");
+        emit_line("j2k_bs_wd:");
+        emit_line("ldp x3, x4, [sp, #0]");
+        emit_line("add sp, sp, #32");
+    }
+    emit_line("mov x0, x2");
+    emit_line("ret");
+    emit_line("j2k_bs_read:");
+    if find_func("os_read") >= 0 { emit_line("b os_read"); }            // os_read(file, buffer, count) gives the number of bytes
+    else if tg_has_input == 1 {
+        emit_line("sub sp, sp, #32");
+        emit_line("stp x3, x4, [sp, #0]");
+        emit_line("mov x3, x1");
+        emit_line("mov x4, 0");
+        ins_n("mov x16, ", tg_input);
+        emit_line("j2k_bs_rl:");
+        emit_line("cmp x4, x2");
+        emit_line("b.hs j2k_bs_rd");
+        emit_line("j2k_bs_rw:");
+        emit_line("ldr x17, [x16, #24]");
+        emit_line("and x17, x17, #16");
+        emit_line("cbnz x17, j2k_bs_rw");
+        emit_line("ldrb x17, [x16, #0]");
+        emit_line("add x0, x3, x4");
+        emit_line("strb x17, [x0, #0]");
+        emit_line("add x4, x4, #1");
+        emit_line("cmp x17, 10");
+        emit_line("b.ne j2k_bs_rl");
+        emit_line("j2k_bs_rd:");
+        emit_line("mov x0, x4");
+        emit_line("ldp x3, x4, [sp, #0]");
+        emit_line("add sp, sp, #32");
+        emit_line("ret");
+    } else {
+        emit_line("mov x0, 0");
+        emit_line("ret");
+    }
+    emit_line("j2k_bs_exit:");
+    if find_func("os_exit") >= 0 { emit_line("b os_exit"); }            // os_exit(code) ends the machine: it must not return
+    else if tg_has_exit == 1 {
+        ins_n("mov x16, ", tg_exit);
+        emit_line("str x0, [x16, #0]");
+    }
+    emit_line("b j2k_halt");
+    emit_stub_tail();                      // the names of the functions (when something asks for them) and the size of the global area
 }
 
 void emit_start_stub() {

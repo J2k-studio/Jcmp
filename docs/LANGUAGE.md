@@ -1220,6 +1220,8 @@ naked void start() {
 
 The program is 12 bytes of code after the 176 bytes of the ELF header. An unknown marker (`#!banana`) is an error.
 
+A machine without an operating system (a board, a kernel, the emulator `jemu --system`) is written with `#target` and `#start`, with variables at an address (`char uart @ 0x09000000;`) and `jout`, `jin`, `alloc`, arrays and `String` that work on it as on Linux (a lower layer of five calls that you can write yourself): see `BARE.md` (Thai: `BARE.th.md`).
+
 ### `#!using asm`
 
 The line `#!using asm` says that the file uses the low-level words (`Reg::`, `Cpu::`, `raw`, `naked`, `register { }`). They are open in every file today, so the line changes nothing yet; it tells the reader (and a later release, which will close those words in a file without the line) what the file does. Any other word after `#!using` is an error.

@@ -865,3 +865,38 @@ What it offers:
 * `TileMap.save(String path)` returns `void` — the world as text: a header, then for each chunk that exists  layer chunk  and its 256 numbers (the file of a save; small, readable)
 * `TileMap::load(String path, bool^ ok)` returns `TileMap`
 
+
+
+## Without an operating system: `#import <os>` (1.2.41.2)
+
+One library for a program with a `#target` line (a board, a kernel, or the emulator `jemu --system`; `BARE.md`). It has three parts, and each is called by its own name:
+
+| part | what it is | the calls |
+|---|---|---|
+| `Console` | text to the console register of the target | `put(c)`, `print(text)`, `line(text)`, `num(n)`, `hex(n)` |
+| `Heap` | `alloc` and `free` of any size from the heap range of the target (first fit, free neighbours join) | `alloc(n)`, `free(p)`, `left()`, `init(start, bytes)` |
+| `Pool` | blocks in a row from a range you give, all given back at once | `init(start, bytes)`, `take(n)`, `reset()`, `left()` |
+
+```jk
+#target virt {
+    entry 0x40000000;
+    ram 0x40100000 1M;
+    stack 64K;
+    heap 64K;
+    console 0x09000000;
+    exit 0x09100000;
+}
+#import <os>
+using Console;                           // the names of Console without the prefix: line(...), num(...)
+
+fn main() {
+    line("hello");
+    i64^ a = (i64^)Heap::alloc(80);      // or  using Heap;  and  alloc(80)
+    a[9] = 1234;
+    num(a[9]); put(10);
+    Heap::free((void^)a);
+    return 0;                            // written to the exit device
+}
+```
+
+Call a part with its name (`Console::line("x")`) or write `using Console;` once and call it without the name (`line("x")`), as with `using Mem;`. Nothing is loaded that you do not use. Nothing in `<os>` calls an operating system. A target without a `console` line writes nothing with `Console`. Put the `#target` line first in the file.

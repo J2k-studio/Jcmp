@@ -43,6 +43,33 @@ From the summary and from the tests `test/t578_vec_heap.jk` (heap arrays, every 
 
 When a loop does not match the list, check it with `-irdbg 4194304` before you rewrite it.
 
+### 2.1 A loop that compares neighbours (1.2.41.1)
+
+A loop over a row of `int` (32-bit) global arrays that **counts or selects with comparisons** is vector code too (four numbers at a time, `cmeq` / `cmgt` / `cmge`). The shape of the tile map (`tools/bench/tilemap.jk`) and the test `test/t656_vec_stencil.jk`:
+
+```
+for y in 1..h - 1 {
+    for x in 1..w - 1 {
+        int c = 0;
+        if tiles[(y - 1) * w + x - 1] == 1 { c += 1; }
+        if tiles[(y - 1) * w + x]     == 1 { c += 1; }
+        if tiles[(y - 1) * w + x + 1] == 1 { c += 1; }
+        ...
+        if c == 3 || (self == 1 && c == 2) { next[y * w + x] = 1; } else { next[y * w + x] = 0; }
+    }
+}
+```
+
+What the vectoriser needs:
+- the arrays are **global `int` arrays** (a heap array in the same function keeps the old rules); `tiles` and `next` are two different arrays, they may have different row offsets;
+- the row offsets `(y - 1) * w` do not change in the `x` loop (the compiler moves them out; write them in a local if you like);
+- an index is `x`, `x + k` or `x - k` plus a row offset;
+- a local of the loop body (`c`) is written before it is read in every turn and nobody reads it after the loop;
+- the conditions are `==`, `!=`, `<`, `<=`, `>`, `>=` of 32-bit numbers (or of a number and a constant); `&&` and `||` of them are `and` / `or` of 0 and 1;
+- the stores are `store`s of 32-bit numbers to a global array. The last turns of the row (up to 3) run as plain code.
+
+Result on the tile map: 2.75 times the time of C -O2 -> 0.98 (big core), 2.1 -> 0.8 (little core). Use `-irdbg 4194304` to see why a loop was not made into vector code.
+
 ## 3. `float` or `double`, and the SIMD types
 
 - `float` is 32 bits. It is the type to use for array data where the precision allows it: it halves the memory traffic and gives four lanes per NEON register.
@@ -201,6 +228,32 @@ Each line is a number that `docs/PROJECT_SUMMARY.md` states. I did not measure t
 | 2026-11-05 late (matrixidx) | GEMM | 1.5 to 1.6 | measured on one phone, noisy, load 47, a rough ratio |
 
 The entries do not agree everywhere: the 2026-11-04/05 section gives int sum 0.6, `docs/LIMITS.md` gives about 1.1 for the same day, and the matrix product is 2.5 in one entry and 1.9 in another. Both values are in the table because both are what the summary states. The newest entries for GEMM are the ones in the 2026-11-05 lines. The summary says that the ijk form still needs unroll-and-jam (design 31, lever L7); that work is not in any released version.
+
+### 5.1 The table of 28 programs (1.2.41.1, big core, `tools/bench`)
+
+Ratio J2K / C -O2 on one big core, best of 7 (the phone changes speed, so only the ratios count). **18 of 28 are within 1.10 of C**:
+
+| within 1.10 | ratio |
+|---|---|
+| arrays, fib, gcd, i32_fib, i32_gcd, i32_loop, i32_matmul, i32_sieve, loop, matmul, nn, qsort, sha256, sieve, soa, tilemap, vec3, widths | 0.61 - 1.09 (tilemap 0.98) |
+
+| over 1.10 | ratio |
+|---|---|
+| particles 1.38, strings 1.38, hashmap 1.27, heapmm 1.21, i32_game 1.21, game 1.19, nbody 1.19, i32_qsort 1.16, mandel 1.13, i32_arrays 1.12 | |
+
+**Measured and rejected** (they did not make `particles` or `strings` faster, so they are not in the compiler): float constants kept in registers outside the loop, double variables in the caller-saved registers d24 - d31, `fccmp` for `a < 0.0 || a > 100.0` (one branch instead of two), the limit of a loop (`mov x, 4194304; cmp`) made once before the loop. A struct of 24 bytes instead of 20 is not the reason either (the C program with 24 bytes is as fast as with 20). The number of instructions is not what is left; ARM64 needs a profile (`perf` is not on the phone) or the pairing of loads (`ldp`) and a better schedule.
+
+### 5.2 Temporary exceptions to the 1.10 limit (2026-11-27)
+
+A program over 1.10 of C -O2 stays on the list until its cause is known and fixed. Accepted for now, with the reason:
+
+| program | ratio (big core) | reason | what would end the exception |
+|---|---|---|---|
+| particles | 1.38 | code quality, **not memory**: with 500 particles (12 KB, inside the L1 cache) the ratio is the same (1.38); a struct of 24 bytes instead of 20 does not change the C program; the extra instructions, spills, `fccmp`, constants in registers were tried and did not help | `ldp` / `stp` pairs and a schedule made with a profile of the CPU (`perf` is not on the development phone) |
+| strings | 1.38 | the same test: 32 KB buffers give 1.32 | the same |
+| hashmap, heapmm, game, i32_game, nbody, i32_qsort, mandel, i32_arrays | 1.12 - 1.27 | not looked at one by one yet | each gets its own look; game and particles first (the pillar of the language) |
+
+The rule stays: a new exception needs a measured reason in this table, and it ends when the cause is fixed.
 
 ## 6. Switches
 

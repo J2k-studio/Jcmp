@@ -870,6 +870,16 @@ void gen_lambda() {
     lam_finish(r_tid, pn, r_start, r_end, p_start, p_end, r_end, b_end, line);
 }
 
+// the current token is fn / fnv and a name and a ( follow: `fnv name(...)` in a struct (a field called fn is not a function)
+bool lambda_fn_ahead_name() {
+    char^ fb = @src_bufs + cur_base;
+    i64 i = gen_blanks(fb, cur_pos, cur_len);
+    if i >= cur_len || !is_letter(fb[i]) { return false; }
+    while i < cur_len && (is_alnum(fb[i]) || fb[i] == '_') { i += 1; }
+    i = gen_blanks(fb, i, cur_len);
+    return i < cur_len && fb[i] == '(';
+}
+
 // is the current token a type that is followed by "(" : the start of  int(int a, int b) { ... } ?
 bool lambda_fn_ahead() {
     if tok_kind == T_IDENT && (tok_is("fn") || tok_is("fnv")) {

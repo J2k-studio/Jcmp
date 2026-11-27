@@ -377,6 +377,54 @@ jout << (a + a).sum() << "\n";
 - **Sum of a vector** — Make an f32x4 with the values 1, 2, 3 and 4, and print its sum as 10.000000. Output: `10.000000`. Hint: Use .sum()
 - **Multiply each lane** — Make an f32x4 with the values 1, 1, 1 and 1, multiply it by 3.0, and print the sum of the result. Output: `12.000000`. Hint: Four lanes of 3 add up to 12
 
+## A loop that looks at its neighbours
+**What it is.** Many games and pictures change a cell by looking at the cells around it: a map of walls, the game of life, a blur. The loop reads a few neighbours, counts the ones that match, and writes the result. The reads are at the same place in every row: one cell to the left, one to the right, one row above.
+**Why it matters.** This is the shape of the tile map of a game. The compiler makes it vector code: four cells at a time, with the comparisons done on four numbers at once. The tile map of the speed table is as fast as the C program (0.98 of C -O2). A loop that is written in another shape stays plain code, which is two to three times slower.
+**How to do it.**
+
+Keep the cells in global `int` arrays, read the neighbours with an index of the form `row * width + x`, `+ 1` or `- 1`, count with `if cell == 1 { c += 1; }`, and write the result with one store at the end. Do not call a function inside the loop. Keep the counter `c` as a local of the loop body: it is made again for every cell and nobody reads it after the loop.
+**Example.**
+
+```jk
+#import <stdlib>
+using stdlib;
+
+int grid[100];
+int near[100];
+
+void main() {
+    for i in 0..100 { if i % 3 == 0 { grid[i] = 1; } else { grid[i] = 0; } }
+    for y in 1..9 {
+        for x in 1..9 {
+            int c = 0;
+            if grid[(y - 1) * 10 + x] == 1 { c += 1; }
+            if grid[(y + 1) * 10 + x] == 1 { c += 1; }
+            if grid[y * 10 + x - 1] == 1 { c += 1; }
+            if grid[y * 10 + x + 1] == 1 { c += 1; }
+            near[y * 10 + x] = c;
+        }
+    }
+    int total = 0;
+    for i in 0..100 { total += near[i]; }
+    jout << total << " " << near[55] << "\n";
+}
+```
+
+```
+84 2
+```
+
+> **Watch out:** the speed comes from the shape, the answer does not change. The compiler does the last cells of a row (up to three) one by one, so the width of a row does not have to be a multiple of four. To see why a loop was not made into vector code, compile it with `-irdbg 4194304`. A heap array (`int[] a = arr(n)`) or a call inside the loop keeps the old rules.
+**Exercises**
+- A loop that counts neighbours is vector code when the cells are in global `int` arrays and the loop has no call. — Answer: t. These are the two things the compiler needs.
+- How many cells does one vector instruction compare in this loop?
+  - a) 4  b) 1  c) 16  — Answer: a. A vector holds four 32-bit numbers.
+- Where should the counter `c` of one cell be declared?
+  - a) in the loop body  b) outside all the loops  c) in a global  — Answer: a. It is made again for every cell and nobody reads it after the loop.
+- Predict the output of the example when the grid has a 1 in every cell (`grid[i] = 1`). Output: `256`. Every cell of the 8 x 8 inside has four neighbours, and 64 cells give 256.
+**Tasks**
+- **Count the walls** — Make a grid of 10 x 10 with a wall (1) in every cell whose number is a multiple of 3. For the cells inside, count the walls in the four neighbours and print the total. Output: `84 2`. Hint: copy the example and change nothing, then try another multiple.
+
 ## Floats and doubles: decimal numbers in the machine
 **What it is.** A decimal number in the machine is stored as a binary number that is close to the real value. Some numbers, like 0.1, cannot be stored exactly. A float uses 32 bits and a double uses 64 bits, so a double is more exact. Comparing two decimal numbers with == is often wrong, because they differ by a tiny amount.
 **Why it matters.** Money, science and graphics programs must understand this small error. For example, in the machine 0.1 + 0.2 is not equal to 0.3.

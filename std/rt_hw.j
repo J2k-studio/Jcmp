@@ -5,6 +5,15 @@ struct Cpu {
     static void send_event() { __cpu_send_event(); }      // sev
     static void pause() { __cpu_pause(); }                // yield: "I am spinning" (pause on x86)
     static void nop() { __cpu_nop(); }
+    // the interrupts of this core (ARM64: the I and F bits of DAIF; for the code that runs at EL1 or higher)
+    static void irq_off() { __cpu_irq_off(); }              // no IRQ and no FIQ from here until irq_on (msr daifset, #3)
+    static void irq_on() { __cpu_irq_on(); }                // msr daifclr, #3
+    static i64 irq_state() { return __cpu_irq_state(); }   // the DAIF bits as they are now: keep them before irq_off, give them back with irq_restore
+    static void irq_restore(i64 state) { __cpu_irq_restore(state); }
+    // a system register of the CPU by its name (a word, not a value): Cpu::read_sysreg(vbar_el1), Cpu::write_sysreg(vbar_el1, table). The compiler writes mrs / msr.
+    // The names are the ones of the assembler (vbar_el1 elr_el1 spsr_el1 esr_el1 far_el1 sp_el0 daif currentel mair_el1 cntvct_el0 ...) and the general form s3_0_c12_c0_0.
+    static i64 read_sysreg(i64 name) { return 0; }
+    static void write_sysreg(i64 name, i64 value) { }
     // crc32 (the polynomial of zip / png / ethernet) and crc32c (Castagnoli: iSCSI, ext4): the crc so far and the next 8 bytes (or 1 byte);
     // they need  #require cpu "crc32"  (ARM64). Start with crc = 0xFFFFFFFF and flip the bits of the end result (~crc & 0xFFFFFFFF).
     static i64 crc32(i64 crc, i64 data) { return __cpu_crc32(crc, data); }

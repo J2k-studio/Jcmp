@@ -716,6 +716,7 @@ i64 gro_a[16384];             // the start of the region of a read-only variable
 i64 gro_s[16384];
 i64 gtid[16384];
 i64 gcnt[16384];
+i64 gabs[16384];                // 1: the variable is at a fixed address of the machine (int reg @ 0x40020014;): goff holds the address
 i64 gcount;
 i64 gl_bytes;                // bytes of the global area handed out (slot 0 = initial sp)
 
@@ -825,6 +826,8 @@ i64 lfl32[8192];             // 1: a scalar float local: its slot is read and wr
 i64 v_fl32;                  // 1: the variable is a scalar float local kept as a whole 8-byte slot (lfl32)
 i64 v_st1;
 i64 v_st2;
+i64 v_abs;                     // 1: the variable is at a fixed address (v_off is the address)
+i64 lv_abs;                  // 1: the lvalue is a variable at a fixed address: its accesses are the acquire / release instructions (see load_abs)
 
 i64 label_no;                // label counter
 i64 in_cout;                 // 1 while parsing a cout operand: << and >> end it
@@ -859,6 +862,7 @@ bool lookup_var(char^ name) {
     if li >= 0 {
         lused[li] = 1;
         v_local = 1;
+        v_abs = 0;
         if mt_outer > 0 && li < mt_outer { v_local = 2; }
         v_kind = lkind[li];
         v_elem = lelem[li];
@@ -888,6 +892,7 @@ bool lookup_var(char^ name) {
         v_dyn = gdyn[gi];
         v_st1 = gst1[gi];
         v_st2 = gst2[gi];
+        v_abs = gabs[gi];
         return true;
     }
     return false;
@@ -1012,6 +1017,7 @@ void add_global(char^ name, i64 kind, i64 elem, i64 bytes, i64 ptr) {
         goff[gcount] = gl_bytes;
         gl_bytes += (bytes + 7) / 8 * 8;
     }
+    gabs[gcount] = 0;
     gt_add(gcount);
     gcount += 1;
 }
@@ -1094,6 +1100,7 @@ char^ var_base() {
 
 // the address of the variable (array start / scalar slot) into x0
 void addr_of_var() {
+    if v_abs == 1 { ins_n("mov x0, ", v_off); return; }
     emit_str("add x0, ");
     emit_str(var_base());
     emit_str(", #");
@@ -1101,8 +1108,29 @@ void addr_of_var() {
     emit_nl();
 }
 
+// a variable at a fixed address of the machine (a register of the hardware): every read and every write in the text is one access made with the
+// acquire / release instructions, which no pass of the compiler joins, moves, repeats or drops
+void load_abs() {
+    ins_n("mov x16, ", v_off);
+    i64 sz = size_of(v_elem);
+    if sz == 1 { emit_line("ldarb x0, [x16]"); if v_elem == 1 { emit_line("sxtb x0, x0"); } }
+    else if sz == 2 { emit_line("ldarh x0, [x16]"); if v_elem == 5 { emit_line("sxth x0, x0"); } }
+    else if sz == 4 { emit_line("ldarw x0, [x16]"); if v_elem == 4 { emit_line("sxtw x0, x0"); } }
+    else { emit_line("ldar x0, [x16]"); }
+}
+
+void store_abs() {
+    ins_n("mov x16, ", v_off);
+    i64 sz = size_of(v_elem);
+    if sz == 1 { emit_line("stlrb x0, [x16]"); }
+    else if sz == 2 { emit_line("stlrh x0, [x16]"); }
+    else if sz == 4 { emit_line("stlrw x0, [x16]"); }
+    else { emit_line("stlr x0, [x16]"); }
+}
+
 // load the value of a scalar variable into x0
 void load_scalar() {
+    if v_abs == 1 { load_abs(); return; }
     char lop[8];
     str_copy(@lop, "ldr", 8);
     if v_elem == 1 { str_copy(@lop, "ldrsb", 8); }
@@ -1127,6 +1155,7 @@ i64 size_of(i64 code) {
 
 // store x0 into a scalar variable (wrapped to its width first)
 void store_scalar() {
+    if v_abs == 1 { store_abs(); return; }
     if v_elem == 1 { emit_line("sxtb x0, x0"); }
     if v_elem == 2 { emit_line("uxtb x0, x0"); }
     if v_elem == 4 { emit_line("sxtw x0, x0"); }
@@ -1227,6 +1256,21 @@ bool load_direct(char^ op, i64 scale) {
 }
 
 void load_through(i64 code) {
+    if lv_abs == 1 {
+        lv_abs = 0;
+        if code == 6 { code = 4; }
+        if code == 7 || code == 13 { code = 8; }
+        if code == 11 { code = 2; }
+        emit_line("mov x16, x0");
+        if code == 1 { emit_line("ldarb x0, [x16]"); emit_line("sxtb x0, x0"); }
+        else if code == 5 { emit_line("ldarh x0, [x16]"); emit_line("sxth x0, x0"); }
+        else if code == 14 { emit_line("ldarh x0, [x16]"); }
+        else if code == 12 { emit_line("ldarw x0, [x16]"); }
+        else if code == 4 { emit_line("ldarw x0, [x16]"); emit_line("sxtw x0, x0"); }
+        else if code == 8 { emit_line("ldar x0, [x16]"); }
+        else { emit_line("ldarb x0, [x16]"); }
+        return;
+    }
     if code == 6 { code = 4; }
     if code == 7 || code == 13 { code = 8; }
     if code == 11 { code = 2; }
@@ -1256,6 +1300,11 @@ i64 fl32_code(i64 code) {
 
 // x0 = the value of the given width code at the address in x3
 void load_from_x3(i64 code) {
+    if lv_abs == 1 {
+        emit_line("mov x0, x3");
+        load_through(code);
+        return;
+    }
     if code == 6 { code = 4; }
     if code == 7 || code == 13 { code = 8; }
     if code == 11 { code = 2; }
@@ -1278,6 +1327,17 @@ void load_from_x3(i64 code) {
 
 // store x1 at the address in x3 (width code)
 void store_through(i64 code) {
+    if lv_abs == 1 {
+        lv_abs = 0;
+        if code == 7 || code == 13 { code = 8; }
+        if code == 6 || code == 12 { code = 4; }
+        emit_line("mov x16, x3");
+        if code == 8 { emit_line("stlr x1, [x16]"); }
+        else if code == 5 || code == 14 { emit_line("stlrh x1, [x16]"); }
+        else if code == 4 { emit_line("stlrw x1, [x16]"); }
+        else { emit_line("stlrb x1, [x16]"); }
+        return;
+    }
     if code == 7 || code == 13 { code = 8; }
     if code == 6 || code == 12 { code = 4; }
     if code == 8 {
@@ -2056,7 +2116,19 @@ void compute_reach() {
         k += 1;
     }
     i64 m = find_func("main");
+    if tg_on == 1 && !str_eq(@tg_start, "main") { m = find_func("j2k_kernel"); }          // a #target program starts where #start says
     if m >= 0 { freach[m] = 1; }
+    if tg_on == 1 {
+        // the lower layer of a #target machine: the functions that the program writes to take over a call of the small kernel (see emit_target_stub)
+        i64 hk = 0;
+        while hk < 5 {
+            char^ hn = "os_write";
+            if hk == 1 { hn = "os_read"; } else if hk == 2 { hn = "os_map"; } else if hk == 3 { hn = "os_exit"; } else if hk == 4 { hn = "os_unmap"; }
+            i64 hf = find_func(hn);
+            if hf >= 0 { freach[hf] = 1; }
+            hk += 1;
+        }
+    }
     // the methods that a table of virtual methods points to are reached without a call that can be seen
     i64 vs = 0;
     while vs < scount {
@@ -2152,6 +2224,32 @@ i64 call_pre;                // arguments already pushed (self of a method call)
 i64 call_method;             // 1 for a method call: arguments are counted after self
 
 // a call: the (mangled) name is in id_name and the token is the "(" after it
+// Cpu::read_sysreg(NAME) / Cpu::write_sysreg(NAME, value): the system register is a word, the compiler writes mrs / msr (the names are the ones of the assembler)
+void gen_sysreg_access(bool write) {
+    expect("(");
+    if tok_kind != T_IDENT { die_help("the name of a system register was expected", "write Cpu::read_sysreg(vbar_el1)  or  Cpu::write_sysreg(vbar_el1, value)"); }
+    char rn[64];
+    str_copy(@rn, @tok_text, 64);
+    if as_sysreg_code(@rn) < 0 { die_name("this system register is not known (use the name of the assembler, or the form s3_0_c12_c0_0)", @rn); }
+    next();
+    if write {
+        expect(",");
+        parse_expr();
+        emit_str("msr ");
+        emit_str(@rn);
+        emit_line(", x0");
+        expect(")");
+        ex_ty = 98;
+        ex_w = 8;
+        return;
+    }
+    expect(")");
+    emit_str("mrs x0, ");
+    emit_line(@rn);
+    ex_ty = 0;
+    ex_w = 8;
+}
+
 void gen_call() {
     char callee[256];
     str_copy(@callee, @id_name, 256);
@@ -2193,6 +2291,7 @@ void gen_call() {
         else if str_eq(@callee, "__atomic_bit_or") { str_copy(@callee, "__fetch_or", 256); }
         else if str_eq(@callee, "__atomic_bit_xor") { str_copy(@callee, "__fetch_xor", 256); }
     }
+    if str_eq(@callee, "__cpu_read_sysreg") || str_eq(@callee, "__cpu_write_sysreg") { gen_sysreg_access(str_eq(@callee, "__cpu_write_sysreg")); return; }
     note_call(@callee);
     i64 vsl = vcall_slot;
     i64 vsl_off = vcall_off;
@@ -2329,6 +2428,10 @@ void gen_call() {
         else if str_eq(@callee, "__cpu_event") { emit_line("wfe"); }
         else if str_eq(@callee, "__cpu_send_event") { emit_line("sev"); }
         else if str_eq(@callee, "__cpu_nop") { emit_line("nop"); }
+        else if str_eq(@callee, "__cpu_irq_off") { emit_line("msr daifset, #3"); }
+        else if str_eq(@callee, "__cpu_irq_on") { emit_line("msr daifclr, #3"); }
+        else if str_eq(@callee, "__cpu_irq_state") { emit_line("mrs x0, daif"); }
+        else if str_eq(@callee, "__cpu_irq_restore") { if n != 1 { die("Cpu::irq_restore takes the state that Cpu::irq_state gave"); } emit_line("msr daif, x0"); n = 0; }
         else if str_eq(@callee, "__cpu_isb") { emit_line("isb"); }
         else if str_eq(@callee, "__cpu_speculation_barrier") { emit_line("dsb nsh"); emit_line("isb"); }
         else if str_eq(@callee, "__cpu_counter") { emit_line("mrs x0, cntvct_el0"); }
@@ -2614,6 +2717,7 @@ void parse_lvalue() {
     lv_dyn = v_dyn;
     lv_base_off = v_off;
     lv_base_local = v_local;
+    lv_abs = v_abs;
     lvalue_loop();
 }
 
@@ -2630,7 +2734,7 @@ void check_moved_use() {
 void lvalue_loop() {
     while true {
         if tok_is(".") && lc(0) == '.' { return; }       // .. is a range (for i in lo..hi), not a field
-        if tok_is("[") || tok_is(".") || tok_is("^") { lv_fl32 = 0; }
+        if tok_is("[") || tok_is(".") || tok_is("^") { lv_fl32 = 0; lv_abs = 0; }
         if lv_kind == 3 && tok_is("[") {
             dyn_index();
         } else if lv_kind == 3 && tok_is(".") {

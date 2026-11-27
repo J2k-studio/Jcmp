@@ -3,7 +3,7 @@
 // Use:    jcmp1 input.jk -o program
 // the version of the compiler (also in the file VERSION; release.sh checks that they agree)
 #allow syscall                         // the compiler is the layer under Sys: it calls the system by number on purpose
-#define JCMP_VERSION "1.2.41.1"
+#define JCMP_VERSION "1.2.41.2"
 #define JCMP_ABI 1                  // the number that the compiler and its Library folder must share (Library/ABI); raise it only when they stop fitting together
 
 #import "jc_base"
@@ -903,8 +903,14 @@ void main() {
     recover_on = 0;
     if err_count > 0 { err_summary(); syscall(93, 1); }
     tm_stage("parse passes 1+2");
-    if find_func("main") < 0 && bare_mode == 0 && (x_lib == 0 || x_dyn == 1) { die_no_main(in_path); }
+    if tg_on == 1 {
+        if !str_eq(@tg_start, "main") && find_func("j2k_kernel") < 0 { die_name("#start names a function that is not in the program", @tg_start); }
+        if str_eq(@tg_start, "main") && find_func("main") < 0 { die_no_main(in_path); }
+    }
+    else if tg_start_set == 1 && bare_mode == 1 && find_func(@tg_start) < 0 { die_name("#start names a function that is not in the program", @tg_start); }
+    else if find_func("main") < 0 && bare_mode == 0 && (x_lib == 0 || x_dyn == 1) { die_no_main(in_path); }
     compute_reach();
+    if tg_on == 1 { tg_check_reach(); }
     pass_no = 3;
     reset_state(in_path);
     if bare_mode == 0 {
@@ -912,6 +918,7 @@ void main() {
         emit_print_helpers();
         emit_copy_helper();
     }
+    if tg_on == 0 && tg_start_set == 1 && bare_mode == 1 { emit_str("b "); emit_line(@tg_start); }          // a raw file starts where #start says
     parse_program();
     if bare_mode == 0 {
         emit_free_thunks();
@@ -920,10 +927,10 @@ void main() {
         if used_uprint == 1 { emit_uprint_helper(); }
         if used_divz == 1 { emit_divzero_helper(); }
         if used_noret == 1 { emit_noret_helper(); }
-        emit_segv_handler();
+        if tg_on == 0 { emit_segv_handler(); }
         if used_try == 1 { emit_exc_helper(); }
         if used_thread == 1 { emit_thread_helper(); }
-        if x_lib == 1 && x_dyn == 0 { emit_lib_stub(); } else { emit_start_stub(); }
+        if tg_on == 1 { emit_target_stub(); } else if x_lib == 1 && x_dyn == 0 { emit_lib_stub(); } else { emit_start_stub(); }
     }
     tm_stage("parse pass 3 (the code)");
     if x_pre != null { write_file(x_pre, @out_buf, out_len); }

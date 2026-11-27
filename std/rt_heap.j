@@ -2,6 +2,7 @@
 // Mem: a small heap. Every block has a 16-byte header: [size, next-free].
 i64 std_heap_cur;
 i64 std_heap_end;
+i64 std_chunk = 1048576;          // the size of the piece that the heap asks the system for (a #target machine makes it smaller than its heap)
 i64 std_free_list;
 i64 std_direct[64];                // blocks of 256 KB and more that have pages of their own (given back to the system by free)
 i64 std_direct_n;

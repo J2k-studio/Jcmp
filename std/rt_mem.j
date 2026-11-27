@@ -42,7 +42,7 @@ struct Mem {
     // the next `need` bytes of the chunk that is in use (a new chunk from the system when it is full)
     static i64 bump(i64 need) {
         if std_heap_cur + need > std_heap_end {
-            i64 chunk = 1048576;
+            i64 chunk = std_chunk;
             if need > chunk { chunk = (need + 4095) / 4096 * 4096; }
             i64 base = syscall(222, 0, chunk, 3, 34, -1, 0);      // mmap: anonymous, read + write
             if base < 0 { return 0; }
