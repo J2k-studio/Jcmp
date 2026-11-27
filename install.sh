@@ -1,5 +1,5 @@
 #!/bin/sh
-# install.sh -- download the Jcmp compiler from the latest GitHub release, check it and put it in a folder.
+# install.sh -- download the Jexcmp compiler (the program jcmp) from the latest GitHub release, check it and put it in a folder.
 #
 #   curl -fsSL https://raw.githubusercontent.com/J2k-studio/Jexcmp/main/install.sh | sh
 #   wget -qO- https://raw.githubusercontent.com/J2k-studio/Jexcmp/main/install.sh | sh
@@ -34,7 +34,7 @@ while [ $# -gt 0 ]; do
 done
 case "$(uname -m)" in
     aarch64|arm64) ;;
-    *) echo "install: Jcmp makes programs for Linux ARM64 only (this machine is $(uname -m))"; exit 1 ;;
+    *) echo "install: Jexcmp makes programs for Linux ARM64 only (this machine is $(uname -m))"; exit 1 ;;
 esac
 fetch() {   # fetch URL FILE
     if command -v curl >/dev/null 2>&1; then curl -fsSL -o "$2" "$1"
