@@ -1648,12 +1648,14 @@ i64 lw_fpimm(i64 bits) {
 bool lw_fcmp_pair(i64 k, i64 b) {
     if k < ir_bs[b] || k + 2 > ir_be[b] - 1 { return false; }
     if ir_op[k] != IR_FCVT_SD || ir_op[k + 1] != IR_FCVT_SD || ir_op[k + 2] != IR_FBR { return false; }
-    if ir_d[k] != ir_a[k] || ir_d[k + 1] != ir_a[k + 1] || ir_d[k] == ir_d[k + 1] { return false; }
+    if ir_d[k] == ir_d[k + 1] || ir_a[k] == ir_d[k + 1] || ir_a[k + 1] == ir_d[k] { return false; }          // the conversions may read other registers than they write (a copy that was joined)
     if ir_bi[k + 2] != 0 || ir_a[k + 2] != ir_d[k] || ir_b[k + 2] != ir_d[k + 1] { return false; }
     if (ir_opt & 140737488355328) != 0 { return false; }
     return true;
 }
 i64 lw_fsingle;                  // 1: the compare that is written now is on floats (fcmp sA, sB)
+i64 lw_fsa;                      // the registers that hold the floats of that compare
+i64 lw_fsb;
 char lw_skipf[IR_MAXI];          // 1: this F32IN was written already, by the load before it (ldr sF, [..])
 
 // a float that is read from memory:  ldrsw xT, [..]  ...  fmov sF, wT   becomes   ldr sF, [..]  (ARM64 only; the F32IN is not written).
@@ -1706,7 +1708,7 @@ bool lw_instr(i64 i, i64 b) {
     if op == IR_LOAD && lw_fuse_f32ld(i, b) { return true; }
     if op == IR_FCVT_SD && (lw_fcmp_pair(i, b) || lw_fcmp_pair(i - 1, b)) { return true; }          // the conversions of a float compare are not written
     lw_fsingle = 0;
-    if op == IR_FBR && lw_fcmp_pair(i - 2, b) { lw_fsingle = 1; }
+    if op == IR_FBR && lw_fcmp_pair(i - 2, b) { lw_fsingle = 1; lw_fsa = ir_a[i - 2]; lw_fsb = ir_a[i - 1]; }
     if op == IR_PARAM {
         return true;                                     // the arguments are in x0..x7 already
     }
@@ -1870,6 +1872,9 @@ bool lw_instr(i64 i, i64 b) {
         else if vk == 8 { rg_text("orr v"); }
         else if vk == 9 { rg_text("eor v"); }
         else if vk == 10 { rg_text("ushl v"); }
+        else if vk == 12 { rg_text("cmeq v"); }
+        else if vk == 13 { rg_text("cmgt v"); }
+        else if vk == 14 { rg_text("cmge v"); }
         else { rg_text("mul v"); }
         rg_int(lw_tmp_reg[d]);
         char^ ar = ".2d";
@@ -2078,9 +2083,9 @@ bool lw_instr(i64 i, i64 b) {
         } else {
             rg_text("fcmp ");
         }
-        if lw_fsingle == 1 { lw_sreg(ir_a[i]); } else { lw_reg(ir_a[i]); }
+        if lw_fsingle == 1 { lw_sreg(lw_fsa); } else { lw_reg(ir_a[i]); }
         rg_text(", ");
-        if ir_bi[i] == 1 { rg_int(ir_b[i]); } else if lw_fsingle == 1 { lw_sreg(ir_b[i]); } else { lw_reg(ir_b[i]); }
+        if ir_bi[i] == 1 { rg_int(ir_b[i]); } else if lw_fsingle == 1 { lw_sreg(lw_fsb); } else { lw_reg(ir_b[i]); }
         rg_put(10);
         rg_text("b.");
         char^ ccs = lw_cc(ir_k[i], 0);
@@ -2526,6 +2531,16 @@ void rp_stage(i64 k) {
     rp_h[k] = ir_text_hash();
 }
 
+// does the function read the header of a heap array ([ptr + 16])? (the vectoriser and the array hoist expect its loads where they are)
+bool lf_has_heap() {
+    i64 i = 0;
+    while i < ir_n {
+        if ir_op[i] == IR_LOAD && ir_a[i] != 30 && ir_w[i] == 8 && ir_k[i] == 16 && ir_bi[i] == 0 { return true; }
+        i += 1;
+    }
+    return false;
+}
+
 void ir_pipeline(char^ name_) {
             i64 h0 = op_hoisted;
             i64 c0 = op_ra_changes;
@@ -2543,6 +2558,8 @@ void ir_pipeline(char^ name_) {
             rp_stage(3);
             i64 vz0 = vz_count;
             i64 ss0 = ss_total;
+            if (ir_opt & 8388608) == 0 && (ir_opt & 268435456) != 0 && !lf_has_heap() { op_licm_exprs(); }      // the invariant parts of the addresses go into cells before the vectoriser looks (a[(y + 1) * w + x])
+            if (ir_opt & 549755813888) != 0 { ir_print(); syscall(64, 2, @ir_pbuf, ir_plen); }      // -irdbg 549755813888: the IR that the vectoriser sees (and again after the cells were promoted)
             if (ir_opt & 268435456) != 0 {
                 op_vectorize();
                 rp_stage(4);
@@ -2561,6 +2578,11 @@ void ir_pipeline(char^ name_) {
                 }
             }
             if (ir_opt & 8388608) == 0 { op_licm_exprs(); }
+            if (ir_opt & 8) != 0 && (ir_opt & 18014398509481984) == 0 {
+                i64 mf0 = mf_changes;
+                op_memfwd();
+                if mf_changes != mf0 && (ir_opt & 4) != 0 { op_clean_run(); }
+            }
             // the cells of a block are kept in registers after the loops were looked at (a counter that is a copy is no counter for the vectoriser)
             if (ir_opt & 8) != 0 {
                 i64 cp0 = cp_changes;

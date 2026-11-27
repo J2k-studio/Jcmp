@@ -1071,10 +1071,23 @@ void as_h_fcmp() {
     i64 rn = as_parse_freg();
     i64 kind = as_fp_kind;
     as_expect_comma();
-    i64 rm = as_parse_freg();
-    if as_fp_kind != kind { as_fail(); }
+    as_skip_spaces();
     i64 base = 0x1E202000;
     if kind == 1 { base = 0x1E602000; }
+    if as_cur() == '#' {                              // fcmp sN, #0.0
+        as_ci += 1;
+        if as_cur() != '0' { as_fail(); }
+        as_ci += 1;
+        if as_cur() == '.' {
+            as_ci += 1;
+            if as_cur() != '0' { as_fail(); }
+            as_ci += 1;
+        }
+        as_put32(base | 8 | (rn << 5));
+        return;
+    }
+    i64 rm = as_parse_freg();
+    if as_fp_kind != kind { as_fail(); }
     as_put32(base | (rm << 16) | (rn << 5));
 }
 
@@ -1823,6 +1836,9 @@ void as_instruction() {
         return;
     }
     if as_mn_is("ushl") { as_h_vec3b(0x6EE04400, 0x6EA04400, 0x6E204400); return; }
+    if as_mn_is("cmeq") { as_h_vec3b(0x6EE08C00, 0x6EA08C00, 0x6E208C00); return; }
+    if as_mn_is("cmgt") { as_h_vec3b(0x4EE03400, 0x4EA03400, 0x4E203400); return; }
+    if as_mn_is("cmge") { as_h_vec3b(0x4EE03C00, 0x4EA03C00, 0x4E203C00); return; }
     // the bitwise vector instructions work on the 128 bits: every arrangement gives the same code
     if as_mn_is("and") { if as_at_vreg() { as_h_vec3b(0x4E201C00, 0x4E201C00, 0x4E201C00); return; } as_h_logic(0x8A000000, 0x92000000); return; }
     if as_mn_is("orr") { if as_at_vreg() { as_h_vec3b(0x4EA01C00, 0x4EA01C00, 0x4EA01C00); return; } as_h_logic(0xAA000000, 0xB2000000); return; }

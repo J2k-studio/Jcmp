@@ -349,7 +349,7 @@ void a32_vstore(i64 v) {
     a32_w(0xF40C0A0F);                                // vst1.8 {d0, d1}, [r12]
 }
 
-// d = a op b on vectors (the codes of IR_VOP: 0 fadd 1 fsub 2 fmul 3 fdiv 4 add 5 sub 6 mul 7 and 8 orr 9 eor 10 ushl; w: 1 = 2 x 64 bits, 2 = 4 x 32, 3 = 16 x 8)
+// d = a op b on vectors (the codes of IR_VOP: 0 fadd 1 fsub 2 fmul 3 fdiv 4 add 5 sub 6 mul 7 and 8 orr 9 eor 10 ushl 12 cmeq 13 cmgt 14 cmge; w: 1 = 2 x 64 bits, 2 = 4 x 32, 3 = 16 x 8)
 bool a32_vop(i64 i) {
     i64 k = ir_k[i];
     i64 w = ir_w[i];
@@ -376,6 +376,9 @@ bool a32_vop(i64 i) {
         else if k == 5 { a32_w(0xF3200842); }
         else if k == 6 { a32_w(0xF2200952); }
         else if k == 10 { a32_w(0xF3220440); }
+        else if k == 12 { a32_w(0xF3200852); }                // vceq.i32 q0, q0, q1
+        else if k == 13 { a32_w(0xF2200342); }                // vcgt.s32
+        else if k == 14 { a32_w(0xF2200352); }                // vcge.s32
         else { a32_fail("a vector operation of 4 x 32 bits"); return false; }
     } else {
         if k == 4 { a32_w(0xF2000842); }

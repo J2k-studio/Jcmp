@@ -2233,6 +2233,45 @@ bool pt_rules(i64 i) {
         pt_parse(0, i);
         pt_parse(1, j);
     }
+    // mov xA, 0 / fmov sB, wA / fcmp sC, sB   (or  fmov sB, wzr / fcmp sC, sB)   where xA and sB are not needed afterwards   ->   fcmp sC, #0.0
+    {
+        i64 zk = 0 - 1;
+        i64 zA = 0 - 1;
+        i64 zB = 0 - 1;
+        i64 zsrc = 0;
+        i64 zl1 = 0 - 1;
+        i64 zl2 = 0 - 1;
+        if pt_mn(0, "mov") && pt_no[0] == 2 && pt_isreg(0, 0) && pt_op(0, 1, "0") && pt_mn(1, "fmov") && pt_no[1] == 2 && pt_o[(1 * 4) * 40] == 's' {
+            zA = pt_regno(0, 0, 'x');
+            zB = pt_regno(1, 0, 's');
+            if zA >= 0 && zA == pt_regno(1, 1, 'w') { zk = pt_next(j); zl1 = i; zl2 = j; zsrc = 1; }
+        } else if pt_mn(0, "fmov") && pt_no[0] == 2 && pt_o[(0 * 4) * 40] == 's' && pt_op(0, 1, "wzr") {
+            zB = pt_regno(0, 0, 's');
+            zk = j;
+            zl1 = 0 - 1;
+            zl2 = i;
+        }
+        if zk >= 0 && zB >= 0 && pt_parse(2, zk) && pt_mn(2, "fcmp") && pt_no[2] == 2 && pt_o[(2 * 4) * 40] == 's' && pt_regno(2, 1, 's') == zB && pt_regno(2, 0, 's') != zB {
+            i64 zC = pt_regno(2, 0, 's');
+            i64 zn = pt_next(zk);
+            bool zok = zn >= 0 && pt_dead(zn, 32 + zB, 40);
+            if zok && zsrc == 1 { zok = pt_dead(zn, zA, 40); }
+            if zok {
+                char fl[24];
+                fl[0] = 'f'; fl[1] = 'c'; fl[2] = 'm'; fl[3] = 'p'; fl[4] = ' '; fl[5] = 's';
+                i64 fq = 6;
+                if zC >= 10 { fl[fq] = '0' + zC / 10; fq += 1; }
+                fl[fq] = '0' + zC % 10; fq += 1;
+                fl[fq] = ','; fl[fq + 1] = ' '; fl[fq + 2] = '#'; fl[fq + 3] = '0'; fl[fq + 4] = '.'; fl[fq + 5] = '0'; fl[fq + 6] = 0;
+                if zl1 >= 0 { pt_set(zl1, ""); }
+                pt_set(zl2, "");
+                pt_set(zk, @fl);
+                return true;
+            }
+        }
+        pt_parse(0, i);
+        pt_parse(1, j);
+    }
     // mov xD, xS  /  mov xD, N   where nothing reads xD before it is written again (or the function ends): the line does nothing
     if pt_mn(0, "mov") && pt_no[0] == 2 && pt_isreg(0, 0) && (pt_isreg(0, 1) || pt_isnum(0, 1)) {
         i64 dr = pt_regno(0, 0, 'x');

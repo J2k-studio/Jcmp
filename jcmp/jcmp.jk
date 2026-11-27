@@ -3,7 +3,7 @@
 // Use:    jcmp1 input.jk -o program
 // the version of the compiler (also in the file VERSION; release.sh checks that they agree)
 #allow syscall                         // the compiler is the layer under Sys: it calls the system by number on purpose
-#define JCMP_VERSION "1.2.41.0"
+#define JCMP_VERSION "1.2.41.1"
 #define JCMP_ABI 1                  // the number that the compiler and its Library folder must share (Library/ABI); raise it only when they stop fitting together
 
 #import "jc_base"
@@ -546,6 +546,31 @@ void main() {
             ir_mode = 2;
             ir_opt = ir_opt | 44;
             ir_pre = 1;
+        } else if str_eq(a, "-mfhit") {
+            ai += 1;
+            char^ hv = arg(ai);
+            i64 hk = 0;
+            i64 hn = 0;
+            while hv[hk] >= '0' && hv[hk] <= '9' {
+                hn = hn * 10 + (hv[hk] - '0');
+                hk += 1;
+            }
+            mf_hmax = hn;
+        } else if str_eq(a, "-mftrace") {
+            mf_trace = 1;
+        } else if str_eq(a, "-mfname") {
+            ai += 1;
+            mf_only = arg(ai);
+        } else if str_eq(a, "-mfmax") {
+            ai += 1;
+            char^ mv = arg(ai);
+            i64 mk = 0;
+            i64 mn = 0;
+            while mv[mk] >= '0' && mv[mk] <= '9' {
+                mn = mn * 10 + (mv[mk] - '0');
+                mk += 1;
+            }
+            mf_max = mn;
         } else if str_eq(a, "-irdbg") {
             ai += 1;
             char^ dv = arg(ai);
