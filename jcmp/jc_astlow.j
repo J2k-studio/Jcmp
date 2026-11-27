@@ -3854,7 +3854,7 @@ bool gl_ifsel(i64 n) {
     return true;
 }
 
-i64 gl_ifconv_on = 1;
+i64 gl_ifconv_on = 0;     // OFF by default since 1.2.41.4: it turned `words_of` of jsh into a silent bug (two  if d == c { depth += 1; }  in one function: a String pushed after them was empty); -ifconv turns it on
 bool gl_ifconv(i64 n) {
     if at_c[n] != 0 || gl_hastmp[n] != 0 { return false; }
     i64 cd = at_a[n];

@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.2.41.4 (2026-11-27)
+* **Fixed (a silent bug of 1.2.41.0 - 1.2.41.3):** the branch-free counter (`if a == x { n += 1; }` worked out as `n += (a == x)`) was on by default, although it was measured slower and meant to be off. In a function with two such counters a String that was pushed to an array afterwards came out empty (the tokenizer of jsh lost `>>`). It is off by default now; `-ifconv` turns it on, `-noifconv` is still accepted.
+* **Added (tests):** t672 (two counters and a String pushed after them).
 ## 1.2.41.3 (2026-11-27)
 * **Added (language):** `jout << a, " ", b << nl;` - in a `jout` / `cout` chain a comma joins the next item like `<<` does (it writes nothing, no space and no line end).
 * **Added (tools):** `tools/shortcount.py` and eight small programs in six languages (`tools/bench/short/`: Jex, C, Rust, Java, C#, Python) that measure how many tokens the same program needs (Jex: 25% shorter than C, 21% than Java, 11% than C#; 2% longer than Rust).

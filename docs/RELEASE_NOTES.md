@@ -1,7 +1,8 @@
-# Jexcmp 1.2.41.3
+# Jexcmp 1.2.41.4
 
 Jexcmp is a self-hosting compiler for the Jex language that writes Linux ARM64 executables directly.
 
+**1.2.41.4:** a silent bug of 1.2.41.0 - 1.2.41.3 is fixed: the branch-free counter (`if a == x { n += 1; }`) was on by default and in some functions made a String that was pushed to an array afterwards come out empty; it is off by default now (`-ifconv` turns it on). Test t672.
 **1.2.41.3:** `jout << a, " ", b << nl;` (a comma joins the next item in a chain), a `#target` program that does not print carries no printing routines (the demo kernel 6.7 KB -> 3.8 KB), a measuring tool for how short the same program is in Jex, C, Rust, Java, C# and Python (Jex is 25% shorter than C).
 **1.2.41.2:** programs without an operating system: `#target` (the compiler writes the start code; `jout`, `jin`, `alloc`, arrays, `String` and `Arena` work on a lower layer that you can write yourself: `os_write`, `os_read`, `os_map`, `os_unmap`, `os_exit`), `#start`, variables at an address (`int reg @ 0x...;`), `asm { }` blocks, `Cpu::irq_*` and system registers, the library `<os>`, `fn`/`fnv` in struct methods, the guide `docs/BARE.md`.
 **1.2.41.1:** the vectoriser reads comparisons (the tile map 2.75 -> 0.98 of C on a big core: 18 of 28 benchmarks within 1.10 of C -O2), values of struct fields kept across stores and loads, `cmeq` / `cmgt` / `cmge`.
