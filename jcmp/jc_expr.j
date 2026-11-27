@@ -2143,9 +2143,9 @@ void compute_reach() {
     }
     // the routines that cout uses for a bool and for a pointer (the syntax tree calls them, the parser does not see it)
     i64 pbl = find_func("__print_bool");
-    if pbl >= 0 && m >= 0 { freach[pbl] = 1; }
+    if pbl >= 0 && m >= 0 && !(tg_on == 1 && used_print == 0) { freach[pbl] = 1; }
     i64 ppt = find_func("__print_ptr");
-    if ppt >= 0 && m >= 0 { freach[ppt] = 1; }
+    if ppt >= 0 && m >= 0 && !(tg_on == 1 && used_print == 0) { freach[ppt] = 1; }
     if x_lib == 1 {
         // a library: the entry points are the roots (there may be no main)
         k = 0;
@@ -2175,6 +2175,8 @@ void compute_reach() {
         i64 j = 0;
         while j < edge_count {
             i64 to = find_func(@edge_to + j * 64);
+            // a #target program that never prints: the call of __flush at the end of main is not made, so it does not pull the printing routines in
+            if to >= 0 && tg_on == 1 && used_print == 0 && str_eq(@fname + to * 64, "__flush") && edge_from[j] >= 0 && fbuiltin[edge_from[j]] == 0 { j += 1; continue; }
             if to >= 0 && freach[to] == 0 && (edge_from[j] < 0 || freach[edge_from[j]] == 1) {
                 freach[to] = 1;
                 changed = true;

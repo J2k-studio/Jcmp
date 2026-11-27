@@ -23,7 +23,7 @@ The core is what every other library stands on. **`Result<T, Error>`** is the an
 ```jk
 #import <stdlib>
 
-void main() {
+fnv main() {
     // Result: a call that can fail gives a value or an error; you choose what to do
     Result<String, Error> r = Fs::read_text("/no/such/file");
     switch r {
@@ -57,7 +57,7 @@ failed: cannot open /no/such/file: there is no file or folder with this name (er
 ```jk
 #import <stdlib>
 
-void main() {
+fnv main() {
     jout << Math::sqrt(2.0) << " " << Math::pow(2.0, 10.0) << " " << Math::floor(-2.5) << "\n";
     jout << Math::min(3.0, 1.5) << " " << Math::abs(-4.25) << " " << Math::clamp(15.0, 0.0, 10.0) << "\n";
     Result<i64, Error> n = Num::parse_int("1234");
@@ -88,7 +88,7 @@ A `String` owns its bytes and frees them itself. It has the methods you expect: 
 ```jk
 #import <stdlib>
 
-void main() {
+fnv main() {
     String s = "  The quick brown fox  ";
     String t = s.trim();
     jout << t.upper() << " | " << t.len << " | " << t.find("quick") << "\n";
@@ -126,7 +126,7 @@ true 42
 ```jk
 #import <stdlib>
 
-void main() {
+fnv main() {
     Dir::make_all("tl_dir/sub");
     Fs::write_text(Path::join("tl_dir/sub", "a.txt"), "one\ntwo\n").unwrap();
     Fs::append_text("tl_dir/sub/a.txt", "three\n").unwrap();
@@ -159,7 +159,7 @@ false
 ```jk
 #import <stdlib>
 
-void main() {
+fnv main() {
     String[] a = Env::args();
     jout << "arguments: " << a.len << "\n";
     jout << Env::get("J2K_NO_SUCH_VARIABLE").is_none() << "\n";
@@ -195,7 +195,7 @@ true
 ```jk
 #import <stdlib>
 
-void main() {
+fnv main() {
     int t0 = Time::mono_ns();
     Time::sleep_ms(10);
     jout << (Time::mono_ns() - t0 >= 10000000) << "\n";
@@ -229,7 +229,7 @@ Lists are dynamic arrays (`T[]`, `String[]`), and `Map<K, V>` and `Set<T>` are h
 ```jk
 #import <stdlib>
 
-void main() {
+fnv main() {
     String[] names = arr(2);
     names.push("ann"); names.push("bob");
     Map<String, int> ages;
@@ -260,7 +260,7 @@ Output:
 ```jk
 #import <stdlib>
 
-void main() {
+fnv main() {
     jout << Sha256::hex("abc") << "\n";
     jout << Base64::encode("hello") << " " << Hex::encode("hello") << "\n";
 }
@@ -287,11 +287,11 @@ using cpu::thread;
 
 int total;
 
-void work(void^ arg) {
+fnv work(void^ arg) {
     for i in 0..1000 { Atomic::add(@total, 1); }
 }
 
-void main() {
+fnv main() {
     Thread a = create(work, null);
     Thread b = create(work, null);
     a.join();
@@ -318,7 +318,7 @@ Output:
 #import <math>
 using math::vector;
 
-void main() {
+fnv main() {
     vec3 a = {1.0, 2.0, 3.0};
     vec3 b = {4.0, 5.0, 6.0};
     vec3 c = a + b * 2.0;

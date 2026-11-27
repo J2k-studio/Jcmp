@@ -20,7 +20,7 @@ jout << steps << "\n";
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     int n = 16;
     for t in 0..3 {
         int linear = n;
@@ -53,7 +53,7 @@ n 4096 linear 4096 halving 12
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 int n = 4;
 int steps = 0;
 for i in 0..n {
@@ -90,7 +90,7 @@ jout << list.len << "\n";
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     int[] list = arr(4);
     for i in 1..6 { list.push(i * i); }
     jout << "len " << list.len << "\n";
@@ -117,7 +117,7 @@ after pop 4
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 int[] a = arr(2);
 a.push(3);
 a.push(4);
@@ -154,15 +154,15 @@ using stdlib;
 
 int[] st;
 
-void push(int x) { st.push(x); }
+fnv push(int x) { st.push(x); }
 
-int pop() {
+fn pop() {
     int x = st[st.len - 1];
     st.pop();
     return x;
 }
 
-void main() {
+fnv main() {
     st = arr(8);
     push(1); push(2); push(3);
     jout << pop() << " " << pop() << "\n";
@@ -189,7 +189,7 @@ using stdlib;
 
 int[] st;
 
-void main() {
+fnv main() {
 st = arr(4);
 st.push(5);
 st.push(6);
@@ -237,14 +237,14 @@ bool enqueue(int x) {
     return true;
 }
 
-int dequeue() {
+fn dequeue() {
     int x = buf[head];
     head = (head + 1) % cap;
     count -= 1;
     return x;
 }
 
-void main() {
+fnv main() {
     buf = arr(cap);
     for i in 0..cap { buf.push(0); }
     for i in 1..6 { jout << enqueue(i * 10) << " "; }
@@ -273,7 +273,7 @@ int[] buf;
 int head = 0;
 int cap = 3;
 
-void main() {
+fnv main() {
 buf = arr(cap);
 buf.push(1); buf.push(2); buf.push(3);
 head = (head + 1) % cap;
@@ -306,7 +306,7 @@ if ages.has("ann") { jout << ages.get("ann") << "\n"; }
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     Map<String, int> ages;
     ages.put("ann", 31);
     ages.put("bob", 25);
@@ -332,7 +332,7 @@ zed not found
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 Map<String, int> m;
 m.put("x", 1);
 m.put("x", 7);
@@ -358,7 +358,7 @@ jout << m.get("x") << " " << m.len << "\n";
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     int[] a = arr(4);
     a.push(1); a.push(3); a.push(5); a.push(7);
     int lo = 0;
@@ -373,7 +373,7 @@ void main() {
 #import <stdlib>
 using stdlib;
 
-int find(int[] a, int x) {
+fn find(int[] a, int x) {
     int lo = 0;
     int hi = a.len - 1;
     while lo <= hi {
@@ -384,7 +384,7 @@ int find(int[] a, int x) {
     return 0 - 1;
 }
 
-void main() {
+fnv main() {
     int[] a = arr(8);
     for i in 0..8 { a.push(i * 3); }
     jout << find(a, 9) << " " << find(a, 10) << " " << find(a, 21) << "\n";
@@ -406,7 +406,7 @@ void main() {
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 int[] a = arr(5);
 for i in 0..5 { a.push(i * 2); }
 int lo = 0;
@@ -434,7 +434,7 @@ jout << a[mid] << "\n";
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     int[] a = arr(3);
     a.push(3); a.push(1); a.push(2);
     for i in 1..a.len {
@@ -455,7 +455,7 @@ void main() {
 #import <stdlib>
 using stdlib;
 
-void insertion(int[] a) {
+fnv insertion(int[] a) {
     for i in 1..a.len {
         int x = a[i];
         int j = i - 1;
@@ -468,7 +468,7 @@ void insertion(int[] a) {
     }
 }
 
-void main() {
+fnv main() {
     int[] a = arr(4);
     a.push(5); a.push(2); a.push(4); a.push(1);
     insertion(a);
@@ -494,7 +494,7 @@ void main() {
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 int[] a = arr(3);
 a.push(3); a.push(1); a.push(2);
 for i in 1..a.len {
@@ -528,7 +528,7 @@ jout << a[0] << a[1] << a[2] << "\n";
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     int[] key = arr(2);
     key.push(50); key.push(30);
     int k = 40;
@@ -546,7 +546,7 @@ int[] key;
 int[] left;
 int[] right;
 
-int insert(int root, int k) {
+fn insert(int root, int k) {
     key.push(k); left.push(0 - 1); right.push(0 - 1);
     int id = key.len - 1;
     if root < 0 { return id; }
@@ -563,14 +563,14 @@ int insert(int root, int k) {
     return root;
 }
 
-void inorder(int n) {
+fnv inorder(int n) {
     if n < 0 { return; }
     inorder(left[n]);
     jout << key[n] << " ";
     inorder(right[n]);
 }
 
-void main() {
+fnv main() {
     key = arr(8); left = arr(8); right = arr(8);
     int root = 0 - 1;
     int[] data = arr(3);
@@ -596,7 +596,7 @@ void main() {
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 int[] a = arr(3);
 a.push(10); a.push(20); a.push(30);
 jout << a[0] + a[2] << "\n";
@@ -621,7 +621,7 @@ push ใส่ค่าท้ายอาเรย์แล้ว sift up คื
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     int[] h = arr(2);
     h.push(1); h.push(5);
     if h[1] < h[0] { jout << "swap\n"; } else { jout << "keep\n"; }
@@ -635,7 +635,7 @@ using stdlib;
 
 int[] h;
 
-void push(int x) {
+fnv push(int x) {
     h.push(x);
     int i = h.len - 1;
     while i > 0 {
@@ -646,7 +646,7 @@ void push(int x) {
     }
 }
 
-int pop_min() {
+fn pop_min() {
     int top = h[0];
     h[0] = h[h.len - 1];
     h.pop();
@@ -664,7 +664,7 @@ int pop_min() {
     return top;
 }
 
-void main() {
+fnv main() {
     h = arr(8);
     push(5); push(3); push(8); push(1);
     jout << pop_min() << " " << pop_min() << "\n";
@@ -686,7 +686,7 @@ void main() {
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 int[] h = arr(3);
 h.push(2); h.push(7); h.push(4);
 jout << h[0] + h[1] + h[2] << "\n";
@@ -711,7 +711,7 @@ jout << h[0] + h[1] + h[2] << "\n";
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     int[] dist = arr(2);
     dist.push(0); dist.push(0 - 1);
     int[] queue = arr(2);
@@ -727,7 +727,7 @@ void main() {
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     int n = 4;
     int[] ea = arr(3); int[] eb = arr(3);
     ea.push(0); eb.push(1); ea.push(1); eb.push(2); ea.push(0); eb.push(3);
@@ -769,7 +769,7 @@ void main() {
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 int[] d = arr(3);
 d.push(0); d.push(0 - 1); d.push(0 - 1);
 d[1] = d[0] + 1;
@@ -797,12 +797,12 @@ using stdlib;
 
 int count = 0;
 
-void visit(int v) {
+fnv visit(int v) {
     count += 1;
     if v < 2 { visit(v + 1); }
 }
 
-void main() {
+fnv main() {
     visit(0);
     jout << count << "\n";
 }
@@ -819,7 +819,7 @@ int count = 0;
 int[] ea;
 int[] eb;
 
-void visit(int v) {
+fnv visit(int v) {
     seen[v] = true;
     count += 1;
     for e in 0..ea.len {
@@ -830,7 +830,7 @@ void visit(int v) {
     }
 }
 
-void main() {
+fnv main() {
     seen = arr(n);
     for i in 0..n { seen.push(false); }
     ea = arr(3); eb = arr(3);
@@ -857,13 +857,13 @@ using stdlib;
 
 int c = 0;
 
-void f(int n) {
+fnv f(int n) {
 if n == 0 { return; }
 c += 1;
 f(n - 1);
 }
 
-void main() {
+fnv main() {
 f(3);
 jout << c << "\n";
 }
@@ -887,7 +887,7 @@ jout << c << "\n";
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     int[] dp = arr(4);
     dp.push(0); dp.push(1);
     for i in 2..4 { dp.push(dp[i - 1] + dp[i - 2]); }
@@ -900,7 +900,7 @@ void main() {
 #import <stdlib>
 using stdlib;
 
-int fib(int n) {
+fn fib(int n) {
     if n < 2 { return n; }
     int[] dp = arr(n + 1);
     dp.push(0);
@@ -909,7 +909,7 @@ int fib(int n) {
     return dp[n];
 }
 
-void main() {
+fnv main() {
     jout << fib(10) << "\n";
     jout << fib(1) << "\n";
     jout << fib(20) << "\n";
@@ -933,7 +933,7 @@ void main() {
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 int a = 0;
 int b = 1;
 for i in 0..5 {

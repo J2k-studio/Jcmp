@@ -12,7 +12,7 @@
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     jout << "compiled and running\n";
 }
 ```
@@ -34,7 +34,7 @@ compiled and running
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 jout << "a" << "\n";
 jout << "b";
 }
@@ -57,7 +57,7 @@ jout << "b";
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     jout << "main is the start\n";
 }
 ```
@@ -79,7 +79,7 @@ main is the start
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 jout << "start\n";
 }
 ```
@@ -101,7 +101,7 @@ jout << "start\n";
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     i8 a = 100;
     i8 b = 100;
     int sum = a + b;
@@ -129,7 +129,7 @@ void main() {
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 i8 x = 127;
 int y = x + 1;
 jout << y << "\n";
@@ -153,7 +153,7 @@ jout << y << "\n";
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     u8 b = 250;
     b += 10;
     jout << b << "\n";
@@ -177,7 +177,7 @@ void main() {
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 u8 b = 255;
 b += 1;
 jout << b << "\n";
@@ -201,7 +201,7 @@ jout << b << "\n";
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     int n = 7;
     double half = (double)n / 2.0;
     jout << half << "\n";
@@ -225,7 +225,7 @@ void main() {
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 int a = 5;
 jout << (double)a / 2.0 << "\n";
 }
@@ -248,7 +248,7 @@ jout << (double)a / 2.0 << "\n";
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     double x = 3.9;
     int whole = (int)x;
     jout << whole << "\n";
@@ -272,7 +272,7 @@ void main() {
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 int n = -1;
 u32 back = (u32)n;
 jout << back << "\n";
@@ -296,7 +296,7 @@ jout << back << "\n";
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     jout << "first\n";
     jout << "second" << nl;
 }
@@ -320,7 +320,7 @@ second
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 jout << "a" << nl;
 jout << "b" << "\n";
 }
@@ -343,7 +343,7 @@ jout << "b" << "\n";
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     int count = 3;
     jout << count << "\n";
 }
@@ -366,7 +366,7 @@ void main() {
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 int count = 3;
 jout << count << "\n";
 }
@@ -389,7 +389,7 @@ jout << count << "\n";
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     bool ok = 7 > 3;
     if ok { jout << "yes\n"; }
     int n = 0;
@@ -415,7 +415,7 @@ zero
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 bool b = 2 == 2;
 if b { jout << "same\n"; }
 }
@@ -438,7 +438,7 @@ if b { jout << "same\n"; }
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     char letter = 'A';
     char next = letter + 1;
     jout << letter << " " << next << "\n";
@@ -462,7 +462,7 @@ A B
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 char c = 'a';
 jout << c << "\n";
 }
@@ -485,7 +485,7 @@ jout << c << "\n";
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     int a = 17;
     jout << a / 5 << " " << a % 5 << "\n";
 }
@@ -508,7 +508,7 @@ void main() {
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 jout << 10 % 4 << "\n";
 }
 ```
@@ -530,7 +530,7 @@ jout << 10 % 4 << "\n";
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     int x = 6;
     jout << (x & 3) << " " << (x | 1) << " " << (x xor 5) << " " << (x << 2) << " " << (x >> 1) << "\n";
 }
@@ -553,7 +553,7 @@ void main() {
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 int y = 8;
 jout << (y >> 2) << "\n";
 }
@@ -576,7 +576,7 @@ jout << (y >> 2) << "\n";
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     int sizes[4] = {2, 4, 6, 8};
     int sum = 0;
     for i in 0..sizes.len { sum += sizes[i]; }
@@ -601,7 +601,7 @@ sum 20 last 8
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 int a[3] = {1, 2, 3};
 jout << a.len << "\n";
 }
@@ -628,12 +628,12 @@ struct Point {
     int x;
     int y;
 
-    int sum(self) {
+    fn sum(self) {
         return self.x + self.y;
     }
 }
 
-void main() {
+fnv main() {
     Point p = {3, 4};
     jout << p.sum() << "\n";
 }
@@ -659,12 +659,12 @@ using stdlib;
 struct Box {
 int w;
 int h;
-int area(self) {
+fn area(self) {
     return self.w * self.h;
 }
 }
 
-void main() {
+fnv main() {
 Box b = {2, 5};
 jout << b.area() << "\n";
 }
@@ -689,14 +689,14 @@ using stdlib;
 
 enum class Way { North, South };
 
-void show(Way d) {
+fnv show(Way d) {
     switch d {
         Way::North: jout << "up\n";
         Way::South: jout << "down\n";
     }
 }
 
-void main() {
+fnv main() {
     show(Way::South);
 }
 ```
@@ -720,7 +720,7 @@ using stdlib;
 
 enum class Light { Red, Green };
 
-void main() {
+fnv main() {
 Light l = Light::Green;
 switch l {
     Light::Red: jout << "stop\n";
@@ -748,7 +748,7 @@ using stdlib;
 
 #define MAX 5
 
-void main() {
+fnv main() {
     int total = 0;
     for i in 0..MAX { total += i; }
     jout << total << "\n";
@@ -774,7 +774,7 @@ using stdlib;
 
 #define N 3
 
-void main() {
+fnv main() {
 jout << N * 2 << "\n";
 }
 ```

@@ -15,7 +15,7 @@ The same files are in `examples/cookbook/`.
 #import <stdlib>
 using stdlib;
 
-int main() {
+fn main() {
     String path = "r01_lines.jk";                       // this very file
     String[] lines = Fs::read_lines(path).take();       // take(): the value, or stop with a message when the file cannot be read
     int words = 0;
@@ -74,7 +74,7 @@ wrote 6 bytes
 #import <stdlib>
 using stdlib;
 
-int main() {
+fn main() {
     String[] names = arr(3);
     names.push("apple"); names.push("kiwi"); names.push("watermelon");
     double[] prices = arr(3);
@@ -106,11 +106,11 @@ using stdlib;
 struct Player {
     String name;
     int score;
-    void add(self, int points) { self.score += points; }
+    fnv add(self, int points) { self.score += points; }
     String describe(self) { return self.name + ": " + stg(self.score); }
 }
 
-int main() {
+fn main() {
     Player[] ps = arr(4);
     String[] names = arr(3);
     names.push("Mali"); names.push("Somchai"); names.push("Nok");
@@ -166,7 +166,7 @@ double area(Shape s) {
     return 0.0;
 }
 
-int main() {
+fn main() {
     jout << fmt(area(Shape::Circle(2.0)), 2) << " " << fmt(area(Shape::Rect(3.0, 4.5)), 2) << " " << fmt(area(Shape::Dot), 2) << "\n";
     return 0;
 }
@@ -185,7 +185,7 @@ Output:
 #import <stdlib>
 using stdlib;
 
-int main() {
+fn main() {
     String text = "the cat and the dog and the bird";
     Map<String, int> count;
     String[] words = text.split(" ");
@@ -229,7 +229,7 @@ the   3
 #import <stdlib>
 using stdlib;
 
-int main() {
+fn main() {
     String src = "{\"name\": \"j2k\", \"version\": 1.2, \"tags\": [\"fast\", \"small\"], \"ok\": true}";
     JsonDoc doc = Json::parse(src).take();
     jout << doc.text(doc.get(doc.root(), "name")) << " " << doc.number(doc.get(doc.root(), "version")) << "\n";
@@ -256,9 +256,9 @@ tag small
 #import <stdlib>
 using stdlib;
 
-int fib(int n) { if n < 2 { return n; } return fib(n - 1) + fib(n - 2); }
+fn fib(int n) { if n < 2 { return n; } return fib(n - 1) + fib(n - 2); }
 
-int main() {
+fn main() {
     int t0 = Time::mono_ns();
     int f = fib(27);
     int ms = (Time::mono_ns() - t0) / 1000000;
@@ -285,7 +285,7 @@ slept
 #import <stdlib>
 using stdlib;
 
-int main() {
+fn main() {
     String[] a = Env::args();
     jout << "arguments: " << a.len - 1 << "\n";
     String[] args = arr(2);
@@ -317,12 +317,12 @@ HOME is set
 #import <tasks>
 using stdlib;
 
-int square(void^ arg) {
+fn square(void^ arg) {
     int n = (int)arg;
     return n * n;
 }
 
-int main() {
+fn main() {
     Task a = Task::run(square, (void^)12);
     Task b = Task::run(square, (void^)7);
     jout << a.wait() + b.wait() << "\n";
@@ -360,19 +360,19 @@ itf Animal {
     int legs(self);
 }
 struct Dog impl Animal {
-    void init(self) { }
+    fnv init(self) { }
     String sound(self) { return "woof"; }
-    int legs(self) { return 4; }
+    fn legs(self) { return 4; }
 }
 struct Bird impl Animal {
-    void init(self) { }
+    fnv init(self) { }
     String sound(self) { return "tweet"; }
-    int legs(self) { return 2; }
+    fn legs(self) { return 2; }
 }
 
-void introduce(Animal^ a) { jout << a^.sound() << " on " << a^.legs() << " legs\n"; }
+fnv introduce(Animal^ a) { jout << a^.sound() << " on " << a^.legs() << " legs\n"; }
 
-int main() {
+fn main() {
     Dog d;
     Bird b;
     introduce(@d);
@@ -395,7 +395,7 @@ tweet on 2 legs
 #import <stdlib>
 using stdlib;
 
-int main() {
+fn main() {
     String s = "  J2K is a small, fast language  ";
     String t = s.trim();
     jout << "[" << t << "] " << t.len << "\n";
@@ -434,9 +434,9 @@ struct Pair<A, B> {
     B second;
 }
 
-int apply_twice(int(int)^ f, int x) { return f(f(x)); }
+fn apply_twice(int(int)^ f, int x) { return f(f(x)); }
 
-int main() {
+fn main() {
     Pair<String, int> p;
     p.first = "age";
     p.second = 31;
@@ -460,12 +460,12 @@ age=31
 #import <stdlib>
 using stdlib;
 
-int parse(String s) {
+fn parse(String s) {
     if s.len == 0 { throw "empty text"; }
     return s.to_int();
 }
 
-int main() {
+fn main() {
     String[] inputs = arr(2);
     inputs.push("41"); inputs.push("");
     for i in 0..inputs.len {
@@ -496,7 +496,7 @@ done with 1
 #import <stdlib>
 using stdlib;
 
-int main() {
+fn main() {
     int flags = 0;
     flags = flags | (1 << 3);
     flags = flags | 1;

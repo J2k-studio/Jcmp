@@ -11,7 +11,7 @@ Create a file named hello.jk and write the code below.
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     jout << "Hello, J2K!\n";
 } 
 ```
@@ -22,7 +22,7 @@ Compile it with jcmp hello.jk -o hello and run it with ./hello. If you see Hello
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     jout << "Hello, J2K!\n";
     jout << "Second line\n";
 }
@@ -44,7 +44,7 @@ Second line
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 jout << "A\n";
 jout << "B\n";
 }
@@ -65,7 +65,7 @@ jout << "B\n";
 
 Write your statements inside the braces of main. Each statement ends with a semicolon ;. You can calculate inside jout without a variable first.
 ```jk
-void main() {
+fnv main() {
     jout << "total " << 6 * 7 << "\n";
 } 
 ```
@@ -76,7 +76,7 @@ This prints total 42.
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     jout << "A number: " << 42 << "\n";
     jout << "Two numbers: " << 3 << " and " << 4 << "\n";
     jout << 10 + 5 * 2 << "\n";
@@ -100,7 +100,7 @@ Two numbers: 3 and 4
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 jout << "x=" << 2 + 3 << "\n";
 }
 ```
@@ -131,7 +131,7 @@ String name = "Ann";
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     int apples = 5;
     apples = apples + 2;
     double price = 2.5;
@@ -162,7 +162,7 @@ JAnn
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 int a = 7;
 int b = 2;
 jout << a / b << "\n";
@@ -179,7 +179,7 @@ jout << a / b << "\n";
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 double d = 3.0;
 jout << (int)d << "\n";
 }
@@ -208,7 +208,7 @@ jout << (a >= 3 && b < 1) << "\n";
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     int a = 7;
     int b = 2;
     jout << 2 + 3 * 4 << "\n";
@@ -238,7 +238,7 @@ false
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 jout << 17 % 5 << "\n";
 }
 ```
@@ -253,7 +253,7 @@ jout << 17 % 5 << "\n";
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 int x = 10;
 jout << (x == 10) << "\n";
 jout << (x != 10) << "\n";
@@ -287,7 +287,7 @@ if score >= 90 {
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     int score = 72;
     if score >= 90 {
         jout << "A\n";
@@ -321,7 +321,7 @@ good pass
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 int n = -4;
 if n > 0 {
     jout << "positive\n";
@@ -343,7 +343,7 @@ if n > 0 {
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 int a = 3;
 if a > 1 {
     if a > 5 { jout << "big\n"; }
@@ -377,7 +377,7 @@ jout << i << "\n";
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     int i = 1;
     while i <= 3 {
         jout << i << " ";
@@ -408,7 +408,7 @@ void main() {
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 for i in 0..5 {
     if i == 2 { continue; }
     jout << i << "\n";
@@ -426,7 +426,7 @@ for i in 0..5 {
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 int n = 6;
 int steps = 0;
 while n != 1 {
@@ -462,7 +462,7 @@ for r in 1..4 {
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     for r in 1..4 {
         for c in 1..4 { jout << r * c << " "; }
         jout << "\n";
@@ -496,7 +496,7 @@ void main() {
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 int count = 0;
 for i in 0..3 {
     for j in 0..2 { count += 1; }
@@ -531,7 +531,7 @@ You can test with a pipe, like echo "Ann 30" | ./program
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     char name[20];
     int age;
     jin >> name >> age;
@@ -555,7 +555,7 @@ Ann will be 31 next year
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 int a = 4;
 int b = 2;
 jout << "in " << a + b << "\n";
@@ -580,11 +580,11 @@ Write the return type, the name, and the parameters, then return the value.
 #import <stdlib>
 using stdlib;
 
-int square(int x) {
+fn square(int x) {
     return x * x;
 }
 
-void main() {
+fnv main() {
     jout << square(4) << "\n";
 }
 ```
@@ -595,17 +595,17 @@ When you pass a value into a function, the value is copied. A change to the para
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     jout << factorial(5) << "\n";
     jout << square(7) << "\n";
 }
 
-int factorial(int n) {
+fn factorial(int n) {
     if n <= 1 { return 1; }
     return n * factorial(n - 1);
 }
 
-int square(int x) {
+fn square(int x) {
     return x * x;
 }
 ```
@@ -626,11 +626,11 @@ int square(int x) {
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 jout << twice(4) << "\n";
 }
 
-int twice(int n) {
+fn twice(int n) {
 return n * 2;
 }
 ```
@@ -663,7 +663,7 @@ jout << total << "\n";
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     int scores[5];
     for i in 0..5 { scores[i] = (i + 1) * 10; }
     int total = 0;
@@ -693,7 +693,7 @@ total 150
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 int a[3];
 a[0] = 2; a[1] = 4; a[2] = 6;
 jout << a[1] + a[2] << "\n";
@@ -729,7 +729,7 @@ jout << count << "\n";
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     String first = "J2K";
     String title = first + " basics";
     jout << title << " " << title.len << " " << title[0] << "\n";
@@ -759,7 +759,7 @@ same
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 String s = "ab";
 s.push('c');
 jout << s << "\n";
@@ -783,7 +783,7 @@ jout << s << "\n";
 Declare a variable in the block where you use it. Only put it outside all functions when many functions need it.
 ```jk
 int total = 100;
-void main() {
+fnv main() {
     if total > 3 {
         int inner = total + 1;
     }
@@ -797,12 +797,12 @@ using stdlib;
 
 int total = 100;
 
-int twice(int x) {
+fn twice(int x) {
     int result = x * 2;
     return result;
 }
 
-void main() {
+fnv main() {
     int n = 5;
     if n > 3 {
         int inner = n + 1;
@@ -837,7 +837,7 @@ using stdlib;
 
 int g = 10;
 
-void main() {
+fnv main() {
 for i in 0..2 {
     int x = i + g;
     jout << x << "\n";
@@ -866,12 +866,12 @@ using stdlib;
 struct Rect {
     int w;
     int h;
-    int area(self) {
+    fn area(self) {
         return self.w * self.h;
     }
 }
 
-void main() {
+fnv main() {
     Rect r = {3, 4};
     jout << r.area() << "\n";
 }
@@ -886,17 +886,17 @@ struct Rect {
     int w;
     int h;
 
-    int area(self) {
+    fn area(self) {
         return self.w * self.h;
     }
 
-    void grow(self, int d) {
+    fnv grow(self, int d) {
         self.w += d;
         self.h += d;
     }
 }
 
-void main() {
+fnv main() {
     Rect r = {3, 4};
     jout << r.area() << "\n";
     r.grow(1);
@@ -925,7 +925,7 @@ int x;
 int y;
 }
 
-void main() {
+fnv main() {
 Point p = {3, 4};
 jout << p.x + p.y << "\n";
 }
@@ -952,7 +952,7 @@ using stdlib;
 
 enum class Light { Red, Yellow, Green };
 
-void say(Light l) {
+fnv say(Light l) {
     switch l {
         Light::Red: jout << "stop\n";
         Light::Green: jout << "go\n";
@@ -960,7 +960,7 @@ void say(Light l) {
     }
 }
 
-void main() {
+fnv main() {
     say(Light::Red);
 }
 ```
@@ -972,7 +972,7 @@ using stdlib;
 
 enum class Light { Red, Yellow, Green };
 
-void say(Light l) {
+fnv say(Light l) {
     switch l {
         Light::Red: jout << "stop\n";
         Light::Yellow: jout << "slow down\n";
@@ -980,7 +980,7 @@ void say(Light l) {
     }
 }
 
-void main() {
+fnv main() {
     say(Light::Green);
     say(Light::Red);
     int n = 3;
@@ -1011,7 +1011,7 @@ using stdlib;
 
 enum class Heading { North, South };
 
-void main() {
+fnv main() {
 Heading d = Heading::South;
 switch d {
     Heading::North: jout << "up\n";
@@ -1039,14 +1039,14 @@ With a Result, use switch with the Ok and Err cases, or use ? to pass the error 
 #import <stdlib>
 using stdlib;
 
-void show(Result<int, Error> r) {
+fnv show(Result<int, Error> r) {
     switch r {
         Result::Ok(v): jout << "sum = " << v << "\n";
         Result::Err(e): jout << "error: " << e.message << "\n";
     }
 }
 
-void main() {
+fnv main() {
     show(Result<int, Error>::Ok(42));
 }
 ```
@@ -1067,14 +1067,14 @@ Result<int, Error> add(String a, String b) {
     return Result<int, Error>::Ok(x + y);
 }
 
-void show(Result<int, Error> r) {
+fnv show(Result<int, Error> r) {
     switch r {
         Result::Ok(v): jout << "sum = " << v << "\n";
         Result::Err(e): jout << "error: " << e.message << "\n";
     }
 }
 
-void main() {
+fnv main() {
     show(add("20", "22"));
     show(add("20", ""));
     Option<String> home = Env::get("J2K_SURELY_NOT_SET");
@@ -1099,7 +1099,7 @@ true
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 Option<String> v = Env::get("J2K_SURELY_NOT_SET");
 jout << v.is_some() << "\n";
 }
@@ -1127,7 +1127,7 @@ A missing semicolon gives a message that says the statement is not finished. Add
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     // the first error is the one to fix: this version compiles and prints
     int count = 5;
     jout << "count " << count << "\n";
@@ -1149,7 +1149,7 @@ count 5
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 int n = 2;
 jout << n * 3 << "\n";
 }

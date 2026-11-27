@@ -1169,6 +1169,7 @@ void parse_mt_for() {
 
 // cout << a << b << ...;   (one number alone also ends the line)
 void parse_cout() {
+    used_print = 1;
     check_io_std();
     i64 c_count = 0;
     i64 c_last = 0;
@@ -1184,7 +1185,7 @@ void parse_cout() {
         io_float_name();
     }
     next();                              // "cout" or "coutf"
-    while tok_is("<<") {
+    while tok_is("<<") || (c_count > 0 && tok_is(",")) {      // jout << a, " ", b << nl;   a comma only joins the next item (it writes nothing)
         next();
         in_cout = 1;
         ex_isptr = 0;
@@ -1233,7 +1234,7 @@ void parse_cout() {
         die("expected ';' or '<<' here (is a '<<' missing between two values?)");
     }
     expect(";");
-    if c_count == 1 && c_last != 9 && c_last != 2 {
+    if (c_count == 1 && c_last != 9 && c_last != 2)  {
         emit_line("mov x0, 10");
         emit_line("bl j2k_print_char");
     }
@@ -3279,10 +3280,12 @@ void parse_function() {
             emit_line("ldr x0, [sp, #0]");
             emit_line("add sp, sp, #16");
         }
-        push_x0();                       // the exit code: the buffered output goes out first
-        rt_call("__flush");
-        emit_line("ldr x0, [sp, #0]");
-        emit_line("add sp, sp, #16");
+        if !(tg_on == 1 && used_print == 0) {
+            push_x0();                   // the exit code: the buffered output goes out first
+            rt_call("__flush");
+            emit_line("ldr x0, [sp, #0]");
+            emit_line("add sp, sp, #16");
+        }
         emit_line("mov x8, 94");
         emit_line("svc 0");
     } else {
@@ -4404,6 +4407,22 @@ void emit_target_stub() {
     }
     emit_line("b j2k_halt");
     emit_stub_tail();                      // the names of the functions (when something asks for them) and the size of the global area
+}
+
+// is the word in the assembler text that was written so far?
+bool out_has(char^ w) {
+    i64 n = 0;
+    while w[n] != 0 { n += 1; }
+    i64 i = 0;
+    while i + n <= out_len {
+        if out_buf[i] == w[0] {
+            i64 k = 1;
+            while k < n && out_buf[i + k] == w[k] { k += 1; }
+            if k == n { return true; }
+        }
+        i += 1;
+    }
+    return false;
 }
 
 void emit_start_stub() {

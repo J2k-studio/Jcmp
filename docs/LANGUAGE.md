@@ -13,7 +13,7 @@ Files: `.jk` and `.jex` are programs (they have `main`; `jcmp hello.jex` makes t
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     jout << "hi\n";
 }
 ```
@@ -25,7 +25,7 @@ The standard error stream is `jerr`. The older names `cout`, `cin` and `cerr` st
 `File`) the compiler reports it and you write `File::write(...)`. `float` is the 32-bit and `double` the 64-bit decimal type (they were
 called `f32` and `f64`; the old names still work with a warning).
 
-`main` may be `void main()` or `int main()` (the returned number is the exit code).
+`main` may be `fnv main()` or `fn main()` (the returned number is the exit code).
 A new line is written `"\n"` (a backslash and n; not `"/n"`, which is a slash and the letter n and gets a warning) or with the word `nl`,
 which needs no backslash: `jout << x << nl;`. A single value, `jout << x;`, gets its new line by itself.
 Statements end with `;`. Blocks use `{ }` and are always required. `//` and `/* */` are comments.
@@ -51,7 +51,7 @@ Rules that catch bugs early:
   when it is **stored** or **cast**.
 
 ```jk
-void main() {
+fnv main() {
     i8 a = 100;
     i8 b = 100;
     int sum = a + b;      // 200 (no overflow in the addition)
@@ -81,7 +81,7 @@ fn main() {
 ### Unsigned numbers
 
 ```jk
-void main() {
+fnv main() {
     u32 h = 2166136261;              // does not fit an i32, fits a u32
     u8 b = 250;
     b += 10;                         // 260 is cut to 8 bits when stored: 4
@@ -122,7 +122,7 @@ Constants: `#define MAX 100` (text substitution; defined before use). When the t
 A condition has no parentheses: `if a > b { ... }`, `while n < 3 { ... }`, `for i in 0..5 { ... }`. The `{` ends the condition: an expression never continues with `{` (the only place where `{ ... }` is a value is the right side of a declaration, `Point p = {1, 2};`, and there the `{` comes straight after the `=`), so no ambiguity is possible.
 
 ```jk
-void main() {
+fnv main() {
     int n = 0;
     while n < 3 { n++; }
 
@@ -143,7 +143,7 @@ void main() {
 ```jk
 enum class Kind { Num, Plus, Minus };
 
-int apply(Kind k, int a, int b) {
+fn apply(Kind k, int a, int b) {
     int r = 0;
     switch k {
         Kind::Plus: r = a + b;
@@ -153,7 +153,7 @@ int apply(Kind k, int a, int b) {
     return r;
 }
 
-void main() { jout << apply(Kind::Plus, 3, 4) << "\n"; }
+fnv main() { jout << apply(Kind::Plus, 3, 4) << "\n"; }
 ```
 
 No fall-through. `_` is the default. Several values: `1, 2, 3: ...`. An enum `switch`
@@ -163,8 +163,8 @@ without `_` that misses a member gives a warning (`-Wswitch`).
 ## Functions
 
 ```jk
-int add(int a, int b) { return a + b; }
-void main() { jout << add(2, 3) << "\n"; }       // functions may be used before they are written
+fn add(int a, int b) { return a + b; }
+fnv main() { jout << add(2, 3) << "\n"; }       // functions may be used before they are written
 ```
 
 ### Several declarations in one
@@ -206,12 +206,12 @@ fn main() {
 (A function that gives nothing keeps its braces, and so does a lambda.)
 
 ```jk
-int sq(int a) => a * a;
+fn sq(int a) => a * a;
 bool is_flag(str s) => s.len > 1 && s[0] == '-';
 struct Box {
     int w;
     int h;
-    int area(self) => self.w * self.h;
+    fn area(self) => self.w * self.h;
 }
 fn main() {
     Box b;
@@ -245,8 +245,8 @@ their length (see below). Structs are passed by value (copied); use `T^` to shar
 The last parameters may have a default value: a constant (a whole number, a bool, a char, `null`, an enum member). A call may leave those parameters out; the compiler puts the value in. A parameter without a default cannot come after one with a default.
 
 ```jk
-int add(int a, int b = 10, int c = 100) { return a + b + c; }
-void main() { jout << add(1) << " " << add(1, 2) << " " << add(1, 2, 3) << "\n"; }     // 111 103 6
+fn add(int a, int b = 10, int c = 100) { return a + b + c; }
+fnv main() { jout << add(1) << " " << add(1, 2) << " " << add(1, 2, 3) << "\n"; }     // 111 103 6
 ```
 
 Methods work the same way (`int bump(self, int d = 1)`). Named arguments are not built (syntax-design 98, B).
@@ -256,13 +256,13 @@ Methods work the same way (`int bump(self, int d = 1)`). Named arguments are not
 A function can have any number of array parameters (`int dot(int a[], int b[])`), anywhere in the list. `stg(x)` (older name `stg(x)`) makes a str from a number, a char, a bool or a String: `stg(42)`, `stg(2.5)`, `stg('x')`, `stg(true)`.
 
 ```jk
-int sum(int a[]) {                  // an array parameter arrives with its length
+fn sum(int a[]) {                  // an array parameter arrives with its length
     int s = 0;
     for i in 0..a.len { s += a[i]; }
     return s;
 }
 
-void main() {
+fnv main() {
     int v[5];                        // not cleared
     for i in 0..5 { v[i] = i + 1; }
     int grid[3][4];                  // up to 3 dimensions
@@ -284,13 +284,13 @@ Strings are `char` arrays ending in 0. Escapes: `\n \t \r \0 \\ \" \'`.
 ## Dynamic arrays
 
 ```jk
-int sum(int[] a) {                      // passed by reference: the callee sees the same array
+fn sum(int[] a) {                      // passed by reference: the callee sees the same array
     int s = 0;
     for i in 0..a.len { s += a[i]; }
     return s;
 }
 
-void main() {
+fnv main() {
     int[] list = arr(4);                // T[] : room for 4 elements, length 0
     for i in 1..11 { list.push(i * i); }   // it grows when full
     jout << list.len << " " << sum(list) << " " << list.pop() << "\n";   // 10 385 100
@@ -447,7 +447,7 @@ Node^ make(int v) {
     return n;                               // ... and hands it to the caller: it is not freed here
 }
 
-void main() {
+fnv main() {
     int^ tmp = (int^)alloc(80);             // freed by the compiler at the end of main
     tmp[0] = 7;
     int[] list = arr(4);                    // so is a dynamic array that main made
@@ -507,14 +507,14 @@ If a variable is called `alloc`, `alloc0`, `free`, `grow` or `arr`, a `[` after 
 ```jk
 frame Context { x19..x30; sp; }                  // a record of registers: 13 words in the order of the list
 
-naked void ctx_switch(int^ from, int^ to) {      // a coroutine switch in two lines
+naked fnv ctx_switch(int^ from, int^ to) {      // a coroutine switch in two lines
     Context::save(x0);                           // x0 = the address of the record that receives this task's registers
     Context::restore(x1);                        // x1 = the record of the task to run: x30 and sp change, so `ret` goes into it
     ret;
 }
 
-interrupt void on_timer() { ticks += 1; }        // saves x0 .. x18, ends with eret (no floating point inside)
-align(128) interrupt void on_irq() { ... }       // starts at an address that is a multiple of 128
+interrupt fnv on_timer() { ticks += 1; }        // saves x0 .. x18, ends with eret (no floating point inside)
+align(128) interrupt fnv on_irq() { ... }       // starts at an address that is a multiple of 128
 
 @no_reorder {                                     // every instruction here stays: not moved, merged or removed
     t = a / 7;
@@ -528,7 +528,7 @@ align(128) interrupt void on_irq() { ... }       // starts at an address that is
 ```jk
 #reserve x18, x19                       // the compiler never gives these to a variable (x18 and x19 .. x25 can be reserved)
 
-int work(int n) {
+fn work(int n) {
     int acc @ x20 = 0;                   // lives in x20 for the whole function, also across calls
     for i in 0..n { acc += i; }
     Reg::x18 = acc;                      // normal code can read / write x18 and the reserved registers
@@ -579,9 +579,9 @@ A pinned variable (`int n @ x19`) is a whole number, pointer, bool, char or enum
 ### `local`: a name that only its own file may use (1.2.37)
 
 ```jk
-local int hidden_twice(int a) { return a * 2; }     // another file that imports this one cannot call it
+local fn hidden_twice(int a) { return a * 2; }     // another file that imports this one cannot call it
 local int count = 40;                               // nor read or write this variable
-int visible_sum(int a) { count += 1; return hidden_twice(a) + count; }
+fn visible_sum(int a) { count += 1; return hidden_twice(a) + count; }
 ```
 A file that uses a `local` name of another file gets an error that names it (`this function is local to another file`). `local` hides a name in the language; it does not hide the code (a library built without its source does that).
 
@@ -593,7 +593,7 @@ device Uart @ 0x0900_0000 {
     flags: u32 @ 0x18 { txfull: 5; rxempty: 4; mode: 8..10; }     // names for a bit (a number) or a field of bits (high..low)
 }
 
-void put(char c) {
+fnv put(char c) {
     while Uart.flags.txfull { }        // a read of the device each turn (a bool)
     Uart.data = c;                     // one store of 32 bits
 }
@@ -610,7 +610,7 @@ Registers are `u8 u16 u32 u64`; every access is made where it is written, as oft
 ```jk
 abi Syscall { number: x8; args: x0..x5; result: x0; via: svc 0; }
 
-int write(int fd, char^ buf, int n) { return Syscall::call(64, fd, buf, n); }     // mov x8, 64 / svc 0
+fn write(int fd, char^ buf, int n) { return Syscall::call(64, fd, buf, n); }     // mov x8, 64 / svc 0
 ```
 `number:` (optional) is the register of the first value, `args:` the registers of the others (`x0..x5` or `x1, x0, x2`), `result:` where the answer is (it ends in `x0`), `via:` the instruction: `svc N`, `hvc N`, `smc N` or `bl function`. The same text works for a hypervisor call or for a function with an unusual convention.
 
@@ -637,13 +637,13 @@ Cache::clean(p);  Cache::invalidate(p);  Cache::clean_invalidate(p);  Cache::zer
 A `naked` function has no prologue, no epilogue and no saves: its body is all there is, written with register statements, one statement for one instruction. Nothing is added by the compiler and the optimiser does not touch it.
 
 ```jk
-naked int sys_write(int fd, char^ buf, int n) {     // the arguments are in x0, x1, x2 as for any function
+naked fn sys_write(int fd, char^ buf, int n) {     // the arguments are in x0, x1, x2 as for any function
     Reg::x8 = 64;                                    // write
     svc(0);
     ret;
 }
 
-naked int sum_to(int n) {
+naked fn sum_to(int n) {
     x1 = 0;
   again:
     if x0 == 0 goto done;
@@ -675,7 +675,7 @@ Bit::bswap(x)        // the 8 bytes in the other order
 ## Pointers
 
 ```jk
-void main() {
+fnv main() {
     int x = 10;
     int^ p = @x;          // @ = address of, ^ after a type = pointer to
     p^ = p^ + 5;          // p^ = the value p points to
@@ -694,12 +694,12 @@ pointer before use: `(char^)p`. Pointers and integers convert with casts: `(int)
 ## Function pointers
 
 ```jk
-int add(int a, int b) { return a + b; }
-int mul(int a, int b) { return a * b; }
+fn add(int a, int b) { return a + b; }
+fn mul(int a, int b) { return a * b; }
 
-int apply(int(int, int)^ f, int x, int y) { return f(x, y); }
+fn apply(int(int, int)^ f, int x, int y) { return f(x, y); }
 
-void main() {
+fnv main() {
     int(int, int)^ op = add;            // RET(PARAMS)^ : a pointer to a function
     jout << op(3, 4) << "\n";            // 7
     op = mul;
@@ -800,7 +800,7 @@ switch add("20", "22") { ... }       // or  Result<int, Error> r = add(...);  sw
 `defer` runs first, and it sees the variables as they are at that moment.
 
 ```jk
-int work(int n) {
+fn work(int n) {
     File f = open(path);
     defer f.close();                  // whatever happens below, the file is closed
     defer jout << "leaving, n = " << n << "\n";
@@ -825,7 +825,7 @@ In a `switch`, the name of a member that frees itself is a pointer to it (used l
 A lambda is a function without a name, written where you use it. It looks like a function declaration without the name (the result type first, then the parameters):
 
 ```jk
-int apply(int(int, int)^ f, int x, int y) { return f(x, y); }
+fn apply(int(int, int)^ f, int x, int y) { return f(x, y); }
 
 jout << apply(int(int a, int b) { return a + b; }, 3, 4) << "\n";      // 7
 int(int)^ twice = int(int x) { return x * 2; };                         // keep it in a function pointer
@@ -852,13 +852,13 @@ globals and its parameters. A lambda inside a lambda is fine.
 ```jk
 struct Counter {
     int n;
-    void init(self) { self.n = 0; }          // init runs when a variable is created
-    void add(self, int d) { self.n += d; }
-    int get(self) { return self.n; }
-    static int twice(int v) { return v * 2; }
+    fnv init(self) { self.n = 0; }          // init runs when a variable is created
+    fnv add(self, int d) { self.n += d; }
+    fn get(self) { return self.n; }
+    static fn twice(int v) { return v * 2; }
 }
 
-void main() {
+fnv main() {
     Counter c;
     c.add(5);
     Counter d = {7};                         // brace init: init() does not run
@@ -880,15 +880,15 @@ A method marked `virtual` is chosen when the program runs; a derived struct chan
 ```jk
 struct Animal {
     int legs;
-    void init(self) { self.legs = 4; }
+    fnv init(self) { self.legs = 4; }
     virtual void speak(self) { jout << "..."; }
 }
 struct Dog : Animal {
-    void init(self) { self.legs = 4; }
+    fnv init(self) { self.legs = 4; }
     override void speak(self) { jout << "Woof"; }
 }
-void talk(Animal^ a) { a^.speak(); jout << "\n"; }
-void main() {
+fnv talk(Animal^ a) { a^.speak(); jout << "\n"; }
+fnv main() {
     Dog d; d.init();
     talk(@d);
 }
@@ -900,23 +900,23 @@ a missing one is a compile error). A pointer to the interface takes any struct t
 ```jk
 itf Shape {
     double area(self);
-    void grow(self, double k);
+    fnv grow(self, double k);
 }
 struct Sq impl Shape {
     double s;
-    void init(self) { }
+    fnv init(self) { }
     double area(self) { return self.s * self.s; }
-    void grow(self, double k) { self.s = self.s * k; }
+    fnv grow(self, double k) { self.s = self.s * k; }
 }
 struct Rect impl Shape {
     double w;
     double h;
-    void init(self) { }
+    fnv init(self) { }
     double area(self) { return self.w * self.h; }
-    void grow(self, double k) { self.w = self.w * k; self.h = self.h * k; }
+    fnv grow(self, double k) { self.w = self.w * k; self.h = self.h * k; }
 }
 double twice(Shape^ a) { a^.grow(2.0); return a^.area(); }
-void main() {
+fnv main() {
     Sq q; q.init(); q.s = 3.0;
     Rect r; r.init(); r.w = 2.0; r.h = 5.0;
     jout << twice(@q) << " " << twice(@r) << "\n";
@@ -929,7 +929,7 @@ method may also be written without a body in a plain struct (`virtual int value(
 ## Floats
 
 ```jk
-void main() {
+fnv main() {
     double r = 2.5;
     float half = 0.5;
     double area = 3.14159 * r * r;
@@ -944,12 +944,12 @@ Comparisons treat NaN correctly. `%` does not work on floats.
 ## Errors: try / catch / throw
 
 ```jk
-int divide(int a, int b) {
+fn divide(int a, int b) {
     if b == 0 { throw "division by zero"; }
     return a / b;
 }
 
-void main() {
+fnv main() {
     try {
         jout << divide(10, 2) << "\n";
         jout << divide(1, 0) << "\n";
@@ -976,7 +976,7 @@ with `free(self)`), innermost first. Nothing leaks.
 ```jk
 struct Node { int value; Node^ next; }
 
-void main() {
+fnv main() {
     int a[10];
     jout << sizeof(int) << " " << sizeof(Node) << " " << sizeof(a) << " " << sizeof(a[0]) << "\n";   // 8 16 80 8
 }
@@ -988,7 +988,7 @@ void main() {
 ## Input: jin
 
 ```jk
-void main() {
+fnv main() {
     int age;
     char name[16];
     double height;
@@ -1005,7 +1005,7 @@ warning goes to stderr), a decimal number for `float`/`double`. Anything else is
 Bad input throws text you can catch: `invalid input`, `number out of range`, `end of input`.
 
 ```jk
-void main() {
+fnv main() {
     int n;
     try { jin >> n; } catch (e) { jout << "not a number: " << e << "\n"; }
 }
@@ -1023,7 +1023,7 @@ using cpu::mutex;
 int counter;
 Mutex mu;
 
-void work(void^ arg) {                  // a thread runs a function  void f(void^ arg)
+fnv work(void^ arg) {                  // a thread runs a function  void f(void^ arg)
     for i in 0..1000 {
         mu.lock();                      // only one thread at a time between lock and unlock
         counter += 1;
@@ -1031,7 +1031,7 @@ void work(void^ arg) {                  // a thread runs a function  void f(void
     }
 }
 
-void main() {
+fnv main() {
     Thread t1 = create(work, null);     // start two threads
     Thread t2 = create(work, null);
     t1.join();                          // wait until a thread has ended
@@ -1053,7 +1053,7 @@ protected by a lock). An exception that no `catch` of the thread handles ends th
 ```jk
 int squares[1000];
 
-void main() {
+fnv main() {
     int offset = 5;
     #multithread
     for i in 0..1000 {                  // the iterations are shared among the machine's cores
@@ -1096,7 +1096,7 @@ Standard library (`stdlib`, source in `std/`):
 #import <stdlib>
 using stdlib::str;
 
-void main() {
+fnv main() {
     char buf[32];
     from_int(@buf, 32, 12345);
     jout << buf << " has " << len(@buf) << " digits\n";
@@ -1113,7 +1113,7 @@ without calling it. The numbers of the system calls are in `Sys` only, so a port
 ```jk
 #import <stdlib>
 
-void main() {
+fnv main() {
     int fd = Sys::open_write("/tmp/sys_example.txt");
     Sys::write(fd, "hello\n".c(), 6);
     Sys::close(fd);
@@ -1182,7 +1182,7 @@ buffer) or `using gfx::screen;` (colour dots). The standard library has `Term::c
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     // text and numbers
     String s = "  Hello, Jex  ";
     jout << s.trim().upper() << " " << s.trim().count() << "\n";         // HELLO, Jex 10
@@ -1246,7 +1246,7 @@ without FMA or from the same program with `-nofma`, which keeps the two rounding
 ```jk
 int[] a = arr(8);   // 10 20 30 40 50 60
 Span<int> s = a[1..5];          // 20 30 40 50: no copy, `s.get(i)`, `s.set(i, x)`, `s.len`, `s.sub(lo, hi)`, `s.to_array()`
-int total(Span<int> v) { ... }
+fn total(Span<int> v) { ... }
 total(a[2..4]);
 ```
 `a[lo..hi]` is written `span(a, lo, hi)` by the compiler (a name directly followed by brackets that have `..` in them, on one line); `lo` and `hi`
@@ -1323,7 +1323,7 @@ v.store(@a[0], 4);                        // a[4] = v.x, a[5] = v.y
 `i8x16` is sixteen bytes in one register (`i8` lanes), made for quantised numbers (neural networks, sound). `i8x16::load(i8^ p, i)` and `v.store(p, i)` move 16 bytes (the index counts bytes), `+` and `-` work lane by lane (wrapping round), and `a.dot(b)` is the **int8 dot product** of the CPU (`SDOT`, the Cortex-A76 and newer): every 32-bit lane of the `i32x4` result is the sum of four products of bytes (lanes 0-3, 4-7, 8-11, 12-15), 16 multiply-adds in one instruction. Not on the ARM32 target (the compiler says so).
 ```jk
 #import <simd>
-int main() {
+fn main() {
     i8[] a = arr(16);
     i8[] b = arr(16);
     for i in 0..16 { a.push((i8)(i + 1)); b.push((i8)2); }
@@ -1343,11 +1343,11 @@ function makes the compiler stop when the function grows past a limit:
 
 ```jk
 #expect instructions <= 12
-int twice(int x) {
+fn twice(int x) {
     return x + x;
 }
 
-void main() {
+fnv main() {
     jout << twice(21) << "\n";
 }
 ```
@@ -1360,7 +1360,7 @@ The count is for ARM64 (the function is counted after the optimizer, and a funct
 `Bit` has the steps of arithmetic on numbers that are wider than 64 bits. A function gives one struct (there is no tuple):
 
 ```jk
-void main() {
+fnv main() {
     // 128-bit addition of (a_hi, a_lo) + (b_hi, b_lo), word by word
     int a_lo = -1;
     int a_hi = 5;
@@ -1383,7 +1383,7 @@ On ARM64 a `register { }` block can read the flags that an instruction left: `x4
 of `jerr` still appear on the screen. (`jerr` is part of the standard library, like `jout`: `#import <stdlib>`.)
 
 ```jk
-void main() {
+fnv main() {
     jout << "result: " << 42 << "\n";
     jerr << "warning: the input was empty\n";
 }
@@ -1394,7 +1394,7 @@ void main() {
 A `bool` prints as `true` or `false`. A pointer prints as `0x` and its address in hex (`null` as `0x0`); write `(int)p` to print it as a number.
 
 ```jk
-int main() {
+fn main() {
     bool ok = 3 > 2;
     int^ p = null;
     jout << ok << " " << p << nl;
@@ -1412,7 +1412,7 @@ Output: `true 0x0`.
 #import <stdlib>
 using Input;
 
-void main() {
+fnv main() {
     jout << "name? ";
     String name = read.line();
     int age = read.number();
@@ -1451,7 +1451,7 @@ The CRC32 instructions are an extension that not every ARMv8 CPU has, so a progr
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     char^ text = "123456789";
     int crc = 0xFFFFFFFF;
     for i in 0..9 { crc = Cpu::crc32_u8(crc, text[i] & 255); }

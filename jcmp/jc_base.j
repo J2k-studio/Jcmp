@@ -228,6 +228,7 @@ i64 opt_rot = 1;             // 1: loops get their test at the bottom (-norot sw
 i64 opt_peep = 1;            // 1: the peephole pass makes the code shorter (-nopeep switches it off, to look for a fault)
 char inc_dir[256];           // -I dir : where `import "name"` looks if the file is not next to the importer
 i64 warn_count;
+i64 used_print = 0;             // 1 once jout / jerr / cout is read (it is not reset between the passes): a #target program that never prints has no printing routines in it
 i64 used_fprint;             // 1 if coutf was used: the float printing routine is emitted
 i64 used_uprint;             // 1 if an unsigned 64-bit number is printed: the routine is emitted
 i64 used_fntab;               // 1 if __fntab() is used: the table of function names is emitted

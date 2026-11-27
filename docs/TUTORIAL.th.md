@@ -185,7 +185,7 @@ jcmp hello.jk -o hello      # คอมไพล์
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     jout << "Hello, Jex!\n";
 }
 ```
@@ -209,7 +209,7 @@ Hello, Jex!
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     int apples = 5;
     int pears = 3;
     int total = apples + pears;
@@ -245,7 +245,7 @@ enough fruit
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     int score = 72;
     if score >= 90 {
         jout << "A\n";
@@ -277,7 +277,7 @@ passed
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     int i = 1;
     while i <= 3 {
         jout << i << " ";
@@ -312,23 +312,23 @@ void main() {
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     jout << square(7) << "\n";
     jout << sum_to(10) << "\n";
     greet("Ann");
 }
 
-int square(int x) {
+fn square(int x) {
     return x * x;
 }
 
-int sum_to(int n) {
+fn sum_to(int n) {
     int s = 0;
     for i in 1..n + 1 { s += i; }
     return s;
 }
 
-void greet(char^ name) {
+fnv greet(char^ name) {
     jout << "Hello, " << name << "!\n";
 }
 ```
@@ -352,7 +352,7 @@ Hello, Ann!
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     int scores[5];
     for i in 0..5 { scores[i] = (i + 1) * 10; }
     int total = 0;
@@ -393,7 +393,7 @@ banana has 3 letter a
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     char name[20];
     int age;
     jin >> name >> age;
@@ -420,7 +420,7 @@ Ann will be 31 next year
 using stdlib;
 using Input;
 
-void main() {
+fnv main() {
     jout << "name? ";
     String name = read.line();
     jout << "age? ";
@@ -455,17 +455,17 @@ struct Rect {
     int w;
     int h;
 
-    int area(self) {
+    fn area(self) {
         return self.w * self.h;
     }
 
-    void grow(self, int d) {
+    fnv grow(self, int d) {
         self.w += d;
         self.h += d;
     }
 }
 
-void main() {
+fnv main() {
     Rect r = {3, 4};
     jout << r.area() << "\n";
     r.grow(1);
@@ -493,7 +493,7 @@ using stdlib;
 
 enum class Light { Red, Yellow, Green };
 
-void say(Light l) {
+fnv say(Light l) {
     switch l {
         Light::Red: jout << "stop\n";
         Light::Yellow: jout << "slow down\n";
@@ -501,7 +501,7 @@ void say(Light l) {
     }
 }
 
-void main() {
+fnv main() {
     say(Light::Green);
     say(Light::Red);
 
@@ -533,11 +533,11 @@ three
 #import <stdlib>
 using stdlib;
 
-void bump(int^ p) {
+fnv bump(int^ p) {
     p^ = p^ + 1;
 }
 
-void main() {
+fnv main() {
     int n = 5;
     bump(@n);
     bump(@n);
@@ -566,13 +566,13 @@ void main() {
 #import <stdlib>
 
 using stdlib;
-int total(int[] list) {
+fn total(int[] list) {
     int s = 0;
     for i in 0..list.len { s += list[i]; }
     return s;
 }
 
-void main() {
+fnv main() {
     int[] squares = arr(4);
     for i in 1..6 { squares.push(i * i); }
     jout << squares.len << " items, total " << total(squares) << "\n";
@@ -609,7 +609,7 @@ String shout(String s) {
     return r;
 }
 
-void main() {
+fnv main() {
     String a = "abc";
     String b = a;
     b.push('d');
@@ -653,7 +653,7 @@ struct Box<T> {
     T get(self) { return self.value; }
 }
 
-void main() {
+fnv main() {
     jout << largest(3, 9) << "\n";
     jout << largest(2.5, 1.5) << "\n";
     jout << largest<int>(8, 2) << "\n";
@@ -682,7 +682,7 @@ generic ต้องเขียนไว้ก่อนจุดแรกที
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     int[] scores = arr(4);
     scores.push(72); scores.push(95); scores.push(60);
     scores.sort();
@@ -725,11 +725,11 @@ lambda คือฟังก์ชันเล็กๆ ที่เขียน
 #import <stdlib>
 using stdlib;
 
-int apply(int(int, int)^ f, int x, int y) {
+fn apply(int(int, int)^ f, int x, int y) {
     return f(x, y);
 }
 
-void main() {
+fnv main() {
     jout << apply(int(int a, int b) { return a + b; }, 3, 4) << "\n";
     int(int)^ triple = int(int x) { return x * 3; };
     jout << triple(5) << "\n";
@@ -753,12 +753,12 @@ void main() {
 #import <stdlib>
 using stdlib;
 
-int divide(int a, int b) {
+fn divide(int a, int b) {
     if b == 0 { throw "cannot divide by zero"; }
     return a / b;
 }
 
-void main() {
+fnv main() {
     try {
         jout << divide(10, 2) << "\n";
         jout << divide(1, 0) << "\n";
@@ -783,7 +783,7 @@ error: cannot divide by zero
 #import <stdlib>
 
 using stdlib;
-void main() {
+fnv main() {
     double a = 3.0;
     double b = 4.0;
     jout << "hypotenuse = " << sqrt(a * a + b * b) << "\n";
@@ -814,7 +814,7 @@ hypotenuse = 5.000000
 #import <stdlib>
 
 using stdlib;
-void main() {
+fnv main() {
     i32 f = File::open("note.txt", FileMode::Write);
     if f < 0 { throw "cannot create note.txt"; }
     File::write(f, "Jex can write files\n");
@@ -843,7 +843,7 @@ Jex can write files
 
 ```jk
 // mathx.j -- a component: functions to import
-int cube(int x) {
+fn cube(int x) {
     return x * x * x;
 }
 ```
@@ -856,7 +856,7 @@ using stdlib;
 
 #import "mathx"
 
-void main() {
+fnv main() {
     jout << cube(3) << "\n";
 }
 ```
@@ -877,13 +877,13 @@ void main() {
 #import <stdlib>
 using stdlib;
 
-int length(char^ s) {
+fn length(char^ s) {
     int n = 0;
     while s[n] != 0 { n++; }
     return n;
 }
 
-void main() {
+fnv main() {
     char w[32];
     int count = 0;
     int longest = 0;
@@ -933,14 +933,14 @@ Result<int, Error> add(String a, String b) {
     return Result<int, Error>::Ok(x + y);
 }
 
-void show(Result<int, Error> r) {
+fnv show(Result<int, Error> r) {
     switch r {
         Result::Ok(v): jout << "sum = " << v << "\n";
         Result::Err(e): jout << "error: " << e.message << "\n";
     }
 }
 
-void main() {
+fnv main() {
     show(add("20", "22"));
     show(add("20", ""));
     Option<String> home = Env::get("J2K_SURELY_NOT_SET");
@@ -966,7 +966,7 @@ true true
 #import <stdlib>
 using stdlib;
 
-void work(int n) {
+fnv work(int n) {
     defer jout << "leaving work(" << n << ")\n";
     if n > 5 {
         jout << "big\n";
@@ -975,7 +975,7 @@ void work(int n) {
     jout << "small\n";
 }
 
-void main() {
+fnv main() {
     work(3);
     work(9);
     for i in 0..2 {
@@ -1021,7 +1021,7 @@ struct Money {
     operator bool eq(self, Money o) { return self.cents == o.cents; }
 }
 
-void main() {
+fnv main() {
     Money a = {250};
     Money b = a + a * 3;
     Money c = 2 * a;
@@ -1045,7 +1045,7 @@ void main() {
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     Date d;
     d.set_unix(86400 * 365);
     jout << d.text() << " weekday " << d.weekday() << "\n";
@@ -1081,7 +1081,7 @@ true
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     String text = "{\"name\": \"Jex\", \"version\": 0.9, \"tags\": [\"fast\", \"small\"], \"ok\": true}";
     JsonDoc doc = Json::parse(text).unwrap();
     int root = doc.root();
@@ -1113,7 +1113,7 @@ node ที่ไม่มีคือ -1 และให้คำตอบว�
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     String[] f = Csv::split_line("Ann,\"Lee, Jr\",30");
     jout << f.len << ": " << f[0] << " | " << f[1] << " | " << f[2] << "\n";
     jout << Csv::join_line(f) << "\n";
@@ -1141,7 +1141,7 @@ ff 101 25.6% 1.5 KB
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     jout << Regex::matches("[a-z]+@[a-z]+\\.com", "ann@mail.com") << " " << Regex::find("[0-9]+", "room 42, floor 7") << " " << Regex::find_text("[0-9]+", "room 42, floor 7") << "\n";
     jout << Sha256::hex("abc") << "\n";
     jout << Hex::encode("Hi") << " " << Base64::encode("Man") << " " << Base64::decode("TWFu").unwrap() << "\n";
@@ -1166,7 +1166,7 @@ ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     jout << Path::join("dir", "file.txt") << "\n";
     String[] args = arr(0);
     args.push("hello from a child");
@@ -1200,7 +1200,7 @@ hello from a child
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     int x = 0xB0;
     jout << x << " " << Bit::popcount(x) << " " << Bit::clz(x) << " " << Bit::ctz(x) << "\n";
     jout << (x >> 4) << " " << (x & 0xF) << " " << (x << 4) << " " << (x xor 0xFF) << "\n";
@@ -1229,7 +1229,7 @@ void main() {
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     // (5, -1) + (0, 1) as numbers of two words: high word first
     BitCarry lo = Bit::add_carry(-1, 1, 0);
     BitCarry hi = Bit::add_carry(5, 0, lo.c);
@@ -1262,11 +1262,11 @@ void main() {
 #import <stdlib>
 using stdlib;
 
-int scale(int x, int k) {
+fn scale(int x, int k) {
     return (x * k) >> 2;
 }
 
-void main() {
+fnv main() {
     int total = 0;
     for i in 0..10 { total += scale(i, 6); }
     jout << total << "\n";
@@ -1301,13 +1301,13 @@ ret
 using stdlib;
 
 #expect instructions <= 12
-int clamp(int x, int lo, int hi) {
+fn clamp(int x, int lo, int hi) {
     if x < lo { return lo; }
     if x > hi { return hi; }
     return x;
 }
 
-void main() {
+fnv main() {
     jout << clamp(-5, 0, 10) << " " << clamp(7, 0, 10) << " " << clamp(99, 0, 10) << "\n";
 }
 ```
@@ -1333,11 +1333,11 @@ using cpu::thread;
 
 int counter;
 
-void work(void^ arg) {
+fnv work(void^ arg) {
     for i in 0..10000 { Atomic::add(@counter, 1); }
 }
 
-void main() {
+fnv main() {
     Thread a = create(work, null);
     Thread b = create(work, null);
     Thread c = create(work, null);
@@ -1365,7 +1365,7 @@ CPU เก็บตัวเลขที่กำลังทำงานไว�
 #import <stdlib>
 using stdlib;
 
-int add_mul(int a, int b, int c) {
+fn add_mul(int a, int b, int c) {
     int r = 0;
     register {
         in x1 = a;
@@ -1379,7 +1379,7 @@ int add_mul(int a, int b, int c) {
     return r;
 }
 
-void main() {
+fnv main() {
     jout << add_mul(2, 3, 4) << "\n";
 }
 ```
@@ -1401,13 +1401,13 @@ void main() {
 #import <stdlib>
 using stdlib;
 
-naked int my_write(int fd, char^ buf, int n) {
+naked fn my_write(int fd, char^ buf, int n) {
     Reg::x8 = 64;
     svc(0);
     ret;
 }
 
-void main() {
+fnv main() {
     char msg[6] = {'h', 'e', 'l', 'l', 'o', '\n'};
     int n = my_write(1, @msg, 6);
     jout << n << "\n";
@@ -1431,7 +1431,7 @@ hello
 #import <stdlib>
 using stdlib;
 
-int carry_of(int a, int b) {
+fn carry_of(int a, int b) {
     int r = 0;
     register {
         in x1 = a;
@@ -1443,7 +1443,7 @@ int carry_of(int a, int b) {
     return r;
 }
 
-void main() {
+fnv main() {
     jout << carry_of(-1, 1) << " " << carry_of(1, 2) << "\n";
 }
 ```
@@ -1464,7 +1464,7 @@ void main() {
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     int v = 5;
     register {
         in x1 = v + 1;
@@ -1494,7 +1494,7 @@ void main() {
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     int x = 0x0102030405060708;
     char^ b = (char^)@x;
     for i in 0..8 { jout << (b[i] & 255) << " "; }
@@ -1526,7 +1526,7 @@ void main() {
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     char msg[8];
     msg[0] = 'h'; msg[1] = 'i'; msg[2] = '\n';
     Sys::write(1, @msg, 3);
@@ -1567,7 +1567,7 @@ int^ bump(int n) {
     return p;
 }
 
-void main() {
+fnv main() {
     heap = (int^)Sys::mmap(65536);
     int^ a = bump(4);
     int^ b = bump(4);
@@ -1599,7 +1599,7 @@ using cpu::thread;
 int lock;
 int counter;
 
-void work(void^ arg) {
+fnv work(void^ arg) {
     for i in 0..10000 {
         while Atomic::cas(@lock, 0, 1) != 0 { Cpu::pause(); }
         counter += 1;
@@ -1607,7 +1607,7 @@ void work(void^ arg) {
     }
 }
 
-void main() {
+fnv main() {
     Thread a = create(work, null);
     Thread b = create(work, null);
     a.join();
@@ -1632,7 +1632,7 @@ void main() {
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     int start = Cpu::counter();
     int sum = 0;
     for i in 0..1000000 { sum += Bit::popcount(i); }
@@ -1659,7 +1659,7 @@ using stdlib;
 #import <math>
 using math::vector;
 
-void main() {
+fnv main() {
     vec3 a = {1.0, 2.0, 3.0};
     vec3 b = {4.0, 5.0, 6.0};
     vec3 c = a + b * 2.0;
@@ -1687,12 +1687,12 @@ using stdlib;
 
 frame Context { x19..x30; sp; }
 
-naked void ctx_save(int^ c) {
+naked fnv ctx_save(int^ c) {
     Context::save(x0);
     ret;
 }
 
-naked void ctx_switch(int^ from, int^ to) {
+naked fnv ctx_switch(int^ from, int^ to) {
     Context::save(x0);
     Context::restore(x1);
     ret;
@@ -1703,7 +1703,7 @@ int task_ctx[16];
 char task_stack[16384];
 int value;
 
-void squares() {
+fnv squares() {
     int n = 1;
     while true {
         value = n * n;
@@ -1712,7 +1712,7 @@ void squares() {
     }
 }
 
-void main() {
+fnv main() {
     ctx_save(@task_ctx);
     task_ctx[10] = 0;
     task_ctx[11] = (int)squares;
@@ -1749,7 +1749,7 @@ int head;
 int tail;
 int total;
 
-void producer(void^ arg) {
+fnv producer(void^ arg) {
     for i in 1..1001 {
         while Atomic::load(@head) - Atomic::load(@tail) >= 64 { Cpu::pause(); }
         int h = Atomic::load(@head);
@@ -1758,7 +1758,7 @@ void producer(void^ arg) {
     }
 }
 
-void consumer(void^ arg) {
+fnv consumer(void^ arg) {
     int got = 0;
     while got < 1000 {
         int t = Atomic::load(@tail);
@@ -1769,7 +1769,7 @@ void consumer(void^ arg) {
     }
 }
 
-void main() {
+fnv main() {
     Thread a = create(producer, null);
     Thread b = create(consumer, null);
     a.join();
@@ -1794,7 +1794,7 @@ void main() {
 #import <stdlib>
 using stdlib;
 
-naked int sum_words(int^ p, int n) {
+naked fn sum_words(int^ p, int n) {
     x2 = 0;
 loop:
     if x1 == 0 goto done;
@@ -1808,7 +1808,7 @@ done:
     ret;
 }
 
-void main() {
+fnv main() {
     int a[5] = {10, 20, 30, 40, 5};
     jout << sum_words(@a, 5) << "\n";
     jout << sum_words(@a, 0) << "\n";
@@ -1832,22 +1832,22 @@ void main() {
 #import <stdlib>
 using stdlib;
 
-naked int mulhi(int a, int b) {
+naked fn mulhi(int a, int b) {
     Cpu::inst("umulh", x0, x0, x1);
     ret;
 }
 
-naked int reverse_bits(int a) {
+naked fn reverse_bits(int a) {
     Cpu::inst("rbit", x0, x0);
     ret;
 }
 
-naked int swap_bytes(int a) {
+naked fn swap_bytes(int a) {
     Cpu::inst("rev", x0, x0);
     ret;
 }
 
-void main() {
+fnv main() {
     jout << mulhi(0x8000000000000000, 6) << " " << mulhi(100, 100) << "\n";
     jout << reverse_bits(1) << " " << reverse_bits(6) << "\n";
     jout << swap_bytes(1) << " " << swap_bytes(0x0102030405060708) << "\n";
@@ -1876,7 +1876,7 @@ using stdlib;
 using Fs;
 using Str::str.len;
 
-void main() {
+fnv main() {
     fs.write("tl_demo.txt", "hello modules\n");
     String text = fs.read("tl_demo.txt");
     jout << text;
@@ -1915,7 +1915,7 @@ enum class Shape { Circle(double r), Rect(double w, double h), Empty;
     }
 };
 
-void main() {
+fnv main() {
     Color c = Color::Green;
     switch c {
         Color::Red: jout << "red\n";
@@ -1955,7 +1955,7 @@ struct Point {
     double x;
     double y;
     double dist2(self) { return self.x * self.x + self.y * self.y; }
-    void move(self, double dx, double dy) { self.x += dx; self.y += dy; }
+    fnv move(self, double dx, double dy) { self.x += dx; self.y += dy; }
 }
 
 struct Line {
@@ -1963,7 +1963,7 @@ struct Line {
     Point b;
 }
 
-void main() {
+fnv main() {
     Point p = {3.0, 4.0};
     p.move(1.0, 0.0);
     jout << p.x << " " << p.dist2() << "\n";
@@ -2002,7 +2002,7 @@ using stdlib;
 struct Buffer {
     int^ data;
     int n;
-    void free(self) {
+    fnv free(self) {
         if self.data != null { jout << "freeing " << self.n << "\n"; free[self.data]; }
     }
 }
@@ -2013,11 +2013,11 @@ Buffer make(int n) {
     return b;
 }
 
-void use(Buffer b) {
+fnv use(Buffer b) {
     jout << "using " << b.n << "\n";
 }
 
-void main() {
+fnv main() {
     Buffer a = make(4);
     Buffer b = a;
     use(b);
@@ -2043,12 +2043,12 @@ end of main
 #import <stdlib>
 
 using stdlib;
-int twice(int x) { return x * 2; }
-int square(int x) { return x * x; }
+fn twice(int x) { return x * 2; }
+fn square(int x) { return x * x; }
 
-int apply(int(int)^ f, int v) { return f(v); }
+fn apply(int(int)^ f, int v) { return f(v); }
 
-void main() {
+fnv main() {
     int(int)^ op = twice;
     jout << op(5) << " " << apply(square, 7) << "\n";
     int k = 3;
@@ -2074,7 +2074,7 @@ void main() {
 #import <stdlib>
 
 using stdlib;
-void main() {
+fnv main() {
     u8 b = 250;
     b += 10;
     u32 big = 4000000000;
@@ -2110,7 +2110,7 @@ void main() {
 ```jk
 #import <stdlib>
 using stdlib;
-void main() {
+fnv main() {
     alloc[int^ pool = 32];
     alloc[pool[12] >> int^ a];
     alloc[pool[12] >> int^ b];
@@ -2157,13 +2157,13 @@ int limit = 100;
 int table[4] = {10, 20, 30, 40};
 #pragma read end
 
-naked int answer() {
+naked fn answer() {
     x0 = 0;
     raw<u32>[0x91008800];
     ret;
 }
 
-int main() {
+fn main() {
     int sum = 0;
     for i in 0..4 { sum += table[i]; }
     jout << sum << " " << limit << " " << answer() << "\n";
@@ -2187,7 +2187,7 @@ int main() {
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     jout << "hello\n";
 }
 ```
@@ -2245,7 +2245,7 @@ makej: done
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     jout << "a build file is a program\n";
 }
 ```
@@ -2284,7 +2284,7 @@ int main() {
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     jout << "a library has no main; this lesson is a program so that it runs\n";
 }
 ```
@@ -2320,7 +2320,7 @@ $ python3 -c "import ctypes; L = ctypes.CDLL('./libmy.so'); print(L.add(2, 3), L
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     jout << "write it with coderin, build it with jcmp, run it\n";
 }
 ```
@@ -2362,7 +2362,7 @@ jcmp -dyn gpu.jk -o gpu       # โปรแกรม dynamic รันใน Te
 #import <stdlib>
 #import <native>
 
-int main() {
+fn main() {
     int lib = Native::open("libvulkan.so");
     if lib == 0 {
         jout << "no libvulkan here, or the program was not built with jcmp -dyn\n";
@@ -2391,7 +2391,7 @@ int main() {
 #import <stdlib>
 #import <opengl3>
 
-int main() {
+fn main() {
     Gl gl = Gl::open(64, 64, 3, 1);                    // 64 x 64 พิกเซล OpenGL ES 3.1 (ใช้ 2, 0 สำหรับ 2.0 แบบเก่า)
     if !gl.ok {
         jout << "no OpenGL here: " << gl.log << "\n";  // gl.log บอกเหตุผล
@@ -2418,7 +2418,7 @@ int main() {
 #import <stdlib>
 #import <opengl3>
 
-int main() {
+fn main() {
     Gl gl = Gl::open(64, 64, 3, 1);
     if !gl.ok { jout << gl.log << "\n"; return 1; }
     String vertex = "#version 300 es\nlayout(location = 0) in vec2 pos;\nvoid main() { gl_Position = vec4(pos, 0.0, 1.0); }\n";
@@ -2452,7 +2452,7 @@ OpenGL ES 3.1 รันเชเดอร์ที่ไม่วาดอะไ
 #import <stdlib>
 #import <opengl3>
 
-int main() {
+fn main() {
     Gl gl = Gl::open(8, 8, 3, 1);
     if !gl.ok { jout << gl.log << "\n"; return 1; }
     // แต่ละเธรดรับเลขหนึ่งตัว: v = v * 2 + 1  local_size_x = 8: หนึ่งกลุ่มมี 8 เธรด
@@ -2478,7 +2478,7 @@ Vulkan คืออินเทอร์เฟซสมัยใหม่ ต้
 #import <stdlib>
 #import <vulkan>
 
-int main() {
+fn main() {
     Vk vk = Vk::open();
     if !vk.ok { jout << vk.log << "\n"; return 1; }
     jout << vk.device_name << ", Vulkan " << vk.api_text() << "\n";
@@ -2499,7 +2499,7 @@ int main() {
 #import <stdlib>
 #import <gamej>
 
-int main() {
+fn main() {
     Game g = Game::open("Lesson");            // ทั้งจอ
     double x = 20.0;                          // ตำแหน่งของสี่เหลี่ยม
     while g.running() {                       // เป็นเท็จหลังกด Esc
@@ -2526,7 +2526,7 @@ int main() {
 #import <stdlib>
 #import <web>
 
-int main() {
+fn main() {
     Result<HttpResponse, Error> r = Web::get("https://example.org/", "");     // url, extra header lines ("" for none)
     switch r {
         Result::Ok(a): {
@@ -2546,7 +2546,7 @@ int main() {
 #import <web>
 
 // asks an API that answers with JSON and prints one field
-int main() {
+fn main() {
     String key = "my-secret-key";                                              // never write a real key in a file you share
     Result<HttpResponse, Error> r = Web::post_json("https://example.org/api", "Authorization: Bearer " + key, "{\"question\":\"hello\"}");
     switch r {
@@ -2578,7 +2578,7 @@ int main() {
 #import <stdlib>
 #import <telegram>
 
-int main() {
+fn main() {
     String token = "";
     switch Env::get("TG_TOKEN") { Option::Some(t): { token = t + ""; } Option::None: { } }
     if token.len == 0 { jout << "set TG_TOKEN first\n"; return 1; }
@@ -2606,7 +2606,7 @@ int main() {
 #import <stdlib>
 #import <discord>
 
-int main() {
+fn main() {
     Discord bot = Discord::bot("TOKEN-of-the-bot");
     switch bot.send("123456789012345678", "hello from Jex") {
         Result::Ok(x): { jout << "sent\n"; }
@@ -2627,7 +2627,7 @@ int main() {
 #import <stdlib>
 #import <websocket>
 
-int main() {
+fn main() {
     switch Ws::connect("wss://example.org/socket", "") {
         Result::Ok(ws): {
             ws.send_text("hello");
@@ -2653,7 +2653,7 @@ Gateway ของ Discord คือ WebSocket ที่มีกติกา (he
 #import <stdlib>
 #import <discord>
 
-int main() {
+fn main() {
     String token = "TOKEN-of-the-bot";
     Discord bot = Discord::bot(token);
     switch Gw::connect(token, Gw::intents()) {
@@ -2684,7 +2684,7 @@ int main() {
 
 Graph g;                                         // a Graph is big: keep it in a global (do not pass it around by value)
 
-int main() {
+fn main() {
     g = Graph::make();
     int w = g.param(Tensor32::zeros(1, 1));      // a parameter: a number that learns
     int b = g.param(Tensor32::zeros(1, 1));
@@ -2723,7 +2723,7 @@ int main() {
 
 Graph g;
 
-int main() {
+fn main() {
     g = Graph::make();
     Linear l1 = g.linear(2, 8, 1);               // 2 numbers in, 8 out; the last number only seeds the start values
     Linear l2 = g.linear(8, 1, 2);
@@ -2768,7 +2768,7 @@ int main() {
 
 Gpt m;
 
-int main() {
+fn main() {
     String text = "the cat sat on the mat. the dog sat on the log. ";
     String all = "";
     for r in 0..40 { all = all + text; }
@@ -2800,7 +2800,7 @@ int main() {
 #import <stdlib>
 #import <llama>
 
-int main() {
+fn main() {
     switch Lm::load("stories15M-q4_0.gguf") {                // from huggingface.co/ggml-org/tiny-llamas (19 MB)
         Result::Ok(m): {
             int[] ids = m.encode("Once upon a time");        // token numbers, the start token first
@@ -2844,7 +2844,7 @@ float dot(float^ a, float^ b, int n) {            // n a multiple of 4
     return acc.sum();
 }
 
-int main() {
+fn main() {
     float[] a = arr(1001);
     float[] b = arr(1001);
     for i in 0..1000 { a.push((float)i * 0.001); b.push(2.0); }
@@ -2906,7 +2906,7 @@ String hex(int n, int width) {
     return s;
 }
 
-int main() {
+fn main() {
     for n in 0..9 { jout << n << " = " << bits(n, 8) << " = 0x" << hex(n, 2) << "\n"; }
     jout << "255 = " << bits(255, 8) << " = 0x" << hex(255, 2) << "\n";
     jout << "256 = " << bits(256, 9) << " = 0x" << hex(256, 3) << "\n";
@@ -2939,7 +2939,7 @@ String bits(int n, int width) {
     return s;
 }
 
-int main() {
+fn main() {
     for n in 0..4 { jout << "-" << n << " in 8 bits: " << bits(-n, 8) << "\n"; }       // 00000000 11111111 11111110 11111101
     int five = 5;
     int flipped = five xor 255;                     // every bit of the 8 turned over
@@ -2977,7 +2977,7 @@ String bits(int n, int width) {
     return s;
 }
 
-void show(double d) {
+fnv show(double d) {
     int^ p = (int^)@d;                               // the same 8 bytes, looked at as a whole number
     int raw = p[0];
     int sign = (raw >> 63) & 1;
@@ -2986,7 +2986,7 @@ void show(double d) {
     jout << d << ": sign " << sign << ", exponent " << bits(exponent, 11) << " (" << exponent - 1023 << "), fraction " << bits(fraction >> 40, 12) << "...\n";
 }
 
-int main() {
+fn main() {
     show(1.0);
     show(2.0);
     show(0.5);
@@ -3012,14 +3012,14 @@ CPU ทำจาก **ประตู (gate)**: AND, OR, XOR, NOT และบ�
 
 // one full adder: three bits in (a, b and the carry from the right), two bits out
 // the sum goes in sum[0], the carry out is the result
-int full_adder(int a, int b, int carry_in, int^ sum) {
+fn full_adder(int a, int b, int carry_in, int^ sum) {
     int x = a xor b;
     sum[0] = x xor carry_in;
     return (a & b) | (x & carry_in);
 }
 
 // two 8-bit numbers added with eight full adders in a row
-int add8(int a, int b) {
+fn add8(int a, int b) {
     int result = 0;
     int carry = 0;
     int sum[1];
@@ -3031,7 +3031,7 @@ int add8(int a, int b) {
 }
 
 // the multiplier of school: shift and add
-int mul8(int a, int b) {
+fn mul8(int a, int b) {
     int result = 0;
     for i in 0..8 {
         if ((b >> i) & 1) == 1 { result = add8(result, (a << i) & 255); }
@@ -3039,7 +3039,7 @@ int mul8(int a, int b) {
     return result;
 }
 
-int main() {
+fn main() {
     jout << add8(100, 55) << " " << add8(200, 100) << " " << add8(255, 1) << "\n";      // 155 44 0
     int bad = 0;
     for a in 0..256 { for b in 0..256 { if add8(a, b) != (a + b) & 255 { bad += 1; } } }
@@ -3086,7 +3086,7 @@ bool step() {
     return true;
 }
 
-int main() {
+fn main() {
     mem = arr(32);
     // r0 = 0 (the sum), r1 = 5 (the counter), r2 = 1: add the counter to the sum, count down, until the counter is 0
     int[] program = arr(24);
@@ -3120,7 +3120,7 @@ int main() {
 #import <stdlib>
 
 // the register number of "r2": 2 (or -1)
-int reg_of(String w) {
+fn reg_of(String w) {
     if w.len == 2 && w[0] == 'r' && w[1] >= '0' && w[1] <= '3' { return w[1] - '0'; }
     return -1;
 }
@@ -3162,7 +3162,7 @@ int[] assemble(String[] lines) {
     return out;
 }
 
-int main() {
+fn main() {
     String[] src = arr(12);
     src.push("load r0, 0"); src.push("load r1, 5"); src.push("load r2, 1");
     src.push("again:");
@@ -3207,15 +3207,15 @@ String hex(int n, int width) {
 }
 
 // add xd, xn, xm  (64 bits)
-int encode_add(int d, int n, int m) { return 0x8B000000 | (m << 16) | (n << 5) | d; }
+fn encode_add(int d, int n, int m) { return 0x8B000000 | (m << 16) | (n << 5) | d; }
 
 // sub xd, xn, xm
-int encode_sub(int d, int n, int m) { return 0xCB000000 | (m << 16) | (n << 5) | d; }
+fn encode_sub(int d, int n, int m) { return 0xCB000000 | (m << 16) | (n << 5) | d; }
 
 // mov xd, #imm16  (movz: the number in bits 5-20)
-int encode_movz(int d, int imm) { return 0xD2800000 | (imm << 5) | d; }
+fn encode_movz(int d, int imm) { return 0xD2800000 | (imm << 5) | d; }
 
-int main() {
+fn main() {
     jout << "add x1, x1, x2  = 0x" << hex(encode_add(1, 1, 2), 8) << "\n";     // 8b020021
     jout << "sub x0, x3, x4  = 0x" << hex(encode_sub(0, 3, 4), 8) << "\n";     // cb040060
     jout << "mov x5, #1000   = 0x" << hex(encode_movz(5, 1000), 8) << "\n";    // d2807d05
@@ -3257,7 +3257,7 @@ int main() {
 #import <stdlib>
 using stdlib;
 
-int main() {
+fn main() {
     String[] items = arr(3);
     items.push("tea"); items.push("rice"); items.push("coconut milk");
     int[] cents = arr(3);
@@ -3330,13 +3330,13 @@ apkj build manifest.toml MyApp.apk lib/arm64-v8a/libgame.so=_out/libgame.so asse
 
 using stdlib;
 // the sum of a part of an array, without copying it
-int total(Span<int> s) {
+fn total(Span<int> s) {
     int t = 0;
     for i in 0..s.len { t += s.get(i); }
     return t;
 }
 
-void main() {
+fnv main() {
     int[] a = arr(10);
     for i in 0..10 { a.push(i * i); }          // 0 1 4 9 16 25 36 49 64 81
 
@@ -3375,7 +3375,7 @@ Span มี `len`, `get(i)`, `set(i, v)` และ `sub(from, to)` (มุมม
 using stdlib;
 
 // a text is bytes (UTF-8): a Thai letter is three bytes. This is how a font library reads it: byte by byte, building the number of each character.
-int next_char(String s, int i, int^ len) {
+fn next_char(String s, int i, int^ len) {
     int c = s[i] & 255;
     if c < 128 { len^ = 1; return c; }
     if c >= 0xe0 { len^ = 3; return ((c & 15) << 12) | ((s[i + 1] & 63) << 6) | (s[i + 2] & 63); }
@@ -3383,7 +3383,7 @@ int next_char(String s, int i, int^ len) {
     return ((c & 31) << 6) | (s[i + 1] & 63);
 }
 
-int main() {
+fn main() {
     String s = "Hi สวัสดี";
     jout << "bytes: " << s.len << "\n";
     int i = 0;
@@ -3433,9 +3433,9 @@ using stdlib;
 
 // a colour is 0xAARRGGBB. Drawing a colour with some alpha over another one mixes them channel by channel: this is what a screen does for every
 // dot of a shadow, a glow or the edge of a letter.
-int channel(int c, int shift) { return (c >> shift) & 255; }
+fn channel(int c, int shift) { return (c >> shift) & 255; }
 
-int blend(int top, int under) {
+fn blend(int top, int under) {
     int a = channel(top, 24);
     int r = (channel(top, 16) * a + channel(under, 16) * (255 - a)) / 255;
     int g = (channel(top, 8) * a + channel(under, 8) * (255 - a)) / 255;
@@ -3443,7 +3443,7 @@ int blend(int top, int under) {
     return 0xff000000 | (r << 16) | (g << 8) | b;
 }
 
-int main() {
+fn main() {
     int blue = 0xff0000ff;
     int half_red = 0x80ff0000;
     jout << "half red over blue: " << tohex(blend(half_red, blue)) << "\n";
@@ -3489,7 +3489,7 @@ sc.save_ppm("screen.ppm");
 using stdlib;
 
 // a key made from a secret: HKDF turns one secret into as many keys as you need, one for each purpose. (jmaip does this for every file and passkey.)
-int main() {
+fn main() {
     char secret[32];
     for i in 0..32 { secret[i] = (char)(i * 7 + 1); }
     char salt[4];
@@ -3546,7 +3546,7 @@ jmaip dec notes.txt.jmaip                   # หา passkey จากหัว�
 using stdlib;
 
 // C = A * B for small matrices, written in the "row update" form: the inner loop adds a row of B, times one number, to a row of C.
-int main() {
+fn main() {
     int n = 4;
     float[] a = arr(n * n);
     float[] b = arr(n * n);
@@ -3594,7 +3594,7 @@ int main() {
 #import <stdlib>
 using stdlib;
 
-int main() {
+fn main() {
     int[] a = arr(1000);
     for i in 0..1000 { a.push(i % 7); }
     int total = 0;
@@ -3624,13 +3624,13 @@ sum: 2997
 #import <stdlib>
 using stdlib;
 
-int work(int[] a) {
+fn work(int[] a) {
     int s = 0;
     for i in 0..a.len { s += a[i] * 3; }
     return s;
 }
 
-int main() {
+fn main() {
     int[] a = arr(100000);
     for i in 0..100000 { a.push(i % 10); }
     int best = 0;
@@ -3670,7 +3670,7 @@ checksum: 1350000
 #import <stdlib>
 using stdlib;
 
-int main() {
+fn main() {
     float[] f = arr(4000);
     double[] d = arr(4000);
     for i in 0..4000 {
@@ -3712,7 +3712,7 @@ sums: 3999000.000000 3999000.000000
 #import <simd>
 using stdlib;
 
-int main() {
+fn main() {
     float a[8] = {1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0};
     float c[8];
     f32x4 v = f32x4::load(@a[0], 4);       // a[4] a[5] a[6] a[7]
@@ -3746,7 +3746,7 @@ using stdlib;
 
 #import <simd>
 
-int main() {
+fn main() {
     f32x4 x = {1.0, 2.0, 3.0, 4.0};
     f32x4 y = {0.5, 0.5, 2.0, 2.0};
     f32x4 z = x * y + x;                   // four lanes at once: 1.5 3 9 12
@@ -3782,7 +3782,7 @@ sum 25.500000  min 1.500000  max 12.000000
 using stdlib;
 
 // y = y + a * x for n numbers; n must be a multiple of 4 in this simple form
-void axpy(float a, float^ x, float^ y, int n) {
+fnv axpy(float a, float^ x, float^ y, int n) {
     f32x4 av = {a, a, a, a};
     int i = 0;
     while i < n {
@@ -3794,7 +3794,7 @@ void axpy(float a, float^ x, float^ y, int n) {
     }
 }
 
-int main() {
+fn main() {
     float x[8];
     float y[8];
     for i in 0..8 {
@@ -3829,7 +3829,7 @@ int main() {
 using stdlib;
 
 // C = A * B for 4x4, the plain way: C[i][j] is the dot product of row i of A and column j of B
-int main() {
+fn main() {
     int n = 4;
     float[] a = arr(16);
     float[] b = arr(16);
@@ -3898,7 +3898,7 @@ float dot_two(float[] a, float[] b, int n) {
     return s0 + s1;
 }
 
-int main() {
+fn main() {
     float[] a = arr(8);
     float[] b = arr(8);
     for i in 0..8 {
@@ -3953,7 +3953,7 @@ float dot_four(float[] a, float[] b, int n) {
     return s;
 }
 
-int main() {
+fn main() {
     float[] a = arr(18);
     float[] b = arr(18);
     for i in 0..18 {
@@ -3991,7 +3991,7 @@ four chains: 242.000000
 using stdlib;
 
 // C = A * B for 4x4, four columns of C at a time: cv holds the row i of C
-int main() {
+fn main() {
     int n = 4;
     float a[16];
     float b[16];
@@ -4045,7 +4045,7 @@ int main() {
 using stdlib;
 
 // A is 4x3, B is 3x8, C is 4x8 (K = 3). The eight vectors of C stay in registers during the loop over k.
-int main() {
+fn main() {
     float a[12];
     float b[24];
     for i in 0..4 {
@@ -4112,7 +4112,7 @@ using stdlib;
 
 int squares[1000];
 
-void main() {
+fnv main() {
     int offset = 5;
     #multithread
     for i in 0..1000 {                  // the iterations are shared among the machine's cores
@@ -4143,7 +4143,7 @@ void main() {
 #import <stdlib>
 using stdlib;
 
-int main() {
+fn main() {
     int[] a = arr(10);
     for i in 0..10 { a.push(i * 3); }
     int total = 0;
@@ -4173,7 +4173,7 @@ total 135
 #import <stdlib>
 using stdlib;
 
-int main() {
+fn main() {
     double[] x = arr(8);
     double[] y = arr(8);
     for i in 0..8 {
@@ -4214,7 +4214,7 @@ double total(double[] v) {
     return s;
 }
 
-int main() {
+fn main() {
     double[] v = arr(16);
     for i in 0..16 { v.push((double)i); }
     jout << total(v) << "\n";
@@ -4242,7 +4242,7 @@ int main() {
 #import <simd>
 using stdlib;
 
-int main() {
+fn main() {
     i32[] a = arr(1000);
     for i in 0..1000 { a.push((i32)(i * 3 % 17)); }
     i32 plain = 0;
@@ -4279,7 +4279,7 @@ vector 7991
 #import <stdlib>
 using stdlib;
 
-int main() {
+fn main() {
     int[] buf = arr(8);
     for i in 0..8 { buf.push(0); }        // allocated once, before the loop
     int total = 0;
@@ -4327,7 +4327,7 @@ double sum_x_soa(double[] xs) {
     return s;
 }
 
-int main() {
+fn main() {
     Point[] ps = arr(1000);
     double[] xs = arr(1000);
     double[] ys = arr(1000);
@@ -4366,7 +4366,7 @@ count of y 1000
 #import <stdlib>
 using stdlib;
 
-int main() {
+fn main() {
     int n = 64;
     double[] a = arr(n * n);
     double[] b = arr(n * n);
@@ -4449,7 +4449,7 @@ double kernel_b(double[] v) {
     return s;
 }
 
-int main() {
+fn main() {
     double[] v = arr(100000);
     for i in 0..100000 { v.push((double)(i % 9)); }
     int best_a = 0;
@@ -4499,7 +4499,7 @@ double relu(double x) {
     if x > 0.0 { return x; }
     return 0.0;
 }
-void main() {
+fnv main() {
     double x1 = 2.0;
     double x2 = 1.0;
     double w1 = 0.5;
@@ -4534,7 +4534,7 @@ negative sum -> 0.000000
 #import <neuron>
 using stdlib;
 // a Tensor is a table of rows x cols doubles; zeros makes one filled with 0.0
-void main() {
+fnv main() {
     Tensor t = Tensor::zeros(2, 3);
     t.set(0, 1, 5.0);
     t.set(1, 2, -1.5);
@@ -4573,13 +4573,13 @@ get(1, 2) = -1.500000
 #import <neuron>
 using stdlib;
 // C = A x B with the plain loop (matmul) and the fast way (matmul_fast)
-void show(Tensor c) {
+fnv show(Tensor c) {
     for r in 0..c.rows {
         for k in 0..c.cols { jout << c.get(r, k) << " "; }
         jout << "\n";
     }
 }
-void main() {
+fnv main() {
     Tensor a = Tensor::zeros(2, 3);
     Tensor b = Tensor::zeros(3, 2);
     for i in 0..6 {
@@ -4626,7 +4626,7 @@ shape 40 x 50, same: true
 #import <neuron>
 using stdlib;
 // a linear layer: y = x @ w + b. The same sum is computed here by hand, and the two agree.
-void main() {
+fnv main() {
     Dense layer = Dense::make(3, 2, 7);
     Tensor x = Tensor::zeros(1, 3);
     x.set(0, 0, 1.0);
@@ -4674,7 +4674,7 @@ double relu(double x) {
     return 0.0;
 }
 double sigmoid(double x) { return 1.0 / (1.0 + Math::exp(-x)); }
-void main() {
+fnv main() {
     double[] xs = arr(4);
     xs.push(-2.0); xs.push(-0.5); xs.push(0.0); xs.push(1.5);
     for i in 0..4 {
@@ -4718,7 +4718,7 @@ loss บอกว่าเอาต์พุตผิดแค่ไหน Mean 
 #import <neuron>
 using stdlib;
 // the loss by hand, then the same with the graph's mse node
-void main() {
+fnv main() {
     double[] out = arr(3);
     out.push(0.8); out.push(0.2); out.push(0.6);
     double[] want = arr(3);
@@ -4766,7 +4766,7 @@ double f(double w) {
     double e = 2.0 * w - 6.0;
     return e * e;
 }
-void main() {
+fnv main() {
     double w = 1.0;
     double h = 0.001;
     double exact = 2.0 * (2.0 * w - 6.0) * 2.0;
@@ -4814,7 +4814,7 @@ gradient descent ขยับน้ำหนักทีละนิดสวน
 #import <stdlib>
 using stdlib;
 // fit one weight: y = 2x on x = 1, 2, 3. The loss is the mean of (w*x - y)^2.
-void main() {
+fnv main() {
     double[] xs = arr(3);
     xs.push(1.0); xs.push(2.0); xs.push(3.0);
     double[] ys = arr(3);
@@ -4861,7 +4861,7 @@ w after 60 steps = 2.000000
 #import <stdlib>
 using stdlib;
 // the line y = 3x + 1 on five points: w is the slope, b the bias, both moved by their average slope
-void main() {
+fnv main() {
     double[] xs = arr(5);
     double[] ys = arr(5);
     for i in 0..5 {
@@ -4912,7 +4912,7 @@ XOR ให้ 1 เมื่อมีอินพุตเพียงตัว�
 #import <neuron>
 using stdlib;
 // XOR: two layers (6 tanh units, then a sigmoid) learn it. The seeds are fixed.
-void main() {
+fnv main() {
     Graph g = Graph::make();
     Linear l1 = g.linear(2, 6, 1);
     Linear l2 = g.linear(6, 1, 2);
@@ -4975,7 +4975,7 @@ String op_name(int op) {
     if op == OP_MSE() { return "mse"; }
     return "other";
 }
-void main() {
+fnv main() {
     Graph g = Graph::make();
     double[] wv = arr(2);
     wv.push(0.5); wv.push(1.0);
@@ -5022,7 +5022,7 @@ gradient of w: 3.000000 6.000000
 #import <neuron>
 using stdlib;
 // eight points of y = 2x + 1; each epoch shuffles the rows and trains on two mini-batches of four
-void main() {
+fnv main() {
     Tensor32 xs = Tensor32::zeros(8, 1);
     Tensor32 ys = Tensor32::zeros(8, 1);
     for i in 0..8 {
@@ -5080,7 +5080,7 @@ epoch 2 order: 2 4 0 7 6 1 3 5
 #import <neuron>
 using stdlib;
 // three samples, three classes: row r holds the scores of the classes 0, 1, 2; the right class of row r is r
-void main() {
+fnv main() {
     double[] v = arr(9);
     v.push(2.0); v.push(0.5); v.push(-1.0);
     v.push(0.1); v.push(0.3); v.push(0.2);
@@ -5146,7 +5146,7 @@ double train(double rate) {
     }
     return w;
 }
-void main() {
+fnv main() {
     double small = train(0.2);
     double big = train(0.22);
     jout << "rate 0.2:  w = " << small << "  converged: " << (Math::abs(small - 2.0) < 0.01) << "\n";
@@ -5176,7 +5176,7 @@ rate 0.22: w = -43.183479  converged: false
 #import <neuron>
 using stdlib;
 // the starting weights: the same seed gives the same weights; the size is limited by sqrt(2 / inputs)
-void main() {
+fnv main() {
     Dense a = Dense::make(4, 3, 5);
     Dense b = Dense::make(4, 3, 5);
     Dense c = Dense::make(4, 3, 6);
@@ -5223,7 +5223,7 @@ other seed, other weights: true
 #import <neuron>
 using stdlib;
 // six words; each word is one row of the table (4 numbers); the id of a word is its row number
-void main() {
+fnv main() {
     String[] words = arr(6);
     words.push("cat"); words.push("sat"); words.push("on");
     words.push("the"); words.push("mat"); words.push("dog");
@@ -5273,7 +5273,7 @@ the row of dog is row 5 of the table: true
 using stdlib;
 // a tiny character model: it reads 8 bytes and guesses the next one at every place. The text repeats, so the loss falls.
 Gpt m;
-void main() {
+fnv main() {
     String text = "abcabcabcabcabcabcabcabc";
     int[] data = Gpt::bytes(text);
     m = Gpt::make(256, 8, 16, 2, 1, 1);
@@ -5311,7 +5311,7 @@ loss at the end 0.001733
 #import <neuron>
 using stdlib;
 // train a network on XOR, save its weights to a file, load them back and compare the answers
-void main() {
+fnv main() {
     Tensor x = Tensor::zeros(4, 2);
     Tensor y = Tensor::zeros(4, 1);
     x.set(1, 1, 1.0); x.set(2, 0, 1.0); x.set(3, 0, 1.0); x.set(3, 1, 1.0);
@@ -5356,7 +5356,7 @@ inference คือการใช้โครงข่ายที่เทร�
 #import <neuron>
 using stdlib;
 // inference: a trained network answers; predict runs only the forward pass
-void main() {
+fnv main() {
     Tensor x = Tensor::zeros(4, 2);
     Tensor y = Tensor::zeros(4, 1);
     x.set(1, 1, 1.0); x.set(2, 0, 1.0); x.set(3, 0, 1.0); x.set(3, 1, 1.0);
@@ -5404,7 +5404,7 @@ weights unchanged after 100 calls: true
 #import <neuron>
 using stdlib;
 // one matrix product of 64 x 64 by 64 x 64: 262144 multiply-adds. The fast way must give the same table.
-void main() {
+fnv main() {
     Tensor a = Tensor::zeros(64, 64);
     Tensor b = Tensor::zeros(64, 64);
     for i in 0..64 * 64 {
@@ -5452,7 +5452,7 @@ struct Point {
     int y;
 }
 
-int manhattan(Point a, Point b) {
+fn manhattan(Point a, Point b) {
     int dx = a.x - b.x;
     int dy = a.y - b.y;
     if dx < 0 { dx = -dx; }
@@ -5472,7 +5472,7 @@ using stdlib;
 #import "geometry"
 
 // report.j -- a component that uses geometry.j
-void print_distance(Point a, Point b) {
+fnv print_distance(Point a, Point b) {
     jout << "distance " << manhattan(a, b) << "\n";
 }
 ```
@@ -5486,7 +5486,7 @@ using stdlib;
 #import "geometry"
 #import "report"
 
-void main() {
+fnv main() {
     Point home = {0, 0};
     Point shop = {3, -4};
     print_distance(home, shop);
@@ -5517,13 +5517,13 @@ int passed = 0;
 int failed = 0;
 
 // the function under test
-int clamp(int x, int lo, int hi) {
+fn clamp(int x, int lo, int hi) {
     if x < lo { return lo; }
     if x > hi { return hi; }
     return x;
 }
 
-void check_int(String name, int got, int want) {
+fnv check_int(String name, int got, int want) {
     if got == want {
         passed += 1;
         jout << "PASS " << name << "\n";
@@ -5533,7 +5533,7 @@ void check_int(String name, int got, int want) {
     }
 }
 
-void main() {
+fnv main() {
     check_int("below the range", clamp(-5, 0, 10), 0);
     check_int("inside the range", clamp(7, 0, 10), 7);
     check_int("above the range", clamp(99, 0, 10), 10);
@@ -5587,7 +5587,7 @@ Result<int, Error> parse_int(char^ s) {
     return Result<int, Error>::Ok(value);
 }
 
-void main() {
+fnv main() {
     char w[32];
     int total = 0;
     int bad = 0;
@@ -5639,7 +5639,7 @@ total 49, 2 wrong
 using stdlib;
 
 // usage: sum NUMBER NUMBER
-void main() {
+fnv main() {
     String[] a = Env::args();
     jout << "arguments given: " << (a.len - 1) << "\n";
     if a.len != 3 {
@@ -5672,7 +5672,7 @@ usage: sum NUMBER NUMBER
 using stdlib;
 
 // the number of words in one line: a word starts where a letter follows a space
-int count_words(String line) {
+fn count_words(String line) {
     int n = 0;
     bool inside = false;
     for i in 0..line.len {
@@ -5686,7 +5686,7 @@ int count_words(String line) {
     return n;
 }
 
-void main() {
+fnv main() {
     String path = "lines_demo.txt";
     Fs::write_text(path, "the first line\nthe second line has more words\n\nlast\n").unwrap();
     String[] lines = Fs::read_lines(path).unwrap();
@@ -5737,7 +5737,7 @@ Sale make_sale(String item, int qty, double price) {
     return s;
 }
 
-void main() {
+fnv main() {
     Sale[] sales = arr(3);
     sales.push(make_sale("pen, blue", 3, 1.5));
     sales.push(make_sale("notebook", 2, 2.25));
@@ -5786,7 +5786,7 @@ ink           10    0.40    4.00
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     String text = "[{\"item\": \"tea\", \"price\": 2.5, \"paid\": true}, {\"item\": \"cake\", \"price\": 3.25, \"paid\": false}, {\"item\": \"jam\", \"price\": 4, \"paid\": true}]";
     JsonDoc doc = Json::parse(text).unwrap();
     int root = doc.root();
@@ -5855,7 +5855,7 @@ Vend step(Vend s, int coin) {
     return s;
 }
 
-void show(Vend s) {
+fnv show(Vend s) {
     switch s {
         Vend::Idle: jout << "idle\n";
         Vend::Paying(c): jout << "paying, " << c << " cents so far\n";
@@ -5863,7 +5863,7 @@ void show(Vend s) {
     }
 }
 
-void main() {
+fnv main() {
     Vend s = Vend::Idle;
     int events[5];
     events[0] = 10;
@@ -5935,7 +5935,7 @@ Token[] tokenize(String s) {
     return out;
 }
 
-void main() {
+fnv main() {
     Token[] toks = tokenize("(12 + 3) * 4");
     for i in 0..toks.len {
         switch toks[i] {
@@ -6032,7 +6032,7 @@ char peek_op() {
     return '#';
 }
 
-int factor() {
+fn factor() {
     if pos >= toks.len { return 0; }
     Token t = toks[pos];
     pos += 1;
@@ -6048,7 +6048,7 @@ int factor() {
     return 0;
 }
 
-int term() {
+fn term() {
     int v = factor();
     while peek_op() == '*' || peek_op() == '/' {
         char op = peek_op();
@@ -6059,7 +6059,7 @@ int term() {
     return v;
 }
 
-int expr() {
+fn expr() {
     int v = term();
     while peek_op() == '+' || peek_op() == '-' {
         char op = peek_op();
@@ -6070,13 +6070,13 @@ int expr() {
     return v;
 }
 
-int calc(String s) {
+fn calc(String s) {
     toks = tokenize(s);
     pos = 0;
     return expr();
 }
 
-void main() {
+fnv main() {
     String[] sums = arr(4);
     sums.push("2 + 3 * (4 - 1)");
     sums.push("(10 - 4) / 2");
@@ -6112,7 +6112,7 @@ using stdlib;
 struct MinHeap {
     int[] a;
 
-    void push(self, int x) {
+    fnv push(self, int x) {
         self.a.push(x);
         int i = self.a.len - 1;
         while i > 0 {
@@ -6125,7 +6125,7 @@ struct MinHeap {
         }
     }
 
-    int pop(self) {
+    fn pop(self) {
         int top = self.a[0];
         int last = self.a.len - 1;
         self.a[0] = self.a[last];
@@ -6147,7 +6147,7 @@ struct MinHeap {
     }
 }
 
-void main() {
+fnv main() {
     MinHeap h;
     h.a = arr(8);
     int input[7];
@@ -6180,7 +6180,7 @@ smallest first: 1 2 3 5 7 8 9
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     String[] words = arr(16);
     words.push("the"); words.push("cat"); words.push("and"); words.push("the");
     words.push("dog"); words.push("and"); words.push("the"); words.push("bird");
@@ -6230,7 +6230,7 @@ using stdlib;
 // a named comparison: the bigger number first
 bool bigger_first(int x, int y) { return x > y; }
 
-void main() {
+fnv main() {
     int[] nums = arr(8);
     nums.push(5); nums.push(12); nums.push(7); nums.push(30); nums.push(2);
 
@@ -6281,7 +6281,7 @@ struct Room {
 }
 
 // the index of the room in direction d (n e s w), or -1 for a wall
-int exit_of(Room r, char d) {
+fn exit_of(Room r, char d) {
     if d == 'n' { return r.north; }
     if d == 'e' { return r.east; }
     if d == 's' { return r.south; }
@@ -6299,7 +6299,7 @@ Room make_room(String name, int north, int east, int south, int west) {
     return r;
 }
 
-void main() {
+fnv main() {
     Room[] rooms = arr(3);
     Room hall = make_room("Hall", 1, -1, -1, -1);
     Room kitchen = make_room("Kitchen", -1, 2, 0, -1);
@@ -6349,7 +6349,7 @@ you are in the Kitchen
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     double dt = 1.0 / 60.0;     // a fixed step: 60 steps for each second, every time
     double gravity = -9.8;      // metres per second squared
     double height = 5.0;
@@ -6427,12 +6427,12 @@ struct Account {
         return true;
     }
 
-    void show(self) {
+    fnv show(self) {
         jout << self.owner << ": " << Fmt::fixed((double)self.cents / 100.0, 2) << "\n";
     }
 }
 
-void main() {
+fnv main() {
     Account acc;
     acc.owner = "Ann";
     acc.cents = 0;
@@ -6480,11 +6480,11 @@ using stdlib;
 struct Stack<T> {
     T[] items;
 
-    void init(self) {
+    fnv init(self) {
         self.items = arr(4);
     }
 
-    void push(self, T x) {
+    fnv push(self, T x) {
         self.items.push(x);
     }
 
@@ -6499,7 +6499,7 @@ struct Stack<T> {
     }
 }
 
-void main() {
+fnv main() {
     Stack<int> nums;
     for i in 1..4 { nums.push(i * i); }
     while !nums.empty() {
@@ -6534,7 +6534,7 @@ struct เดียวใช้ได้กับทุกชนิด `Stack<in
 using stdlib;
 
 // writes a file, checks it, and removes the file on every way out
-int check_file(String path, String text) {
+fn check_file(String path, String text) {
     Fs::write_text(path, text).unwrap();
     defer Fs::remove(path);
     defer jout << "removed " << path << "\n";
@@ -6543,7 +6543,7 @@ int check_file(String path, String text) {
     return lines.len;
 }
 
-void main() {
+fnv main() {
     jout << check_file("defer_ok.txt", "a\nb\nc\n") << " lines\n";
     try {
         jout << check_file("defer_bad.txt", "") << " lines\n";
@@ -6576,7 +6576,7 @@ left behind: falsefalse
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     String path = "makej_demo";
     String build = "[makej]\nout = \"_out\"\n\n[program.hello]\nmain = \"src/hello.jk\"\n\n[step.run]\nneeds = \"hello\"\nrun = \"_out/hello\"\n";
     Fs::write_text(path, build).unwrap();
@@ -6628,14 +6628,14 @@ main = "src/hello.jk"
 using stdlib;
 
 // this program compiles; the message format is shown after it
-int average(int[] values) {
+fn average(int[] values) {
     int total = 0;
     for i in 0..values.len { total += values[i]; }
     if values.len == 0 { return 0; }
     return total / values.len;
 }
 
-void main() {
+fnv main() {
     int[] marks = arr(3);
     marks.push(70);
     marks.push(85);
@@ -6675,12 +6675,12 @@ using stdlib;
 
 int total = 100;                 // a global: visible everywhere
 
-int twice(int x) {
+fn twice(int x) {
     int result = x * 2;          // a local: only inside twice
     return result;
 }
 
-void main() {
+fnv main() {
     int n = 5;
     if n > 3 {
         int inner = n + 1;       // lives only inside these braces
@@ -6718,7 +6718,7 @@ sq = 4
 using stdlib;
 
 // a 3 x 3 table kept in one array: the cell (row, col) is at row * 3 + col
-void main() {
+fnv main() {
     int[] t = arr(9);
     for r in 0..3 {
         for c in 0..3 { t.push((r + 1) * (c + 1)); }
@@ -6756,7 +6756,7 @@ diagonal sum = 14
 using stdlib;
 
 // binary search in a sorted array: each step throws half of the rest away
-int find(int[] a, int x) {
+fn find(int[] a, int x) {
     int lo = 0;
     int hi = a.len - 1;
     while lo <= hi {
@@ -6767,7 +6767,7 @@ int find(int[] a, int x) {
     return 0 - 1;
 }
 
-void main() {
+fnv main() {
     int[] a = arr(8);
     for i in 0..8 { a.push(i * 3); }
     jout << find(a, 9) << " " << find(a, 10) << " " << find(a, 21) << "\n";
@@ -6794,7 +6794,7 @@ void main() {
 using stdlib;
 
 // debugging by looking: print the values that matter, then compare with what you expected
-int collatz_steps(int n) {
+fn collatz_steps(int n) {
     int steps = 0;
     while n != 1 {
         if n % 2 == 0 { n = n / 2; } else { n = 3 * n + 1; }
@@ -6803,7 +6803,7 @@ int collatz_steps(int n) {
     return steps;
 }
 
-void main() {
+fnv main() {
     for n in 1..8 {
         jout << "n = " << n << "  steps = " << collatz_steps(n) << "\n";
     }
@@ -6836,9 +6836,9 @@ n = 7  steps = 16
 using stdlib;
 
 // Big-O by counting: how many steps does a search need as the data grows?
-int linear_steps(int n) { return n; }                 // look at every item in the worst case
+fn linear_steps(int n) { return n; }                 // look at every item in the worst case
 
-int binary_steps(int n) {
+fn binary_steps(int n) {
     int lo = 0;
     int hi = n - 1;
     int steps = 0;
@@ -6850,7 +6850,7 @@ int binary_steps(int n) {
     return steps;
 }
 
-void main() {
+fnv main() {
     jout << "n          linear    binary\n";
     int n = 16;
     for t in 0..5 {
@@ -6887,8 +6887,8 @@ using stdlib;
 // a stack in an array: the last item in is the first one out (LIFO)
 struct Stack { int[] items; }
 
-void push(Stack s, int x) { s.items.push(x); }
-int pop(Stack s) {
+fnv push(Stack s, int x) { s.items.push(x); }
+fn pop(Stack s) {
     int x = s.items[s.items.len - 1];
     s.items.pop();
     return x;
@@ -6912,7 +6912,7 @@ bool balanced(String t) {
     return s.items.len == 0;
 }
 
-void main() {
+fnv main() {
     jout << balanced("(a[b]c)") << " " << balanced("(a[b)]") << " " << balanced("((") << "\n";
 }
 
@@ -6949,14 +6949,14 @@ bool enqueue(int x) {
     return true;
 }
 
-int dequeue() {
+fn dequeue() {
     int x = buf[head];
     head = (head + 1) % cap;
     count -= 1;
     return x;
 }
 
-void main() {
+fnv main() {
     buf = arr(cap);
     for i in 0..cap { buf.push(0); }
     for i in 1..7 { jout << enqueue(i * 10) << " "; }       // the 5th and 6th do not fit
@@ -6995,7 +6995,7 @@ int[] key;
 int[] left;
 int[] right;
 
-int insert(int root, int k) {
+fn insert(int root, int k) {
     key.push(k); left.push(0 - 1); right.push(0 - 1);
     int id = key.len - 1;
     if root < 0 { return id; }
@@ -7012,14 +7012,14 @@ int insert(int root, int k) {
     return root;
 }
 
-void inorder(int n) {                                    // left, node, right: the keys come out sorted
+fnv inorder(int n) {                                    // left, node, right: the keys come out sorted
     if n < 0 { return; }
     inorder(left[n]);
     jout << key[n] << " ";
     inorder(right[n]);
 }
 
-int height(int n) {
+fn height(int n) {
     if n < 0 { return 0; }
     int a = height(left[n]);
     int b = height(right[n]);
@@ -7027,7 +7027,7 @@ int height(int n) {
     return b + 1;
 }
 
-void main() {
+fnv main() {
     key = arr(8); left = arr(8); right = arr(8);
     int root = 0 - 1;
     int[] data = arr(8);
@@ -7060,7 +7060,7 @@ using stdlib;
 
 // breadth-first search: the fewest steps from a start node to every other node of a graph
 // the graph is kept as lists: the neighbours of node v are nb[start[v] .. start[v+1])
-void main() {
+fnv main() {
     int n = 6;
     int[] start = arr(8);
     int[] nb = arr(16);
@@ -7118,7 +7118,7 @@ node 5: -1
 using stdlib;
 
 // dynamic programming: the longest common subsequence of two texts; table[i][j] uses the answers for shorter texts
-int lcs(String a, String b) {
+fn lcs(String a, String b) {
     int w = b.len + 1;
     int[] t = arr((a.len + 1) * w);
     for i in 0..(a.len + 1) * w { t.push(0); }
@@ -7136,7 +7136,7 @@ int lcs(String a, String b) {
 }
 
 // the fewest coins for an amount (coins 1, 5, 12): the answer for 15 is 3 coins of 5, not 12 + 1 + 1 + 1
-int coins(int amount) {
+fn coins(int amount) {
     int[] best = arr(amount + 1);
     best.push(0);
     for x in 1..amount + 1 {
@@ -7149,7 +7149,7 @@ int coins(int amount) {
     return best[amount];
 }
 
-void main() {
+fnv main() {
     jout << lcs("AGGTAB", "GXTXAYB") << " " << lcs("abc", "xyz") << "\n";
     jout << coins(15) << " " << coins(11) << " " << coins(24) << "\n";
 }
@@ -7182,15 +7182,15 @@ int[] vals;
 bool[] used;
 int probes = 0;
 
-int h(int k) { return (k * 31 + 7) % cap; }
+fn h(int k) { return (k * 31 + 7) % cap; }
 
-void put(int k, int v) {
+fnv put(int k, int v) {
     int i = h(k);
     while used[i] && keys[i] != k { i = (i + 1) % cap; probes += 1; }
     used[i] = true; keys[i] = k; vals[i] = v;
 }
 
-int get(int k) {
+fn get(int k) {
     int i = h(k);
     while used[i] {
         if keys[i] == k { return vals[i]; }
@@ -7199,7 +7199,7 @@ int get(int k) {
     return 0 - 1;
 }
 
-void main() {
+fnv main() {
     keys = arr(cap); vals = arr(cap); used = arr(cap);
     for i in 0..cap { keys.push(0); vals.push(0); used.push(false); }
     for i in 0..10 { put(i * 16 + 3, i * 100); }          // these keys all want the same place: collisions
@@ -7231,7 +7231,7 @@ using stdlib;
 // two sorts, the same data: count the comparisons (insertion sort ~ n*n/4, merge sort ~ n*log2(n))
 int cmp_count = 0;
 
-void insertion(int[] a) {
+fnv insertion(int[] a) {
     for i in 1..a.len {
         int x = a[i];
         int j = i - 1;
@@ -7245,7 +7245,7 @@ void insertion(int[] a) {
     }
 }
 
-void merge_sort(int[] a, int[] tmp, int lo, int hi) {   // sorts a[lo .. hi)
+fnv merge_sort(int[] a, int[] tmp, int lo, int hi) {   // sorts a[lo .. hi)
     if hi - lo < 2 { return; }
     int mid = (lo + hi) / 2;
     merge_sort(a, tmp, lo, mid);
@@ -7270,7 +7270,7 @@ int[] make(int n) {
     return a;
 }
 
-void main() {
+fnv main() {
     int n = 1000;
     int[] a = make(n);
     int[] b = make(n);
@@ -7312,7 +7312,7 @@ using stdlib;
 
 // the same sum of a table, read by rows and by columns: one answer, but the CPU reads memory in blocks (cache lines),
 // so walking along a row uses every number of a block while walking down a column uses one number of each block
-void main() {
+fnv main() {
     int n = 512;
     float[] t = arr(n * n);
     for i in 0..n * n { t.push((float)(i % 10)); }

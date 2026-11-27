@@ -29,7 +29,7 @@ curl -fsSL https://raw.githubusercontent.com/J2k-studio/Jexcmp/main/install.sh |
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     jout << "Hello, J2K!\n";
 }
 ```
@@ -65,7 +65,7 @@ Hello, J2K!
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     jout << "Hello, J2K!\n";
     jout << "Next line\n";
     jout << "A number: " << 42 << "\n";
@@ -108,7 +108,7 @@ broken.jk:5:26: error: expected ';' at the end of line 5: the statement is not f
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     int apples = 5;
     apples = apples + 2;
     double price = 2.5;
@@ -161,7 +161,7 @@ broken.jk:6:20: error: unknown name 'apples'
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     int a = 7;
     int b = 2;
     jout << a / b << "\n";
@@ -215,7 +215,7 @@ broken.jk:6:16: error: unknown name 'ok'
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     int score = 72;
     if score >= 90 {
         jout << "A\n";
@@ -265,7 +265,7 @@ broken.jk:6:10: error: a bool is required here
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     int i = 1;
     while i <= 3 {
         jout << i << " ";
@@ -321,7 +321,7 @@ broken.jk:10:1: error: a type was expected, but found '}'
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     char name[20];
     int age;
     jin >> name >> age;
@@ -372,22 +372,22 @@ uncaught exception: invalid input: a whole number was expected, but found 't'
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     jout << factorial(5) << "\n";
     banner();
 }
 
-int factorial(int n) {
+fn factorial(int n) {
     if n <= 1 { return 1; }
     return n * factorial(n - 1);
 }
 
-void print_box(int n) {
+fnv print_box(int n) {
     for i in 0..n { jout << "*"; }
     jout << "\n";
 }
 
-void banner() {
+fnv banner() {
     print_box(3);
     jout << "ready\n";
 }
@@ -426,7 +426,7 @@ broken.jk:9:22: error: argument 1 of 'twice': a text was given, but the paramete
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     int scores[5];
     for i in 0..5 { scores[i] = (i + 1) * 10; }
     int total = 0;
@@ -481,7 +481,7 @@ runtime error: index out of bounds, array size is 3
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     String first = "J2K";
     String title = first + " basics";
     jout << title << " " << title.len << " " << title[0] << "\n";

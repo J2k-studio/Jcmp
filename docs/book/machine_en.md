@@ -12,7 +12,7 @@ Count what the loop does in one turn, then multiply by the number of turns. The 
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     int sum = 0;
     for i in 1..1001 { sum += i; }
     jout << "sum " << sum << "\n";
@@ -34,7 +34,7 @@ sum 500500
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 int sum = 0;
 for i in 1..11 { sum += i; }
 jout << sum << "\n";
@@ -61,7 +61,7 @@ Use sizeof(type) to see the size in bytes. Work out the size of an array by mult
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     jout << "char " << sizeof(char) << " int " << sizeof(int) << "\n";
     jout << "float " << sizeof(float) << " double " << sizeof(double) << "\n";
     int n = 100;
@@ -86,7 +86,7 @@ array of 100 floats: 400 bytes
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 jout << sizeof(float) * 10 << "\n";
 }
 ```
@@ -111,7 +111,7 @@ Declare a pointer with the type and ^, then set its address with @. Write throug
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     int x = 1;
     int^ p = @x;
     p^ = 5;
@@ -139,7 +139,7 @@ a[1] through the pointer: 7
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 int v = 2;
 int^ p = @v;
 p^ = p^ * 10;
@@ -167,7 +167,7 @@ When you read a two-dimensional table, put the loop over columns inside the loop
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     int n = 4;
     int[] t = arr(n * n);
     for i in 0..n * n { t.push(i); }
@@ -196,7 +196,7 @@ same true
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 int[] t = arr(4);
 t.push(1); t.push(2); t.push(3); t.push(4);
 int s = 0;
@@ -225,7 +225,7 @@ Try a jump index (i * 3) % n over an array of size n, and compare the sum with t
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     int n = 8;
     int[] a = arr(n);
     for i in 0..n { a.push(i * 2); }
@@ -252,7 +252,7 @@ walk 56 jump 56
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 int[] a = arr(3);
 a.push(5); a.push(6); a.push(7);
 int s = 0;
@@ -281,7 +281,7 @@ Keep the condition in a loop simple. If you can arrange the data so that the res
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     int n = 10;
     int[] a = arr(n);
     for i in 0..n { a.push(i); }
@@ -308,7 +308,7 @@ count 5
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 int count = 0;
 for i in 0..6 {
     if i % 2 == 0 { count += 1; }
@@ -338,7 +338,7 @@ Make an f32x4 value with braces, then use + or the method sum, which works on al
 #import <simd>
 using stdlib;
 
-void main() {
+fnv main() {
     f32x4 f = {1.0, 2.0, 3.0, 4.0};
     jout << f.sum() << " " << f.min() << " " << f.max() << "\n";
     f32x4 g = f * 2.0;
@@ -363,7 +363,7 @@ void main() {
 #import <simd>
 using stdlib;
 
-void main() {
+fnv main() {
 f32x4 a = {1.0, 2.0, 3.0, 4.0};
 jout << (a + a).sum() << "\n";
 }
@@ -392,7 +392,7 @@ using stdlib;
 int grid[100];
 int near[100];
 
-void main() {
+fnv main() {
     for i in 0..100 { if i % 3 == 0 { grid[i] = 1; } else { grid[i] = 0; } }
     for y in 1..9 {
         for x in 1..9 {
@@ -437,7 +437,7 @@ Check the difference with a small limit you accept, instead of using ==. The exa
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     double x = 0.1 + 0.2;
     jout << (x == 0.3) << " " << x << "\n";
     float f = 1.5;
@@ -464,7 +464,7 @@ close enough
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 double a = 0.5 + 0.25;
 jout << (a == 0.75) << "\n";
 }
@@ -490,7 +490,7 @@ Write the formula in the normal way, a * b + c. The compiler chooses the combine
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     double a = 2.0;
     double b = 3.0;
     double c = 1.0;
@@ -516,7 +516,7 @@ true
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 double x = 4.0 * 2.0 + 1.0;
 jout << x << "\n";
 }
@@ -546,11 +546,11 @@ using cpu::thread;
 
 int counter;
 
-void work(void^ arg) {
+fnv work(void^ arg) {
     for i in 0..10000 { Atomic::add(@counter, 1); }
 }
 
-void main() {
+fnv main() {
     Thread a = create(work, null);
     Thread b = create(work, null);
     Thread c = create(work, null);
@@ -576,7 +576,7 @@ void main() {
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 int n = 0;
 Atomic::add(@n, 5);
 Atomic::add(@n, 2);
@@ -604,7 +604,7 @@ Start with C set to zero, then add the products into each cell of C.
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     int n = 2;
     int[] a = arr(4); int[] b = arr(4); int[] c = arr(4);
     a.push(1); a.push(2); a.push(3); a.push(4);
@@ -638,7 +638,7 @@ void main() {
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 int a = 2;
 int b = 3;
 jout << a * b + a << "\n";
@@ -665,7 +665,7 @@ Move the loop over k into the middle. The inner loop over j then walks along row
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     int n = 3;
     int[] a = arr(9); int[] b = arr(9); int[] c1 = arr(9); int[] c2 = arr(9);
     for i in 0..9 { a.push(i + 1); b.push(9 - i); c1.push(0); c2.push(0); }
@@ -702,7 +702,7 @@ same true
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 int s = 0;
 for i in 0..2 {
     for k in 0..3 { s += 1; }
@@ -731,7 +731,7 @@ Loop over the blocks on the outside with the block size bs, then multiply only t
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     int n = 4;
     int bs = 2;
     int[] a = arr(16); int[] b = arr(16); int[] c = arr(16);
@@ -778,7 +778,7 @@ plain total 339
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 int total = 0;
 for i in 0..4 {
     if i % 2 == 0 { total += i; }
@@ -807,13 +807,13 @@ Save the start time, do the work, save the end time, subtract. Repeat the work s
 #import <stdlib>
 using stdlib;
 
-int work(int[] a) {
+fn work(int[] a) {
     int s = 0;
     for i in 0..a.len { s += a[i] * 3; }
     return s;
 }
 
-void main() {
+fnv main() {
     int[] a = arr(1000);
     for i in 0..1000 { a.push(i % 10); }
     int best = 0;
@@ -845,7 +845,7 @@ checksum: 13500
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 int a = 4;
 int b = a * 3;
 jout << b << "\n";

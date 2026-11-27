@@ -12,7 +12,7 @@
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     jout << "Read the line number first\n";
 }
 ```
@@ -34,7 +34,7 @@ Read the line number first
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 jout << "error" << "\n";
 }
 ```
@@ -56,7 +56,7 @@ jout << "error" << "\n";
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     int count = 3;
     jout << count << "\n";
     for i in 0..count { jout << "repeat " << i << "\n"; }
@@ -83,7 +83,7 @@ repeat 2
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 for i in 0..2 { jout << "go " << i << "\n"; }
 }
 ```
@@ -105,7 +105,7 @@ for i in 0..2 { jout << "go " << i << "\n"; }
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     int width = 4;
     int nums[3] = {10, 20, 30};
     jout << "width " << width << "\n";
@@ -131,7 +131,7 @@ first 10
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 int nums[2] = {7, 8};
 jout << nums[1] << "\n";
 }
@@ -154,7 +154,7 @@ jout << nums[1] << "\n";
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     int count = 2;
     if count < 3 { jout << "small\n"; } else { jout << "big\n"; }
 }
@@ -177,7 +177,7 @@ small
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 int n = 1;
 if n == 1 { jout << "one\n"; } else { jout << "other\n"; }
 }
@@ -200,7 +200,7 @@ if n == 1 { jout << "one\n"; } else { jout << "other\n"; }
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     int score = 10;
     int scores[2] = {10, 20};
     jout << "score " << score << "\n";
@@ -226,7 +226,7 @@ scores 20
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 int scores[2] = {3, 4};
 jout << scores[0] + scores[1] << "\n";
 }
@@ -249,7 +249,7 @@ jout << scores[0] + scores[1] << "\n";
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     int value = 7;
     if value < 10 { jout << value << "\n"; }
 }
@@ -272,7 +272,7 @@ void main() {
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 int v = 4;
 if v > 2 { jout << "more\n"; }
 }
@@ -295,7 +295,7 @@ if v > 2 { jout << "more\n"; }
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     // 60 seconds make one minute
     int seconds = 60;
     jout << seconds << "\n";
@@ -319,7 +319,7 @@ void main() {
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 // this line is not printed
 jout << "shown\n";
 }
@@ -342,7 +342,7 @@ jout << "shown\n";
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     int first_score = 8;
     int total_score = first_score + 2;
     jout << "total " << total_score << "\n";
@@ -366,7 +366,7 @@ total 10
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 int count = 3;
 int total_count = count + 1;
 jout << total_count << "\n";
@@ -390,7 +390,7 @@ jout << total_count << "\n";
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     int count = 0;
     if count == 0 { jout << "empty\n"; } else { jout << "not empty\n"; }
 }
@@ -413,7 +413,7 @@ empty
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 int n = 5;
 if n > 3 { jout << "big\n"; }
 }
@@ -436,7 +436,7 @@ if n > 3 { jout << "big\n"; }
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     int nums[4] = {5, 6, 7, 8};
     jout << "first " << nums[0] << "\n";
     jout << "last " << nums[3] << "\n";
@@ -461,7 +461,7 @@ last 8
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 int a[3] = {2, 4, 6};
 jout << a[0] << "\n";
 }
@@ -484,7 +484,7 @@ jout << a[0] << "\n";
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     int width = 6;
     jout << "What is the width? " << width << "\n";
 }
@@ -507,7 +507,7 @@ What is the width? 6
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 int x = 2;
 jout << "x is " << x << "\n";
 }
@@ -530,7 +530,7 @@ jout << "x is " << x << "\n";
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     int x = 1;
     jout << "before " << x << "\n";
     x = x + 5;
@@ -556,7 +556,7 @@ after 6
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 int n = 2;
 n = n * 3;
 jout << n << "\n";
@@ -580,11 +580,11 @@ jout << n << "\n";
 #import <stdlib>
 using stdlib;
 
-int twice(int v) {
+fn twice(int v) {
     return v * 2;
 }
 
-void main() {
+fnv main() {
     int count = twice(4);
     jout << "count " << count << "\n";
 }
@@ -607,11 +607,11 @@ count 8
 #import <stdlib>
 using stdlib;
 
-int twice(int v) {
+fn twice(int v) {
 return v * 2;
 }
 
-void main() {
+fnv main() {
 jout << twice(3) << "\n";
 }
 ```
@@ -633,7 +633,7 @@ jout << twice(3) << "\n";
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     int total = 0;
     int n = 5;
     total = total + n;
@@ -658,7 +658,7 @@ void main() {
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 int a = 2;
 int b = 3;
 a = a + b;
@@ -683,7 +683,7 @@ jout << a << "\n";
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     int value = 9;
     jout << value << "\n";
 }
@@ -706,7 +706,7 @@ void main() {
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 int value = 9;
 jout << value << "\n";
 }
@@ -729,7 +729,7 @@ jout << value << "\n";
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     // heading: printing
     jout << "printing is the first topic\n";
 }
@@ -752,7 +752,7 @@ printing is the first topic
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 // heading: loops
 jout << "loops\n";
 }

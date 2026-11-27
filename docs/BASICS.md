@@ -30,7 +30,7 @@ Save this as `hello.jk`:
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     jout << "Hello, J2K!\n";
 }
 ```
@@ -66,7 +66,7 @@ The first two lines (`#import` and `using`) give you `jout`: keep them at the to
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     jout << "Hello, J2K!\n";
     jout << "Next line\n";
     jout << "A number: " << 42 << "\n";
@@ -109,7 +109,7 @@ You declare a variable with its type, give it a value, and change the value late
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     int apples = 5;
     apples = apples + 2;
     double price = 2.5;
@@ -162,7 +162,7 @@ broken.jk:6:20: error: unknown name 'apples'
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     int a = 7;
     int b = 2;
     jout << a / b << "\n";
@@ -216,7 +216,7 @@ Conditions are the `bool` results from chapter 3, and you can put an `if` inside
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     int score = 72;
     if score >= 90 {
         jout << "A\n";
@@ -267,7 +267,7 @@ be inside another loop.
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     int i = 1;
     while i <= 3 {
         jout << i << " ";
@@ -324,7 +324,7 @@ type the input into the program with a pipe: `echo "..." | ./name`.
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     char name[20];
     int age;
     jin >> name >> age;
@@ -377,22 +377,22 @@ the place that uses it.
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     jout << factorial(5) << "\n";
     banner();
 }
 
-int factorial(int n) {
+fn factorial(int n) {
     if n <= 1 { return 1; }
     return n * factorial(n - 1);
 }
 
-void print_box(int n) {
+fnv print_box(int n) {
     for i in 0..n { jout << "*"; }
     jout << "\n";
 }
 
-void banner() {
+fnv banner() {
     print_box(3);
     jout << "ready\n";
 }
@@ -432,7 +432,7 @@ Loop over an array with `for i in 0..scores.len`.
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     int scores[5];
     for i in 0..5 { scores[i] = (i + 1) * 10; }
     int total = 0;
@@ -490,7 +490,7 @@ written in the program (`"42".to_int()` is 42).
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     String first = "J2K";
     String title = first + " basics";
     jout << title << " " << title.len << " " << title[0] << "\n";

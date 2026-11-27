@@ -1574,7 +1574,7 @@ i64 ast_cout() {
     next();                                  // cout
     i64 first = 0;
     i64 last = 0;
-    while tok_is("<<") {
+    while tok_is("<<") || (first != 0 && tok_is(",")) {
         next();
         i64 item = 0;
         ast_in_cout = 1;

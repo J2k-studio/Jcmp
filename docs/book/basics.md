@@ -14,7 +14,7 @@
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     int a = 2;
     int b = 3;
     int sum = a + b;
@@ -37,7 +37,7 @@ result 5
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 int x = 6;
 jout << x * 7 << "\n";
 }
@@ -51,7 +51,7 @@ jout << x * 7 << "\n";
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 jout << 10 - 4 * 2 << "\n";
 }
 ```
@@ -73,7 +73,7 @@ jout << 10 - 4 * 2 << "\n";
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     // this text is software: a program that the computer runs
     int speed = 3;
     int hours = 4;
@@ -96,7 +96,7 @@ distance 12 km
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 int speed = 3;
 jout << "km " << speed * 4 << "\n";
 }
@@ -112,7 +112,7 @@ jout << "km " << speed * 4 << "\n";
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 int n = 0;
 n += 5;
 n += 5;
@@ -136,7 +136,7 @@ jout << n << "\n";
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     // each turn of this loop is a few CPU instructions: fetch, decode, execute
     int total = 0;
     for i in 1..5 {
@@ -161,7 +161,7 @@ sum 10
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 int sum = 0;
 for i in 1..4 { sum += i; }
 jout << sum << "\n";
@@ -189,7 +189,7 @@ jout << sum << "\n";
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     int a = 10;
     int b = 20;
     a = a + b;
@@ -214,7 +214,7 @@ one int takes 8 bytes
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 int x = 4;
 x = x * x;
 x = x + 1;
@@ -243,7 +243,7 @@ jout << x << "\n";
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     i32 f = File::open("note.txt", FileMode::Write);
     File::write(f, "saved on disk\n");
     File::close(f);
@@ -270,7 +270,7 @@ saved on disk
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 char line[64];
 i32 f = File::open("note.txt", FileMode::Write);
 File::write(f, "hi\n");
@@ -303,7 +303,7 @@ jout << line << "\n";
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     // output: the program sends text to the screen with jout
     int price = 25;
     int qty = 4;
@@ -328,7 +328,7 @@ total 100
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 int a = 4;
 int b = 5;
 jout << "in " << a << " and " << b << "\n";
@@ -346,7 +346,7 @@ jout << "out " << a * b << "\n";
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 jout << "a" << "b" << 3 << "\n";
 }
 ```
@@ -368,7 +368,7 @@ jout << "a" << "b" << 3 << "\n";
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     String text = "42";
     int n = text.to_int();
     jout << text + "!\n";
@@ -392,7 +392,7 @@ void main() {
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 String s = "7";
 int n = s.to_int();
 jout << n * 6 << "\n";
@@ -420,7 +420,7 @@ jout << n * 6 << "\n";
 #import <stdlib>
 using stdlib;
 
-void show_bits(int n) {
+fnv show_bits(int n) {
     String s = "";
     for i in 0..4 {
         s.push((char)(48 + ((n >> (3 - i)) & 1)));
@@ -428,7 +428,7 @@ void show_bits(int n) {
     jout << s << "\n";
 }
 
-void main() {
+fnv main() {
     show_bits(13);
     show_bits(5);
 }
@@ -450,7 +450,7 @@ void main() {
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 jout << (6 & 3) << "\n";
 }
 ```
@@ -463,7 +463,7 @@ jout << (6 & 3) << "\n";
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 jout << (1 << 3) << "\n";
 }
 ```
@@ -488,7 +488,7 @@ jout << (1 << 3) << "\n";
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     char c = 'A';
     jout << (int)c << "\n";
     String word = "Jao";
@@ -515,7 +515,7 @@ void main() {
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 char c = 'B';
 jout << (int)c << "\n";
 }
@@ -531,7 +531,7 @@ jout << (int)c << "\n";
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 String w = "ab";
 jout << w.len << "\n";
 }
@@ -554,7 +554,7 @@ jout << w.len << "\n";
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     // the operating system answers: a variable that is not set gives an empty Option
     Option<String> v = Env::get("J2K_SURELY_NOT_SET");
     if v.is_none() { jout << "no such variable\n"; }
@@ -578,7 +578,7 @@ the program asked the system for it
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 Option<String> v = Env::get("J2K_SURELY_NOT_SET");
 jout << v.is_some() << "\n";
 }
@@ -605,7 +605,7 @@ jout << v.is_some() << "\n";
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     String dir = "docs";
     String path = dir + "/" + "plan.txt";
     jout << path << " has " << path.len << " characters\n";
@@ -627,7 +627,7 @@ docs/plan.txt has 13 characters
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 String d = "a";
 String p = d + "/" + "b.txt";
 jout << p << "\n";
@@ -655,7 +655,7 @@ URL เช่น http://example.com/a แบ่งเป็นสามส่ว
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     String url = "http://example.com/a";
     int at = url.find("://");
     jout << "protocol " << url.slice(0, at) << "\n";
@@ -679,7 +679,7 @@ host and path example.com/a
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 String u = "https://x.io/p";
 jout << u.find("://") << "\n";
 }
@@ -706,7 +706,7 @@ jout << u.find("://") << "\n";
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     // this file becomes machine instructions; the program starts at main
     for i in 1..4 {
         jout << "instruction " << i << " runs\n";
@@ -731,7 +731,7 @@ instruction 3 runs
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 for i in 1..3 { jout << i << "\n"; }
 }
 ```
@@ -757,7 +757,7 @@ for i in 1..3 { jout << i << "\n"; }
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
     int nums[5];
     nums[0] = 4; nums[1] = 9; nums[2] = 2; nums[3] = 7; nums[4] = 5;
     int best = nums[0];
@@ -783,7 +783,7 @@ largest 9
 #import <stdlib>
 using stdlib;
 
-void main() {
+fnv main() {
 int count = 0;
 for i in 0..3 { count += 1; }
 jout << count << "\n";

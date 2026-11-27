@@ -6211,10 +6211,12 @@ i64 ast_lower_body(i64 ti, char^ name) {
         }
         gl_place(gl_ret);
         // the buffered output goes out first (the exit code waits in a temporary)
-        gl_store(30, gl_cell(gl_depth), 1);
-        i64 fl_c = ir_add(IR_CALL, 1, 0, 0, 0, ir_name_index("__flush"));
-        ir_set_args(fl_c, 0, @gl_args);
-        gl_load(1, 30, gl_cell(gl_depth));
+        if !(tg_on == 1 && used_print == 0) {
+            gl_store(30, gl_cell(gl_depth), 1);
+            i64 fl_c = ir_add(IR_CALL, 1, 0, 0, 0, ir_name_index("__flush"));
+            ir_set_args(fl_c, 0, @gl_args);
+            gl_load(1, 30, gl_cell(gl_depth));
+        }
         ir_add(IR_CONST, 9, 0, 0, 0, 94);
         i64 xe = ir_add(IR_SYSCALL, 1, 9, 0, 0, 0);
         i64 xk = 0;

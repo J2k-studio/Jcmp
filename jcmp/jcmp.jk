@@ -3,7 +3,7 @@
 // Use:    jcmp1 input.jk -o program
 // the version of the compiler (also in the file VERSION; release.sh checks that they agree)
 #allow syscall                         // the compiler is the layer under Sys: it calls the system by number on purpose
-#define JCMP_VERSION "1.2.41.2"
+#define JCMP_VERSION "1.2.41.3"
 #define JCMP_ABI 1                  // the number that the compiler and its Library folder must share (Library/ABI); raise it only when they stop fitting together
 
 #import "jc_base"
@@ -915,8 +915,10 @@ void main() {
     reset_state(in_path);
     if bare_mode == 0 {
         if x_lib == 0 || x_dyn == 1 { emit_line("b j2k_start"); }
-        emit_print_helpers();
-        emit_copy_helper();
+        if tg_on == 0 {
+            emit_print_helpers();
+            emit_copy_helper();
+        }
     }
     if tg_on == 0 && tg_start_set == 1 && bare_mode == 1 { emit_str("b "); emit_line(@tg_start); }          // a raw file starts where #start says
     parse_program();
@@ -927,6 +929,11 @@ void main() {
         if used_uprint == 1 { emit_uprint_helper(); }
         if used_divz == 1 { emit_divzero_helper(); }
         if used_noret == 1 { emit_noret_helper(); }
+        if tg_on == 1 {
+            // the printing and copying routines only when something in the text calls them (a program that does not print stays small)
+            if out_has("j2k_print_") { emit_print_helpers(); }
+            if out_has("j2k_copy") { emit_copy_helper(); }
+        }
         if tg_on == 0 { emit_segv_handler(); }
         if used_try == 1 { emit_exc_helper(); }
         if used_thread == 1 { emit_thread_helper(); }

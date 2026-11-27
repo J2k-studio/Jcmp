@@ -37,7 +37,7 @@ It is **self-hosting**: the compiler is written in Jex and rebuilds itself, byte
 
 ```jk
 // hello.jk
-void main() {
+fnv main() {
     jout << "Hello from Jex!\n";
 }
 ```
@@ -192,7 +192,7 @@ Put the folder on your `PATH` (once per shell, or add the line to `~/.bashrc`), 
 
 ```bash
 export PATH="$PWD:$PATH"            # inside the folder; or the full path of your folder
-jcmp -version                      # jcmp 1.2.41.2 (Jex compiler, Linux ARM64)
+jcmp -version                      # jcmp 1.2.41.3 (Jex compiler, Linux ARM64)
 
 printf '#import <stdlib>\nusing stdlib\nvoid main() { jout << "hi\\n"; }\n' > hi.jk
 jcmp hi.jk -o hi && ./hi            # hi
@@ -234,13 +234,13 @@ struct Point {
     double length(self) { return sqrt(self.x * self.x + self.y * self.y); }
 }
 
-int sum(int a[]) {              // arrays arrive with their length: a.len
+fn sum(int a[]) {              // arrays arrive with their length: a.len
     int total = 0;
     for i in 0..a.len { total += a[i]; }
     return total;
 }
 
-void main() {
+fnv main() {
     int numbers[4];
     for i in 0..4 { numbers[i] = i * 10; }
     jout << "sum = " << sum(numbers) << "\n";
